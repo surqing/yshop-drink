@@ -5,6 +5,6 @@
  * @Description:
  */
 import Materials from './src/Materials.vue'
-import EditorMaterials from './src/EditorMaterials.vue'
+import EditorMaterials from './src/editorMaterials.vue'
 
 export { Materials, EditorMaterials }

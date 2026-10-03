@@ -76,6 +76,7 @@
 <script lang="ts" setup>
 import { formatDate, addTime, betweenDay, beginOfDay, endOfDay } from '@/utils/formatTime'
 import * as StatisticsApi from '@/api/mp/statistics'
+import type { EChartsOption } from 'echarts'
 import * as MpAccountApi from '@/api/mp/account'
 
 defineOptions({ name: 'MpStatistics' })
@@ -83,7 +84,7 @@ defineOptions({ name: 'MpStatistics' })
 const message = useMessage() // 消息弹窗
 
 // 默认开始时间是当前日期-7，结束时间是当前日期-1
-const dateRange = ref([
+const dateRange = ref<[Date, Date]>([
   beginOfDay(new Date(new Date().getTime() - 3600 * 1000 * 24 * 7)),
   endOfDay(new Date(new Date().getTime() - 3600 * 1000 * 24))
 ])
@@ -123,7 +124,7 @@ const userSummaryOption = reactive({
       data: [] as any[] // 取消关注的用户的数据
     }
   ]
-})
+} satisfies EChartsOption)
 // 累计用户数据图表配置项
 const userCumulateOption = reactive({
   legend: {
@@ -147,7 +148,7 @@ const userCumulateOption = reactive({
       }
     }
   ]
-})
+} satisfies EChartsOption)
 // 消息发送概况数据图表配置项
 const upstreamMessageOption = reactive({
   color: ['#67C23A', '#E5323E'],
@@ -181,7 +182,7 @@ const upstreamMessageOption = reactive({
       data: [] as any[] // 用户发送条数的数据
     }
   ]
-})
+} satisfies EChartsOption)
 // 接口分析况数据图表配置项
 const interfaceSummaryOption = reactive({
   color: ['#67C23A', '#E5323E', '#E6A23C', '#409EFF'],
@@ -228,7 +229,7 @@ const interfaceSummaryOption = reactive({
       data: [] as any[] // 总耗时的数据
     }
   ]
-})
+} satisfies EChartsOption)
 
 /** 加载公众号账号的列表 */
 const getAccountList = async () => {

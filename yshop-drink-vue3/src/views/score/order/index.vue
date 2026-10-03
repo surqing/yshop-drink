@@ -244,6 +244,7 @@ const handleTake = async (id: number) => {
 onMounted(() => {
   getList()
 })
+defineExpose({ handleExport })
 </script>
 <style>
   .tabBox{

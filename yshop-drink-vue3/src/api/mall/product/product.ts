@@ -23,12 +23,12 @@ export interface StoreProductVO {
   isBest: boolean
   isNew: boolean
   description: string
-  isPostage: byte
-  merUse: byte
+  isPostage: number
+  merUse: number
   giveIntegral: number
   cost: number
-  isSeckill: byte
-  isBargain: byte
+  isSeckill: number
+  isBargain: number
   isGood: boolean
   ficti: number
   browse: number
@@ -36,12 +36,12 @@ export interface StoreProductVO {
   isSub: boolean
   tempId: number
   specType: boolean
-  isIntegral: byte
+  isIntegral: number
   integral: number
 }
 
 // 查询商品列表
-export const getStoreProductPage = async (params: StoreProductPageReqVO) => {
+export const getStoreProductPage = async (params: PageParam) => {
   return await request.get({ url: `/product/store-product/page`, params })
 }
 

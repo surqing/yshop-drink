@@ -21,7 +21,7 @@ export interface MerchantDetailsVO {
 }
 
 // 查询支付服务商配置列表
-export const getMerchantDetailsPage = async (params: MerchantDetailsPageReqVO) => {
+export const getMerchantDetailsPage = async (params: PageParam) => {
   return await request.get({ url: `/pay/merchant-details/page`, params })
 }
 

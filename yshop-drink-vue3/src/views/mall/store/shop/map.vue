@@ -37,9 +37,13 @@ import { BaiduMap, BmControl, BmAutoComplete, BmLocalSearch, BmMarker, BmGeoloca
 const message = useMessage() // 消息弹窗
 const ak = ref(import.meta.env.VITE_BAIDU_MAP_AK)
 const zoom = ref(15)
-const BMap = ref({})
+interface MapSDK {
+  Geolocation: new () => { getCurrentPosition(callback: (result: { point: { lng: number; lat: number }; address: { province: string; city: string; district: string; street: string; street_number: string } }) => void): void }
+  Geocoder: new () => { getLocation(point: { lng: number; lat: number }, callback: (result: { address: string; addressComponents: { province: string; city: string; district: string; street: string; streetNumber: string }; surroundingPois: { title: string }[] }) => void): void }
+}
+const BMap = ref<MapSDK>()
 const center = ref({ lng: 116.404, lat: 39.915 })
-const choosedLocation = ref({ point: {}, address: '',province: '', city: '', district: '', addr: '' })
+const choosedLocation = ref<{ point?: { lng?: number; lat?: number }; address?: string; province: string; city: string; district: string; addr: string; lng?: number; lat?: number }>({ point: {}, address: '',province: '', city: '', district: '', addr: '' })
 
 const dialogVisible = ref(false) // 弹窗的是否展示
 const dialogTitle = ref('地图选择') // 弹窗的标题

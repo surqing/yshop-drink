@@ -18,7 +18,7 @@
         />
       </el-form-item>
       <el-form-item label="性别" prop="sex">
-        <el-select v-model="queryParams.sex" class="!w-240px" clearable placeholder="请选择性别">
+        <el-select v-model="(queryParams.sex as number | undefined)" class="!w-240px" clearable placeholder="请选择性别">
           <el-option
             v-for="dict in getIntDictOptions(DICT_TYPE.SYSTEM_USER_SEX)"
             :key="dict.value"
@@ -29,7 +29,7 @@
       </el-form-item>
       <el-form-item label="创建时间" prop="createTime">
         <el-date-picker
-          v-model="queryParams.createTime"
+          v-model="(queryParams.createTime as [string, string])"
           :default-time="[new Date('1 00:00:00'), new Date('1 23:59:59')]"
           class="!w-240px"
           end-placeholder="结束日期"
@@ -168,9 +168,9 @@ const queryParams = reactive({
   pageNo: 1,
   pageSize: 10,
   name: null,
-  sex: null,
+  sex: null as number | null,
   description: null,
-  createTime: []
+  createTime: [] as string[]
 })
 const queryFormRef = ref() // 搜索的表单
 const exportLoading = ref(false) // 导出的加载中
@@ -234,7 +234,7 @@ const handleExport = async () => {
 }
 
 /** 选中行操作 */
-const currentRow = ref({}) // 选中行
+const currentRow = ref<Partial<Demo03StudentApi.Demo03StudentVO>>({}) // 选中行
 const handleCurrentChange = (row) => {
   currentRow.value = row
 }

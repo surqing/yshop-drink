@@ -42,8 +42,8 @@ const dialogVisible = ref(false) // 弹窗的是否展示
 const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
-const formData = ref({
-    id: undefined,
+const formData = ref<Partial<StoreOrderApi.StoreOrderVO>>({
+    id: undefined as number | undefined,
     updateType: "",
     orderId: undefined,
     orderType: 'send',
@@ -74,7 +74,7 @@ const formData = ref({
     refundReason: undefined,
     refundPrice: undefined,
     deliverySn: undefined,
-    deliveryName: undefined,
+    deliveryName: undefined as string | undefined,
     deliveryType: 'normal',
     deliveryId: undefined,
     gainIntegral: undefined,
@@ -102,7 +102,7 @@ const formRules = reactive({
 })
 const formRef = ref() // 表单 Ref
 
-const express = ref([])
+const express = ref<{ code: string; name: string }[]>([])
 
 /** 打开弹窗 */
 const open = async (type: string, id?: number) => {
@@ -146,18 +146,17 @@ const submitForm = async () => {
 }
 
 const selectExpress = (val) => {
-  let obj = {};
-  obj = express.value.find((item)=>{ // 这里的userList就是上面遍历的数据源
+  const obj = express.value.find((item)=>{ // 这里的userList就是上面遍历的数据源
       return item.code === val; // 筛选出匹配数据
   })
-  formData.value.deliveryName = obj.name
+  formData.value.deliveryName = obj?.name
 }
 
 
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
-    id: undefined,
+    id: undefined as number | undefined,
     updateType: "",
     orderId: undefined,
     orderType: 'send',
@@ -188,7 +187,7 @@ const resetForm = () => {
     refundReason: undefined,
     refundPrice: undefined,
     deliverySn: undefined,
-    deliveryName: undefined,
+    deliveryName: undefined as string | undefined,
     deliveryType: 'normal',
     deliveryId: undefined,
     gainIntegral: undefined,

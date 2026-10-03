@@ -19,7 +19,7 @@
       </el-form-item>
       <el-form-item label="短信渠道" prop="channelId">
         <el-select
-          v-model="queryParams.channelId"
+          v-model="(queryParams.channelId as number | undefined)"
           placeholder="请选择短信渠道"
           clearable
           class="!w-240px"
@@ -46,7 +46,7 @@
       </el-form-item>
       <el-form-item label="发送状态" prop="sendStatus">
         <el-select
-          v-model="queryParams.sendStatus"
+          v-model="(queryParams.sendStatus as number | undefined)"
           placeholder="请选择发送状态"
           clearable
           class="!w-240px"
@@ -61,7 +61,7 @@
       </el-form-item>
       <el-form-item label="发送时间" prop="sendTime">
         <el-date-picker
-          v-model="queryParams.sendTime"
+          v-model="(queryParams.sendTime as [string, string])"
           value-format="YYYY-MM-DD HH:mm:ss"
           type="daterange"
           start-placeholder="开始日期"
@@ -71,7 +71,7 @@
       </el-form-item>
       <el-form-item label="接收状态" prop="receiveStatus">
         <el-select
-          v-model="queryParams.receiveStatus"
+          v-model="(queryParams.receiveStatus as number | undefined)"
           placeholder="请选择接收状态"
           clearable
           class="!w-240px"
@@ -86,7 +86,7 @@
       </el-form-item>
       <el-form-item label="接收时间" prop="receiveTime">
         <el-date-picker
-          v-model="queryParams.receiveTime"
+          v-model="(queryParams.receiveTime as [string, string])"
           value-format="YYYY-MM-DD HH:mm:ss"
           type="daterange"
           start-placeholder="开始日期"
@@ -201,16 +201,16 @@ const queryFormRef = ref() // 搜索的表单
 const queryParams = reactive({
   pageNo: 1,
   pageSize: 10,
-  channelId: null,
+  channelId: null as number | null,
   templateId: null,
   mobile: '',
-  sendStatus: null,
-  receiveStatus: null,
-  sendTime: [],
-  receiveTime: []
+  sendStatus: null as number | null,
+  receiveStatus: null as number | null,
+  sendTime: [] as string[],
+  receiveTime: [] as string[]
 })
 const exportLoading = ref(false) // 导出的加载中
-const channelList = ref([]) // 短信渠道列表
+const channelList = ref<SmsChannelApi.SmsChannelVO[]>([]) // 短信渠道列表
 
 /** 查询列表 */
 const getList = async () => {

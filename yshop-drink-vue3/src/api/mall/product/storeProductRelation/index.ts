@@ -9,7 +9,7 @@ export interface StoreProductRelationVO {
 }
 
 // 查询商品点赞和收藏列表
-export const getStoreProductRelationPage = async (params: StoreProductRelationPageReqVO) => {
+export const getStoreProductRelationPage = async (params: PageParam) => {
   return await request.get({ url: `/product/store-product-relation/page`, params })
 }
 

@@ -19,7 +19,7 @@
       </el-form-item>
       <el-form-item label="用户类型" prop="userType">
         <el-select
-          v-model="queryParams.userType"
+          v-model="(queryParams.userType as number | undefined)"
           placeholder="请选择用户类型"
           clearable
           class="!w-240px"
@@ -43,7 +43,7 @@
       </el-form-item>
       <el-form-item label="请求时间" prop="beginTime">
         <el-date-picker
-          v-model="queryParams.beginTime"
+          v-model="(queryParams.beginTime as [string, string])"
           value-format="YYYY-MM-DD HH:mm:ss"
           type="daterange"
           start-placeholder="开始日期"
@@ -162,12 +162,12 @@ const queryParams = reactive({
   pageNo: 1,
   pageSize: 10,
   userId: null,
-  userType: null,
+  userType: null as number | null,
   applicationName: null,
   requestUrl: null,
   duration: null,
   resultCode: null,
-  beginTime: []
+  beginTime: [] as string[]
 })
 const queryFormRef = ref() // 搜索的表单
 const exportLoading = ref(false) // 导出的加载中

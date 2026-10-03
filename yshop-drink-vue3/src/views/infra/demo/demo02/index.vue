@@ -19,7 +19,7 @@
       </el-form-item>
       <el-form-item label="创建时间" prop="createTime">
         <el-date-picker
-          v-model="queryParams.createTime"
+          v-model="(queryParams.createTime as [string, string])"
           value-format="YYYY-MM-DD HH:mm:ss"
           type="daterange"
           start-placeholder="开始日期"
@@ -122,20 +122,23 @@ const message = useMessage() // 消息弹窗
 const { t } = useI18n() // 国际化
 
 const loading = ref(true) // 列表的加载中
-const list = ref([]) // 列表的数据
+const list = ref<Demo02CategoryApi.Demo02CategoryVO[]>([]) // 列表的数据
 const queryParams = reactive({
+  pageNo: 1,
+  pageSize: 10,
   name: null,
   parentId: null,
-  createTime: []
+  createTime: [] as string[]
 })
 const queryFormRef = ref() // 搜索的表单
+const total = computed(() => list.value.length)
 const exportLoading = ref(false) // 导出的加载中
 
 /** 查询列表 */
 const getList = async () => {
   loading.value = true
   try {
-    const data = await Demo02CategoryApi.getDemo02CategoryList(queryParams)
+    const data = await Demo02CategoryApi.getDemo02CategoryList()
     list.value = handleTree(data, 'id', 'parentId')
   } finally {
     loading.value = false

@@ -15,7 +15,7 @@
         <el-select v-model="queryParams.type" placeholder="请选择消息类型" class="!w-240px">
           <el-option
             v-for="dict in getStrDictOptions(DICT_TYPE.MP_MESSAGE_TYPE)"
-            :key="dict.value"
+            :key="String(dict.value)"
             :label="dict.label"
             :value="dict.value"
           />
@@ -32,14 +32,14 @@
       </el-form-item>
       <el-form-item label="创建时间" prop="createTime">
         <el-date-picker
-          v-model="queryParams.createTime"
+          v-model="(queryParams.createTime as [string, string])"
           style="width: 240px"
           value-format="YYYY-MM-DD HH:mm:ss"
           type="daterange"
           range-separator="-"
           start-placeholder="开始日期"
           end-placeholder="结束日期"
-          :default-time="['00:00:00', '23:59:59']"
+          :default-time="[new Date(2000, 0, 1, 0, 0, 0), new Date(2000, 0, 1, 23, 59, 59)]"
           class="!w-240px"
         />
       </el-form-item>
@@ -101,7 +101,7 @@ const queryParams = reactive({
   openid: '',
   accountId: -1,
   type: MsgType.Text,
-  createTime: []
+  createTime: [] as string[]
 })
 const queryFormRef = ref<FormInstance | null>(null) // 搜索的表单
 

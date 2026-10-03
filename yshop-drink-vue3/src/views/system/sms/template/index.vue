@@ -76,7 +76,7 @@
       </el-form-item>
       <el-form-item label="创建时间" prop="createTime">
         <el-date-picker
-          v-model="queryParams.createTime"
+          v-model="(queryParams.createTime as [string, string])"
           style="width: 240px"
           type="daterange"
           value-format="YYYY-MM-DD HH:mm:ss"
@@ -236,7 +236,7 @@ const queryParams = reactive({
   content: '',
   apiTemplateId: '',
   channelId: undefined,
-  createTime: []
+  createTime: [] as string[]
 })
 const exportLoading = ref(false) // 导出的加载中
 const channelList = ref<SmsChannelApi.SmsChannelVO[]>([]) // 短信渠道列表

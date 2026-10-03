@@ -49,8 +49,8 @@ const dialogVisible = ref(false) // 弹窗的是否展示
 const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
-const formData = ref({
-  id: undefined,
+const formData = ref<Partial<OrderApi.OrderVO>>({
+  id: undefined as number | undefined,
   userId: undefined,
   productId: undefined,
   number: undefined,
@@ -59,7 +59,7 @@ const formData = ref({
   ip: undefined,
   expressSn: undefined,
   expressNumber: undefined,
-  expressCompany: undefined,
+  expressCompany: undefined as string | undefined,
   customerName: undefined,
   customerPhone: undefined,
   customerAddress: undefined,
@@ -68,7 +68,7 @@ const formData = ref({
   haveDelivered: undefined,
   haveReceived: undefined
 })
-const express = ref([])
+const express = ref<{ code: string; name: string }[]>([])
 const formRules = reactive({
   expressSn: [{ required: true, message: '请选择快递公司', trigger: 'blur' }],
   expressNumber: [{ required: true, message: '快递单号不能为空', trigger: 'blur' }]
@@ -116,17 +116,16 @@ const submitForm = async () => {
 }
 
 const selectExpress = (val) => {
-  let obj = {};
-  obj = express.value.find((item)=>{ // 这里的userList就是上面遍历的数据源
+  const obj = express.value.find((item)=>{ // 这里的userList就是上面遍历的数据源
       return item.code === val; // 筛选出匹配数据
   })
-  formData.value.expressCompany = obj.name
+  formData.value.expressCompany = obj?.name
 }
 
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
-    id: undefined,
+    id: undefined as number | undefined,
     userId: undefined,
     productId: undefined,
     number: undefined,
@@ -134,7 +133,7 @@ const resetForm = () => {
     totalScore: undefined,
     ip: undefined,
     expressNumber: undefined,
-    expressCompany: undefined,
+    expressCompany: undefined as string | undefined,
     customerName: undefined,
     customerPhone: undefined,
     customerAddress: undefined,

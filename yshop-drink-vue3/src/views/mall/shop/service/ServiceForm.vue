@@ -20,7 +20,7 @@
         <el-input v-model="formData.name" placeholder="请输入标题" />
       </el-form-item>
       <el-form-item label="图标" prop="image">
-          <Materials v-model="formData.image" num="1" type="image" />
+          <Materials v-model="formData.image" :num="1" type="image" />
       </el-form-item>
       <el-form-item label="小程序app_id" prop="appId">
         <el-input v-model="formData.appId" placeholder="请输入小程序app_id" />
@@ -61,7 +61,7 @@ const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
 const formData = ref({
-  id: undefined,
+  id: undefined as number | undefined,
   name: undefined,
   image: undefined,
   type: undefined,
@@ -127,7 +127,7 @@ const submitForm = async () => {
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
-    id: undefined,
+    id: undefined as number | undefined,
     name: undefined,
     image: undefined,
     type: undefined,

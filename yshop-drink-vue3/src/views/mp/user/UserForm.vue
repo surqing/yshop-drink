@@ -42,14 +42,14 @@ const message = useMessage() // 消息弹窗
 const dialogVisible = ref(false) // 弹窗的是否展示
 const formLoading = ref(false) // 表单的加载中
 const formData = ref({
-  id: undefined,
+  id: undefined as number | undefined,
   nickname: undefined,
   remark: undefined,
   tagIds: []
 })
 const formRules = reactive({}) // 表单的校验
 const formRef = ref() // 表单 Ref
-const tagList = ref([]) // 公众号标签列表
+const tagList = ref<(MpTagApi.TagVO & { tagId: number })[]>([]) // 公众号标签列表
 
 /** 打开弹窗 */
 const open = async (id: number) => {
@@ -92,7 +92,7 @@ const submitForm = async () => {
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
-    id: undefined,
+    id: undefined as number | undefined,
     nickname: undefined,
     remark: undefined,
     tagIds: []

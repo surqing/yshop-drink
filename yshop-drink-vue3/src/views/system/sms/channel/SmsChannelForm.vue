@@ -14,7 +14,7 @@
         <el-select v-model="formData.code" clearable placeholder="请选择渠道编码">
           <el-option
             v-for="dict in getStrDictOptions(DICT_TYPE.SYSTEM_SMS_CHANNEL_CODE)"
-            :key="dict.value"
+            :key="String(dict.value)"
             :label="dict.label"
             :value="dict.value"
           />
@@ -24,7 +24,7 @@
         <el-radio-group v-model="formData.status">
           <el-radio
             v-for="dict in getIntDictOptions(DICT_TYPE.COMMON_STATUS)"
-            :key="dict.value"
+            :key="String(dict.value)"
             :label="dict.value"
           >
             {{ dict.label }}
@@ -65,7 +65,7 @@ const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
 const formData = ref({
-  id: undefined,
+  id: undefined as number | undefined,
   signature: '',
   code: '',
   status: CommonStatusEnum.ENABLE,
@@ -130,7 +130,7 @@ const submitForm = async () => {
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
-    id: undefined,
+    id: undefined as number | undefined,
     signature: '',
     code: '',
     status: CommonStatusEnum.ENABLE,

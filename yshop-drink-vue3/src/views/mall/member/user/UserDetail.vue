@@ -104,14 +104,15 @@ const { t } = useI18n() // 国际化
 // const message = useMessage() // 消息弹窗
 const dialogTitle = ref('') // 弹窗的标题
 const drawer = ref(false)
-const DetailData = ref({})
+const loading = ref(false)
+const DetailData = ref<Partial<UserApi.UserVO>>({})
 const activeName = ref('first')
 const total = ref(0) // 列表的总页数
 const list = ref([]) // 列表的数据
 const queryParams = reactive({
   pageNo: 1,
   pageSize: 10,
-  uid: null,
+  uid: null as number | null,
   linkId: null,
   pm: null,
   title: null,
@@ -124,7 +125,7 @@ const queryParams = reactive({
   status: null
 })
 /** 打开弹窗 */
-const open = async (type: string, id?: number) => {
+const open = async (type: string, id: number) => {
   drawer.value = true
   dialogTitle.value = t('action.' + type)
   DetailData.value = await UserApi.getUser(id)
@@ -133,7 +134,7 @@ const open = async (type: string, id?: number) => {
 }
 defineExpose({ open }) // 提供 open 方法，用于打开弹窗
 
-const handleClick = (tab: TabsPaneContext, event: Event) => {
+const handleClick = (_tab: TabsPaneContext, _event: Event) => {
 }
 /** 查询列表 */
 const getList = async () => {

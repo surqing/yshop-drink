@@ -14,7 +14,7 @@ export interface ProductVO {
 }
 
 // 查询积分产品列表
-export const getProductPage = async (params: ProductPageReqVO) => {
+export const getProductPage = async (params: PageParam) => {
   return await request.get({ url: `/score/product/page`, params })
 }
 

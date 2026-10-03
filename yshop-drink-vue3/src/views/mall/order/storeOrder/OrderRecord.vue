@@ -17,7 +17,7 @@ const dialogTitle = ref('') // 弹窗的标题
 const drawer = ref(false)
 const tableData = ref([])
 /** 打开弹窗 */
-const open = async (type: string, id?: number) => {
+const open = async (type: string, id: number) => {
   drawer.value = true
   dialogTitle.value = t('action.' + type)
   console.log(id)

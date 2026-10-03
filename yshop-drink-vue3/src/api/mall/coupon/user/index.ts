@@ -24,7 +24,7 @@ export const getUserList = async (id) => {
   return await request.get({ url: `/coupon/user/list?couponId=`+id })
 }
 // 查询用户领的优惠券列表
-export const getUserPage = async (params: UserPageReqVO) => {
+export const getUserPage = async (params: PageParam) => {
   return await request.get({ url: `/coupon/user/page`, params })
 }
 

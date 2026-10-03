@@ -80,8 +80,8 @@ service.interceptors.request.use(
   },
   (error: AxiosError) => {
     // Do something with request error
-    console.log(error) // for debug
-    Promise.reject(error)
+    console.warn('[request] category=configuration')
+    return Promise.reject(error)
   }
 )
 
@@ -183,7 +183,7 @@ service.interceptors.response.use(
     }
   },
   (error: AxiosError) => {
-    console.log('err' + error) // for debug
+    console.warn('[request]', { category: error.response ? 'http' : 'network', status: error.response?.status })
     let { message } = error
     const { t } = useI18n()
     if (message === 'Network Error') {

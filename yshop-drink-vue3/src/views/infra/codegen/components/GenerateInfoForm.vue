@@ -3,7 +3,7 @@
     <el-row>
       <el-col :span="12">
         <el-form-item label="生成模板" prop="templateType">
-          <el-select v-model="formData.templateType">
+          <el-select v-model="(formData.templateType as number | undefined)">
             <el-option
               v-for="dict in getIntDictOptions(DICT_TYPE.INFRA_CODEGEN_TEMPLATE_TYPE)"
               :key="dict.value"
@@ -15,7 +15,7 @@
       </el-col>
       <el-col :span="12">
         <el-form-item label="前端类型" prop="frontType">
-          <el-select v-model="formData.frontType">
+          <el-select v-model="(formData.frontType as number | undefined)">
             <el-option
               v-for="dict in getIntDictOptions(DICT_TYPE.INFRA_CODEGEN_FRONT_TYPE)"
               :key="dict.value"
@@ -28,7 +28,7 @@
 
       <el-col :span="12">
         <el-form-item label="生成场景" prop="scene">
-          <el-select v-model="formData.scene">
+          <el-select v-model="(formData.scene as number | undefined)">
             <el-option
               v-for="dict in getIntDictOptions(DICT_TYPE.INFRA_CODEGEN_SCENE)"
               :key="dict.value"
@@ -291,7 +291,6 @@ import { PropType } from 'vue'
 
 defineOptions({ name: 'InfraCodegenGenerateInfoForm' })
 
-const message = useMessage() // 消息弹窗
 const props = defineProps({
   table: {
     type: Object as PropType<Nullable<CodegenApi.CodegenTableVO>>,
@@ -305,9 +304,9 @@ const props = defineProps({
 
 const formRef = ref()
 const formData = ref({
-  templateType: null,
-  frontType: null,
-  scene: null,
+  templateType: null as number | null,
+  frontType: null as number | null,
+  scene: null as number | null,
   moduleName: '',
   businessName: '',
   className: '',
@@ -338,7 +337,7 @@ const rules = reactive({
   treeNameColumnId: [required]
 })
 
-const tables = ref([]) // 表定义列表
+const tables = ref<CodegenApi.CodegenTableVO[]>([]) // 表定义列表
 const menus = ref<any[]>([])
 const menuTreeProps = {
   label: 'name'
@@ -351,7 +350,7 @@ watch(
     formData.value = table as any
     // 加载表列表
     if (table.dataSourceConfigId >= 0) {
-      tables.value = await CodegenApi.getCodegenTableList(formData.value.dataSourceConfigId)
+      tables.value = await CodegenApi.getCodegenTableList(table.dataSourceConfigId)
     }
   },
   {

@@ -31,7 +31,7 @@
         <el-input v-model="formData.exchangeCode" placeholder="请输入兑换码" />
       </el-form-item>
       <el-form-item label="图片" prop="image">
-          <Materials v-model="formData.image" num="1" type="image" />
+          <Materials v-model="formData.image" :num="1" type="image" />
       </el-form-item>
       <el-form-item label="优惠券名称" prop="title">
         <el-input v-model="formData.title" placeholder="请输入优惠券名称" />
@@ -94,8 +94,8 @@ const dialogVisible = ref(false) // 弹窗的是否展示
 const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
-const formData = ref({
-  id: undefined,
+const formData = ref<Partial<Api.VO>>({
+  id: undefined as number | undefined,
   shopId: undefined,
   shopName: undefined,
   title: undefined,
@@ -114,7 +114,7 @@ const formData = ref({
   image: undefined,
   limit: undefined
 })
-const shopList = ref([])
+const shopList = ref<ShopApi.ShopVO[]>([])
 const formRules = reactive({
   shopId: [{ required: true, message: '店铺id,0表示通用不能为空', trigger: 'blur' }],
   title: [{ required: true, message: '优惠券名称不能为空', trigger: 'blur' }],
@@ -186,7 +186,7 @@ const getList = async () => {
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
-    id: undefined,
+    id: undefined as number | undefined,
     shopId: undefined,
     shopName: undefined,
     title: undefined,

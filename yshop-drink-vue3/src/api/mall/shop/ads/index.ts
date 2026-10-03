@@ -9,7 +9,7 @@ export interface AdsVO {
 }
 
 // 查询广告图管理列表
-export const getAdsPage = async (params: AdsPageReqVO) => {
+export const getAdsPage = async (params: PageParam) => {
   return await request.get({ url: `/shop/ads/page`, params })
 }
 

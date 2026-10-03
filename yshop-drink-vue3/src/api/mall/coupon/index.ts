@@ -2,16 +2,16 @@ import request from '@/config/axios'
 
 export interface VO {
   id: number
-  shopId: string
+  shopId: number
   shopName: string
   title: string
-  switch: boolean
+  isSwitch: number
   least: number
   value: number
   startTime: Date
-  endtIme: Date
+  endTime: Date
   weigh: number
-  type: boolean
+  type: number
   exchangeCode: string
   receive: number
   distribute: number
@@ -25,7 +25,7 @@ export const getCouponList = async () => {
   return await request.get({ url: `/coupon/list` })
 }
 // 查询优惠券列表
-export const getCouponPage = async (params: PageReqVO) => {
+export const getCouponPage = async (params: PageParam) => {
   return await request.get({ url: `/coupon/page`, params })
 }
 

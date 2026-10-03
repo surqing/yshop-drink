@@ -4,7 +4,7 @@ export interface UserBillVO {
   id: number
   uid: number
   linkId: string
-  pm: byte
+  pm: number
   title: string
   category: string
   type: string
@@ -15,7 +15,7 @@ export interface UserBillVO {
 }
 
 // 查询用户账单列表
-export const getUserBillPage = async (params: UserBillPageReqVO) => {
+export const getUserBillPage = async (params: PageParam) => {
   return await request.get({ url: `/member/user-bill/page`, params })
 }
 

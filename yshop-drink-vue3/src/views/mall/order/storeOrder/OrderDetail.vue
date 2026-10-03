@@ -25,7 +25,7 @@
                   <td>状态</td>
                 </tr>
                 <tr  v-for="(val, i ) in product" :key="i" >
-                    <td><el-image style="width: 40px; height: 40px" :src="val.image" :fit="fit" /></td>
+                    <td><el-image style="width: 40px; height: 40px" :src="val.image"  /></td>
                     <td>{{ val.title}}</td>
                     <td>{{ '￥'+ val.price}}</td>
                     <td>{{ ' x '+ val.number}}</td>
@@ -90,18 +90,18 @@ import { formatDate } from '@/utils/formatTime'
 const { t } = useI18n() // 国际化
 const dialogTitle = ref('') // 弹窗的标题
 const drawer = ref(false)
-const DetailData = ref({})
+const DetailData = ref<Partial<StoreOrderApi.StoreOrderVO>>({})
 const nickname = ref('')
-const logisticResult = ref({})
-const product = ref([])
+const logisticResult = ref<Record<string, { acceptTime: string; acceptStation: string }>>({})
+const product = ref<StoreOrderApi.StoreOrderProductVO[]>([])
 const addProductMark = ref(0)
 /** 打开弹窗 */
-const open = async (type: string, id?: number) => {
+const open = async (type: string, id: number) => {
   drawer.value = true
   dialogTitle.value = t('action.' + type)
   DetailData.value = await StoreOrderApi.getStoreOrder(id)
-  nickname.value = DetailData.value.userRespVO.nickname
-  product.value = DetailData.value.storeOrderCartInfoDOList
+  nickname.value = DetailData.value.userRespVO?.nickname || ''
+  product.value = DetailData.value.storeOrderCartInfoDOList || []
 }
 defineExpose({ open }) // 提供 open 方法，用于打开弹窗
 

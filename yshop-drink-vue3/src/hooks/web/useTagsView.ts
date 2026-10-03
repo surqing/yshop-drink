@@ -7,7 +7,7 @@ export const useTagsView = () => {
 
   const { replace, currentRoute } = useRouter()
 
-  const selectedTag = computed(() => tagsViewStore.getSelectedTag)
+  const selectedTag = computed(() => currentRoute.value)
 
   const closeAll = (callback?: Fn) => {
     tagsViewStore.delAllViews()
@@ -48,7 +48,8 @@ export const useTagsView = () => {
   }
 
   const setTitle = (title: string, path?: string) => {
-    tagsViewStore.setTitle(title, path)
+    const view = tagsViewStore.getVisitedViews.find((item) => item.path === (path || currentRoute.value.path))
+    if (view) tagsViewStore.updateVisitedView({ ...view, meta: { ...view.meta, title } })
   }
 
   return {

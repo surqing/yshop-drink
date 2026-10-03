@@ -7,7 +7,7 @@ export interface StoreProductRuleVO {
 }
 
 // 查询商品规则值(规格)列表
-export const getStoreProductRulePage = async (params: StoreProductRulePageReqVO) => {
+export const getStoreProductRulePage = async (params: PageParam) => {
   return await request.get({ url: `/product/store-product-rule/page`, params })
 }
 

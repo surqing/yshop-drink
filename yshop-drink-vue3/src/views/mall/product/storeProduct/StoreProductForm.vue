@@ -11,7 +11,7 @@
       <el-tab-pane label="基本信息" name="one">
         <el-form-item label="展示店铺" prop="shopId">
           <el-select
-            v-model="formValidate.shopId"
+            v-model="(formValidate.shopId as number | undefined)"
             placeholder="选择店铺"
             @change="selectShop"
           >
@@ -56,10 +56,10 @@
           <el-input v-model="formValidate.stock" class="input-width" placeholder="请输入库存" />
         </el-form-item>
         <el-form-item label="封面图" prop="image">
-          <Materials v-model="formValidate.image" num="1" type="image" />
+          <Materials v-model="formValidate.image" :num="1" type="image" />
         </el-form-item>
        <el-form-item label="轮播图" prop="slider_image">
-        <Materials v-model="formValidate.slider_image" num="5" type="image" />
+        <Materials v-model="formValidate.slider_image" :num="5" type="image" />
         </el-form-item>
         <el-form-item label="商品状态" prop="is_show">
           <el-radio-group v-model="formValidate.is_show">
@@ -97,7 +97,7 @@
                     <Icon icon="ep:circle-close" @click="handleRemoveRole(index)" />
                   </div>
                   <div class="rulesBox">
-                    <el-tag type="dot" closable color="primary" v-for="(j, indexn) in item.detail" :key="indexn" :name="j" class="mr20" @close="handleRemove2(item.detail,indexn)">{{j}}</el-tag>
+                    <el-tag type="primary" closable color="primary" v-for="(j, indexn) in item.detail" :key="indexn" :name="j" class="mr20" @close="handleRemove2(item.detail,indexn)">{{j}}</el-tag>
                     <el-input placeholder="请输入属性名称" v-model="item.detail.attrsVal"
                               style="width: 150px">
                       <template #append>
@@ -141,7 +141,7 @@
                     <el-table-column type="myindex" v-for="(item,index) in formValidate.header" :key="index" :label="item.title" :property="item.slot" align="center">
                       <template #default="scope">
                         <div v-if="item.slot == 'pic'" align="center">
-                           <Materials v-model="scope.row[item.slot]" num="1" type="image" :width="60" :height="60" />
+                           <Materials v-model="scope.row[item.slot]" :num="1" type="image" :width="60" :height="60" />
                           <!-- <single-pic v-model="scope.row[scope.column.property]" type="image" :num="1" :width="60" :height="60" /> -->
                         </div>
                         <div v-else-if="item.slot.indexOf('value') != -1" align="center">
@@ -167,7 +167,7 @@
               <el-table :data="oneFormValidate"  size="small" style="width: 90%;">
                 <el-table-column prop="pic" label="图片" align="center">
                   <template #default="scope">
-                    <Materials v-model="scope.row.pic" num="1" type="image" :width="60" :height="60" />
+                    <Materials v-model="scope.row.pic" :num="1" type="image" :width="60" :height="60" />
                   </template>
                 </el-table-column>
                 <el-table-column prop="price" label="售价" align="center">
@@ -248,8 +248,59 @@ const dialogVisible = ref(false) // 弹窗的是否展示
 const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
-const formData = ref({
-  id: undefined,
+interface AttributeRule { value: string; detail: string[] & { attrsVal?: string } }
+interface ProductAttribute {
+  imageArr?: string[]
+  pic: string
+  price: number | string
+  cost: number | string
+  ot_price: number | string
+  stock: number | string
+  bar_code: string
+  integral: number | string
+  seckill_stock?: number
+  seckill_price?: number
+  pink_stock?: number
+  pink_price?: number
+  weight?: number
+  volume?: number
+  brokerage?: number
+  brokerage_two?: number
+}
+interface ProductForm {
+  shopId?: number | null
+  imageArr: string[]
+  sliderImageArr: string[]
+  store_name: string
+  cate_id: number | string
+  keyword: string
+  unit_name: string
+  store_info: string
+  image: string
+  slider_image: string[]
+  description: string
+  ficti: number
+  give_integral: number
+  sort: number
+  is_show: number
+  price: number
+  otPrice: number
+  stock: number
+  is_new: number
+  postage: number
+  is_postage: number
+  is_sub: number
+  is_integral: number
+  id: number
+  spec_type: number
+  temp_id: string
+  attrs: ProductAttribute[]
+  items: (AttributeRule | ProductAttribute)[]
+  header: { title: string; slot: string; fixed?: string; width?: number }[]
+  selectRule: string
+}
+const formData = ref<Partial<Omit<StoreProductApi.StoreProductVO, 'isShow' | 'isNew' | 'specType'>> & { isShow?: number; isNew?: number; specType?: number }>({
+  id: undefined as number | undefined,
   image: undefined,
   sliderImage: undefined,
   storeName: undefined,
@@ -287,8 +338,8 @@ const formData = ref({
   isIntegral: undefined,
   integral: undefined
 })
-const formValidate = ref({
-    shopId: null,
+const formValidate = ref<ProductForm>({
+    shopId: null as number | null,
     imageArr:[],
     sliderImageArr: [],
     store_name: '',
@@ -330,7 +381,7 @@ const formValidate = ref({
     selectRule: ''
 })
 
-const manyFormValidate = ref([])
+const manyFormValidate = ref<ProductAttribute[]>([])
 const oneFormValidate = ref([
   {
     imageArr: [],
@@ -360,8 +411,8 @@ const formRules = reactive({
   cate_id: [{ required: true, message: '分类id不能为空', trigger: 'blur' }],
   price: [{ required: true, message: '商品价格不能为空', trigger: 'blur' }]
 })
-const ruleList = ref([])
-const attrs = ref([])
+const ruleList = ref<{ ruleName: string; ruleValue: AttributeRule[] }[]>([])
+const attrs = ref<AttributeRule[]>([])
 // 规格数据
 const formDynamic = reactive({
   attrsName: '',
@@ -370,7 +421,7 @@ const formDynamic = reactive({
 const createBnt = ref(false)
 const showIput = ref(false)
 const postageSet = ref(false) //false -固定  true 运费模板
-const templateList = ref([])
+const templateList = ref<{ id: number; name: string }[]>([])
 // 批量设置表格data
 const oneFormBatch = ref([
   {
@@ -455,7 +506,7 @@ const myConfig = reactive( {
       ],
 })
 const activeName = ref('one')
-const shopList = ref([])
+const shopList = ref<ShopApi.ShopVO[]>([])
 
 /** 打开弹窗 */
 const open = async (type: string, id?: number) => {
@@ -477,7 +528,7 @@ const open = async (type: string, id?: number) => {
 
  
 }
-defineExpose({ open }) // 提供 open 方法，用于打开弹窗
+ // 提供 open 方法，用于打开弹窗
 
 
 const selectShop = (val) => {
@@ -573,7 +624,7 @@ if (activeName.value == 'one') {
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
-    id: undefined,
+    id: undefined as number | undefined,
     image: undefined,
     sliderImage: undefined,
     storeName: undefined,
@@ -837,7 +888,7 @@ const createAttrName = () =>{
     };
     attrs.value.push(data);
     var hash = {};
-    attrs.value = attrs.value.reduce(function (item, next) {
+    attrs.value = attrs.value.reduce<AttributeRule[]>(function (item, next) {
       hash[next.value] ? '' : hash[next.value] = true && item.push(next);
       return item
     }, [])
@@ -853,7 +904,7 @@ const createAttr = (num, idx) => {
   if (num) {
     attrs.value[idx].detail.push(num);
     var hash = {};
-    attrs.value[idx].detail = attrs.value[idx].detail.reduce(function (item, next) {
+    attrs.value[idx].detail = attrs.value[idx].detail.reduce<string[]>(function (item, next) {
       hash[next] ? '' : hash[next] = true && item.push(next);
       return item
     }, [])
@@ -883,6 +934,7 @@ const clearAttr = () => {
 }
 
 
+defineExpose({ open, delAttrTable })
 </script>
 
 <style scoped>

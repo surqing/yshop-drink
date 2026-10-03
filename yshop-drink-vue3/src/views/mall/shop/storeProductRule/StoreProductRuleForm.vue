@@ -73,7 +73,7 @@ const dialogVisible = ref(false) // 弹窗的是否展示
 const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
-const formData = ref({
+const formData = ref<{ id?: number; ruleName?: string; ruleValue: { value: string; detail: string[] & { attrsVal?: string } }[] }>({
   id: 0,
   ruleName: '',
   ruleValue: []
@@ -131,7 +131,7 @@ const submitForm = async () => {
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
-    id: undefined,
+    id: undefined as number | undefined,
     ruleName: undefined,
     ruleValue: []
   }
@@ -149,7 +149,7 @@ const createAttr = (num, idx) => {
     if (num) {
         formData.value.ruleValue[idx].detail.push(num);
         var hash = {};
-        formData.value.ruleValue[idx].detail = formData.value.ruleValue[idx].detail.reduce(function (item, next) {
+        formData.value.ruleValue[idx].detail = formData.value.ruleValue[idx].detail.reduce<string[]>(function (item, next) {
           hash[next] ? '' : hash[next] = true && item.push(next);
           return item
         }, [])
@@ -171,7 +171,7 @@ const createAttrName = () => {
     //arr.push(data)
     formData.value.ruleValue.push(data)
     var hash = {}
-    formData.value.ruleValue = formData.value.ruleValue.reduce(function (item, next) {
+    formData.value.ruleValue = formData.value.ruleValue.reduce<{ value: string; detail: string[] }[]>(function (item, next) {
             /* eslint-disable */
             hash[next.value] ? '' : hash[next.value] = true && item.push(next);
             return item
