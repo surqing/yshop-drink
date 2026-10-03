@@ -34,6 +34,9 @@ public interface UserBillService extends IService<UserBillDO> {
      * @param balance 剩余
      * @param mark 备注
      */
+    void expendExact(Long uid, String title, String category, String type, java.math.BigDecimal number,
+                     java.math.BigDecimal balance, String mark);
+
     void expend(Long uid,String title,String category,String type,double number,double balance,String mark);
 
     /**

@@ -64,6 +64,14 @@ public class UserBillServiceImpl extends ServiceImpl<UserBillMapper, UserBillDO>
         userBillMapper.insert(userBill);
     }
 
+    @Override
+    public void expendExact(Long uid, String title, String category, String type, BigDecimal number,
+                            BigDecimal balance, String mark) {
+        UserBillDO bill = UserBillDO.builder().uid(uid).title(title).category(category).type(type)
+                .number(number).balance(balance).mark(mark).pm(BillEnum.PM_0.getValue()).build();
+        userBillMapper.insert(bill);
+    }
+
     /**
      * 增加收入/支入流水
      * @param uid uid
