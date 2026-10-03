@@ -46,14 +46,15 @@ def main():
     args = parser.parse_args()
     private_values = []
     try:
-        for file in [workspace / '.local-dev/.env', workspace / '.uniapp-dev/server/application-wechat.properties']:
+        for file in [workspace / '.local-dev/.env', workspace / '.uniapp-dev/server/application-wechat.properties',
+                     workspace / '.uniapp-dev/server/application-payment.properties']:
             if not file.exists():
                 continue
             for line in file.read_text().splitlines():
                 if '=' not in line or line.lstrip().startswith('#'):
                     continue
                 key, value = line.split('=', 1)
-                if any(part in key.lower() for part in ['password', 'secret']):
+                if any(part in key.lower() for part in ['password', 'secret', 'master-key', 'master_key']):
                     value = value.strip()
                     if file.suffix != '.properties':
                         value = ''.join(shlex.split(value))
