@@ -1,26 +1,21 @@
 package co.yixiang.yshop.framework.apilog.core.filter;
 
-import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.date.LocalDateTimeUtil;
-import cn.hutool.core.exceptions.ExceptionUtil;
-import cn.hutool.core.map.MapUtil;
-import cn.hutool.core.util.ArrayUtil;
 import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
 import co.yixiang.yshop.framework.apilog.core.annotation.ApiAccessLog;
 import co.yixiang.yshop.framework.apilog.core.enums.OperateTypeEnum;
 import co.yixiang.yshop.framework.apilog.core.service.ApiAccessLogFrameworkService;
 import co.yixiang.yshop.framework.apilog.core.util.ApiLogUtils;
+import co.yixiang.yshop.framework.apilog.core.util.SensitiveDataSanitizer;
 import co.yixiang.yshop.framework.common.exception.enums.GlobalErrorCodeConstants;
 import co.yixiang.yshop.framework.common.pojo.CommonResult;
-import co.yixiang.yshop.framework.common.util.json.JsonUtils;
 import co.yixiang.yshop.framework.common.util.monitor.TracerUtils;
 import co.yixiang.yshop.framework.common.util.servlet.ServletUtils;
 import co.yixiang.yshop.framework.web.config.WebProperties;
 import co.yixiang.yshop.framework.web.core.filter.ApiRequestFilter;
 import co.yixiang.yshop.framework.web.core.util.WebFrameworkUtils;
 import co.yixiang.yshop.module.infra.api.logger.dto.ApiAccessLogCreateReqDTO;
-import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.FilterChain;
@@ -34,7 +29,6 @@ import org.springframework.web.method.HandlerMethod;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Iterator;
 import java.util.Map;
 
 import static co.yixiang.yshop.framework.apilog.core.interceptor.ApiAccessLogInterceptor.*;
@@ -49,11 +43,6 @@ import static co.yixiang.yshop.framework.common.util.json.JsonUtils.toJsonString
  */
 @Slf4j
 public class ApiAccessLogFilter extends ApiRequestFilter {
-
-    private static final String[] SANITIZE_KEYS = new String[]{"password", "token", "accessToken", "refreshToken", "Authorization",
-            "secret", "appSecret", "sessionKey", "openid", "openId", "mobile", "phoneNumber",
-            "code", "loginCode", "phoneCode", "encryptedData", "iv", "phone", "userPhone", "customerPhone",
-            "realName", "nickname", "avatar", "address", "userAddress", "customerAddress"};
 
     private final String applicationName;
 
@@ -119,11 +108,10 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
         // 设置访问结果
         CommonResult<?> result = WebFrameworkUtils.getCommonResult(request);
         if (result != null) {
-            accessLog.setResultCode(result.getCode()).setResultMsg(result.getMsg());
+            accessLog.setResultCode(result.getCode()).setResultMsg(result.getCode() == 0 ? "" : "Request failed");
         } else if (ex != null) {
             accessLog.setResultCode(GlobalErrorCodeConstants.INTERNAL_SERVER_ERROR.getCode())
-                    .setResultMsg(ApiLogUtils.isIdentityRequest(request.getRequestURI())
-                            ? ex.getClass().getSimpleName() : ExceptionUtil.getRootCauseMessage(ex));
+                    .setResultMsg(ex.getClass().getSimpleName());
         } else {
             accessLog.setResultCode(GlobalErrorCodeConstants.SUCCESS.getCode()).setResultMsg("");
         }
@@ -134,10 +122,8 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
         String[] sanitizeKeys = accessLogAnnotation != null ? accessLogAnnotation.sanitizeKeys() : null;
         Boolean requestEnable = accessLogAnnotation != null ? accessLogAnnotation.requestEnable() : Boolean.TRUE;
         if (!BooleanUtil.isFalse(requestEnable) && !ApiLogUtils.isIdentityRequest(request.getRequestURI())) { // 默认记录，所以判断 !false
-            Map<String, Object> requestParams = MapUtil.<String, Object>builder()
-                    .put("query", sanitizeMap(queryString, sanitizeKeys))
-                    .put("body", sanitizeJson(requestBody, sanitizeKeys)).build();
-            accessLog.setRequestParams(toJsonString(requestParams));
+            accessLog.setRequestParams(SensitiveDataSanitizer.sanitizeRequest(
+                    request.getRequestURI(), queryString, requestBody, sanitizeKeys));
         }
         Boolean responseEnable = accessLogAnnotation != null ? accessLogAnnotation.responseEnable() : Boolean.FALSE;
         if (BooleanUtil.isTrue(responseEnable) && !ApiLogUtils.isIdentityRequest(request.getRequestURI())) { // 默认不记录，默认强制要求 true
@@ -185,71 +171,13 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
 
     // ========== 请求和响应的脱敏逻辑，移除类似 password、token 等敏感字段 ==========
 
-    private static String sanitizeMap(Map<String, ?> map, String[] sanitizeKeys) {
-        if (CollUtil.isNotEmpty(map)) {
-            return null;
-        }
-        if (sanitizeKeys != null) {
-            MapUtil.removeAny(map, sanitizeKeys);
-        }
-        MapUtil.removeAny(map, SANITIZE_KEYS);
-        return JsonUtils.toJsonString(map);
-    }
-
-    private static String sanitizeJson(String jsonString, String[] sanitizeKeys) {
-        if (StrUtil.isEmpty(jsonString)) {
-            return null;
-        }
-        try {
-            JsonNode rootNode = JsonUtils.parseTree(jsonString);
-            sanitizeJson(rootNode, sanitizeKeys);
-            return JsonUtils.toJsonString(rootNode);
-        } catch (Exception e) {
-            // 脱敏失败的情况下，直接忽略异常，避免影响用户请求
-            log.warn("[sanitizeJson] category=invalid-json");
-            return null;
-        }
-    }
-
-    private static String sanitizeJson(CommonResult<?> commonResult, String[] sanitizeKeys) {
-        if (commonResult == null) {
-            return null;
-        }
-        String jsonString = toJsonString(commonResult);
-        try {
-            JsonNode rootNode = JsonUtils.parseTree(jsonString);
-            sanitizeJson(rootNode.get("data"), sanitizeKeys); // 只处理 data 字段，不处理 code、msg 字段，避免错误被脱敏掉
-            return JsonUtils.toJsonString(rootNode);
-        } catch (Exception e) {
-            // 脱敏失败的情况下，直接忽略异常，避免影响用户请求
-            log.warn("[sanitizeJson] category=invalid-json");
-            return null;
-        }
-    }
-
-    private static void sanitizeJson(JsonNode node, String[] sanitizeKeys) {
-        // 情况一：数组，遍历处理
-        if (node.isArray()) {
-            for (JsonNode childNode : node) {
-                sanitizeJson(childNode, sanitizeKeys);
-            }
-            return;
-        }
-        // 情况二：非 Object，只是某个值，直接返回
-        if (!node.isObject()) {
-            return;
-        }
-        //  情况三：Object，遍历处理
-        Iterator<Map.Entry<String, JsonNode>> iterator = node.properties().iterator();
-        while (iterator.hasNext()) {
-            Map.Entry<String, JsonNode> entry = iterator.next();
-            if (ArrayUtil.contains(sanitizeKeys, entry.getKey())
-                || ArrayUtil.contains(SANITIZE_KEYS, entry.getKey())) {
-                iterator.remove();
-                continue;
-            }
-            sanitizeJson(entry.getValue(), sanitizeKeys);
-        }
+    private static String sanitizeJson(CommonResult<?> result, String[] sanitizeKeys) {
+        if (result == null) return null;
+        Map<String, Object> response = new java.util.LinkedHashMap<>();
+        response.put("code", result.getCode());
+        response.put("data", result.getData());
+        // Result messages may include values interpolated by an exception handler.
+        return SensitiveDataSanitizer.sanitizeJson(toJsonString(response), sanitizeKeys);
     }
 
 }

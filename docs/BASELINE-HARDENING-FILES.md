@@ -1,24 +1,30 @@
-# 第四阶段修改文件清单
+# 第四阶段修改文件清单（含 PR #1 第二轮）
 
-共 162 个修改/新增文件。后台历史类型修复范围已得到追加授权；不存在自动格式化、前端依赖/锁文件升级、本地环境或构建产物提交。
+共 169 个修改/新增文件。首轮 162 个文件；第二轮仅追加审查相关修复和测试。后台历史类型修复范围已获得追加授权，本轮无后台源码或依赖变更。未提交本地环境、构建产物或私有凭据。
 
 - `docs/BASELINE-HARDENING-ACCEPTANCE.md` — 复现说明、范围说明与验收记录
 - `docs/BASELINE-HARDENING-FILES.md` — 复现说明、范围说明与验收记录
 - `docs/BASELINE-HARDENING.md` — 复现说明、范围说明与验收记录
+- `docs/PR1-REVIEW-FIX.md` — 第二轮审查修复、测试证据、范围边界与后续技术债
 - `tests/auth-errors.test.mjs` — 真实本地验收、过期订单检查点核对与安全扫描，不伪造登录、不调用支付
 - `tests/smoke/mini-program.cjs` — 真实本地验收、过期订单检查点核对与安全扫描，不伪造登录、不调用支付
 - `tests/smoke/run.sh` — 真实本地验收、过期订单检查点核对与安全扫描，不伪造登录、不调用支付
-- `tests/smoke/secret-scan.py` — 真实本地验收、过期订单检查点核对与安全扫描，不伪造登录、不调用支付
+- `tests/smoke/secret-scan.py` — 扫描已提交基线到 HEAD，以及未提交/未跟踪文件，支持 --base，错误输入失败
 - `tests/smoke/server-check.py` — 真实本地验收、过期订单检查点核对与安全扫描，不伪造登录、不调用支付
+- `tests/smoke/test_secret_scan.py` — 临时 Git 仓库验证 clean committed 泄漏必失败及各类工作区修改覆盖
+- `tests/sms-errors.test.mjs` — 短信白名单业务提示、单次请求错误归一化与未知/网络错误防泄漏测试
 - `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-mybatis/pom.xml` — 新增已有统一版本管理的 test-only 测试依赖，验证 SQL 日志不转发敏感数据
 - `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-mybatis/src/main/java/co/yixiang/yshop/framework/mybatis/config/YshopMybatisAutoConfiguration.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
-- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-mybatis/src/main/java/co/yixiang/yshop/framework/mybatis/core/log/SafeSqlLog.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
-- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-mybatis/src/test/java/co/yixiang/yshop/framework/mybatis/core/log/SafeSqlLogTest.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
-- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/main/java/co/yixiang/yshop/framework/apilog/core/filter/ApiAccessLogFilter.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-mybatis/src/main/java/co/yixiang/yshop/framework/mybatis/core/log/SafeSqlLog.java` — 安全 SQL 事件与经过校验的静态 mapper statement 标识，禁止参数/结果/原文
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-mybatis/src/test/java/co/yixiang/yshop/framework/mybatis/core/log/SafeSqlLogTest.java` — SQL 参数/结果/原文防泄漏与安全 mapper 标识回归
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/main/java/co/yixiang/yshop/framework/apilog/core/filter/ApiAccessLogFilter.java` — 统一请求/响应审计脱敏，修复普通 query 遗失，结果文案不落凭据
 - `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/main/java/co/yixiang/yshop/framework/apilog/core/interceptor/ApiAccessLogInterceptor.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
 - `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/main/java/co/yixiang/yshop/framework/apilog/core/util/ApiLogUtils.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
-- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/main/java/co/yixiang/yshop/framework/web/core/handler/GlobalExceptionHandler.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
-- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/test/java/co/yixiang/yshop/framework/apilog/core/filter/ApiAccessLogFilterTest.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/main/java/co/yixiang/yshop/framework/apilog/core/util/SensitiveDataSanitizer.java` — 访问和异常审计共用的递归/大小写不敏感敏感字段移除，安静解析与安全堆栈
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/main/java/co/yixiang/yshop/framework/web/core/handler/GlobalExceptionHandler.java` — 统一异常审计脱敏，保留异常类别/cause/位置，省略原始消息
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/test/java/co/yixiang/yshop/framework/apilog/core/filter/ApiAccessLogFilterTest.java` — 支付 create/update 访问审计及显式响应审计防泄漏回归
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/test/java/co/yixiang/yshop/framework/apilog/core/util/SensitiveDataSanitizerTest.java` — 支付/身份凭据、query 保留、不可变输入、损坏 JSON 安静解析和安全堆栈回归
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/test/java/co/yixiang/yshop/framework/web/core/handler/GlobalExceptionHandlerTest.java` — 支付配置异常审计入口的 body/query/cause 消息防泄漏回归
 - `yshop-drink-boot3/yshop-module-member/yshop-module-member-biz/src/main/java/co/yixiang/yshop/module/member/dal/redis/RedisKeyConstants.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
 - `yshop-drink-boot3/yshop-module-member/yshop-module-member-biz/src/main/java/co/yixiang/yshop/module/member/dal/redis/order/MiniRedisDAO.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
 - `yshop-drink-boot3/yshop-module-member/yshop-module-member-biz/src/main/java/co/yixiang/yshop/module/member/framework/auth/config/MiniAppAuthProperties.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
@@ -26,19 +32,20 @@
 - `yshop-drink-boot3/yshop-module-member/yshop-module-member-biz/src/test/java/co/yixiang/yshop/module/member/dal/redis/order/MiniRedisDAOTest.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
 - `yshop-drink-boot3/yshop-module-system/yshop-module-system-biz/src/main/java/co/yixiang/yshop/module/system/service/social/SocialClientServiceImpl.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
 - `yshop-drink-uniapp-vue3/App.vue` — 认证错误处理、协议状态或安全调试日志
-- `yshop-drink-uniapp-vue3/api/api.js` — 认证错误处理、协议状态或安全调试日志
-- `yshop-drink-uniapp-vue3/api/auth.js` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/api/api.js` — 短信与微信交换错误路径分开，短信错误仅返回安全类别与数值码
+- `yshop-drink-uniapp-vue3/api/auth.js` — 将短信发送/登录从 authError 切换到专用短信错误处理
 - `yshop-drink-uniapp-vue3/pages-checkout/pay/pay.vue` — 认证错误处理、协议状态或安全调试日志
 - `yshop-drink-uniapp-vue3/pages-score/scoreproduct/confirm.vue` — 认证错误处理、协议状态或安全调试日志
 - `yshop-drink-uniapp-vue3/pages-user/address/add.vue` — 认证错误处理、协议状态或安全调试日志
 - `yshop-drink-uniapp-vue3/pages-user/address/address.vue` — 认证错误处理、协议状态或安全调试日志
-- `yshop-drink-uniapp-vue3/pages-user/login/login.vue` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/pages-user/login/login.vue` — 协议受控状态、登录失败处理及短信操作专用提示
 - `yshop-drink-uniapp-vue3/pages-user/mine/userinfo.vue` — 认证错误处理、协议状态或安全调试日志
 - `yshop-drink-uniapp-vue3/pages/index/index.vue` — 认证错误处理、协议状态或安全调试日志
 - `yshop-drink-uniapp-vue3/pages/menu/menu.vue` — 认证错误处理、协议状态或安全调试日志
 - `yshop-drink-uniapp-vue3/utils/auth-errors.js` — 认证错误处理、协议状态或安全调试日志
 - `yshop-drink-uniapp-vue3/utils/cookie.js` — 认证错误处理、协议状态或安全调试日志
 - `yshop-drink-uniapp-vue3/utils/router.js` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/utils/sms-errors.js` — 短信发送/登录的安全错误码转换与单次提示
 - `yshop-drink-uniapp-vue3/utils/wechat-login.js` — 认证错误处理、协议状态或安全调试日志
 - `yshop-drink-vue3/src/api/express/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
 - `yshop-drink-vue3/src/api/infra/demo/demo03/inner/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件

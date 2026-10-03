@@ -20,7 +20,7 @@ yshop.member.auth.mini-session-timeout=30m
 
 Spring configuration binding also supports `YSHOP_MEMBER_AUTH_MINI_SESSION_TIMEOUT`. Default: 30 minutes. This is a conservative local application cache lifetime, not a claim about WeChat's server-side session lifetime. Existing permanent entries get a TTL on the next successful exchange; no bulk Redis migration is performed. Values must be non-null and greater than zero. The cached value is used to decrypt legacy encrypted phone data, and can be renewed through real `wx.login`.
 
-Frontend token, openid, phone, request payload, full member and payment-response logs were removed. Backend raw request/query logging was replaced by method/path/timing. Access audits still record method, URL, result, user ID and timing; identity endpoints omit payloads and exceptions omit credential-bearing messages. Nested sensitive fields are removed from other audit JSON; invalid JSON fails closed. No authorization or audit service was disabled. Real-identity scanning additionally found MyBatis DEBUG bound-parameter logs. A centralized safe MyBatis logger now emits SQL execution status and numeric row counts, omits SQL text/parameters/results, and reports exception categories without credential-bearing messages. It is registered through the existing MyBatis configuration customizer, independent of the local Logback override. A managed test-only Spring test dependency was added for its two regression tests; no runtime dependency was added.
+Frontend token, openid, phone, request payload, full member and payment-response logs were removed. Backend raw request/query logging was replaced by method/path/timing. Access audits still record method, URL, result, user ID and timing; identity endpoints omit payloads and exceptions omit credential-bearing messages. Nested sensitive fields are removed from other audit JSON; invalid JSON fails closed. No authorization or audit service was disabled. Real-identity scanning additionally found MyBatis DEBUG bound-parameter logs. A centralized safe MyBatis logger now emits a validated static mapper statement identity, SQL execution status and numeric row counts, omits SQL text/parameters/results, and reports exception categories without credential-bearing messages. It is registered through the existing MyBatis configuration customizer, independent of the local Logback override. A managed test-only Spring test dependency was added for its two regression tests; no runtime dependency was added.
 
 ## Member access-token review
 
@@ -61,19 +61,22 @@ Other checks:
 ```sh
 node --test tests/auth-errors.test.mjs
 python3 tests/smoke/secret-scan.py
+python3 tests/smoke/secret-scan.py --base origin/develop
+python3 -m unittest discover -s tests/smoke -p 'test_*.py'
+node --test tests/sms-errors.test.mjs
 # With the established JDK 17 / Maven / Node / pnpm environment:
 cd yshop-drink-boot3
 mvn clean install package -Dmaven.test.skip=true
 # Focused tests, separately from the repository's skip-tests build:
 mvn -pl yshop-module-member/yshop-module-member-biz -Dtest=MiniRedisDAOTest test
-mvn -pl yshop-framework/yshop-spring-boot-starter-web -Dtest=ApiAccessLogFilterTest test
+mvn -pl yshop-framework/yshop-spring-boot-starter-web -Dtest=SensitiveDataSanitizerTest,ApiAccessLogFilterTest,GlobalExceptionHandlerTest test
 mvn -pl yshop-framework/yshop-spring-boot-starter-mybatis -Dtest=SafeSqlLogTest test
 cd ../yshop-drink-vue3
 pnpm ts:check
 pnpm build:local
 ```
 
-Use the existing private Maven cache setting when reproducing this Mac's build. The secret scanner reads local credential values without printing them, scans changed/new source and the diff, and optionally scans runtime files or identities supplied via stdin. Reports only PASS/FAIL and file paths. It is an exact-value regression check, not a complete secret-discovery product or a claim that historical repository defaults are safe for deployment.
+Use the existing private Maven cache setting when reproducing this Mac's build. The secret scanner reads protected values without printing them. By default it resolves the merge-base of HEAD and the immutable baseline tag, scans the committed baseline-to-HEAD diff and all affected current files, and also scans staged/unstaged changes and untracked files. `--base origin/develop` (or another explicit ref) selects a different PR base. Clean committed branches are covered. Invalid bases, missing runtime paths, or absent protected scan values fail rather than return an empty PASS. Runtime files and protected identities can be supplied via stdin; CI must provide protected scan values and must not echo them. Reports only PASS/FAIL and file paths. It is an exact-value regression check, not a complete secret-discovery product or a claim that historical repository defaults are safe for deployment.
 
 ## Known remaining work
 
@@ -84,3 +87,7 @@ Real payment was not invoked. No /order/pay request was made. No wx.requestPayme
 ## Rollback
 
 Use the immutable baseline tag as the review/rollback reference. Do not reset a checkout with unreviewed local work. No master changes, develop merge, public-history rebase, force push or tag rewrite is part of this task.
+
+## PR #1 review follow-up
+
+[Second-round fixes and acceptance](PR1-REVIEW-FIX.md) address payment credential fields in both access/error audits, clean committed PR scanning, specific safe SMS messages and the inverted query-map guard. Shared case-insensitive recursive sanitation retains ordinary business IDs without mutating input. Error diagnostics retain cause classes/locations rather than raw messages; access audit result messages are status-only. SQL logs retain validated static mapper statement names without exposing SQL literals, parameters or rows. Optional SQL-template logging and targeted historical admin-form UI smoke remain separate follow-up work.

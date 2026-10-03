@@ -67,6 +67,7 @@ import {
 import * as util  from '@/utils/util'
 import { loginWechatSession } from '@/utils/wechat-login'
 import { reportAuthError } from '@/utils/auth-errors'
+import { reportSmsError } from '@/utils/sms-errors'
 import { mobile as testMobible } from '@/uni_modules/uv-ui-tools/libs/function/test'
 const main = useMainStore()
 const title = ref('登录')
@@ -167,7 +168,7 @@ const getCaptcha = async () => {
 		
 	}
 	} catch (error) {
-		reportAuthError(error)
+		reportSmsError(error, 'send')
 	}
 }
 
@@ -244,7 +245,7 @@ const login = async () => {
 		}, 2000);
 	}
 	} catch (error) {
-		reportAuthError(error)
+		reportSmsError(error, 'login')
 	}
 }
 

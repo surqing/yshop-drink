@@ -18,6 +18,7 @@ import { VUE_APP_API_URL } from '@/config'
 import cookie from '@/utils/cookie'
 import { replace } from '@/utils/router'
 import { logger } from '@/utils/logger'
+import { normalizeSmsError } from '@/utils/sms-errors'
 
 const fly = new Fly()
 fly.config.baseURL = VUE_APP_API_URL
@@ -41,7 +42,7 @@ function baseRequest(options) {
   }
 
   // 结构请求需要的参数
-  const { url, params, data, login, authError, ...option } = options
+  const { url, params, data, login, authError, smsError, ...option } = options
 
   // 发起请求
   return fly
@@ -61,6 +62,9 @@ function baseRequest(options) {
       }
 	  // #endif
 	  
+      if (options.smsError && (res.status !== 200 || Number(data.code) !== 0)) {
+        return Promise.reject(normalizeSmsError({ data: { code: data.code }, status: res.status }))
+      }
       if (options.authError && (res.status !== 200 || Number(data.code) !== 0)) {
         return Promise.reject({ authCode: Number(data.code), status: res.status })
       }
@@ -93,6 +97,9 @@ function baseRequest(options) {
       return Promise.resolve(data.data, res)
     })
     .catch(error => {
+      if (options.smsError) {
+        return Promise.reject(normalizeSmsError(error))
+      }
       if (options.authError) {
         return Promise.reject({
           authCode: error?.authCode,

@@ -4,14 +4,14 @@ import api from './api'
  * 使用手机 + 验证码登录
  */
 export function userLogin(data) {
-  return api.post('/member/auth/sms-login', data, { login: false, authError: true })
+  return api.post('/member/auth/sms-login', data, { login: false, smsError: 'login' })
 }
 
 /**
  * 使用手机 + 验证码登录  member/auth/send-sms-code
  */
 export function smsSend(data) {
-  return api.post('/member/auth/send-sms-code', data, { login: false, authError: true })
+  return api.post('/member/auth/send-sms-code', data, { login: false, smsError: 'send' })
 }
 
 /**

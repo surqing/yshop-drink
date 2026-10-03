@@ -35,6 +35,19 @@ class SafeSqlLogTest {
         assertEquals(List.of("<==      Total: 12", "SQL event"), sink.messages);
     }
 
+    @Test
+    void retainsStaticStatementIdentityWithoutSqlOrValues() {
+        Capture sink = new Capture();
+        SafeSqlLog log = new SafeSqlLog(sink, "co.yixiang.StoreOrderMapper.selectById");
+        log.debug("==> Preparing: select * from orders where secret='private-test-value'");
+        log.debug("==> Parameters: private-test-value(String)");
+        assertTrue(sink.messages.stream().allMatch(s -> s.startsWith("statement=co.yixiang.StoreOrderMapper.selectById ")));
+        assertFalse(String.join("\n", sink.messages).contains("private-test-value"));
+        Capture invalid = new Capture();
+        new SafeSqlLog(invalid, "invalid name\nprivate-test-value").debug("==> Preparing: private-test-value");
+        assertEquals(List.of("SQL prepared"), invalid.messages);
+    }
+
     private static class Capture implements Log {
         final List<String> messages = new ArrayList<>();
         public boolean isDebugEnabled() { return true; }

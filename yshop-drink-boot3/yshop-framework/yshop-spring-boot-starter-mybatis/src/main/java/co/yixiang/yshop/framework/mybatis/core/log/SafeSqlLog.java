@@ -6,14 +6,24 @@ import org.apache.ibatis.logging.slf4j.Slf4jImpl;
 /** SQL diagnostics must never include bound credentials, row values or exception messages. */
 public final class SafeSqlLog implements Log {
     private final Log delegate;
+    private final String statement;
 
     public SafeSqlLog(String name) {
-        this(new Slf4jImpl(name));
+        this(new Slf4jImpl(name), name);
     }
 
     SafeSqlLog(Log delegate) {
-        this.delegate = delegate;
+        this(delegate, null);
     }
+
+    SafeSqlLog(Log delegate, String name) {
+        this.delegate = delegate;
+        // MyBatis supplies a static mapper statement name, never SQL values.
+        this.statement = name != null && name.matches("[A-Za-z_$][A-Za-z0-9_.$]*")
+                ? "statement=" + name + " " : "";
+    }
+
+    private String event(String message) { return statement + message; }
 
     @Override
     public boolean isDebugEnabled() { return delegate.isDebugEnabled(); }
@@ -22,20 +32,20 @@ public final class SafeSqlLog implements Log {
     public boolean isTraceEnabled() { return delegate.isTraceEnabled(); }
 
     @Override
-    public void debug(String message) { delegate.debug(safeMessage(message)); }
+    public void debug(String message) { delegate.debug(event(safeMessage(message))); }
 
     @Override
-    public void trace(String message) { delegate.trace(safeMessage(message)); }
+    public void trace(String message) { delegate.trace(event(safeMessage(message))); }
 
     @Override
-    public void warn(String message) { delegate.warn("SQL warning"); }
+    public void warn(String message) { delegate.warn(event("SQL warning")); }
 
     @Override
-    public void error(String message) { delegate.error("SQL failure"); }
+    public void error(String message) { delegate.error(event("SQL failure")); }
 
     @Override
     public void error(String message, Throwable error) {
-        delegate.error("SQL failure category=" + (error == null ? "unknown" : error.getClass().getSimpleName()));
+        delegate.error(event("SQL failure category=" + (error == null ? "unknown" : error.getClass().getSimpleName())));
     }
 
     private static String safeMessage(String message) {

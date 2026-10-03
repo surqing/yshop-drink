@@ -64,3 +64,7 @@ AppSecret 仍仅在服务端私有配置；源码、构建产物、报告与计�
 仍存在：208 天 token / 12 小时 refresh 策略技术债、小程序未集成 refresh；旧 encryptedData/iv 手机号接口；Node 20 EOL、Vite CJS、Browserslist、::v-deep、wx.getSystemInfoSync、HTTP 图片、样式选择器和旧依赖警告。开发工具热重载期间曾出现 SDK 路由错误与图片中断/Broken pipe，脚本通过关闭旧项目再启动和有限就绪等待消除测试启动竞争，未修改业务来掩盖这些现象。自动化端口测试期间临时开启，结束应回归普通开发模式。
 
 协议人工授权已完成并通过后端与用户态验证。本分支按认证/隐私、后台类型、自动化/文档拆分 conventional commits，另补充了过期订单检查点处理的测试提交，推送后创建指向 develop 的 PR；不合并 PR。最终 Git 状态、提交哈希和 PR 地址在本地交付报告中记录，避免提交文档自引用其自身提交哈希。
+
+## PR #1 第二轮修复
+
+第一轮记录保留作为阶段历史；第二轮验收、额外文件、测试结果及边界见 [PR1-REVIEW-FIX.md](PR1-REVIEW-FIX.md)。安全扫描现覆盖已 commit 的基线到 HEAD，clean 分支重新运行也实际检查提交内容。原 3 个访问日志单测改为覆盖访问/异常审计真实入口与统一脱敏规则的 10 项 Web 测试，另保留 3 项 SQL 日志和 2 项 session 测试。

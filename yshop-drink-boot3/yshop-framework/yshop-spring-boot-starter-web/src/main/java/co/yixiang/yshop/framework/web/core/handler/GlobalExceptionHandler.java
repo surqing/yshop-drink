@@ -1,14 +1,12 @@
 package co.yixiang.yshop.framework.web.core.handler;
 
 import cn.hutool.core.exceptions.ExceptionUtil;
-import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
 import co.yixiang.yshop.framework.apilog.core.service.ApiErrorLogFrameworkService;
-import co.yixiang.yshop.framework.apilog.core.util.ApiLogUtils;
+import co.yixiang.yshop.framework.apilog.core.util.SensitiveDataSanitizer;
 import co.yixiang.yshop.framework.common.exception.ServiceException;
 import co.yixiang.yshop.framework.common.pojo.CommonResult;
 import co.yixiang.yshop.framework.common.util.collection.SetUtils;
-import co.yixiang.yshop.framework.common.util.json.JsonUtils;
 import co.yixiang.yshop.framework.common.util.monitor.TracerUtils;
 import co.yixiang.yshop.framework.common.util.servlet.ServletUtils;
 import co.yixiang.yshop.framework.web.core.util.WebFrameworkUtils;
@@ -19,7 +17,6 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.ValidationException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.util.Assert;
 import org.springframework.validation.BindException;
@@ -33,7 +30,6 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.time.LocalDateTime;
-import java.util.Map;
 import java.util.Set;
 
 import static co.yixiang.yshop.framework.common.exception.enums.GlobalErrorCodeConstants.*;
@@ -173,7 +169,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(NoHandlerFoundException.class)
     public CommonResult<?> noHandlerFoundExceptionHandler(HttpServletRequest req, NoHandlerFoundException ex) {
-        log.warn("[noHandlerFoundExceptionHandler]", ex);
+        log.warn("[noHandlerFoundExceptionHandler] category={}", ex.getClass().getSimpleName());
         return CommonResult.error(NOT_FOUND.getCode(), String.format("请求地址不存在:%s", ex.getRequestURL()));
     }
 
@@ -184,7 +180,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public CommonResult<?> httpRequestMethodNotSupportedExceptionHandler(HttpRequestMethodNotSupportedException ex) {
-        log.warn("[httpRequestMethodNotSupportedExceptionHandler]", ex);
+        log.warn("[httpRequestMethodNotSupportedExceptionHandler] category={}", ex.getClass().getSimpleName());
         return CommonResult.error(METHOD_NOT_ALLOWED.getCode(), String.format("请求方法不正确:%s", ex.getMessage()));
     }
 
@@ -196,7 +192,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = AccessDeniedException.class)
     public CommonResult<?> accessDeniedExceptionHandler(HttpServletRequest req, AccessDeniedException ex) {
         log.warn("[accessDeniedExceptionHandler][userId({}) 无法访问 url({})]", WebFrameworkUtils.getLoginUserId(req),
-                req.getRequestURL(), ex);
+                req.getRequestURI());
         return CommonResult.error(FORBIDDEN);
     }
 
@@ -226,12 +222,8 @@ public class GlobalExceptionHandler {
         }
 
         // 情况二：处理异常
-        if (ApiLogUtils.isIdentityRequest(req.getRequestURI())) {
-            log.error("[defaultExceptionHandler] category={} location={}", ex.getClass().getSimpleName(),
-                    ex.getStackTrace().length > 0 ? ex.getStackTrace()[0] : "unknown");
-        } else {
-            log.error("[defaultExceptionHandler]", ex);
-        }
+        log.error("[defaultExceptionHandler] category={} locations={}", ex.getClass().getSimpleName(),
+                SensitiveDataSanitizer.safeStackTrace(ex));
         // 插入异常日志
         this.createExceptionLog(req, ex);
         // 返回 ERROR CommonResult
@@ -257,15 +249,9 @@ public class GlobalExceptionHandler {
         errorLog.setUserType(WebFrameworkUtils.getLoginUserType(request));
         // 设置异常字段
         errorLog.setExceptionName(e.getClass().getName());
-        errorLog.setExceptionMessage(ExceptionUtil.getMessage(e));
-        errorLog.setExceptionRootCauseMessage(ExceptionUtil.getRootCauseMessage(e));
-        errorLog.setExceptionStackTrace(ExceptionUtils.getStackTrace(e));
-        if (ApiLogUtils.isIdentityRequest(request.getRequestURI())) {
-            errorLog.setExceptionMessage("Identity request failed");
-            errorLog.setExceptionRootCauseMessage(e.getClass().getSimpleName());
-            errorLog.setExceptionStackTrace(java.util.Arrays.stream(e.getStackTrace())
-                    .map(StackTraceElement::toString).collect(java.util.stream.Collectors.joining("\n")));
-        }
+        errorLog.setExceptionMessage("Request failed");
+        errorLog.setExceptionRootCauseMessage(e.getClass().getSimpleName());
+        errorLog.setExceptionStackTrace(SensitiveDataSanitizer.safeStackTrace(e));
         StackTraceElement[] stackTraceElements = e.getStackTrace();
         Assert.notEmpty(stackTraceElements, "异常 stackTraceElements 不能为空");
         StackTraceElement stackTraceElement = stackTraceElements[0];
@@ -277,11 +263,8 @@ public class GlobalExceptionHandler {
         errorLog.setTraceId(TracerUtils.getTraceId());
         errorLog.setApplicationName(applicationName);
         errorLog.setRequestUrl(request.getRequestURI());
-        Map<String, Object> requestParams = MapUtil.<String, Object>builder()
-                .put("query", ServletUtils.getParamMap(request))
-                .put("body", ServletUtils.getBody(request)).build();
-        errorLog.setRequestParams(ApiLogUtils.isIdentityRequest(request.getRequestURI())
-                ? "{}" : JsonUtils.toJsonString(requestParams));
+        errorLog.setRequestParams(SensitiveDataSanitizer.sanitizeRequest(request.getRequestURI(),
+                ServletUtils.getParamMap(request), ServletUtils.getBody(request), null));
         errorLog.setRequestMethod(request.getMethod());
         errorLog.setUserAgent(ServletUtils.getUserAgent(request));
         errorLog.setUserIp(ServletUtils.getClientIP(request));
