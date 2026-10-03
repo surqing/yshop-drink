@@ -205,7 +205,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
     public AppAuthLoginRespVO weixinMiniAppLogin2(AppWeixinMiniLoginVO loginVO){
         try {
             WxMaJscode2SessionResult session = wxMaService.getUserService().getSessionInfo(loginVO.getCode());
-            log.info(session.getOpenid());
+            log.info("[weixinMiniAppLogin2] session established");
             miniRedisDAO.set(session.getSessionKey(),session.getOpenid());
             //根据openid查用户是否存在
             MemberUserDO memberUserDO = userMapper.selectOne(new LambdaQueryWrapper<MemberUserDO>()
@@ -222,7 +222,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
             return appAuthLoginRespVO;
 
         } catch (WxErrorException e) {
-            log.error(e.getMessage());
+            log.warn("[weixinMiniAppLogin2] category=wechat code={}", e.getError().getErrorCode());
             throw exception(MINI_AUTH_LOGIN_BAD);
         }
     }
@@ -302,7 +302,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
                 userMapper.updateById(memberUserDO);
             }
         }catch (WxErrorException e) {
-            log.error(e.getMessage());
+            log.warn("[wechatAuth] category=wechat code={}", e.getError().getErrorCode());
             throw exception(MINI_AUTH_LOGIN_BAD);
         }
 

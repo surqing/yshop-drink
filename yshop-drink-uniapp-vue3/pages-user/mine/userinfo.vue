@@ -125,7 +125,7 @@ const endDate = computed(() => {
 })
 
 const chooseavatar = (e) => {
-	console.log('detal:',e.detail);
+
 	uni.uploadFile({
 		url: VUE_APP_UPLOAD_URL, 
 		filePath: e.detail.avatarUrl,
@@ -136,16 +136,16 @@ const chooseavatar = (e) => {
 			'content-type': 'application/x-www-form-urlencoded;charset=UTF-8'
 		},
 		success(uploadFileResult){
-			console.log('uploadFileResult:',uploadFileResult)
+			console.debug('[avatar] status:', uploadFileResult.statusCode)
 			if (uploadFileResult) {
 				const upload = JSON.parse(uploadFileResult.data);
-				console.log('upload:',upload.data)
+
 				member.value.avatar = upload.data;
 			}
 		}, 
 		fail(e){
 			console.log('网络链接错误');
-			console.log(e)
+			console.warn('[avatar] category=network')
 		}
 	});
 }

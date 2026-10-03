@@ -16,7 +16,7 @@ public interface RedisKeyConstants {
 
     RedisKeyDefine YSHOP_MINI_LOGIN_CACHE_KEY = new RedisKeyDefine("小程序登录session",
             "yshop_mini_login_cache:%s", // 参数为访问uid+key
-            STRING, String.class, RedisKeyDefine.TimeoutTypeEnum.FOREVER);
+            STRING, String.class, RedisKeyDefine.TimeoutTypeEnum.DYNAMIC);
 
 
 

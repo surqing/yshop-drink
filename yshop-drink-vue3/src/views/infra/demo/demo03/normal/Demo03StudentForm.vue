@@ -62,7 +62,7 @@ const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
 const formData = ref({
-  id: undefined,
+  id: undefined as number | undefined,
   name: undefined,
   sex: undefined,
   birthday: undefined,
@@ -142,7 +142,7 @@ const submitForm = async () => {
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
-    id: undefined,
+    id: undefined as number | undefined,
     name: undefined,
     sex: undefined,
     birthday: undefined,

@@ -112,7 +112,7 @@ export const conditionStr = (nodeConfig, index) => {
 }
 
 export const dealStr = (str: string, obj) => {
-  const arr = []
+  const arr: string[] = []
   const list = str.split(',')
   for (const elem in obj) {
     list.map((item) => {

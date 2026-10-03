@@ -10,7 +10,7 @@ const props = defineProps({
   preIcon: propTypes.string.def(''),
   postIcon: propTypes.string.def(''),
   title: propTypes.string.def(''),
-  type: propTypes.oneOf(['', 'primary', 'success', 'warning', 'danger', 'info']).def(''),
+  type: propTypes.oneOf(['', 'primary', 'success', 'warning', 'danger', 'info'] as const).def(''),
   link: propTypes.bool.def(false),
   circle: propTypes.bool.def(false),
   round: propTypes.bool.def(false),

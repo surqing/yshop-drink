@@ -42,6 +42,7 @@ onMounted(() => {
   //   1000 * 60 * 2
   // )
 })
+defineExpose({ getUnreadCount })
 </script>
 <template>
   <div class="message">

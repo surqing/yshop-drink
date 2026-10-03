@@ -183,4 +183,5 @@ const handleExport = async () => {
 onMounted(() => {
   getList()
 })
+defineExpose({ handleExport })
 </script>

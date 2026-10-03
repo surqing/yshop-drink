@@ -12,7 +12,7 @@ export const getExpressList = async () => {
 }
 
 // 查询快递公司列表
-export const getExpressPage = async (params: ExpressPageReqVO) => {
+export const getExpressPage = async (params: PageParam) => {
   return await request.get({ url: `/order/express/page`, params })
 }
 

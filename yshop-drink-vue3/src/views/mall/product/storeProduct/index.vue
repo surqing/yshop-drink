@@ -278,4 +278,5 @@ onMounted(() => {
 })
 
 
+defineExpose({ handleExport })
 </script>

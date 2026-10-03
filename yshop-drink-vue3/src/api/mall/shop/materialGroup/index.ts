@@ -6,7 +6,7 @@ export interface MaterialGroupVO {
 }
 
 // 查询素材分组列表
-export const getMaterialGroupPage = async (params: MaterialGroupPageReqVO) => {
+export const getMaterialGroupPage = async (params: PageParam) => {
   return await request.get({ url: `/shop/material-group/page`, params })
 }
 

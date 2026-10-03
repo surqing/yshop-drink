@@ -17,7 +17,7 @@ export interface StoreProductReplyVO {
 }
 
 // 查询评论列表
-export const getStoreProductReplyPage = async (params: StoreProductReplyPageReqVO) => {
+export const getStoreProductReplyPage = async (params: PageParam) => {
   return await request.get({ url: `/product/store-product-reply/page`, params })
 }
 

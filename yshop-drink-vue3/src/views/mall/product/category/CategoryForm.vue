@@ -9,7 +9,7 @@
     >
       <el-form-item label="展示店铺" prop="shopId">
         <el-select
-          v-model="formData.shopId"
+          v-model="(formData.shopId as number | undefined)"
           placeholder="选择店铺"
         >
           <el-option
@@ -24,7 +24,7 @@
         <el-input v-model="formData.name" placeholder="请输入分类名称" />
       </el-form-item>
       <el-form-item label="分类图片" prop="picUrl">
-        <Materials v-model="formData.picUrl" num="1" type="image" />
+        <Materials v-model="formData.picUrl" :num="1" type="image" />
       </el-form-item>
       <el-form-item label="分类排序" prop="sort">
         <el-input-number v-model="formData.sort" controls-position="right" :min="0" />
@@ -63,9 +63,9 @@ const dialogVisible = ref(false) // 弹窗的是否展示
 const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
-const formData = ref({
-  id: undefined,
-  shopId: null,
+const formData = ref<Partial<ProductCategoryApi.CategoryVO> & { shopId?: number | null }>({
+  id: undefined as number | undefined,
+  shopId: null as number | null,
   name: '',
   picUrl: '',
   status: CommonStatusEnum.ENABLE,
@@ -81,7 +81,7 @@ const formRules = reactive({
 })
 const formRef = ref() // 表单 Ref
 // const categoryTree = ref<any[]>([]) // 分类树
-const shopList = ref([])
+const shopList = ref<ShopApi.ShopVO[]>([])
 
 /** 打开弹窗 */
 const open = async (type: string, id?: number) => {
@@ -99,8 +99,7 @@ const open = async (type: string, id?: number) => {
       formLoading.value = false
     }
   }
-  // 获得分类树
-  await getTree()
+  // Shop choices are loaded by getList; this form has no category-tree field.
 }
 defineExpose({ open }) // 提供 open 方法，用于打开弹窗
 
@@ -142,7 +141,7 @@ const submitForm = async () => {
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
-    id: undefined,
+    id: undefined as number | undefined,
     name: '',
     picUrl: '',
     status: CommonStatusEnum.ENABLE,

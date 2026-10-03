@@ -3,7 +3,7 @@ import request from '@/config/axios'
 export interface FilePageReqVO extends PageParam {
   path?: string
   type?: string
-  createTime?: Date[]
+  createTime?: (string | Date)[]
 }
 
 // 文件预签名地址 Response VO

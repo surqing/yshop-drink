@@ -61,6 +61,7 @@
   </el-scrollbar>
 </template>
 <script lang="ts" setup>
+import type { EChartsOption } from 'echarts'
 import * as RedisApi from '@/api/infra/redis'
 import { RedisMonitorInfoVO } from '@/api/infra/redis/types'
 const cache = ref<RedisMonitorInfoVO>()
@@ -202,7 +203,7 @@ const commandStatsRefChika = reactive({
       }
     }
   ]
-})
+} satisfies EChartsOption)
 
 /** 加载数据 */
 const getSummary = () => {

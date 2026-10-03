@@ -41,7 +41,7 @@
 				<!-- #endif -->
 			</view>
 			<view class="login-page__agreement">
-					<radio value="isChecked" @tap.stop="onChange" />
+					<radio value="agreement" :checked="isChecked" @tap.stop="onChange" />
 					我已经阅读并遵守
 					<text class="login-page__link" @tap="serv(29,'用户协议')">《用户协议》</text>与
 						<text class="login-page__link" @tap="serv(30,'隐私政策')">《隐私政策》</text>
@@ -57,15 +57,17 @@ import {
   ref,
   computed
 } from 'vue'
-import { onLoad,onShow } from '@dcloudio/uni-app'
+import { onLoad } from '@dcloudio/uni-app'
 import { useMainStore } from '@/store/store'
 import {
-  userAuthSession,
   userLoginForWechatMini,
   smsSend,
   userLogin
 } from '@/api/auth'
 import * as util  from '@/utils/util'
+import { loginWechatSession } from '@/utils/wechat-login'
+import { reportAuthError } from '@/utils/auth-errors'
+import { reportSmsError } from '@/utils/sms-errors'
 import { mobile as testMobible } from '@/uni_modules/uv-ui-tools/libs/function/test'
 const main = useMainStore()
 const title = ref('登录')
@@ -83,31 +85,25 @@ const isCaptchaBtnActive = computed(() => {
 	return Boolean(mobile.value) && captchaText.value === '获取验证码';
 });
 
-onShow(() => {
+onLoad(() => {
    
 	// #ifdef MP-WEIXIN
-	if(!openid.value){
-		wechatMiniLogin();
-	}
+	wechatMiniLogin();
 	
 	// #endif
 })
 
 
-const wechatMiniLogin = () => {
-	//this.$u.toast('登录中');
-	uni.login({
-		provider: 'weixin'
-	}).then(async (res) => {
-		let data = await userAuthSession({
-			code: res.code
-		});
-		if (data) {
-			console.log('data.openId001:',data.openId)
-			main.SET_OPENID(data.openId)
-			openid.value = data.openId
-		}
-	});
+const wechatMiniLogin = async () => {
+	try {
+		const data = await loginWechatSession()
+		main.SET_OPENID(data.openId)
+		openid.value = data.openId
+		return true
+	} catch (error) {
+		reportAuthError(error, error?.authStage || 'exchange')
+		return false
+	}
 }
 
 
@@ -120,7 +116,11 @@ const loginForWechatMini = async (e) => {
 		});
 		return
 	}
-	if (e.detail.encryptedData && e.detail.iv) {
+	if (!e.detail.encryptedData || !e.detail.iv) {
+		reportAuthError({ errMsg: e.detail.errMsg }, 'phone')
+		return
+	}
+	try {
 		let data = await userLoginForWechatMini({
 			encryptedData: e.detail.encryptedData,
 			iv: e.detail.iv,
@@ -137,6 +137,14 @@ const loginForWechatMini = async (e) => {
 				uni.navigateBack();
 			}, 2000);
 		}
+	} catch (error) {
+		reportAuthError(error)
+		// An expired session requires new phone authorization: old encrypted data
+		// cannot be replayed with the new session key. Refresh once, then let the
+		// user explicitly retry; never retry the phone request automatically.
+		if (error?.authCode === 1004004002 && await wechatMiniLogin()) {
+			uni.showToast({ title: '微信会话已更新，请重新授权手机号', icon: 'none' })
+		}
 	}
 }
 
@@ -150,6 +158,7 @@ const getCaptcha = async () => {
 		return
 	}
 	
+	try {
 	let data = await smsSend({
 		mobile: mobile.value,
 		scene: 1
@@ -157,6 +166,9 @@ const getCaptcha = async () => {
 	if (data) {
 		uCode.value.start();
 		
+	}
+	} catch (error) {
+		reportSmsError(error, 'send')
 	}
 }
 
@@ -206,6 +218,7 @@ const login = async () => {
 	}
 	
 	// #endif
+	try {
 	let data = await userLogin({
 		mobile: mobile.value,
 		code: captcha.value,
@@ -230,6 +243,9 @@ const login = async () => {
 		setTimeout(function() {
 			uni.navigateBack();
 		}, 2000);
+	}
+	} catch (error) {
+		reportSmsError(error, 'login')
 	}
 }
 

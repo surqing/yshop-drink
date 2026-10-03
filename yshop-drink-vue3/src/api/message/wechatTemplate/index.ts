@@ -6,12 +6,12 @@ export interface WechatTemplateVO {
   name: string
   content: string
   tempid: string
-  status: byte
+  status: number
   type: string
 }
 
 // 查询微信模板列表
-export const getWechatTemplatePage = async (params: WechatTemplatePageReqVO) => {
+export const getWechatTemplatePage = async (params: PageParam) => {
   return await request.get({ url: `/message/wechat-template/page`, params })
 }
 

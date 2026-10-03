@@ -30,7 +30,7 @@ export const useUpload = () => {
     } else {
       // 模式二：后端上传
       // 重写 el-upload httpRequest 文件上传成功会走成功的钩子，失败走失败的钩子
-      return new Promise((resolve, reject) => {
+      return new Promise<{ code: number; data: string }>((resolve, reject) => {
         FileApi.updateFile({ file: options.file })
           .then((res) => {
             if (res.code === 0) {

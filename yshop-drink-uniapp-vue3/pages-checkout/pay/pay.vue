@@ -330,7 +330,7 @@ onShow(() => {
 	}
 	defaultTime.value = hour + ':' + minute;
 	
-	console.log('member:',member.value)
+	console.debug('[checkout] member present:', !!member.value?.id)
 	
 	if(orderType.value == 'takeout'){
 		active.value = true
@@ -623,7 +623,7 @@ const weixinPay = async(order) => {
 		from: from,
 		paytype: 'weixin'
 	});
-	console.log('param2:',data)
+	console.debug('[payment] response present:', !!data)
 	if (!data) {
 		uni.hideLoading();
 		return;
@@ -631,12 +631,12 @@ const weixinPay = async(order) => {
 	if (data.trade_type == 'MWEB') {
 		// #ifdef H5
 		// 微信外的H5
-		console.log('data:',data)
+
 		location.href = data.data;
 		// #endif
-		console.log('data1:',data)
+
 	} else if (data.trade_type == 'JSAPI') {
-		console.log('param:',data)
+
 
 		// #ifdef MP-WEIXIN
 		uni.requestPayment({
@@ -654,7 +654,7 @@ const weixinPay = async(order) => {
 				});
 			},
 			fail: function(err) {
-				console.log('fail:' + JSON.stringify(err));
+				console.warn('[payment] category=wechat');
 			}
 		});
 		// #endif
@@ -683,7 +683,7 @@ const aliPay = async(order) => {
 		paytype: 'alipay'
 	});
 
-	console.log('data:',data.data)
+	console.debug('[payment] response present:', !!data?.data)
   // 支付宝支付，这里只要提交表单
 	let form = data.data
 	const div = document.createElement('formdiv');

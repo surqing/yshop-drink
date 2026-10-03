@@ -2,6 +2,10 @@ import request from '@/config/axios'
 
 export interface OrderVO {
   id: number
+  orderId: string
+  expressSn: string
+  createTime: string
+  userRespVO: { nickname: string }
   userId: number
   productId: number
   number: number
@@ -20,7 +24,7 @@ export interface OrderVO {
 }
 
 // 查询积分商城订单列表
-export const getOrderPage = async (params: OrderPageReqVO) => {
+export const getOrderPage = async (params: PageParam) => {
   return await request.get({ url: `/score/order/page`, params })
 }
 

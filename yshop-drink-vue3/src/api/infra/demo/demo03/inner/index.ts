@@ -6,6 +6,8 @@ export interface Demo03StudentVO {
   sex: number
   birthday: Date
   description: string
+  demo03Courses?: Demo03CourseVO[]
+  demo03Grade?: Demo03GradeVO
 }
 
 // 查询学生分页
@@ -54,4 +56,18 @@ export const getDemo03GradeByStudentId = async (studentId) => {
   return await request.get({
     url: `/infra/demo03-student/demo03-grade/get-by-student-id?studentId=` + studentId
   })
+}
+
+export interface Demo03CourseVO {
+  id?: number
+  studentId?: number
+  name?: string
+  score?: number
+}
+
+export interface Demo03GradeVO {
+  id?: number
+  studentId?: number
+  name?: string
+  teacher?: string
 }

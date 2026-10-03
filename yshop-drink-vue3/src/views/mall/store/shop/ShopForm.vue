@@ -14,10 +14,10 @@
         <el-input v-model="formData.mobile" placeholder="请输入店铺电话" />
       </el-form-item>
       <el-form-item label="门店头像" prop="image">
-          <Materials v-model="formData.image" num="1" type="image" />
+          <Materials v-model="formData.image" :num="1" type="image" />
       </el-form-item>
       <el-form-item label="门店组图" prop="images">
-        <Materials v-model="formData.images" num="5" type="image" />
+        <Materials v-model="formData.images" :num="5" type="image" />
       </el-form-item>
       <el-form-item label="营业开始时间" prop="startTime">
         <el-time-picker v-model="formData.startTime" placeholder="选择营业开始时间" />
@@ -98,8 +98,8 @@ const dialogVisible = ref(false) // 弹窗的是否展示
 const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
-const formData = ref({
-  id: undefined,
+const formData = ref<Partial<Omit<ShopApi.ShopVO, 'adminId' | 'status'>> & { adminId?: (string | number)[]; status?: number }>({
+  id: undefined as number | undefined,
   name: undefined,
   mobile: undefined,
   image: undefined,
@@ -138,7 +138,7 @@ const formRules = reactive({
 })
 const formRef = ref() // 表单 Ref
 
-const adminUsers = ref([])
+const adminUsers = ref<UserApi.UserVO[]>([])
 const isShow = ref(true)
 
 /** 打开弹窗 */
@@ -158,7 +158,7 @@ const open = async (type: string, id?: number) => {
     formLoading.value = true
     try {
       formData.value = await ShopApi.getShop(id)
-      formData.value.adminId = formData.value.adminId.map(Number)
+      formData.value.adminId = formData.value.adminId?.map(Number)
     } finally {
       formLoading.value = false
     }
@@ -221,7 +221,7 @@ const getList = async () => {
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
-    id: undefined,
+    id: undefined as number | undefined,
     name: undefined,
     mobile: undefined,
     image: undefined,

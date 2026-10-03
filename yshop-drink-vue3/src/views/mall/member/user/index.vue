@@ -34,7 +34,7 @@
       </el-form-item>
       <el-form-item label="添加时间" prop="createTime">
         <el-date-picker
-          v-model="queryParams.createTime"
+          v-model="(queryParams.createTime as [string, string])"
           value-format="YYYY-MM-DD HH:mm:ss"
           type="daterange"
           start-placeholder="开始日期"
@@ -121,6 +121,7 @@
 <script setup lang="ts" name="User">
 import { dateFormatter } from '@/utils/formatTime'
 import download from '@/utils/download'
+import type { TabsPaneContext } from 'element-plus'
 import * as UserApi from '@/api/member/user'
 import UserForm from './UserForm.vue'
 import UserDetail from './UserDetail.vue'
@@ -134,11 +135,12 @@ const list = ref([]) // 列表的数据
 const queryParams = reactive({
   pageNo: 1,
   pageSize: 10,
+  loginType: undefined as string | number | undefined,
   username: null,
   realName: null,
   nickname: null,
   phone: null,
-  createTime: []
+  createTime: [] as string[]
 })
 const queryFormRef = ref() // 搜索的表单
 const exportLoading = ref(false) // 导出的加载中
@@ -211,4 +213,5 @@ const handleExport = async () => {
 onMounted(() => {
   getList()
 })
+defineExpose({ handleExport })
 </script>

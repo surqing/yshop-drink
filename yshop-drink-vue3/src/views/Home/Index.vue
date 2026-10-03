@@ -130,7 +130,7 @@ const count = ref({
         goodsCount: 0
 })
 const loading = ref(true)
-const notice = ref([])
+const notice = ref<NoticeApi.NoticeVO[]>([])
 
 
 /** 查询列表 */

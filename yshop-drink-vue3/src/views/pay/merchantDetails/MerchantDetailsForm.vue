@@ -120,7 +120,7 @@ const formData = ref({
   subAppId: undefined,
   subMchId: undefined,
   inputCharset: undefined,
-  isTest: undefined
+  isTest: undefined as number | undefined
 })
 const formRules = reactive({
   payType: [{ required: true, message: '支付类型(支付渠道)不能为空', trigger: 'change' }],

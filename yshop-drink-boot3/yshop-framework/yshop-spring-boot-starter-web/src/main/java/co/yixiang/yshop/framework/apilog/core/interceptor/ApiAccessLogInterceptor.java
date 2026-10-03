@@ -1,8 +1,5 @@
 package co.yixiang.yshop.framework.apilog.core.interceptor;
 
-import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.util.StrUtil;
-import co.yixiang.yshop.framework.common.util.servlet.ServletUtils;
 import co.yixiang.yshop.framework.common.util.spring.SpringUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -11,7 +8,6 @@ import org.springframework.util.StopWatch;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
-import java.util.Map;
 
 /**
  * API 访问日志 Interceptor
@@ -37,14 +33,9 @@ public class ApiAccessLogInterceptor implements HandlerInterceptor {
 
         // 打印 request 日志
         if (!SpringUtils.isProd()) {
-            Map<String, String> queryString = ServletUtils.getParamMap(request);
-            String requestBody = ServletUtils.isJsonRequest(request) ? ServletUtils.getBody(request) : null;
-            if (CollUtil.isEmpty(queryString) && StrUtil.isEmpty(requestBody)) {
-                log.info("[preHandle][开始请求 URL({}) 无参数]", request.getRequestURI());
-            } else {
-                log.info("[preHandle][开始请求 URL({}) 参数({})]", request.getRequestURI(),
-                        StrUtil.blankToDefault(requestBody, queryString.toString()));
-            }
+            // Request bodies/queries can contain codes, tokens or personal data.
+            // Keep method, path and timing; never print raw request values.
+            log.info("[preHandle][开始请求 method({}) URL({})]", request.getMethod(), request.getRequestURI());
             // 计时
             StopWatch stopWatch = new StopWatch();
             stopWatch.start();

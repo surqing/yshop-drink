@@ -11,10 +11,10 @@
         <el-input v-model="formData.title" placeholder="请输入产品标题" />
       </el-form-item>
       <el-form-item label="主图" prop="image">
-          <Materials v-model="formData.image" num="1" type="image" />
+          <Materials v-model="formData.image" :num="1" type="image" />
       </el-form-item>
       <el-form-item label="组图" prop="images">
-        <Materials v-model="formData.images" num="5" type="image" />
+        <Materials v-model="formData.images" :num="5" type="image" />
       </el-form-item>
       <el-form-item label="详情" prop="desc">
         <vue-ueditor-wrap v-model="formData.desc" :config="myConfig" @before-init="addCustomDialog"    style="width: 90%;" />
@@ -51,8 +51,8 @@ const dialogVisible = ref(false) // 弹窗的是否展示
 const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
-const formData = ref({
-  id: undefined,
+const formData = ref<Partial<ProductApi.ProductVO> & { isSwitch?: number }>({
+  id: undefined as number | undefined,
   title: undefined,
   image: undefined,
   images: undefined,
@@ -204,7 +204,7 @@ const addCustomDialog  = () => {
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
-    id: undefined,
+    id: undefined as number | undefined,
     title: undefined,
     image: undefined,
     images: undefined,

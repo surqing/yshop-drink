@@ -13,11 +13,11 @@ export interface UserAddressVO {
   postCode: string
   longitude: string
   latitude: string
-  isDefault: byte
+  isDefault: number
 }
 
 // 查询用户地址列表
-export const getUserAddressPage = async (params: UserAddressPageReqVO) => {
+export const getUserAddressPage = async (params: PageParam) => {
   return await request.get({ url: `/member/user-address/page`, params })
 }
 

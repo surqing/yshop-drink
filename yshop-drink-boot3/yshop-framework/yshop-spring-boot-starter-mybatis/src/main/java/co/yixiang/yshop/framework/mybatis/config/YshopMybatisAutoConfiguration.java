@@ -2,8 +2,10 @@ package co.yixiang.yshop.framework.mybatis.config;
 
 import cn.hutool.core.util.StrUtil;
 import co.yixiang.yshop.framework.mybatis.core.handler.DefaultDBFieldHandler;
+import co.yixiang.yshop.framework.mybatis.core.log.SafeSqlLog;
 import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.autoconfigure.MybatisPlusAutoConfiguration;
+import com.baomidou.mybatisplus.autoconfigure.ConfigurationCustomizer;
 import com.baomidou.mybatisplus.core.handlers.MetaObjectHandler;
 import com.baomidou.mybatisplus.core.incrementer.IKeyGenerator;
 import com.baomidou.mybatisplus.extension.incrementer.*;
@@ -25,6 +27,11 @@ import org.springframework.core.env.ConfigurableEnvironment;
 @MapperScan(value = "${yshop.info.base-package}", annotationClass = Mapper.class,
         lazyInitialization = "${mybatis.lazy-initialization:false}") // Mapper 懒加载，目前仅用于单元测试
 public class YshopMybatisAutoConfiguration {
+
+    @Bean
+    public ConfigurationCustomizer safeSqlLoggingCustomizer() {
+        return configuration -> configuration.setLogImpl(SafeSqlLog.class);
+    }
 
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {

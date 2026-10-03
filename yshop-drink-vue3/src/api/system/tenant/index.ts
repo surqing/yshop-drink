@@ -20,7 +20,7 @@ export interface TenantPageReqVO extends PageParam {
   contactName?: string
   contactMobile?: string
   status?: number
-  createTime?: Date[]
+  createTime?: (string | Date)[]
 }
 
 export interface TenantExportReqVO {
@@ -28,7 +28,7 @@ export interface TenantExportReqVO {
   contactName?: string
   contactMobile?: string
   status?: number
-  createTime?: Date[]
+  createTime?: (string | Date)[]
 }
 
 // 查询租户列表

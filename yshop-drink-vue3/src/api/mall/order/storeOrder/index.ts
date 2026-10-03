@@ -2,6 +2,17 @@ import request from '@/config/axios'
 
 export interface StoreOrderVO {
   id: number
+  updateType?: string
+  orderType: string
+  shopName: string
+  numberId: number
+  deskNumber: string
+  deskPeople: number
+  statusStr: string
+  createTime: string
+  getTime: string
+  userRespVO: { nickname: string }
+  storeOrderCartInfoDOList: StoreOrderProductVO[]
   orderId: string
   extendOrderId: string
   uid: number
@@ -18,11 +29,11 @@ export interface StoreOrderVO {
   deductionPrice: number
   couponId: number
   couponPrice: number
-  paid: byte
+  paid: number
   payTime: Date
   payType: string
   status: boolean
-  refundStatus: byte
+  refundStatus: number
   refundReasonWapImg: string
   refundReasonWapExplain: string
   refundReasonTime: Date
@@ -49,12 +60,12 @@ export interface StoreOrderVO {
   verifyCode: string
   storeId: number
   shippingType: boolean
-  isChannel: byte
+  isChannel: number
   isSystemDel: boolean
 }
 
 // 查询订单列表
-export const getStoreOrderPage = async (params: StoreOrderPageReqVO) => {
+export const getStoreOrderPage = async (params: PageParam) => {
   return await request.get({ url: `/order/store-order/page`, params })
 }
 
@@ -118,3 +129,11 @@ export const orderNoticeUrl = async () => {
   return await request.get({ url: `/order/store-order/notice`})
 }
 
+
+export interface StoreOrderProductVO {
+  image: string
+  title: string
+  price: number
+  number: number
+  isOrder: number
+}

@@ -1,12 +1,6 @@
 import { parseUrl } from '@/utils'
 
 export function navigateTo(location, complete, fail, success) {
-  console.log({
-    url: parseUrl(location),
-    complete,
-    fail,
-    success,
-  })
   uni.navigateTo({
     url: parseUrl(location),
     complete,

@@ -127,8 +127,7 @@ public class SocialClientServiceImpl implements SocialClientService {
         AuthCallback authCallback = AuthCallback.builder().code(code).state(state).build();
         // 执行请求
         AuthResponse<?> authResponse = authRequest.login(authCallback);
-        log.info("[getAuthUser][请求社交平台 type({}) request({}) response({})]", socialType,
-                toJsonString(authCallback), toJsonString(authResponse));
+        log.info("[getAuthUser] type={} success={}", socialType, authResponse.ok());
         if (!authResponse.ok()) {
             throw exception(SOCIAL_USER_AUTH_FAILURE, authResponse.getMsg());
         }
@@ -222,7 +221,7 @@ public class SocialClientServiceImpl implements SocialClientService {
         try {
             return service.getUserService().getPhoneNoInfo(phoneCode);
         } catch (WxErrorException e) {
-            log.error("[getPhoneNoInfo][userType({}) phoneCode({}) 获得手机号失败]", userType, phoneCode, e);
+            log.warn("[getPhoneNoInfo] category=wechat userType={} code={}", userType, e.getError().getErrorCode());
             throw exception(SOCIAL_CLIENT_WEIXIN_MINI_APP_PHONE_CODE_ERROR);
         }
     }

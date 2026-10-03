@@ -27,7 +27,7 @@
         </el-select>
       </el-form-item>
       <el-form-item label="图片" prop="image">
-          <Materials v-model="formData.image" num="1" type="image" />
+          <Materials v-model="formData.image" :num="1" type="image" />
       </el-form-item>
       <el-form-item label="权重" prop="weigh">
         <el-input v-model="formData.weigh" placeholder="请输入权重" />
@@ -57,9 +57,9 @@ const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
 const formData = ref({
-  id: undefined,
+  id: undefined as number | undefined,
   image: undefined,
-  isSwitch: undefined,
+  isSwitch: undefined as number | undefined,
   weigh: undefined,
   shopId: 0
 })
@@ -69,7 +69,7 @@ const formRules = reactive({
   shopId: [{ required: true, message: '请选择店铺', trigger: 'blur' }]
 })
 const formRef = ref() // 表单 Ref
-const shopList = ref([])
+const shopList = ref<ShopApi.ShopVO[]>([])
 
 /** 打开弹窗 */
 const open = async (type: string, id?: number) => {
@@ -131,7 +131,7 @@ const getList = async () => {
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
-    id: undefined,
+    id: undefined as number | undefined,
     image: undefined,
     isSwitch: 1,
     weigh: undefined,

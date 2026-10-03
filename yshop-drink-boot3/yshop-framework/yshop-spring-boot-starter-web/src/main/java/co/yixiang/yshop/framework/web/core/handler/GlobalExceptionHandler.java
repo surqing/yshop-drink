@@ -1,13 +1,12 @@
 package co.yixiang.yshop.framework.web.core.handler;
 
 import cn.hutool.core.exceptions.ExceptionUtil;
-import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
 import co.yixiang.yshop.framework.apilog.core.service.ApiErrorLogFrameworkService;
+import co.yixiang.yshop.framework.apilog.core.util.SensitiveDataSanitizer;
 import co.yixiang.yshop.framework.common.exception.ServiceException;
 import co.yixiang.yshop.framework.common.pojo.CommonResult;
 import co.yixiang.yshop.framework.common.util.collection.SetUtils;
-import co.yixiang.yshop.framework.common.util.json.JsonUtils;
 import co.yixiang.yshop.framework.common.util.monitor.TracerUtils;
 import co.yixiang.yshop.framework.common.util.servlet.ServletUtils;
 import co.yixiang.yshop.framework.web.core.util.WebFrameworkUtils;
@@ -18,7 +17,6 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.ValidationException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.util.Assert;
 import org.springframework.validation.BindException;
@@ -32,7 +30,6 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.time.LocalDateTime;
-import java.util.Map;
 import java.util.Set;
 
 import static co.yixiang.yshop.framework.common.exception.enums.GlobalErrorCodeConstants.*;
@@ -106,7 +103,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(value = MissingServletRequestParameterException.class)
     public CommonResult<?> missingServletRequestParameterExceptionHandler(MissingServletRequestParameterException ex) {
-        log.warn("[missingServletRequestParameterExceptionHandler]", ex);
+        log.warn("[missingServletRequestParameterExceptionHandler] category={}", ex.getClass().getSimpleName());
         return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数缺失:%s", ex.getParameterName()));
     }
 
@@ -117,7 +114,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public CommonResult<?> methodArgumentTypeMismatchExceptionHandler(MethodArgumentTypeMismatchException ex) {
-        log.warn("[missingServletRequestParameterExceptionHandler]", ex);
+        log.warn("[missingServletRequestParameterExceptionHandler] category={}", ex.getClass().getSimpleName());
         return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数类型错误:%s", ex.getMessage()));
     }
 
@@ -126,7 +123,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public CommonResult<?> methodArgumentNotValidExceptionExceptionHandler(MethodArgumentNotValidException ex) {
-        log.warn("[methodArgumentNotValidExceptionExceptionHandler]", ex);
+        log.warn("[methodArgumentNotValidExceptionExceptionHandler] category={}", ex.getClass().getSimpleName());
         FieldError fieldError = ex.getBindingResult().getFieldError();
         assert fieldError != null; // 断言，避免告警
         return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数不正确:%s", fieldError.getDefaultMessage()));
@@ -137,7 +134,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(BindException.class)
     public CommonResult<?> bindExceptionHandler(BindException ex) {
-        log.warn("[handleBindException]", ex);
+        log.warn("[handleBindException] category={}", ex.getClass().getSimpleName());
         FieldError fieldError = ex.getFieldError();
         assert fieldError != null; // 断言，避免告警
         return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数不正确:%s", fieldError.getDefaultMessage()));
@@ -148,7 +145,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(value = ConstraintViolationException.class)
     public CommonResult<?> constraintViolationExceptionHandler(ConstraintViolationException ex) {
-        log.warn("[constraintViolationExceptionHandler]", ex);
+        log.warn("[constraintViolationExceptionHandler] category={}", ex.getClass().getSimpleName());
         ConstraintViolation<?> constraintViolation = ex.getConstraintViolations().iterator().next();
         return CommonResult.error(BAD_REQUEST.getCode(), String.format("请求参数不正确:%s", constraintViolation.getMessage()));
     }
@@ -158,7 +155,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(value = ValidationException.class)
     public CommonResult<?> validationException(ValidationException ex) {
-        log.warn("[constraintViolationExceptionHandler]", ex);
+        log.warn("[constraintViolationExceptionHandler] category={}", ex.getClass().getSimpleName());
         // 无法拼接明细的错误信息，因为 Dubbo Consumer 抛出 ValidationException 异常时，是直接的字符串信息，且人类不可读
         return CommonResult.error(BAD_REQUEST);
     }
@@ -172,7 +169,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(NoHandlerFoundException.class)
     public CommonResult<?> noHandlerFoundExceptionHandler(HttpServletRequest req, NoHandlerFoundException ex) {
-        log.warn("[noHandlerFoundExceptionHandler]", ex);
+        log.warn("[noHandlerFoundExceptionHandler] category={}", ex.getClass().getSimpleName());
         return CommonResult.error(NOT_FOUND.getCode(), String.format("请求地址不存在:%s", ex.getRequestURL()));
     }
 
@@ -183,7 +180,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public CommonResult<?> httpRequestMethodNotSupportedExceptionHandler(HttpRequestMethodNotSupportedException ex) {
-        log.warn("[httpRequestMethodNotSupportedExceptionHandler]", ex);
+        log.warn("[httpRequestMethodNotSupportedExceptionHandler] category={}", ex.getClass().getSimpleName());
         return CommonResult.error(METHOD_NOT_ALLOWED.getCode(), String.format("请求方法不正确:%s", ex.getMessage()));
     }
 
@@ -195,7 +192,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = AccessDeniedException.class)
     public CommonResult<?> accessDeniedExceptionHandler(HttpServletRequest req, AccessDeniedException ex) {
         log.warn("[accessDeniedExceptionHandler][userId({}) 无法访问 url({})]", WebFrameworkUtils.getLoginUserId(req),
-                req.getRequestURL(), ex);
+                req.getRequestURI());
         return CommonResult.error(FORBIDDEN);
     }
 
@@ -208,7 +205,7 @@ public class GlobalExceptionHandler {
     public CommonResult<?> serviceExceptionHandler(ServiceException ex) {
         if (!IGNORE_ERROR_MESSAGES.contains(ex.getMessage())) {
             // 不包含的时候，才进行打印，避免 ex 堆栈过多
-            log.info("[serviceExceptionHandler]", ex);
+            log.info("[serviceExceptionHandler] code={}", ex.getCode());
         }
         return CommonResult.error(ex.getCode(), ex.getMessage());
     }
@@ -225,7 +222,8 @@ public class GlobalExceptionHandler {
         }
 
         // 情况二：处理异常
-        log.error("[defaultExceptionHandler]", ex);
+        log.error("[defaultExceptionHandler] category={} locations={}", ex.getClass().getSimpleName(),
+                SensitiveDataSanitizer.safeStackTrace(ex));
         // 插入异常日志
         this.createExceptionLog(req, ex);
         // 返回 ERROR CommonResult
@@ -241,7 +239,7 @@ public class GlobalExceptionHandler {
             // 执行插入 errorLog
             apiErrorLogFrameworkService.createApiErrorLog(errorLog);
         } catch (Throwable th) {
-            log.error("[createExceptionLog][url({}) log({}) 发生异常]", req.getRequestURI(),  JsonUtils.toJsonString(errorLog), th);
+            log.error("[createExceptionLog] URL({}) category={}", req.getRequestURI(), th.getClass().getSimpleName());
         }
     }
 
@@ -251,9 +249,9 @@ public class GlobalExceptionHandler {
         errorLog.setUserType(WebFrameworkUtils.getLoginUserType(request));
         // 设置异常字段
         errorLog.setExceptionName(e.getClass().getName());
-        errorLog.setExceptionMessage(ExceptionUtil.getMessage(e));
-        errorLog.setExceptionRootCauseMessage(ExceptionUtil.getRootCauseMessage(e));
-        errorLog.setExceptionStackTrace(ExceptionUtils.getStackTrace(e));
+        errorLog.setExceptionMessage("Request failed");
+        errorLog.setExceptionRootCauseMessage(e.getClass().getSimpleName());
+        errorLog.setExceptionStackTrace(SensitiveDataSanitizer.safeStackTrace(e));
         StackTraceElement[] stackTraceElements = e.getStackTrace();
         Assert.notEmpty(stackTraceElements, "异常 stackTraceElements 不能为空");
         StackTraceElement stackTraceElement = stackTraceElements[0];
@@ -265,10 +263,8 @@ public class GlobalExceptionHandler {
         errorLog.setTraceId(TracerUtils.getTraceId());
         errorLog.setApplicationName(applicationName);
         errorLog.setRequestUrl(request.getRequestURI());
-        Map<String, Object> requestParams = MapUtil.<String, Object>builder()
-                .put("query", ServletUtils.getParamMap(request))
-                .put("body", ServletUtils.getBody(request)).build();
-        errorLog.setRequestParams(JsonUtils.toJsonString(requestParams));
+        errorLog.setRequestParams(SensitiveDataSanitizer.sanitizeRequest(request.getRequestURI(),
+                ServletUtils.getParamMap(request), ServletUtils.getBody(request), null));
         errorLog.setRequestMethod(request.getMethod());
         errorLog.setUserAgent(ServletUtils.getUserAgent(request));
         errorLog.setUserIp(ServletUtils.getClientIP(request));

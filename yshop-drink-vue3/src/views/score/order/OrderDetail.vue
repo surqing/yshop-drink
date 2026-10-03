@@ -9,7 +9,7 @@
       </el-descriptions>
       <el-descriptions title="商品明细" :column="2">
         <el-descriptions-item label="商品图片">
-          <el-image style="width: 40px; height: 40px" :src="product.image" :fit="fit" />
+          <el-image style="width: 40px; height: 40px" :src="product.image"  />
         </el-descriptions-item>
         <el-descriptions-item label="商品名称">{{ product.title }}</el-descriptions-item>
         <el-descriptions-item label="商品价格">{{ product.score }}积分</el-descriptions-item>
@@ -59,17 +59,18 @@ import { formatDate } from '@/utils/formatTime'
 const { t } = useI18n() // 国际化
 const dialogTitle = ref('') // 弹窗的标题
 const drawer = ref(false)
-const DetailData = ref({})
+const message = useMessage()
+const DetailData = ref<Partial<OrderApi.OrderVO>>({})
 const nickname = ref('')
-const logisticResult = ref({})
-const product = ref({})
+const logisticResult = ref<Record<string, { acceptTime: string; acceptStation: string }>>({})
+const product = ref<Partial<{ image: string; title: string; score: number }>>({})
 /** 打开弹窗 */
-const open = async (type: string, id?: number) => {
+const open = async (type: string, id: number) => {
   drawer.value = true
   dialogTitle.value = t('action.' + type)
   let data  = await OrderApi.getOrder(id)
   DetailData.value = data
-  nickname.value = DetailData.value.userRespVO.nickname
+  nickname.value = DetailData.value.userRespVO?.nickname || ''
   product.value = data.scoreProductRespVO
   console.log('aa:',product.value )
 }

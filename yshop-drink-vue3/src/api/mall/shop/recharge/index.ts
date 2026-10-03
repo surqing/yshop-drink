@@ -11,7 +11,7 @@ export interface RechargeVO {
 }
 
 // 查询充值金额管理列表
-export const getRechargePage = async (params: RechargePageReqVO) => {
+export const getRechargePage = async (params: PageParam) => {
   return await request.get({ url: `/shop/recharge/page`, params })
 }
 

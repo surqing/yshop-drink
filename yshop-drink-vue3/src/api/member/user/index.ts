@@ -5,7 +5,7 @@ export interface UserVO {
   username: string
   password: string
   realName: string
-  birthday: number
+  birthday: string
   cardId: string
   mark: string
   partnerId: number
@@ -13,6 +13,10 @@ export interface UserVO {
   nickname: string
   avatar: string
   phone: string
+  mobile: string
+  cardName?: string
+  loginIp: string
+  createTime: string
   addIp: string
   lastIp: string
   nowMoney: number
@@ -20,11 +24,11 @@ export interface UserVO {
   integral: number
   signNum: number
   status: boolean
-  level: byte
+  level: number
   spreadUid: number
   spreadTime: Date
   userType: string
-  isPromoter: byte
+  isPromoter: number
   payCount: number
   spreadCount: number
   addres: string
@@ -34,7 +38,7 @@ export interface UserVO {
 }
 
 // 查询用户列表
-export const getUserPage = async (params: UserPageReqVO) => {
+export const getUserPage = async (params: PageParam) => {
   return await request.get({ url: `/member/user/page`, params })
 }
 

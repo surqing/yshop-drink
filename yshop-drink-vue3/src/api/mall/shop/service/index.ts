@@ -15,7 +15,7 @@ export interface ServiceVO {
 }
 
 // 查询我的服务列表
-export const getServicePage = async (params: ServicePageReqVO) => {
+export const getServicePage = async (params: PageParam) => {
   return await request.get({ url: `/shop/service/page`, params })
 }
 

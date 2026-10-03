@@ -273,7 +273,7 @@ const isCartShow = ref(true)
 const popup = ref()
 
 const newkmUnit = computed(() => (param) =>{
-  console.log('param:',param)
+  console.debug('[menu] opened')
   return '10km'
 })
 const goodCartNum = computed(() => { //计算单个饮品添加到购物车的数量
@@ -358,13 +358,13 @@ const  init = async() => { //页面初始化
 	//return
 	let error = {},
 		result = location.value
-	console.log('result:',result)
+	console.debug('[location] cached:', !!result?.latitude)
 	if (!location.value.hasOwnProperty('latitude')) {
-		  console.log('result1:',location.value)
+		  console.debug('[location] cached:', !!location.value)
 		  uni.getLocation(({
 			 type: 'wgs84',
 			 success: function (res) {
-			   console.log('location1:',res)
+			   console.debug('[location] acquired')
 		
 				result = {
 					latitude: res.latitude,
@@ -404,7 +404,7 @@ const  init = async() => { //页面初始化
 	
 }
 const getShopList = async(res) => {
-	 console.log('location9:',res)
+	 console.debug('[location] acquired')
 	if (res) {
 		main.SET_LOCATION(res);
 	
@@ -434,8 +434,8 @@ const getShopList = async(res) => {
 				goods.value = mygoods;
 				refreshCart();
 			}
-			console.log('goods:',mygoods)
-			console.log('goods:',goods.value)
+			console.debug('[menu] response groups:', Array.isArray(mygoods) ? mygoods.length : 0)
+			console.debug('[menu] rendered groups:', goods.value.length)
 			loading.value = false;
 			uni.stopPullDownRefresh();
 		}
@@ -588,7 +588,7 @@ const closeGoodDetailModal = () => { //关闭饮品详情模态框
 }
 const changePropertyDefault = (index, key, isDefault) => { //改变默认属性值
 	let valueStr = ''
-	console.log('good:',good.value)
+	console.debug('[menu] product ID:', good.value.id)
 	if(isDefault){
 		newValue.value = []
 		for(let i = 0;i < good.value.productAttr.length;i++){

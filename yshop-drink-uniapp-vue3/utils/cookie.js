@@ -12,8 +12,6 @@ function all() {
 }
 
 function set(key, data, time) {
-  console.log("--> % set % key:\n", key)
-  console.log("--> % set % data:\n", data)
   if (!key) {
     return
   }

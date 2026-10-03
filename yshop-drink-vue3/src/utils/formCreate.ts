@@ -44,7 +44,7 @@ export const setConfAndFields2 = (
   value?: object
 ) => {
   if (isRef(detailPreview)) {
-    detailPreview = detailPreview.value
+    detailPreview = (detailPreview as Ref<object>).value
   }
   // @ts-ignore
   detailPreview.option = JSON.parse(conf)

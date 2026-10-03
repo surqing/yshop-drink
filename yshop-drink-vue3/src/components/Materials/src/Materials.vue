@@ -186,7 +186,7 @@ import { getAccessToken } from '@/utils/auth'
 
 const props = defineProps({
   modelValue: {
-    type: Array,
+    type: [Array, String],
     default() {
       return []
     }

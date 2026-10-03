@@ -47,7 +47,7 @@
 <script setup lang="ts">
 // 拖拽组件
 import VueDraggable from 'vuedraggable'
-import { usePropertyForm } from '@/components/DiyEditor/util'
+import { useVModel } from '@vueuse/core'
 import { any, array } from 'vue-types'
 import { propTypes } from '@/utils/propTypes'
 import { cloneDeep } from 'lodash-es'
@@ -66,7 +66,7 @@ const props = defineProps({
 })
 // 定义事件
 const emit = defineEmits(['update:modelValue'])
-const { formData } = usePropertyForm(props.modelValue, emit)
+const formData = useVModel(props, 'modelValue', emit, { passive: true, deep: true })
 
 // 处理添加
 const handleAdd = () => formData.value.push(cloneDeep(props.emptyItem || {}))

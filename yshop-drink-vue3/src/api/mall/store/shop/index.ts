@@ -26,7 +26,7 @@ export const getShopList = async () => {
 }
 
 // 查询门店管理列表
-export const getShopPage = async (params: ShopPageReqVO) => {
+export const getShopPage = async (params: PageParam) => {
   return await request.get({ url: `/store/shop/page`, params })
 }
 

@@ -57,8 +57,8 @@ const message = useMessage() // 消息弹窗
 
 const dialogVisible = ref(false) // 弹窗的是否展示
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
-const formData = reactive({
-  id: undefined,
+const formData = reactive<{ id?: number; name: string; code: string; menuIds: number[] }>({
+  id: undefined as number | undefined,
   name: '',
   code: '',
   menuIds: []
@@ -81,9 +81,9 @@ const open = async (row: RoleApi.RoleVO) => {
   formData.code = row.code
   formLoading.value = true
   try {
-    formData.value.menuIds = await PermissionApi.getRoleMenuList(row.id)
+    formData.menuIds = await PermissionApi.getRoleMenuList(row.id)
     // 设置选中
-    formData.value.menuIds.forEach((menuId: number) => {
+    formData.menuIds.forEach((menuId: number) => {
       treeRef.value.setChecked(menuId, true, false)
     })
   } finally {
@@ -95,6 +95,7 @@ defineExpose({ open }) // 提供 open 方法，用于打开弹窗
 /** 提交表单 */
 const emit = defineEmits(['success']) // 定义 success 事件，用于操作成功后的回调
 const submitForm = async () => {
+  if (formData.id === undefined) return
   // 校验表单
   if (!formRef) return
   const valid = await formRef.value.validate()
@@ -125,12 +126,12 @@ const resetForm = () => {
   treeNodeAll.value = false
   menuExpand.value = false
   // 重置表单
-  formData.value = {
-    id: undefined,
+  Object.assign(formData, {
+    id: undefined as number | undefined,
     name: '',
     code: '',
     menuIds: []
-  }
+  })
   treeRef.value?.setCheckedNodes([])
   formRef.value?.resetFields()
 }
