@@ -3,7 +3,6 @@ package co.yixiang.yshop.module.order.service.payment;
 import co.yixiang.yshop.module.order.dal.mysql.payment.PaymentMapper;
 import co.yixiang.yshop.module.pay.callback.*;
 
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.*;
 
@@ -35,29 +34,30 @@ public class PaymentInbox {
         row.setMchId(event.mchId());
         row.setResultCode(event.resultCode());
         row.setReceivedAt(event.receivedAt());
-        try {
-            mapper.insert(row);
-            return new Receipt(row.getId(), null);
-        } catch (DuplicateKeyException duplicate) {
-            PaymentRecord existing =
-                    mapper.lockTransaction(row.getProvider(), row.getProviderTransactionId());
-            if (existing == null) throw new IllegalStateException("PAYMENT_RECORD_NOT_FOUND");
-            mapper.seen(existing.getId());
-            boolean sameOrder = existing.getOrderId().equals(event.outTradeNo());
-            if (!sameOrder
-                    || existing.getAmountCents() != event.totalFeeCents()
-                    || !Objects.equals(existing.getMerchantDetailsId(), event.merchantDetailsId())
-                    || !Objects.equals(existing.getAppid(), event.appid())
-                    || !Objects.equals(existing.getMchId(), event.mchId())) {
-                mapper.conflict(
-                        row.getId(),
-                        existing.getId(),
-                        event.outTradeNo(),
-                        sameOrder ? "PAYMENT_CONFLICT" : "TRANSACTION_ORDER_CONFLICT");
-                return new Receipt(existing.getId(), PaymentResult.REJECTED);
-            }
-            return new Receipt(existing.getId(), null);
+        // A duplicate INSERT takes an InnoDB shared lock. Catching it and then requesting
+        // FOR UPDATE deadlocks simultaneous duplicates during the shared-to-exclusive upgrade.
+        // The no-op upsert instead acquires the exclusive lock without changing the old payload.
+        // JDBC affected-row conventions differ, so identify a new receipt by its generated ID.
+        mapper.insertOrLock(row);
+        PaymentRecord existing =
+                mapper.lockTransaction(row.getProvider(), row.getProviderTransactionId());
+        if (existing == null) throw new IllegalStateException("PAYMENT_RECORD_NOT_FOUND");
+        if (row.getId().equals(existing.getId())) return new Receipt(row.getId(), null);
+        mapper.seen(existing.getId());
+        boolean sameOrder = existing.getOrderId().equals(event.outTradeNo());
+        if (!sameOrder
+                || existing.getAmountCents() != event.totalFeeCents()
+                || !Objects.equals(existing.getMerchantDetailsId(), event.merchantDetailsId())
+                || !Objects.equals(existing.getAppid(), event.appid())
+                || !Objects.equals(existing.getMchId(), event.mchId())) {
+            mapper.conflict(
+                    row.getId(),
+                    existing.getId(),
+                    event.outTradeNo(),
+                    sameOrder ? "PAYMENT_CONFLICT" : "TRANSACTION_ORDER_CONFLICT");
+            return new Receipt(existing.getId(), PaymentResult.REJECTED);
         }
+        return new Receipt(existing.getId(), null);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

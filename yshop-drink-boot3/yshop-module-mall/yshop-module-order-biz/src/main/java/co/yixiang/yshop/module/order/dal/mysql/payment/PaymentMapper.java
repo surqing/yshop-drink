@@ -13,8 +13,9 @@ public interface PaymentMapper {
             "INSERT INTO"
                 + " yshop_order_payment(id,order_id,provider,merchant_details_id,out_trade_no,provider_transaction_id,amount_cents,appid,mch_id,result_code,status,received_at,last_seen_at)"
                 + " VALUES(#{id},#{orderId},#{provider},#{merchantDetailsId},#{outTradeNo},"
-                + "#{providerTransactionId},#{amountCents},#{appid},#{mchId},#{resultCode},'RECEIVED',#{receivedAt},#{receivedAt})")
-    int insert(PaymentRecord record);
+                + "#{providerTransactionId},#{amountCents},#{appid},#{mchId},#{resultCode},'RECEIVED',#{receivedAt},#{receivedAt})"
+                + " ON DUPLICATE KEY UPDATE id=id")
+    int insertOrLock(PaymentRecord record);
 
     @Select(
             "SELECT * FROM yshop_order_payment WHERE provider=#{provider} AND"

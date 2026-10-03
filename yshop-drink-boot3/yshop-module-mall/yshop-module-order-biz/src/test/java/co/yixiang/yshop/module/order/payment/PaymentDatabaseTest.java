@@ -70,11 +70,38 @@ class PaymentDatabaseTest {
     PaymentMapper payments;
     StoreOrderMapper orders;
 
+    static boolean mysqlAcceptance() {
+        return System.getenv("YSHOP_ACCEPTANCE_CONFIG") != null;
+    }
+
     @Configuration
     @EnableTransactionManagement(proxyTargetClass = true)
     static class Config {
         @Bean
         DataSource dataSource() {
+            if (mysqlAcceptance()) {
+                var settings = new java.util.Properties();
+                try (var input =
+                        java.nio.file.Files.newInputStream(
+                                java.nio.file.Path.of(System.getenv("YSHOP_ACCEPTANCE_CONFIG")))) {
+                    settings.load(input);
+                } catch (java.io.IOException ex) {
+                    throw new IllegalStateException("ACCEPTANCE_CONFIGURATION_UNAVAILABLE");
+                }
+                String url = settings.getProperty("url", "");
+                String user = settings.getProperty("username", "");
+                if (!url.matches(
+                                "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase5b_[a-f0-9]{8}(\\?.*)?")
+                        || !user.matches("accept5b_[a-f0-9]{8}")) {
+                    throw new IllegalStateException("ISOLATED_DATABASE_REQUIRED");
+                }
+                var ds = new org.springframework.jdbc.datasource.DriverManagerDataSource();
+                ds.setDriverClassName("com.mysql.cj.jdbc.Driver");
+                ds.setUrl(url);
+                ds.setUsername(user);
+                ds.setPassword(settings.getProperty("password"));
+                return ds;
+            }
             var ds = new JdbcDataSource();
             ds.setURL(
                     "jdbc:h2:mem:"
@@ -97,7 +124,12 @@ class PaymentDatabaseTest {
         SqlSessionFactory factory(DataSource ds) throws Exception {
             var bean = new MybatisSqlSessionFactoryBean();
             bean.setDataSource(ds);
+            var global = com.baomidou.mybatisplus.core.toolkit.GlobalConfigUtils.defaults();
+            global.setMetaObjectHandler(
+                    new co.yixiang.yshop.framework.mybatis.core.handler.DefaultDBFieldHandler());
+            bean.setGlobalConfig(global);
             var config = new MybatisConfiguration();
+            com.baomidou.mybatisplus.core.toolkit.GlobalConfigUtils.setGlobalConfig(config, global);
             config.setMapUnderscoreToCamelCase(true);
             for (Class<?> type :
                     List.of(
@@ -243,15 +275,38 @@ class PaymentDatabaseTest {
         service = ctx.getBean(PaymentFinalizationService.class);
         payments = ctx.getBean(PaymentMapper.class);
         orders = ctx.getBean(StoreOrderMapper.class);
-        // Map every actual entity field, so production mapper/services, not substitute mappers,
-        // execute.
-        for (Class<?> entity :
-                List.of(
-                        StoreOrderDO.class,
-                        MemberUserDO.class,
-                        UserBillDO.class,
-                        co.yixiang.yshop.module.order.dal.dataobject.storeorderstatus
-                                .StoreOrderStatusDO.class)) createEntityTable(entity);
+        if (mysqlAcceptance()) {
+            // The temporary account is granted only its isolated schema. Never use the dev DB.
+            for (String table :
+                    List.of(
+                            "yshop_order_payment_conflict",
+                            "yshop_order_payment",
+                            "yshop_user_bill",
+                            "yshop_store_order_status",
+                            "yshop_store_order",
+                            "yshop_user",
+                            "test_inventory",
+                            "test_coupon")) jdbc.execute("DROP TABLE IF EXISTS " + table);
+            String schemas;
+            try (var input = getClass().getResourceAsStream("/mysql/payment-entities.sql")) {
+                schemas =
+                        new String(
+                                java.util.Objects.requireNonNull(input).readAllBytes(),
+                                java.nio.charset.StandardCharsets.UTF_8);
+            }
+            for (String sql : schemas.replaceAll("(?m)^--.*$", "").split(";"))
+                if (!sql.isBlank()) jdbc.execute(sql);
+        } else {
+            // Map every actual entity field, so production mapper/services, not substitute mappers,
+            // execute.
+            for (Class<?> entity :
+                    List.of(
+                            StoreOrderDO.class,
+                            MemberUserDO.class,
+                            UserBillDO.class,
+                            co.yixiang.yshop.module.order.dal.dataobject.storeorderstatus
+                                    .StoreOrderStatusDO.class)) createEntityTable(entity);
+        }
         jdbc.execute("CREATE TABLE test_inventory(id INT PRIMARY KEY, stock INT)");
         jdbc.update("INSERT INTO test_inventory VALUES(1,0)");
         jdbc.execute("CREATE TABLE test_coupon(id INT PRIMARY KEY, status INT)");
@@ -260,11 +315,12 @@ class PaymentDatabaseTest {
                 java.nio.file.Files.readString(
                         java.nio.file.Path.of(
                                 "../../sql/migrations/2026-10-03-payment-finalization.sql"));
-        migration =
-                migration
-                        .replaceAll("(?m)^--.*$", "")
-                        .replace("CHARACTER SET ascii COLLATE ascii_bin", "")
-                        .replace("ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "");
+        migration = migration.replaceAll("(?m)^--.*$", "");
+        if (!mysqlAcceptance())
+            migration =
+                    migration
+                            .replace("CHARACTER SET ascii COLLATE ascii_bin", "")
+                            .replace("ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "");
         for (String sql : migration.split(";")) if (!sql.isBlank()) jdbc.execute(sql);
         jdbc.update(
                 "INSERT INTO yshop_user(id,pay_count,now_money,login_type,deleted)"
@@ -304,11 +360,20 @@ class PaymentDatabaseTest {
         if (ctx != null) ctx.close();
     }
 
+    void dropFault(String table) {
+        jdbc.execute(
+                "ALTER TABLE "
+                        + table
+                        + (mysqlAcceptance() ? " DROP CHECK " : " DROP CONSTRAINT ")
+                        + "injected_fault");
+    }
+
     void order(String id, long key) {
         jdbc.update(
                 "INSERT INTO"
-                    + " yshop_store_order(id,order_id,uid,pay_price,paid,status,refund_status,is_system_del,deleted,order_type,number_id,shop_name,coupon_id)"
-                    + " VALUES(?,?,1,0.02,0,0,0,0,0,'takein',1,'Synthetic shop',1)",
+                    + " yshop_store_order(id,order_id,uid,pay_price,paid,status,refund_status,is_system_del,deleted,order_type,number_id,shop_name,coupon_id,pay_type,mark,cost,create_time)"
+                    + " VALUES(?,?,1,0.02,0,0,0,0,0,'takein',1,'Synthetic"
+                    + " shop',1,'synthetic','',0,CURRENT_TIMESTAMP)",
                 key,
                 id);
     }
@@ -366,7 +431,7 @@ class PaymentDatabaseTest {
         effects(1);
         assertEquals(1, count("SELECT paid FROM yshop_store_order WHERE id=1"));
         assertEquals(
-                new BigDecimal("0.0200"),
+                new BigDecimal(mysqlAcceptance() ? "0.02" : "0.0200"),
                 jdbc.queryForObject("SELECT number FROM yshop_user_bill", BigDecimal.class));
     }
 
@@ -506,12 +571,9 @@ class PaymentDatabaseTest {
         assertEquals(
                 "FAILED_RETRYABLE",
                 jdbc.queryForObject("SELECT status FROM yshop_order_payment", String.class));
-        if (point.equals("STATUS"))
-            jdbc.execute("ALTER TABLE yshop_store_order_status DROP CONSTRAINT injected_fault");
-        if (point.equals("SUCCESS_RECORD"))
-            jdbc.execute("ALTER TABLE yshop_order_payment DROP CONSTRAINT injected_fault");
-        if (point.equals("BILL"))
-            jdbc.execute("ALTER TABLE yshop_user_bill DROP CONSTRAINT injected_fault");
+        if (point.equals("STATUS")) dropFault("yshop_store_order_status");
+        if (point.equals("SUCCESS_RECORD")) dropFault("yshop_order_payment");
+        if (point.equals("BILL")) dropFault("yshop_user_bill");
         ctx.getBean(AtomicReference.class).set("");
         if (point.equals("AFTER_TRANSITION"))
             doAnswer(
@@ -562,8 +624,8 @@ class PaymentDatabaseTest {
     @Test
     void rechargeIsDurablyUnsupportedNotCredited() {
         jdbc.update(
-                "INSERT INTO yshop_user_bill(id,uid,extend_field,status,number)"
-                        + " VALUES(99,1,'recharge-A',0,10)");
+                "INSERT INTO yshop_user_bill(id,uid,extend_field,status,number,create_time)"
+                        + " VALUES(99,1,'recharge-A',0,10,CURRENT_TIMESTAMP)");
         for (int i = 0; i < 10; i++)
             assertEquals(
                     PaymentResult.REJECTED,
@@ -678,7 +740,7 @@ class PaymentDatabaseTest {
                                     var result =
                                             statement.executeQuery(
                                                     "SELECT paid FROM yshop_store_order WHERE"
-                                                        + " id=1")) {
+                                                            + " id=1")) {
                                 assertTrue(result.next());
                                 assertEquals(1, result.getInt(1));
                             }
@@ -742,7 +804,7 @@ class PaymentDatabaseTest {
                 .when(users)
                 .decPrice(anyLong(), any(BigDecimal.class));
         return target; // Deliberately no proxy: proves pay()->this.yuePay() uses an actual
-                       // transaction.
+        // transaction.
     }
 
     @Test
@@ -751,25 +813,25 @@ class PaymentDatabaseTest {
         jdbc.execute("ALTER TABLE yshop_user_bill ADD CONSTRAINT injected_fault CHECK(number < 0)");
         assertThrows(RuntimeException.class, () -> balance.yuePay("order-A", 1L));
         assertEquals(
-                new BigDecimal("100.0000"),
+                new BigDecimal(mysqlAcceptance() ? "100.00" : "100.0000"),
                 jdbc.queryForObject(
                         "SELECT now_money FROM yshop_user WHERE id=1", BigDecimal.class));
         assertEquals(0, count("SELECT paid FROM yshop_store_order WHERE id=1"));
         effects(0);
         service.recover(); // Internal receipt must never credit an order without a matching debit.
         assertEquals(0, count("SELECT paid FROM yshop_store_order WHERE id=1"));
-        jdbc.execute("ALTER TABLE yshop_user_bill DROP CONSTRAINT injected_fault");
+        dropFault("yshop_user_bill");
         balance.yuePay("order-A", 1L);
         effects(1);
         assertEquals(
-                new BigDecimal("99.9800"),
+                new BigDecimal(mysqlAcceptance() ? "99.98" : "99.9800"),
                 jdbc.queryForObject(
                         "SELECT now_money FROM yshop_user WHERE id=1", BigDecimal.class));
         assertThrows(
                 co.yixiang.yshop.framework.common.exception.ServiceException.class,
                 () -> balance.yuePay("order-A", 1L));
         assertEquals(
-                new BigDecimal("99.9800"),
+                new BigDecimal(mysqlAcceptance() ? "99.98" : "99.9800"),
                 jdbc.queryForObject(
                         "SELECT now_money FROM yshop_user WHERE id=1", BigDecimal.class));
         effects(1);
@@ -913,5 +975,63 @@ class PaymentDatabaseTest {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    @Test
+    void twoTransactionsCompeteForOneOrder() throws Exception {
+        var pool = Executors.newFixedThreadPool(2);
+        var gate = new CountDownLatch(1);
+        try {
+            var first =
+                    pool.submit(
+                            () -> {
+                                gate.await();
+                                return service.accept(event("order-A", "synthetic-X", 2));
+                            });
+            var second =
+                    pool.submit(
+                            () -> {
+                                gate.await();
+                                return service.accept(event("order-A", "synthetic-Y", 2));
+                            });
+            gate.countDown();
+            var results =
+                    List.of(first.get(40, TimeUnit.SECONDS), second.get(40, TimeUnit.SECONDS));
+            assertEquals(1, results.stream().filter(r -> r == PaymentResult.FIRST_SUCCESS).count());
+            assertEquals(
+                    1,
+                    results.stream()
+                            .filter(r -> r == PaymentResult.RECONCILIATION_REQUIRED)
+                            .count());
+            effects(1);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void positiveAmountAndSuccessBindingChecksEnforced() {
+        pay();
+        for (String change :
+                List.of(
+                        "amount_cents=0",
+                        "amount_cents=-1",
+                        "success_order_id=NULL",
+                        "success_order_id='different'",
+                        "status='RECEIVED'"))
+            assertThrows(
+                    org.springframework.dao.DataAccessException.class,
+                    () -> jdbc.update("UPDATE yshop_order_payment SET " + change));
+        effects(1);
+    }
+
+    @Test
+    void repeatedRecoveryAndProcessPending() {
+        var receipt = ctx.getBean(PaymentInbox.class).capture(event("order-A", "synthetic-T1", 2));
+        for (int i = 0; i < 20; i++) {
+            service.recover();
+            assertEquals(PaymentResult.IDEMPOTENT_DUPLICATE, service.processPending(receipt.id()));
+        }
+        effects(1);
     }
 }

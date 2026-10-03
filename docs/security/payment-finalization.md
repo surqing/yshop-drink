@@ -111,6 +111,28 @@ The unchanged stock scanner also flags the already public default admin value in
 
 Remaining: wallet concurrency, refunds, recharge, real merchant integration, API v3 migration decision, CI, production default administrator credentials, master-key rotation, operational reconciliation and reliable notification outbox/delivery. No claim of real-payment validation is made.
 
+## MySQL 8 acceptance and inbox lock correction
+
+The approved PR head `11e744dfc9bcdc16a0befbed88e1510e57d8d0e4` was tested on real MySQL 8.0.46 / InnoDB in a separately created schema with a temporary account granted only that schema. The existing development database and rows were not modified. After matching the test factory to the production MyBatis field-fill handler and production entity DDL, 54 of 55 checks passed. The remaining 20-caller duplicate test returned FIRST_SUCCESS=1, IDEMPOTENT_DUPLICATE=1, RETRY=18 with inbox deadlock warnings.
+
+The original inbox used a plain INSERT followed by a caught duplicate-key exception and SELECT FOR UPDATE. InnoDB takes a shared lock for the duplicate-key error; concurrent callers then try to upgrade their locks. The [MySQL 8 InnoDB locking documentation](https://dev.mysql.com/doc/refman/8.0/en/innodb-locks-set.html) describes this deadlock and the exclusive-lock behavior of INSERT ON DUPLICATE KEY UPDATE.
+
+The corrected receipt INSERT uses `ON DUPLICATE KEY UPDATE id=id`, retaining the original row and every immutable payload field. It then locks/reads the transaction, identifies first insertion by its candidate UUID (never JDBC affected-row counts), and performs the existing duplicate/conflict audit. No constraint, isolation level, payload validation, or provider acknowledgement policy is relaxed. No migration is required for this correction.
+
+`PaymentDatabaseTest` now supports an opt-in `mysql-acceptance` Maven profile with a test-only JDBC driver. The default remains isolated H2. The MySQL mode requires a loopback URL whose schema matches `yshop_acceptance_phase5b_<8 hex>` and account matches `accept5b_<8 hex>`; the disposable account has no access to the development schema. It uses schema-only production entity DDL (no seeded identities/credentials) and the exact production payment migration, plus the production field-fill handler. New checks cover two concurrent transactions for one order, positive amount/success-binding CHECK violations, and 20 repeated recovery/processPending invocations.
+
+For the established Git-ignored local Docker/toolchain environment, run from the repository root:
+
+```sh
+python3 tests/payment/mysql-acceptance.py
+```
+
+The runner creates a new database/account, stores a mode-600 private JDBC configuration outside Git, runs the suite, verifies all eight test tables use InnoDB, and drops only its generated database/account on exit. Safe result metadata and private logs remain under `.local-dev/acceptance`; the temporary password is not printed or committed. Direct integration with another test environment can use the same Maven profile and `YSHOP_ACCEPTANCE_CONFIG` private properties path, subject to the same schema/account guards. The test mode must never point at a shared development or production database.
+
+The corrected real MySQL suite passes all 55 checks: same-transaction 20 concurrent callers produce exactly one first success and 19 duplicates; competing transactions cannot both pay the order; transaction reuse cannot pay a second order; cancellation/payment races pass 20 repetitions; all five fault-injection paths roll back paid/bill/payCount/status/success together; both UNIQUE keys and CHECKs reject violations; recovery and redelivery do not repeat effects. Production transport/provider calls are mocked; all amounts are synthetic fixture data.
+
+Because this acceptance required a production-code correction, PR #3 must remain open for review of its new head. It is not merged, no payment-finalization baseline tag is created, and Phase 5C has not started.
+
 ## Payment safety statement
 
 Real merchant credentials were not used.
