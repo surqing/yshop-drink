@@ -73,7 +73,7 @@ const form = ref({
 
 onLoad((option) => {
 	//为了方便演示，这里用本地缓存
-	console.log('option:',option)
+	console.debug('[address] edit mode:', !!option.id)
 	if (option.id) {
 		form.value = addresses.value.find(item => item.id == option.id)
 	}

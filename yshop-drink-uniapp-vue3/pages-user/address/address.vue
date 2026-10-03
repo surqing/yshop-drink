@@ -61,7 +61,7 @@ const swipeOption = ref([{
 }])
 
 onLoad((option) => {
-	console.log('option:',option)
+	console.debug('[address] opened')
 	is_choose.value = option.is_choose || false
 	scene.value = option.scene || 'menu'
 })

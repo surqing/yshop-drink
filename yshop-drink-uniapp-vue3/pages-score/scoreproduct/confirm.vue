@@ -79,7 +79,7 @@ const customStyle = computed(() => {
 })
 
 onLoad(() => {
-	console.log('address:',address.value)
+	console.debug('[checkout] address selected:', !!address.value?.id)
 	if(!isLogin.value) {
 		uni.navigateTo({url: '/pages-user/login/login'})
 	}

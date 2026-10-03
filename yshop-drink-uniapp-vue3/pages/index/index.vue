@@ -98,7 +98,7 @@ const handGetListAds = async () => {
 	});
 	if (data) {
 		listAds.value = data.list;
-		console.log('listAds:',listAds.value)
+		console.debug('[home] ad count:', listAds.value.length)
 		uni.setStorage({
 				key: 'isActive',
 				data: data.isActive

@@ -1,6 +1,6 @@
 package co.yixiang.yshop.module.member.dal.redis.order;
 
-import co.yixiang.yshop.framework.common.util.json.JsonUtils;
+import co.yixiang.yshop.module.member.framework.auth.config.MiniAppAuthProperties;
 import jakarta.annotation.Resource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;
@@ -19,6 +19,9 @@ public class MiniRedisDAO {
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
+    @Resource
+    private MiniAppAuthProperties authProperties;
+
     public String get(String key) {
         String redisKey = formatKey(key);
         return stringRedisTemplate.opsForValue().get(redisKey);
@@ -26,7 +29,7 @@ public class MiniRedisDAO {
 
     public String set(String str,String key) {
         String redisKey = formatKey(key);
-        stringRedisTemplate.opsForValue().set(redisKey, str);
+        stringRedisTemplate.opsForValue().set(redisKey, str, authProperties.getMiniSessionTimeout());
         return key;
     }
 

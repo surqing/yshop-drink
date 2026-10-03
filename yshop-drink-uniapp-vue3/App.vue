@@ -1,15 +1,15 @@
 <script setup>
 import { onHide,onLaunch,onShow } from '@dcloudio/uni-app'
-import { storeToRefs } from 'pinia'
 import { useMainStore } from '@/store/store'
 const main = useMainStore()
 import { isWeixin,parseQuery } from '@/utils/util'
 import cookie from '@/utils/cookie'
 import {
-  userAuthSession,
   wechatAuth
 } from '@/api/auth'
 import { APP_ID } from '@/config'
+import { loginWechatSession } from '@/utils/wechat-login'
+import { reportAuthError } from '@/utils/auth-errors'
 
 onLaunch(() => {
 	console.log('App Launch')
@@ -45,22 +45,22 @@ onHide(() => {
 
 
 
+let pendingLogin
 const wechatMiniLogin = () => {
-	//this.$u.toast('登录中');
-	uni.login({
-		provider: 'weixin'
-	}).then(async (res) => {
-		let data = await userAuthSession({
-			code: res.code
-		});
-		if (data) {
+	if (pendingLogin) return pendingLogin
+	pendingLogin = (async () => {
+		try {
+			const data = await loginWechatSession()
 			main.SET_OPENID(data.openId)
-			if (data.hasOwnProperty('userInfo') && data.accessToken && data.accessToken != '') {
-				main.SET_MEMBER(data.userInfo);
-				main.SET_TOKEN(data.accessToken);
+			if (data.userInfo && data.accessToken) {
+				main.SET_MEMBER(data.userInfo)
+				main.SET_TOKEN(data.accessToken)
 			}
+		} catch (error) {
+			reportAuthError(error, error?.authStage || 'exchange')
 		}
-	});
+	})().finally(() => { pendingLogin = null })
+	return pendingLogin
 }
 
 const getAuthUrl = (appId) => {
@@ -91,16 +91,15 @@ const oAuth = async() => {
 		  location.href = getAuthUrl(appid)
 		  return
 		} else {
-		 auth(code)
+		 auth(code).catch(error => reportAuthError(error))
 		}
 		resolve()
 	  }).catch(error => {
-		console.log(error)
+		if (error) reportAuthError(error)
 	  })
 }
 
 const auth = async(code) => {
-	console.log('获取微信授权:',code)
 	let data = await wechatAuth({'code':code})
 	cookie.set('wx_auth', code)
 	if (data) {

@@ -22,28 +22,6 @@ import { logger } from '@/utils/logger'
 const fly = new Fly()
 fly.config.baseURL = VUE_APP_API_URL
 
-fly.interceptors.response.use(
-  response => {
-    // 定时刷新access-token
-    return response
-  },
-  error => {
-    if (error.status == 401) {
-      handleLoginFailure()
-      return Promise.reject({ msg: '未登录', toLogin: true })
-    }
-    const errData = error.response && error.response.data
-    if (errData && errData.status == 5109) {
-      uni.showToast({
-        title: errData.msg,
-        icon: 'none',
-        duration: 2000,
-      })
-    }
-    return Promise.reject(error)
-  }
-)
-
 const defaultOpt = { login: true }
 
 function baseRequest(options) {
@@ -63,7 +41,7 @@ function baseRequest(options) {
   }
 
   // 结构请求需要的参数
-  const { url, params, data, login, ...option } = options
+  const { url, params, data, login, authError, ...option } = options
 
   // 发起请求
   return fly
@@ -77,13 +55,15 @@ function baseRequest(options) {
 	 if (res.data.code == 1004004002) {
 		 if(isWeixin()){
 			const url = cookie.get('index_url')
-			logger.debug('[api] redirect_uri:', url)
 			location.href = url
 			return
 		}
       }
 	  // #endif
 	  
+      if (options.authError && (res.status !== 200 || Number(data.code) !== 0)) {
+        return Promise.reject({ authCode: Number(data.code), status: res.status })
+      }
       if (res.status !== 200) {
         return Promise.reject({ msg: '请求失败', res, data })
       }
@@ -112,6 +92,24 @@ function baseRequest(options) {
 
       return Promise.resolve(data.data, res)
     })
+    .catch(error => {
+      if (options.authError) {
+        return Promise.reject({
+          authCode: error?.authCode,
+          status: error?.status,
+          authCategory: error?.authCode != null || Number(error?.status) > 0 ? 'backend' : 'network'
+        })
+      }
+      if (error.status == 401) {
+        handleLoginFailure()
+        return Promise.reject({ msg: '未登录', toLogin: true })
+      }
+      const errData = error.response && error.response.data
+      if (errData && errData.status == 5109) {
+        uni.showToast({ title: errData.msg, icon: 'none', duration: 2000 })
+      }
+      return Promise.reject(error)
+    })
 }
 
 /**
@@ -128,7 +126,7 @@ const request = ['post', 'put', 'patch'].reduce((request, method) => {
    * @returns {AxiosPromise}
    */
   request[method] = (url, data = {}, options = {}) => {
-    logger.debug('[api]', method.toUpperCase(), url, data)
+    logger.debug('[api]', method.toUpperCase(), url)
     return baseRequest(Object.assign({ url, data, method }, defaultOpt, options))
   }
   return request

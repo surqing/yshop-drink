@@ -10,6 +10,7 @@ import cn.hutool.core.util.StrUtil;
 import co.yixiang.yshop.framework.apilog.core.annotation.ApiAccessLog;
 import co.yixiang.yshop.framework.apilog.core.enums.OperateTypeEnum;
 import co.yixiang.yshop.framework.apilog.core.service.ApiAccessLogFrameworkService;
+import co.yixiang.yshop.framework.apilog.core.util.ApiLogUtils;
 import co.yixiang.yshop.framework.common.exception.enums.GlobalErrorCodeConstants;
 import co.yixiang.yshop.framework.common.pojo.CommonResult;
 import co.yixiang.yshop.framework.common.util.json.JsonUtils;
@@ -49,7 +50,10 @@ import static co.yixiang.yshop.framework.common.util.json.JsonUtils.toJsonString
 @Slf4j
 public class ApiAccessLogFilter extends ApiRequestFilter {
 
-    private static final String[] SANITIZE_KEYS = new String[]{"password", "token", "accessToken", "refreshToken"};
+    private static final String[] SANITIZE_KEYS = new String[]{"password", "token", "accessToken", "refreshToken", "Authorization",
+            "secret", "appSecret", "sessionKey", "openid", "openId", "mobile", "phoneNumber",
+            "code", "loginCode", "phoneCode", "encryptedData", "iv", "phone", "userPhone", "customerPhone",
+            "realName", "nickname", "avatar", "address", "userAddress", "customerAddress"};
 
     private final String applicationName;
 
@@ -93,7 +97,7 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
             }
             apiAccessLogFrameworkService.createApiAccessLog(accessLog);
         } catch (Throwable th) {
-            log.error("[createApiAccessLog][url({}) log({}) 发生异常]", request.getRequestURI(), toJsonString(accessLog), th);
+            log.error("[createApiAccessLog] URL({}) category={}", request.getRequestURI(), th.getClass().getSimpleName());
         }
     }
 
@@ -118,7 +122,8 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
             accessLog.setResultCode(result.getCode()).setResultMsg(result.getMsg());
         } else if (ex != null) {
             accessLog.setResultCode(GlobalErrorCodeConstants.INTERNAL_SERVER_ERROR.getCode())
-                    .setResultMsg(ExceptionUtil.getRootCauseMessage(ex));
+                    .setResultMsg(ApiLogUtils.isIdentityRequest(request.getRequestURI())
+                            ? ex.getClass().getSimpleName() : ExceptionUtil.getRootCauseMessage(ex));
         } else {
             accessLog.setResultCode(GlobalErrorCodeConstants.SUCCESS.getCode()).setResultMsg("");
         }
@@ -128,14 +133,14 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
                 .setUserAgent(ServletUtils.getUserAgent(request)).setUserIp(ServletUtils.getClientIP(request));
         String[] sanitizeKeys = accessLogAnnotation != null ? accessLogAnnotation.sanitizeKeys() : null;
         Boolean requestEnable = accessLogAnnotation != null ? accessLogAnnotation.requestEnable() : Boolean.TRUE;
-        if (!BooleanUtil.isFalse(requestEnable)) { // 默认记录，所以判断 !false
+        if (!BooleanUtil.isFalse(requestEnable) && !ApiLogUtils.isIdentityRequest(request.getRequestURI())) { // 默认记录，所以判断 !false
             Map<String, Object> requestParams = MapUtil.<String, Object>builder()
                     .put("query", sanitizeMap(queryString, sanitizeKeys))
                     .put("body", sanitizeJson(requestBody, sanitizeKeys)).build();
             accessLog.setRequestParams(toJsonString(requestParams));
         }
         Boolean responseEnable = accessLogAnnotation != null ? accessLogAnnotation.responseEnable() : Boolean.FALSE;
-        if (BooleanUtil.isTrue(responseEnable)) { // 默认不记录，默认强制要求 true
+        if (BooleanUtil.isTrue(responseEnable) && !ApiLogUtils.isIdentityRequest(request.getRequestURI())) { // 默认不记录，默认强制要求 true
             accessLog.setResponseBody(sanitizeJson(result, sanitizeKeys));
         }
         // 持续时间
@@ -201,8 +206,8 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
             return JsonUtils.toJsonString(rootNode);
         } catch (Exception e) {
             // 脱敏失败的情况下，直接忽略异常，避免影响用户请求
-            log.error("[sanitizeJson][脱敏({}) 发生异常]", jsonString, e);
-            return jsonString;
+            log.warn("[sanitizeJson] category=invalid-json");
+            return null;
         }
     }
 
@@ -217,8 +222,8 @@ public class ApiAccessLogFilter extends ApiRequestFilter {
             return JsonUtils.toJsonString(rootNode);
         } catch (Exception e) {
             // 脱敏失败的情况下，直接忽略异常，避免影响用户请求
-            log.error("[sanitizeJson][脱敏({}) 发生异常]", jsonString, e);
-            return jsonString;
+            log.warn("[sanitizeJson] category=invalid-json");
+            return null;
         }
     }
 
