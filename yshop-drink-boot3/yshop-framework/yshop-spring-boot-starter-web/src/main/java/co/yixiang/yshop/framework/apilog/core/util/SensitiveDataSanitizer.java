@@ -24,7 +24,9 @@ public final class SensitiveDataSanitizer {
             "clientSecret", "sessionKey", "openid", "mobile", "phoneNumber", "code", "loginCode", "phoneCode",
             "encryptedData", "iv", "phone", "userPhone", "customerPhone", "realName", "nickname", "avatar",
             "address", "userAddress", "customerAddress", "keyPrivate", "privateKey", "apiV3Key", "apiKey",
-            "keyCertPwd", "certificatePassword", "mchKey", "payKey", "keyPassword"
+            "keyCertPwd", "certificatePassword", "mchKey", "payKey", "keyPassword", "keyCert", "keyPublic",
+            "keystore", "keystorePwd", "keyPrivateCertPwd", "paymentCredentialMasterKey",
+            "YSHOP_PAYMENT_CREDENTIAL_MASTER_KEY", "masterKey"
     }).map(SensitiveDataSanitizer::normalize).collect(Collectors.toSet());
 
     private SensitiveDataSanitizer() { }

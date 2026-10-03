@@ -27,17 +27,12 @@ public class MerchantDetailsExcelVO {
     @ExcelProperty("当前面私钥公钥为证书类型的时候，这里必填，可选值:PATH,STR,INPUT_STREAM,CLASS_PATH,URL")
     private String certStoreType;
 
-    @ExcelProperty("私钥或私钥证书")
-    private String keyPrivate;
 
     @ExcelProperty("公钥或公钥证书")
+    @lombok.ToString.Exclude
     private String keyPublic;
 
-    @ExcelProperty("key证书,附加证书使用，如SSL证书，或者银联根级证书方面")
-    private String keyCert;
 
-    @ExcelProperty("私钥证书或key证书的密码")
-    private String keyCertPwd;
 
     @ExcelProperty("异步回调")
     private String notifyUrl;
@@ -63,4 +58,10 @@ public class MerchantDetailsExcelVO {
     @ExcelProperty("是否为测试环境: 0 否，1 测试环境")
     private Integer isTest;
 
+    @ExcelProperty("私钥或 API 密钥已配置")
+    private boolean privateKeyConfigured;
+    @ExcelProperty("证书密码已配置")
+    private boolean certificatePasswordConfigured;
+    @ExcelProperty("附加证书已配置")
+    private boolean keyCertificateConfigured;
 }

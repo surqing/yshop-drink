@@ -1,6 +1,8 @@
 package co.yixiang.yshop.module.pay.config;
 
 import co.yixiang.yshop.module.pay.config.handlers.AliPayMessageHandler;
+import co.yixiang.yshop.module.pay.credential.PaymentCredentialCryptoService;
+import co.yixiang.yshop.module.pay.credential.EncryptedMerchantDetailsServiceBuilder;
 import co.yixiang.yshop.module.pay.config.handlers.WxPayMessageHandler;
 import com.egzosn.pay.spring.boot.core.PayServiceConfigurer;
 import com.egzosn.pay.spring.boot.core.configurers.MerchantDetailsServiceConfigurer;
@@ -28,6 +30,8 @@ public class MerchantPayServiceConfigurer implements PayServiceConfigurer {
     @Resource
     private JdbcTemplate jdbcTemplate;
     @Resource
+    private PaymentCredentialCryptoService credentialCrypto;
+    @Resource
     private AliPayMessageHandler aliPayMessageHandler;
     @Resource
     private WxPayMessageHandler wxPayMessageHandler;
@@ -39,10 +43,7 @@ public class MerchantPayServiceConfigurer implements PayServiceConfigurer {
      */
     @Override
     public void configure(MerchantDetailsServiceConfigurer merchants)  {
-        merchants.jdbc()
-                //是否开启缓存，默认不开启,这里开启缓存
-                .cache(false)
-                .template(jdbcTemplate);
+        merchants.setBuilder(new EncryptedMerchantDetailsServiceBuilder(jdbcTemplate, credentialCrypto));
 
     }
     /**
