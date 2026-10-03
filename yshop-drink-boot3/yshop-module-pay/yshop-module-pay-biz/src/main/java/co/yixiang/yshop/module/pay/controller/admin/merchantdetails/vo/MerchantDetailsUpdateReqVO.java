@@ -9,10 +9,7 @@ import jakarta.validation.constraints.*;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
-public class MerchantDetailsUpdateReqVO extends MerchantDetailsBaseVO {
+public class MerchantDetailsUpdateReqVO extends MerchantDetailsWriteVO {
 
-    @Schema(description = "列表id", required = true, example = "17552")
-    @NotNull(message = "列表id不能为空")
-    private String detailsId;
 
 }

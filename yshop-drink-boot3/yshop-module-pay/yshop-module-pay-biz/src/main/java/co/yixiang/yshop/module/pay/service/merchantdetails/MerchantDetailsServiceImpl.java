@@ -1,6 +1,7 @@
 package co.yixiang.yshop.module.pay.service.merchantdetails;
 
 import org.springframework.stereotype.Service;
+import co.yixiang.yshop.module.pay.credential.PaymentCredentialCryptoService;
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
 
@@ -27,10 +28,14 @@ public class MerchantDetailsServiceImpl implements MerchantDetailsService {
     @Resource
     private MerchantDetailsMapper merchantDetailsMapper;
 
+    @Resource
+    private PaymentCredentialCryptoService credentialCrypto;
+
     @Override
     public String createMerchantDetails(MerchantDetailsCreateReqVO createReqVO) {
         // 插入
         MerchantDetailsDO merchantDetails = MerchantDetailsConvert.INSTANCE.convert(createReqVO);
+        encryptInputs(merchantDetails, createReqVO);
         merchantDetailsMapper.insert(merchantDetails);
         // 返回
         return merchantDetails.getDetailsId();
@@ -42,6 +47,7 @@ public class MerchantDetailsServiceImpl implements MerchantDetailsService {
         validateMerchantDetailsExists(updateReqVO.getDetailsId());
         // 更新
         MerchantDetailsDO updateObj = MerchantDetailsConvert.INSTANCE.convert(updateReqVO);
+        encryptInputs(updateObj, updateReqVO);
         merchantDetailsMapper.updateById(updateObj);
     }
 
@@ -79,4 +85,10 @@ public class MerchantDetailsServiceImpl implements MerchantDetailsService {
         return merchantDetailsMapper.selectList(exportReqVO);
     }
 
+    private void encryptInputs(MerchantDetailsDO target, MerchantDetailsWriteVO input) {
+        target.setKeyPrivate(credentialCrypto.encrypt(target.getDetailsId(), "keyPrivate", input.getKeyPrivate()));
+        target.setKeyCertPwd(credentialCrypto.encrypt(target.getDetailsId(), "keyCertPwd", input.getKeyCertPwd()));
+        target.setKeyCert(credentialCrypto.encrypt(target.getDetailsId(), "keyCert", input.getKeyCert()));
+        // Secret columns use explicit NOT_NULL update strategy: blank inputs never clear storage.
+    }
 }

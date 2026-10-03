@@ -19,17 +19,11 @@ public class MerchantDetailsExportReqVO {
     @Schema(description = "当前面私钥公钥为证书类型的时候，这里必填，可选值:PATH,STR,INPUT_STREAM,CLASS_PATH,URL", example = "1")
     private String certStoreType;
 
-    @Schema(description = "私钥或私钥证书")
-    private String keyPrivate;
 
     @Schema(description = "公钥或公钥证书")
     private String keyPublic;
 
-    @Schema(description = "key证书,附加证书使用，如SSL证书，或者银联根级证书方面")
-    private String keyCert;
 
-    @Schema(description = "私钥证书或key证书的密码")
-    private String keyCertPwd;
 
     @Schema(description = "异步回调", example = "https://www.yixiang.co")
     private String notifyUrl;

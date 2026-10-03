@@ -1,18 +1,19 @@
 package co.yixiang.yshop.module.pay.controller.admin.merchantdetails.vo;
 
-import co.yixiang.yshop.framework.desensitize.core.slider.annotation.SliderDesensitize;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 
 import jakarta.validation.constraints.*;
 
 /**
-* 支付服务商配置 Base VO，提供给添加、修改、详细的子 VO 使用
+* 支付服务商配置 Base VO，仅包含公共元数据，供写入模型使用
 * 如果子 VO 存在差异的字段，请不要添加到这里，影响 Swagger 文档生成
 */
 @Data
 public class MerchantDetailsBaseVO {
 
+    @NotBlank(message = "支付配置 ID 不能为空")
+    @Pattern(regexp = "[A-Za-z0-9_-]{1,32}", message = "支付配置 ID 格式不正确")
     private String detailsId;
 
     @Schema(description = "支付类型(支付渠道) 详情查看com.egzosn.pay.spring.boot.core.merchant.PaymentPlatform对应子类，aliPay 支付宝， wxPay微信..等等", required = true, example = "2")
@@ -30,18 +31,12 @@ public class MerchantDetailsBaseVO {
     @Schema(description = "当前面私钥公钥为证书类型的时候，这里必填，可选值:PATH,STR,INPUT_STREAM,CLASS_PATH,URL", example = "1")
     private String certStoreType;
 
-    @Schema(description = "私钥或私钥证书")
-    //@SliderDesensitize(prefixKeep=4 ,suffixKeep=4)
-    private String keyPrivate;
 
     @Schema(description = "公钥或公钥证书")
+    @lombok.ToString.Exclude
     private String keyPublic;
 
-    @Schema(description = "key证书,附加证书使用，如SSL证书，或者银联根级证书方面")
-    private String keyCert;
 
-    @Schema(description = "私钥证书或key证书的密码")
-    private String keyCertPwd;
 
     @Schema(description = "异步回调", example = "https://www.yixiang.co")
     private String notifyUrl;

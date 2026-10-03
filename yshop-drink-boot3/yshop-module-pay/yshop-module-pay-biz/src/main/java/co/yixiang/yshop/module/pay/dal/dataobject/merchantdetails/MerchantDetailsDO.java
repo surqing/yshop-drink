@@ -1,6 +1,7 @@
 package co.yixiang.yshop.module.pay.dal.dataobject.merchantdetails;
 
 import lombok.*;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.baomidou.mybatisplus.annotation.*;
 import co.yixiang.yshop.framework.mybatis.core.dataobject.BaseDO;
 
@@ -43,18 +44,31 @@ public class MerchantDetailsDO extends BaseDO {
     /**
      * 私钥或私钥证书
      */
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @TableField(updateStrategy = FieldStrategy.NOT_NULL)
     private String keyPrivate;
     /**
      * 公钥或公钥证书
      */
+    @ToString.Exclude
     private String keyPublic;
     /**
      * key证书,附加证书使用，如SSL证书，或者银联根级证书方面
      */
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @TableField(updateStrategy = FieldStrategy.NOT_NULL)
     private String keyCert;
     /**
      * 私钥证书或key证书的密码
      */
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @TableField(updateStrategy = FieldStrategy.NOT_NULL)
     private String keyCertPwd;
     /**
      * 异步回调

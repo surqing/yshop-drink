@@ -7,6 +7,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
-public class MerchantDetailsCreateReqVO extends MerchantDetailsBaseVO {
+public class MerchantDetailsCreateReqVO extends MerchantDetailsWriteVO {
 
 }
