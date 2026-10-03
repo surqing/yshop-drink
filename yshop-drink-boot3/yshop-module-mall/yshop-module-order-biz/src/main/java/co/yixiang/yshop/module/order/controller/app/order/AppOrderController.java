@@ -25,7 +25,6 @@ import co.yixiang.yshop.module.store.convert.storeshop.StoreShopConvert;
 import co.yixiang.yshop.module.store.dal.dataobject.storeshop.StoreShopDO;
 import co.yixiang.yshop.module.store.service.storeshop.AppStoreShopService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.egzosn.pay.spring.boot.core.PayServiceManager;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
@@ -65,7 +64,7 @@ public class AppOrderController {
 
     private final AppStoreOrderService appStoreOrderService;
     private final AsyncOrderRedisDAO asyncOrderRedisDAO;
-    private final PayServiceManager manager;
+    private final co.yixiang.yshop.module.order.service.payment.VerifiedPaymentCallback verifiedPaymentCallback;
     private final AppStoreShopService appStoreShopService;
 ;
 
@@ -103,7 +102,7 @@ public class AppOrderController {
      */
     @RequestMapping(value = "/notify/payBack{detailsId}.json")
     public String payBack(HttpServletRequest request, @PathVariable String detailsId)  {
-        return manager.payBack(detailsId, new HttpRequestNoticeNewParams(request));
+        return verifiedPaymentCallback.receive(detailsId, request);
     }
 
 

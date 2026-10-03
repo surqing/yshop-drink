@@ -28,6 +28,24 @@ import org.apache.ibatis.annotations.Select;
 @Mapper
 public interface StoreOrderMapper extends BaseMapperX<StoreOrderDO> {
 
+    @Select("SELECT id,order_id,uid,pay_price,paid,status,refund_status,is_system_del,deleted " +
+            "FROM yshop_store_order WHERE order_id=#{orderId} FOR UPDATE")
+    co.yixiang.yshop.module.order.service.payment.PaymentOrder lockPaymentOrder(String orderId);
+
+    @Select("SELECT id,order_id,uid,pay_price,paid,status,refund_status,is_system_del,deleted " +
+            "FROM yshop_store_order WHERE id=#{id} FOR UPDATE")
+    co.yixiang.yshop.module.order.service.payment.PaymentOrder lockCancellationOrder(Long id);
+
+    @org.apache.ibatis.annotations.Update("UPDATE yshop_store_order SET paid=1,pay_type=#{payType}," +
+            "pay_time=CURRENT_TIMESTAMP,update_time=CURRENT_TIMESTAMP WHERE id=#{id} " +
+            "AND paid=0 AND status=0 AND refund_status=0 AND is_system_del=0 AND deleted=0")
+    int markPaid(@Param("id") Long id, @Param("payType") String payType);
+
+    @org.apache.ibatis.annotations.Update("UPDATE yshop_store_order SET deleted=1,update_time=CURRENT_TIMESTAMP " +
+            "WHERE id=#{id} AND paid=0 AND status=0 AND refund_status=0 AND is_system_del=0 AND deleted=0")
+    int markCanceled(Long id);
+
+
     default PageResult<StoreOrderDO> selectPage(StoreOrderPageReqVO reqVO) {
         LambdaQueryWrapperX<StoreOrderDO> wrapper = new LambdaQueryWrapperX();
         Long shopId = SecurityFrameworkUtils.getLoginUser().getShopId();

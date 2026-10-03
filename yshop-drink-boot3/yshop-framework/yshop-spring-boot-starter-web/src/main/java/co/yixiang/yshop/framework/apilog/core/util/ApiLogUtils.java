@@ -7,6 +7,6 @@ public final class ApiLogUtils {
 
     public static boolean isIdentityRequest(String path) {
         return path != null && (path.contains("/auth/") || path.contains("/member/")
-                || path.contains("/system/user/"));
+                || path.contains("/system/user/") || path.contains("/notify/payBack"));
     }
 }

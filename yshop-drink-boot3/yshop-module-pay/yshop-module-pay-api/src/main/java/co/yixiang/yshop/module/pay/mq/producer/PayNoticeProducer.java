@@ -15,10 +15,10 @@ public class PayNoticeProducer {
 
     /**
      * 发送消息
-     * @param orderId 订单编号
+     * @param eventId 已提交的支付事件编号
      */
-    public void sendPayNoticeMessage(String orderId,String payType) {
-        PayNoticeMessage payNoticeMessage = new PayNoticeMessage().setOrderId(orderId).setPayType(payType);
+    public void sendPayNoticeMessage(String eventId) {
+        PayNoticeMessage payNoticeMessage = new PayNoticeMessage().setEventId(eventId);
         redisMQTemplate.send(payNoticeMessage);
     }
 }

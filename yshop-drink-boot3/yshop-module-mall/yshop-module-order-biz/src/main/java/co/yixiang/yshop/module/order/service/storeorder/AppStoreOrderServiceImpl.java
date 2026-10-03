@@ -22,7 +22,6 @@ import co.yixiang.yshop.module.member.service.user.MemberUserService;
 import co.yixiang.yshop.module.member.service.useraddress.AppUserAddressService;
 import co.yixiang.yshop.module.member.service.userbill.UserBillService;
 import co.yixiang.yshop.module.message.enums.WechatTempateEnum;
-import co.yixiang.yshop.module.message.mq.producer.WeixinNoticeProducer;
 import co.yixiang.yshop.module.message.redismq.msg.OrderMsg;
 import co.yixiang.yshop.module.order.controller.app.order.param.AppOrderParam;
 import co.yixiang.yshop.module.order.controller.app.order.param.AppPayParam;
@@ -109,8 +108,6 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
     @Resource
     private PayServiceManager manager;
     @Resource
-    private WeixinNoticeProducer weixinNoticeProducer;
-    @Resource
     private RedissonClient redissonClient;
     @Resource
     private StoreProductAttrValueService storeProductAttrValueService;
@@ -124,6 +121,11 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
     private AsyncStoreOrderService asyncStoreOrderService;
     @Resource
     private MerchantDetailsService merchantDetailsService;
+
+    @Resource
+    private co.yixiang.yshop.module.order.service.payment.PaymentFinalizationService paymentFinalizationService;
+    @Resource
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private static final String LOCK_KEY = "cart:check:stock:lock";
     private static final String STOCK_LOCK_KEY = "cart:do:stock:lock";
@@ -444,25 +446,30 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
     @Override
     @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public void yuePay(String orderId, Long uid) {
-        AppStoreOrderQueryVo orderInfo = getOrderInfo(orderId, uid);
-        if (ObjectUtil.isNull(orderInfo)) {
-            throw exception(STORE_ORDER_NOT_EXISTS);
-        }
+        // pay() calls this method on the same instance; an explicit template prevents proxy bypass.
+        new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+            AppStoreOrderQueryVo orderInfo = getOrderInfo(orderId, uid);
+            if (ObjectUtil.isNull(orderInfo)) {
+                throw exception(STORE_ORDER_NOT_EXISTS);
+            }
 
-        if (OrderInfoEnum.PAY_STATUS_1.getValue().equals(orderInfo.getPaid())) {
-            throw exception(ORDER_PAY_FINISH);
-        }
+            if (OrderInfoEnum.PAY_STATUS_1.getValue().equals(orderInfo.getPaid())) {
+                throw exception(ORDER_PAY_FINISH);
+            }
 
-        AppUserQueryVo userInfo = userService.getAppUser(uid);
+            AppUserQueryVo userInfo = userService.getAppUser(uid);
 
-        if (userInfo.getNowMoney().compareTo(orderInfo.getPayPrice()) < 0) {
-            throw exception(PAY_YUE_NOT);
-        }
+            if (userInfo.getNowMoney().compareTo(orderInfo.getPayPrice()) < 0) {
+                throw exception(PAY_YUE_NOT);
+            }
 
-        userService.decPrice(uid, orderInfo.getPayPrice());
+            userService.decPrice(uid, orderInfo.getPayPrice());
 
-        //支付成功后处理
-        this.paySuccess(orderInfo.getOrderId(), PayTypeEnum.YUE.getValue());
+            //支付成功后处理
+            var result = paymentFinalizationService.finalizeInternal(orderInfo.getOrderId(),
+                    co.yixiang.yshop.module.pay.callback.PaymentSuccessEvent.Provider.BALANCE);
+            if (result != co.yixiang.yshop.module.pay.callback.PaymentResult.FIRST_SUCCESS) throw exception(ORDER_PAY_FINISH);
+        });
     }
 
 
@@ -476,79 +483,16 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
     @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     @TenantIgnore
     public void paySuccess(String orderId, String payType) {
-        //处理充值与会员卡订单
-        UserBillDO userBillDO =  billService.getOne(new LambdaQueryWrapper<UserBillDO>()
-                .eq(UserBillDO::getExtendField,orderId));
-        if(userBillDO != null) {
-            userBillDO.setStatus(ShopCommonEnum.IS_STATUS_1.getValue());
-            billService.updateById(userBillDO);
-        if(BillDetailEnum.TYPE_1.getValue().equals(userBillDO.getType())){
-                //充值
-                userService.incMoney(userBillDO.getUid(), userBillDO.getNumber());
-            }
-
-            return;
-        }
-
-        log.info("orderId:[{}]",orderId);
-        AppStoreOrderQueryVo orderInfo = getOrderInfo(orderId, null);
-        log.info("orderInfo:[{}]",orderInfo);
-        if(orderInfo == null){
-            return;
-        }
-
-        //更新订单状态
-        LambdaQueryWrapper<StoreOrderDO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(StoreOrderDO::getOrderId, orderId);
-        StoreOrderDO storeOrder = new StoreOrderDO();
-        storeOrder.setPaid(OrderInfoEnum.PAY_STATUS_1.getValue());
-        storeOrder.setPayType(payType);
-        storeOrder.setPayTime(LocalDateTime.now());
-
-        this.update(storeOrder, wrapper);
-
-        //增加用户购买次数
-        userService.incPayCount(orderInfo.getUid());
-        //增加状态
-        storeOrderStatusService.create(orderInfo.getUid(),orderInfo.getId(), OrderLogEnum.PAY_ORDER_SUCCESS.getValue(),
-                OrderLogEnum.PAY_ORDER_SUCCESS.getDesc());
-
-
-        MemberUserDO userInfo = userService.getUser(orderInfo.getUid());
-        //增加流水
-        String payTypeMsg = PayTypeEnum.WEIXIN.getDesc();
-        if (PayTypeEnum.YUE.getValue().equals(payType)) {
-            payTypeMsg = PayTypeEnum.YUE.getDesc();
-        }else if (PayTypeEnum.ALI.getValue().equals(payType)) {
-            payTypeMsg = PayTypeEnum.ALI.getDesc();
-        }else if(PayTypeEnum.CASH.getValue().equals(payType)){
-            payTypeMsg = PayTypeEnum.CASH.getDesc();
-        }
-        billService.expend(userInfo.getId(), "购买商品",
-                BillDetailEnum.CATEGORY_1.getValue(),
-                BillDetailEnum.TYPE_3.getValue(),
-                orderInfo.getPayPrice().doubleValue(), userInfo.getNowMoney().doubleValue(),
-                payTypeMsg + orderInfo.getPayPrice() + "元购买商品");
-
-
-
-        //发送消息队列进行推送消息,堂食不需要
-        if(!OrderLogEnum.ORDER_TAKE_DESK.getValue().equals(orderInfo.getOrderType()) &&
-                userInfo.getLoginType().equals(AppFromEnum.ROUNTINE.getValue())){
-            List<StoreOrderCartInfoDO> storeOrderCartInfoDOList = storeOrderCartInfoService
-                    .list(new LambdaQueryWrapper<StoreOrderCartInfoDO>()
-                    .eq(StoreOrderCartInfoDO::getOid,orderInfo.getId()));
-            List<String> names = storeOrderCartInfoDOList.stream().map(StoreOrderCartInfoDO::getTitle)
-                    .collect(Collectors.toList());
-            String productName = StrUtil.join(",",names);
-            weixinNoticeProducer.sendNoticeMessage(orderInfo.getUid(),WechatTempateEnum.PAY_SUCCESS.getValue(),
-                    WechatTempateEnum.SUBSCRIBE.getValue(),orderInfo.getOrderId(),
-                    "","","","",orderInfo.getId(),orderInfo.getNumberId(),
-                    productName,orderInfo.getShopName());
-        }
-
-
+        co.yixiang.yshop.module.pay.callback.PaymentSuccessEvent.Provider provider;
+        if (PayTypeEnum.YUE.getValue().equals(payType)) provider = co.yixiang.yshop.module.pay.callback.PaymentSuccessEvent.Provider.BALANCE;
+        else if (PayTypeEnum.CASH.getValue().equals(payType)) provider = co.yixiang.yshop.module.pay.callback.PaymentSuccessEvent.Provider.CASH;
+        else throw new IllegalArgumentException("VERIFIED_PROVIDER_EVENT_REQUIRED");
+        var result = paymentFinalizationService.finalizeInternal(orderId, provider);
+        if (result != co.yixiang.yshop.module.pay.callback.PaymentResult.FIRST_SUCCESS &&
+                result != co.yixiang.yshop.module.pay.callback.PaymentResult.IDEMPOTENT_DUPLICATE)
+            throw new IllegalStateException("PAYMENT_FINALIZATION_REJECTED");
     }
+
 
     /**
      * 减库存增加销量
@@ -882,11 +826,12 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
         }
 
 
+        var locked = storeOrderMapper.lockCancellationOrder(order.getId());
+        if (locked == null || !Integer.valueOf(0).equals(locked.getPaid()) ||
+                storeOrderMapper.markCanceled(order.getId()) != 1) throw exception(ORDER_NOT_CANCEL);
+        // The conditional deletion and both restorations commit or roll back together.
         this.regressionStock(order);
-
         this.regressionCoupon(order, 0);
-
-        storeOrderMapper.deleteById(order.getId());
     }
 
 
@@ -982,7 +927,7 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
                     ,newSku, 0L, null);
         }
     }
-    
+
 
     /**
      * 奖励积分

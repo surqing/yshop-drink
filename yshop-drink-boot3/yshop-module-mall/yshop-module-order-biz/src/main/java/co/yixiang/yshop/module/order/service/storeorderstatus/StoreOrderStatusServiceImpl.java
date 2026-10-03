@@ -40,7 +40,9 @@ public class StoreOrderStatusServiceImpl extends ServiceImpl<StoreOrderStatusMap
         this.baseMapper.insert(storeOrderStatus);
 
         //异步统计
-        asyncStoreOrderService.orderData(uid);
+        if (!co.yixiang.yshop.module.order.enums.OrderLogEnum.PAY_ORDER_SUCCESS.getValue().equals(changetype)) {
+            asyncStoreOrderService.orderData(uid);
+        } // Payment statistics are triggered by PaymentEffects after commit.
 
     }
 
