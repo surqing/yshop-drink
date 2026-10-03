@@ -109,11 +109,13 @@ async function run() {
       count: (await page.$$('.good')).length, path: page.path }));
     await (await page.$('.property_btn')).tap(); await page.waitFor(350);
     await check('product detail/specification', async () => ({ ok: !!await page.$('.add-to-cart-btn') }));
-    const before = await mini.evaluate(() => (wx.getStorageSync('cart') || []).reduce((sum, row) => sum + row.number, 0));
+    const before = await mini.evaluate(() => (wx.getStorageSync('cart') || []).map(row => ({ id: row.id, valueStr: row.valueStr, number: row.number })));
     await (await page.$('.add-to-cart-btn')).tap(); await page.waitFor(350);
-    await check('add to cart through page', () => mini.evaluate(previous => {
-      const count = (wx.getStorageSync('cart') || []).reduce((sum, row) => sum + row.number, 0);
-      return { ok: count > previous, count };
+    const added = await check('add to cart through page', () => mini.evaluate(previous => {
+      const rows = wx.getStorageSync('cart') || [];
+      const selected = rows.find(row => row.number > (previous.find(old => old.id === row.id && old.valueStr === row.valueStr)?.number || 0));
+      return { ok: !!selected, count: rows.reduce((sum, row) => sum + row.number, 0),
+        selected: selected && { id: selected.id, valueStr: selected.valueStr } };
     }, before));
     page = await mini.navigateTo('/pages-checkout/cart/cart');
     await waitFor(page, '.cart-item');
@@ -146,8 +148,10 @@ async function run() {
       // Record before sending: an ambiguous timeout must not create a duplicate
       // order when this script is run again. Reconcile using the audit/database.
       fs.writeFileSync(attemptedPath, JSON.stringify({ started: new Date().toISOString(), marker }), { mode: 0o600 });
-      created = await check('create exactly one unpaid order', () => mini.evaluate(() => new Promise(resolve => {
-        const cart = wx.getStorageSync('cart'), member = wx.getStorageSync('userinfo');
+      created = await check('create exactly one unpaid order', () => mini.evaluate(selected => new Promise(resolve => {
+        // Order only the item added by this run; preserve unrelated/stale developer cart contents.
+        const cart = (wx.getStorageSync('cart') || []).filter(row => row.id === selected.id && row.valueStr === selected.valueStr);
+        const member = wx.getStorageSync('userinfo');
         if (!Array.isArray(cart) || !cart.length || !member) return resolve({ ok: false });
         wx.request({ url: 'http://127.0.0.1:48081/app-api/order/create', method: 'POST',
           header: { Authorization: 'Bearer ' + wx.getStorageSync('accessToken') },
@@ -158,7 +162,7 @@ async function run() {
           success: r => resolve({ ok: r.data?.code === 0 && !!r.data?.data?.orderId, code: r.data?.code,
             orderId: r.data?.data?.orderId }), fail: () => resolve({ ok: false, networkError: true })
         });
-      })));
+      }), added.selected));
       fs.writeFileSync(checkpointPath, JSON.stringify(created), { mode: 0o600 });
     }
     await check('unpaid order detail API', () => mini.evaluate(orderId => new Promise(resolve => wx.request({

@@ -76,4 +76,34 @@ class ApiAccessLogFilterTest {
         assertTrue(ApiLogUtils.isIdentityRequest("/app-api/member/user/get-info"));
         assertFalse(ApiLogUtils.isIdentityRequest("/app-api/order/create"));
     }
+    @Test
+    void callbackNeverAuditsRawBodyQueryOrSignature() throws Exception {
+        ApiAccessLogFrameworkService service = mock(ApiAccessLogFrameworkService.class);
+        ApiAccessLogFilter filter = new ApiAccessLogFilter(new WebProperties(), "test", service);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/app-api/order/notify/payBacksynthetic.json");
+        WebFrameworkUtils.setLoginUserType(request, 1);
+        request.setContentType("application/json");
+        request.setContent("{\"openid\":\"synthetic-private-marker\",\"sign\":\"synthetic-private-marker\"}".getBytes(StandardCharsets.UTF_8));
+        request.addParameter("sign", "synthetic-private-marker");
+        filter.doFilter(request, new MockHttpServletResponse(), (req, resp) -> { });
+        var captor = ArgumentCaptor.forClass(ApiAccessLogCreateReqDTO.class);
+        verify(service).createApiAccessLog(captor.capture());
+        assertNull(captor.getValue().getRequestParams());
+        assertNull(captor.getValue().getResponseBody());
+    }
+
+    @Test
+    void localAccessLogSwitchControlsRegistration() {
+        var runner = new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+                .withUserConfiguration(co.yixiang.yshop.framework.apilog.config.YshopApiLogAutoConfiguration.class)
+                .withBean(WebProperties.class, WebProperties::new)
+                .withBean(co.yixiang.yshop.module.infra.api.logger.ApiAccessLogApi.class,
+                        () -> mock(co.yixiang.yshop.module.infra.api.logger.ApiAccessLogApi.class))
+                .withBean(co.yixiang.yshop.module.infra.api.logger.ApiErrorLogApi.class,
+                        () -> mock(co.yixiang.yshop.module.infra.api.logger.ApiErrorLogApi.class))
+                .withPropertyValues("spring.application.name=test");
+        runner.withPropertyValues("yshop.access-log.enable=false").run(ctx -> assertFalse(ctx.containsBean("apiAccessLogFilter")));
+        runner.withPropertyValues("yshop.access-log.enable=true").run(ctx -> assertTrue(ctx.containsBean("apiAccessLogFilter")));
+    }
+
 }
