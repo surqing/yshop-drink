@@ -11,8 +11,10 @@ import co.yixiang.yshop.module.member.dal.dataobject.user.MemberUserDO;
 import co.yixiang.yshop.module.member.dal.dataobject.userbill.UserBillDO;
 import co.yixiang.yshop.module.member.dal.mysql.user.MemberUserMapper;
 import co.yixiang.yshop.module.member.dal.mysql.userbill.UserBillMapper;
+import co.yixiang.yshop.module.member.dal.mysql.wallet.*;
 import co.yixiang.yshop.module.member.service.user.MemberUserService;
 import co.yixiang.yshop.module.member.service.userbill.*;
+import co.yixiang.yshop.module.member.service.wallet.*;
 import co.yixiang.yshop.module.message.mq.producer.WeixinNoticeProducer;
 import co.yixiang.yshop.module.order.controller.app.order.vo.AppStoreOrderQueryVo;
 import co.yixiang.yshop.module.order.dal.dataobject.storeorder.StoreOrderDO;
@@ -91,8 +93,8 @@ class PaymentDatabaseTest {
                 String url = settings.getProperty("url", "");
                 String user = settings.getProperty("username", "");
                 if (!url.matches(
-                                "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase5b_[a-f0-9]{8}(\\?.*)?")
-                        || !user.matches("accept5b_[a-f0-9]{8}")) {
+                                "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase5[bc]_[a-f0-9]{8}(\\?.*)?")
+                        || !user.matches("accept5[bc]_[a-f0-9]{8}")) {
                     throw new IllegalStateException("ISOLATED_DATABASE_REQUIRED");
                 }
                 var ds = new org.springframework.jdbc.datasource.DriverManagerDataSource();
@@ -133,6 +135,8 @@ class PaymentDatabaseTest {
             config.setMapUnderscoreToCamelCase(true);
             for (Class<?> type :
                     List.of(
+                            WalletMapper.class,
+                            RechargeMapper.class,
                             PaymentMapper.class,
                             StoreOrderMapper.class,
                             MemberUserMapper.class,
@@ -140,6 +144,31 @@ class PaymentDatabaseTest {
                             StoreOrderStatusMapper.class)) config.addMapper(type);
             bean.setConfiguration(config);
             return bean.getObject();
+        }
+
+        @Bean
+        WalletMapper walletMapper(SqlSessionFactory f) {
+            return new SqlSessionTemplate(f).getMapper(WalletMapper.class);
+        }
+
+        @Bean
+        RechargeMapper rechargeMapper(SqlSessionFactory f) {
+            return new SqlSessionTemplate(f).getMapper(RechargeMapper.class);
+        }
+
+        @Bean
+        WalletService wallets(WalletMapper m) {
+            return new WalletService(m);
+        }
+
+        @Bean
+        WalletOpeningMigration opening(WalletMapper m, WalletService w) {
+            return new WalletOpeningMigration(m, w);
+        }
+
+        @Bean
+        RechargeService recharge(RechargeMapper m, WalletService w) {
+            return new RechargeService(m, w, true);
         }
 
         @Bean
@@ -263,8 +292,10 @@ class PaymentDatabaseTest {
                 PaymentProcessor processor,
                 PaymentMapper mapper,
                 StoreOrderMapper orders,
-                PayNoticeProducer wakeup) {
-            return new PaymentFinalizationService(inbox, processor, mapper, orders, wakeup);
+                PayNoticeProducer wakeup,
+                WalletService wallets) {
+            return new PaymentFinalizationService(
+                    inbox, processor, mapper, orders, wakeup, wallets);
         }
     }
 
@@ -279,6 +310,8 @@ class PaymentDatabaseTest {
             // The temporary account is granted only its isolated schema. Never use the dev DB.
             for (String table :
                     List.of(
+                            "yshop_member_wallet_transaction",
+                            "yshop_member_recharge_order",
                             "yshop_order_payment_conflict",
                             "yshop_order_payment",
                             "yshop_user_bill",
@@ -322,6 +355,31 @@ class PaymentDatabaseTest {
                             .replace("CHARACTER SET ascii COLLATE ascii_bin", "")
                             .replace("ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "");
         for (String sql : migration.split(";")) if (!sql.isBlank()) jdbc.execute(sql);
+        String walletMigration =
+                java.nio.file.Files.readString(
+                                java.nio.file.Path.of(
+                                        "../../sql/migrations/2026-10-03-wallet-ledger.sql"))
+                        .replaceAll("(?m)^--.*$", "");
+        if (!mysqlAcceptance())
+            walletMigration =
+                    walletMigration
+                            .replace("CHARACTER SET ascii COLLATE ascii_bin", "")
+                            .replace("ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "")
+                            .replace("bigint unsigned", "bigint");
+        for (String sql : walletMigration.split(";"))
+            if (!sql.isBlank() && !sql.trim().startsWith("CREATE TRIGGER")) jdbc.execute(sql);
+        if (mysqlAcceptance()) {
+            var ddl =
+                    new ProcessBuilder(
+                                    "python3",
+                                    "../../../tests/payment/mysql-acceptance.py",
+                                    "--install-triggers")
+                            .redirectErrorStream(true)
+                            .start();
+            ddl.getInputStream().readAllBytes();
+            if (ddl.waitFor() != 0)
+                throw new IllegalStateException("ISOLATED_IMMUTABILITY_MIGRATION_FAILED");
+        }
         jdbc.update(
                 "INSERT INTO yshop_user(id,pay_count,now_money,login_type,deleted)"
                         + " VALUES(1,0,100,'routine',0)");
@@ -770,39 +828,31 @@ class PaymentDatabaseTest {
                 target, "transactionManager", ctx.getBean(PlatformTransactionManager.class));
         ReflectionTestUtils.setField(target, "paymentFinalizationService", service);
         ReflectionTestUtils.setField(target, "userService", ctx.getBean(MemberUserService.class));
+        ReflectionTestUtils.setField(target, "storeOrderMapper", orders);
+        ReflectionTestUtils.setField(target, "walletService", ctx.getBean(WalletService.class));
         doAnswer(
-                        call -> {
-                            var vo = new AppStoreOrderQueryVo();
-                            vo.setId(1L);
-                            vo.setOrderId("order-A");
-                            vo.setUid(1L);
-                            vo.setPaid(count("SELECT paid FROM yshop_store_order WHERE id=1"));
-                            vo.setPayPrice(new BigDecimal("0.02"));
-                            return vo;
-                        })
+                        call ->
+                                jdbc
+                                        .query(
+                                                "SELECT id,order_id,uid,paid,pay_price FROM"
+                                                    + " yshop_store_order WHERE order_id=? AND"
+                                                    + " uid=? AND deleted=0",
+                                                (rs, n) -> {
+                                                    var vo = new AppStoreOrderQueryVo();
+                                                    vo.setId(rs.getLong(1));
+                                                    vo.setOrderId(rs.getString(2));
+                                                    vo.setUid(rs.getLong(3));
+                                                    vo.setPaid(rs.getInt(4));
+                                                    vo.setPayPrice(rs.getBigDecimal(5));
+                                                    return vo;
+                                                },
+                                                (String) call.getArgument(0),
+                                                (Long) call.getArgument(1))
+                                        .stream()
+                                        .findFirst()
+                                        .orElse(null))
                 .when(target)
                 .getOrderInfo(anyString(), nullable(Long.class));
-        var users = ctx.getBean(MemberUserService.class);
-        when(users.getAppUser(anyLong()))
-                .thenAnswer(
-                        call -> {
-                            var user =
-                                    new co.yixiang.yshop.module.member.controller.app.user.vo
-                                            .AppUserQueryVo();
-                            user.setNowMoney(
-                                    jdbc.queryForObject(
-                                            "SELECT now_money FROM yshop_user WHERE id=1",
-                                            BigDecimal.class));
-                            return user;
-                        });
-        doAnswer(
-                        call -> {
-                            ctx.getBean(MemberUserMapper.class)
-                                    .decPrice(call.getArgument(1), call.getArgument(0));
-                            return null;
-                        })
-                .when(users)
-                .decPrice(anyLong(), any(BigDecimal.class));
         return target; // Deliberately no proxy: proves pay()->this.yuePay() uses an actual
         // transaction.
     }
