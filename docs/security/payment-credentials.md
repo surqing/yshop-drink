@@ -52,14 +52,14 @@ Write DTO secret fields are Jackson WRITE_ONLY and Lombok string/equality exclud
 ## Explicit upgrade / legacy migration
 
 1. Stop credential writers/payment activity and preserve an authorized database backup and the private encryption key. Do not test with upstream merchant values.
-2. Apply **sql/migrations/payment-credential-columns.sql** against the intended database. It expands all three secret columns to MEDIUMTEXT without reading, replacing or deleting values. Repeating the DDL is safe. The original SQL seed is unchanged; apply this migration after a fresh seed import too. Seeded records were not edited by this PR.
+2. Apply **sql/migrations/payment-credential-columns.sql** against the intended database. It expands all three secret columns to MEDIUMTEXT without reading, replacing or deleting values. Repeating the DDL is safe. The SQL seed retains its original schema and five records, but all `key_private`, `key_cert` and `key_cert_pwd` values are empty. Apply the column migration after a fresh seed import too; no imported provider credentials should be used.
 3. Configure the server-private master key.
 4. Explicitly start the backend once with **yshop.pay.credentials.migrate-once=true** in a private config or the non-secret command option `--yshop.pay.credentials.migrate-once=true`. Ordinary startup leaves migration disabled.
 5. Require the count-only `Payment credential migration verified` result; then remove/disable the flag before the next ordinary restart. No migration HTTP endpoint is exposed.
 
 `PaymentCredentialMigrationService` runs one transaction, locks all rows including soft-deleted rows, recognizes `enc:` envelopes and verifies them rather than re-encrypting, encrypts nonblank legacy fields, writes with bound JDBC parameters and reads back/decrypts to verify. Failure on any record rolls back the transaction. Unknown/malformed versions stop rather than falling back. Empty fields and records are preserved. Re-running reports zero migrated fields and verifies existing envelopes. DDL and data migration are separate because MySQL DDL auto-commits.
 
-The original SQL seed contains five credential-bearing rows (nonblank private-key fields: 5; password: 1; additional certificate: 1; encrypted: 0). These values were not used. Existing local database inventory before this phase: five rows, zero nonblank values in all three protected columns; prior setup had already disabled/cleared imported external credentials. The data migration mechanism is still supplied and tested against synthetic legacy data.
+Before the review follow-up, the SQL seed contained five credential-bearing rows (nonblank private-key fields: 5; password: 1; additional certificate: 1; encrypted: 0). These values were not used and have now been removed from the current seed. All five records and every non-credential field are preserved; the three protected fields are empty. A fresh payment-table import in an isolated MySQL database verified five records and zero nonblank values in each protected column. Existing local database inventory before this phase: five rows, zero nonblank values in all three protected columns; prior setup had already disabled/cleared imported external credentials. The data migration mechanism is still supplied and tested against synthetic legacy data.
 
 ## Validation and limits
 
