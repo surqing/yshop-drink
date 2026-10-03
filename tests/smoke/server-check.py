@@ -14,6 +14,15 @@ try:
     args = json.load(sys.stdin)
     if args['action'] == 'marker':
         result = {'marker': db.mysql('SELECT COALESCE(MAX(id),0) FROM infra_api_access_log;').strip()}
+    elif args['action'] == 'checkpoint':
+        order_id = str(args['orderId'])
+        if not re.fullmatch(r'\d{1,24}', order_id):
+            raise ValueError('Invalid business ID')
+        rows = db.mysql("SELECT paid,CAST(deleted AS UNSIGNED) FROM yshop_store_order WHERE order_id='" + order_id + "';").splitlines()
+        result = {'found': len(rows) == 1}
+        if result['found']:
+            paid, deleted = rows[0].split('\t')
+            result.update({'paid': int(paid), 'deleted': int(deleted) == 1})
     else:
         marker = str(args['marker'])
         order_id = str(args['orderId'])

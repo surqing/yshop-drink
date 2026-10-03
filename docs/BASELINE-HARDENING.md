@@ -44,7 +44,13 @@ bash tests/smoke/run.sh
 
 This starts existing local services without resetting data, checks health, compiles with HBuilderX, temporarily opens WeChat automation on port 9420, verifies real member state, navigates home/store 2/product specification/cart/order pages, creates at most one unpaid order, and checks `paid=0` and zero payment requests against server audit/database records. Credentials stay in memory/stdin. Results go to `.uniapp-dev/logs/baseline-smoke.json`.
 
-The private order checkpoint is reused on later runs. A recorded attempt without a successful checkpoint stops retries for manual read-only reconciliation. To create another test order, first review the previous order and deliberately archive its private checkpoint/attempt records; the script never clears them automatically. Cart additions are real UI actions, so repeated runs increment the existing cart. No store, goods, member or database fixture is fabricated.
+The private order checkpoint is reused while its order remains active and unpaid. The original application cancels and logically deletes unpaid orders after its timeout, so a previously successful checkpoint can later become unavailable. The script reads its database state before reuse. Missing or paid records stop the test; deleted unpaid records require an explicit replacement flag:
+
+```sh
+bash tests/smoke/run.sh --replace-deleted-order
+```
+
+Only after read-only confirmation of `paid=0` and logical deletion does this flag archive the private checkpoint/attempt records and create at most one replacement via the real API. It never undeletes or changes database records, never replaces an active order, and never replaces a paid order. A recorded attempt without a successful checkpoint still stops retries for manual read-only reconciliation. Cart additions are real UI actions, so repeated runs increment the existing cart. No store, goods, member or database fixture is fabricated.
 
 Order creation calls the real create API with original page payload semantics after UI cart verification, because the original submit button continues directly into the payment page. This deliberately verifies order creation separately from the payment-linked button. Payment functions are never invoked or mocked. Zero payment requests are checked using persisted audits and the application's request log events; this is not a real-payment test.
 

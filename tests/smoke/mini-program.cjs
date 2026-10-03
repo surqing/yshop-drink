@@ -121,8 +121,28 @@ async function run() {
     let created;
     if (fs.existsSync(checkpointPath)) {
       created = JSON.parse(fs.readFileSync(checkpointPath, 'utf8'));
-      report.reusedOrderCheckpoint = true;
-    } else {
+      const state = serverCheck({ action: 'checkpoint', orderId: created.orderId });
+      report.checkpointState = state;
+      save();
+      if (!state.found || state.paid !== 0) throw new Error('Checkpoint requires read-only reconciliation');
+      if (state.deleted) {
+        if (!process.argv.includes('--replace-deleted-order')) throw new Error('Deleted checkpoint requires explicit replacement flag');
+        // Only a verified unpaid, logically deleted order may be replaced.
+        // Preserve both records, never undelete the database order or silently
+        // retry an ambiguous create request. At most one replacement is sent.
+        const archived = path.join(privateDev, 'logs', 'baseline-smoke-order-archived-' + created.orderId + '.json');
+        if (fs.existsSync(archived)) throw new Error('Checkpoint archive already exists');
+        fs.renameSync(checkpointPath, archived);
+        if (fs.existsSync(attemptedPath)) {
+          fs.renameSync(attemptedPath, archived.replace('.json', '-attempt.json'));
+        }
+        report.replacedDeletedCheckpoint = true;
+        created = null;
+      } else {
+        report.reusedOrderCheckpoint = true;
+      }
+    }
+    if (!created) {
       // Record before sending: an ambiguous timeout must not create a duplicate
       // order when this script is run again. Reconcile using the audit/database.
       fs.writeFileSync(attemptedPath, JSON.stringify({ started: new Date().toISOString(), marker }), { mode: 0o600 });
@@ -144,7 +164,7 @@ async function run() {
     await check('unpaid order detail API', () => mini.evaluate(orderId => new Promise(resolve => wx.request({
       url: 'http://127.0.0.1:48081/app-api/order/detail/' + orderId,
       header: { Authorization: 'Bearer ' + wx.getStorageSync('accessToken') },
-      success: r => resolve({ ok: r.data?.code === 0 && r.data?.data?.paid === 0, paid: r.data?.data?.paid }),
+      success: r => resolve({ ok: r.data?.code === 0 && r.data?.data?.paid === 0, code: r.data?.code, paid: r.data?.data?.paid }),
       fail: () => resolve({ ok: false, networkError: true })
     })), created.orderId));
     page = await mini.switchTab('/pages/order/order');

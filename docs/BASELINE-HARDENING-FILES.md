@@ -5,11 +5,11 @@
 - `docs/BASELINE-HARDENING-ACCEPTANCE.md` — 复现说明、范围说明与验收记录
 - `docs/BASELINE-HARDENING-FILES.md` — 复现说明、范围说明与验收记录
 - `docs/BASELINE-HARDENING.md` — 复现说明、范围说明与验收记录
-- `tests/auth-errors.test.mjs` — 真实本地验收与安全扫描，不伪造登录、不调用支付
-- `tests/smoke/mini-program.cjs` — 真实本地验收与安全扫描，不伪造登录、不调用支付
-- `tests/smoke/run.sh` — 真实本地验收与安全扫描，不伪造登录、不调用支付
-- `tests/smoke/secret-scan.py` — 真实本地验收与安全扫描，不伪造登录、不调用支付
-- `tests/smoke/server-check.py` — 真实本地验收与安全扫描，不伪造登录、不调用支付
+- `tests/auth-errors.test.mjs` — 真实本地验收、过期订单检查点核对与安全扫描，不伪造登录、不调用支付
+- `tests/smoke/mini-program.cjs` — 真实本地验收、过期订单检查点核对与安全扫描，不伪造登录、不调用支付
+- `tests/smoke/run.sh` — 真实本地验收、过期订单检查点核对与安全扫描，不伪造登录、不调用支付
+- `tests/smoke/secret-scan.py` — 真实本地验收、过期订单检查点核对与安全扫描，不伪造登录、不调用支付
+- `tests/smoke/server-check.py` — 真实本地验收、过期订单检查点核对与安全扫描，不伪造登录、不调用支付
 - `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-mybatis/pom.xml` — 新增已有统一版本管理的 test-only 测试依赖，验证 SQL 日志不转发敏感数据
 - `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-mybatis/src/main/java/co/yixiang/yshop/framework/mybatis/config/YshopMybatisAutoConfiguration.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
 - `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-mybatis/src/main/java/co/yixiang/yshop/framework/mybatis/core/log/SafeSqlLog.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
