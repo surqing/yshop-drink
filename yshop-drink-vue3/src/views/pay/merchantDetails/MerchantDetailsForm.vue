@@ -14,7 +14,7 @@
         </el-select>
       </el-form-item>
       <el-form-item label="支付id" prop="detailsId">
-        <el-select v-model="formData.detailsId">
+        <el-select v-model="formData.detailsId" :disabled="formType === 'update'" filterable allow-create default-first-option>
           <!-- <el-option  :value="tenantId" /> -->
           <el-option label="微信支付小程序" :value="'wx_miniapp'" />
           <el-option label="微信支付公众号" :value="'wx_wechat'" />
@@ -44,17 +44,50 @@
         </el-select>
         <div style="color: red;">注意：需要证书的选择不需要不选择</div>
       </el-form-item>
-      <el-form-item label="私钥或私钥证书" prop="keyPrivate">
-        <el-input v-model="formData.keyPrivate" placeholder="请输入私钥或私钥证书" />
+      <el-form-item label="私钥 / API 密钥" prop="keyPrivate">
+        <div class="w-full">
+          <template v-if="formType === 'update'">
+            <el-tag :type="credentialStatus.privateKeyConfigured ? 'success' : 'info'">
+              {{ credentialStatus.privateKeyConfigured ? '已配置' : '未配置' }}
+            </el-tag>
+            <el-button link type="primary" @click="replacement.keyPrivate = !replacement.keyPrivate">
+              {{ replacement.keyPrivate ? '取消替换' : '替换私钥 / API 密钥' }}
+            </el-button>
+          </template>
+          <el-input v-if="formType === 'create' || replacement.keyPrivate" v-model="formData.keyPrivate"
+            type="password" autocomplete="new-password" placeholder="输入新凭据；留空保持服务器原值" />
+        </div>
       </el-form-item>
       <el-form-item label="公钥或公钥证书" prop="keyPublic">
         <el-input v-model="formData.keyPublic" placeholder="请输入公钥或公钥证书" />
       </el-form-item>
-      <el-form-item label="key证书" prop="keyCert">
-        <el-input v-model="formData.keyCert" placeholder="请输入key证书,附加证书使用，如SSL证书，或者银联根级证书方面" />
+      <el-form-item label="附加证书" prop="keyCert">
+        <div class="w-full">
+          <template v-if="formType === 'update'">
+            <el-tag :type="credentialStatus.keyCertificateConfigured ? 'success' : 'info'">
+              {{ credentialStatus.keyCertificateConfigured ? '已配置' : '未配置' }}
+            </el-tag>
+            <el-button link type="primary" @click="replacement.keyCert = !replacement.keyCert">
+              {{ replacement.keyCert ? '取消替换' : '替换附加证书' }}
+            </el-button>
+          </template>
+          <el-input v-if="formType === 'create' || replacement.keyCert" v-model="formData.keyCert"
+            type="password" autocomplete="new-password" placeholder="输入新凭据；留空保持服务器原值" />
+        </div>
       </el-form-item>
-      <el-form-item label="证书的密码" prop="keyCertPwd">
-        <el-input v-model="formData.keyCertPwd" placeholder="请输入私钥证书或key证书的密码" />
+      <el-form-item label="证书密码" prop="keyCertPwd">
+        <div class="w-full">
+          <template v-if="formType === 'update'">
+            <el-tag :type="credentialStatus.certificatePasswordConfigured ? 'success' : 'info'">
+              {{ credentialStatus.certificatePasswordConfigured ? '已配置' : '未配置' }}
+            </el-tag>
+            <el-button link type="primary" @click="replacement.keyCertPwd = !replacement.keyCertPwd">
+              {{ replacement.keyCertPwd ? '取消替换' : '替换证书密码' }}
+            </el-button>
+          </template>
+          <el-input v-if="formType === 'create' || replacement.keyCertPwd" v-model="formData.keyCertPwd"
+            type="password" autocomplete="new-password" placeholder="输入新凭据；留空保持服务器原值" />
+        </div>
       </el-form-item>
       <el-form-item label="异步回调地址" prop="notifyUrl">
         <el-input v-model="formData.notifyUrl" placeholder="请输入异步回调" />
@@ -90,20 +123,22 @@
 </template>
 <script setup lang="ts">
 import * as MerchantDetailsApi from '@/api/pay/merchantDetails'
-import { getTenantId } from '@/utils/auth'
 
 const { t } = useI18n() // 国际化
 const message = useMessage() // 消息弹窗
 
-const tenantId = ref(getTenantId())
-
-console.log('tenantId:',tenantId.value)
 
 const dialogVisible = ref(false) // 弹窗的是否展示
 const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
-const formData = ref({
+const credentialStatus = reactive({
+  privateKeyConfigured: false,
+  certificatePasswordConfigured: false,
+  keyCertificateConfigured: false
+})
+const replacement = reactive({ keyPrivate: false, keyCert: false, keyCertPwd: false })
+const formData = ref<MerchantDetailsApi.MerchantDetailsWriteVO>({
   detailsId: undefined,
   payType: undefined,
   appid: undefined,
@@ -132,7 +167,7 @@ const formRules = reactive({
 const formRef = ref() // 表单 Ref
 
 /** 打开弹窗 */
-const open = async (type: string, id?: number) => {
+const open = async (type: string, id?: string) => {
   dialogVisible.value = true
   dialogTitle.value = t('action.' + type)
   formType.value = type
@@ -141,7 +176,10 @@ const open = async (type: string, id?: number) => {
   if (id) {
     formLoading.value = true
     try {
-      formData.value = await MerchantDetailsApi.getMerchantDetails(id)
+      const { privateKeyConfigured, certificatePasswordConfigured, keyCertificateConfigured, ...metadata } =
+        await MerchantDetailsApi.getMerchantDetails(id) as MerchantDetailsApi.MerchantDetailsVO
+      Object.assign(credentialStatus, { privateKeyConfigured, certificatePasswordConfigured, keyCertificateConfigured })
+      formData.value = { ...metadata }
     } finally {
       formLoading.value = false
     }
@@ -159,7 +197,12 @@ const submitForm = async () => {
   // 提交请求
   formLoading.value = true
   try {
-    const data = formData.value as unknown as MerchantDetailsApi.MerchantDetailsVO
+    const data: MerchantDetailsApi.MerchantDetailsWriteVO = { ...formData.value }
+    for (const field of ['keyPrivate', 'keyCert', 'keyCertPwd'] as const) {
+      if ((formType.value === 'update' && !replacement[field]) || !data[field]?.trim()) {
+        delete data[field]
+      }
+    }
     if (formType.value === 'create') {
       await MerchantDetailsApi.createMerchantDetails(data)
       message.success(t('common.createSuccess'))
@@ -177,6 +220,8 @@ const submitForm = async () => {
 
 /** 重置表单 */
 const resetForm = () => {
+  Object.assign(credentialStatus, { privateKeyConfigured: false, certificatePasswordConfigured: false, keyCertificateConfigured: false })
+  Object.assign(replacement, { keyPrivate: false, keyCert: false, keyCertPwd: false })
   formData.value = {
     detailsId: undefined,
     payType: undefined,
