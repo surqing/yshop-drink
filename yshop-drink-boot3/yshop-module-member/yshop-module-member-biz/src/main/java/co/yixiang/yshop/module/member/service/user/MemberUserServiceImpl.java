@@ -153,7 +153,7 @@ public class MemberUserServiceImpl extends ServiceImpl<MemberUserMapper,MemberUs
     @Override
     @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public void decPrice(Long uid, BigDecimal payPrice) {
-        memberUserMapper.decPrice(payPrice,uid);
+        throw new IllegalStateException("WALLET_SERVICE_REQUIRED");
     }
 
     /**
@@ -241,9 +241,7 @@ public class MemberUserServiceImpl extends ServiceImpl<MemberUserMapper,MemberUs
      */
     @Override
     public void incMoney(Long uid, BigDecimal price) {
-        if(price!=null&&price.doubleValue()>0){
-            memberUserMapper.incMoney(uid,price);
-        }
+        throw new IllegalStateException("WALLET_SERVICE_REQUIRED");
     }
 
 

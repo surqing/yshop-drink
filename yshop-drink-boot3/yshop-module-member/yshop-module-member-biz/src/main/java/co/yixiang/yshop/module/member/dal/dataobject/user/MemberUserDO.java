@@ -115,6 +115,7 @@ public class MemberUserDO extends TenantBaseDO {
     /**
      * 用户余额
      */
+    @com.baomidou.mybatisplus.annotation.TableField(insertStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER, updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)
     private BigDecimal nowMoney;
     /**
      * 佣金金额

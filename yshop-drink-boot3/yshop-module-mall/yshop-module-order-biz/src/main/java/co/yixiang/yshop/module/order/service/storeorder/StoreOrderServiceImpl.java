@@ -68,6 +68,8 @@ import static co.yixiang.yshop.module.order.enums.ErrorCodeConstants.*;
 public class StoreOrderServiceImpl implements StoreOrderService {
 
     @Resource
+    private co.yixiang.yshop.module.member.service.wallet.WalletService walletService;
+    @Resource
     private StoreOrderMapper storeOrderMapper;
     @Resource
     private MemberUserMapper memberUserMapper;
@@ -300,8 +302,10 @@ public class StoreOrderServiceImpl implements StoreOrderService {
         //根据支付类型不同退款不同
         if (PayTypeEnum.YUE.getValue().equals(storeOrderDO.getPayType())) {
             //退款到余额
-            userService.incMoney(storeOrderDO.getUid(), price);
-            balance = balance.add(price);
+            var movement = walletService.credit(storeOrderDO.getUid(), price,
+                    co.yixiang.yshop.module.member.service.wallet.WalletType.ORDER_REFUND,
+                    storeOrderDO.getOrderId(), "refund:" + storeOrderDO.getOrderId());
+            balance = movement.transaction().getBalanceAfter();
 
         } else if (PayTypeEnum.WEIXIN.getValue().equals(storeOrderDO.getPayType())) {
             if(isDemo){

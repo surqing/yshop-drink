@@ -45,6 +45,7 @@ const formLoading = ref(false) // 表单的加载中：1）修改时的数据加
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
 const formData = ref({
   id: undefined as number | undefined,
+  idempotencyKey: crypto.randomUUID(),
   ptype: 1,
   money: undefined,
   itype: 1,
@@ -79,7 +80,7 @@ const submitForm = async () => {
   // 提交请求
   formLoading.value = true
   try {
-    const data = formData.value as unknown as UserApi.UserVO
+    const data = formData.value as unknown as UserApi.MoneyAdjustmentVO
     await UserApi.updateMony(data)
     message.success(t('common.updateSuccess'))
     dialogVisible.value = false
@@ -94,6 +95,7 @@ const submitForm = async () => {
 const resetForm = () => {
   formData.value = {
     id: undefined as number | undefined,
+    idempotencyKey: crypto.randomUUID(),
     ptype: 1,
     money: undefined,
     itype: 1,
