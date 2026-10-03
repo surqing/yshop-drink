@@ -1,0 +1,166 @@
+# 第四阶段修改文件清单
+
+共 162 个修改/新增文件。后台历史类型修复范围已得到追加授权；不存在自动格式化、前端依赖/锁文件升级、本地环境或构建产物提交。
+
+- `docs/BASELINE-HARDENING-ACCEPTANCE.md` — 复现说明、范围说明与验收记录
+- `docs/BASELINE-HARDENING-FILES.md` — 复现说明、范围说明与验收记录
+- `docs/BASELINE-HARDENING.md` — 复现说明、范围说明与验收记录
+- `tests/auth-errors.test.mjs` — 真实本地验收与安全扫描，不伪造登录、不调用支付
+- `tests/smoke/mini-program.cjs` — 真实本地验收与安全扫描，不伪造登录、不调用支付
+- `tests/smoke/run.sh` — 真实本地验收与安全扫描，不伪造登录、不调用支付
+- `tests/smoke/secret-scan.py` — 真实本地验收与安全扫描，不伪造登录、不调用支付
+- `tests/smoke/server-check.py` — 真实本地验收与安全扫描，不伪造登录、不调用支付
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-mybatis/pom.xml` — 新增已有统一版本管理的 test-only 测试依赖，验证 SQL 日志不转发敏感数据
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-mybatis/src/main/java/co/yixiang/yshop/framework/mybatis/config/YshopMybatisAutoConfiguration.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-mybatis/src/main/java/co/yixiang/yshop/framework/mybatis/core/log/SafeSqlLog.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-mybatis/src/test/java/co/yixiang/yshop/framework/mybatis/core/log/SafeSqlLogTest.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/main/java/co/yixiang/yshop/framework/apilog/core/filter/ApiAccessLogFilter.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/main/java/co/yixiang/yshop/framework/apilog/core/interceptor/ApiAccessLogInterceptor.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/main/java/co/yixiang/yshop/framework/apilog/core/util/ApiLogUtils.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/main/java/co/yixiang/yshop/framework/web/core/handler/GlobalExceptionHandler.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-web/src/test/java/co/yixiang/yshop/framework/apilog/core/filter/ApiAccessLogFilterTest.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-module-member/yshop-module-member-biz/src/main/java/co/yixiang/yshop/module/member/dal/redis/RedisKeyConstants.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-module-member/yshop-module-member-biz/src/main/java/co/yixiang/yshop/module/member/dal/redis/order/MiniRedisDAO.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-module-member/yshop-module-member-biz/src/main/java/co/yixiang/yshop/module/member/framework/auth/config/MiniAppAuthProperties.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-module-member/yshop-module-member-biz/src/main/java/co/yixiang/yshop/module/member/service/auth/MemberAuthServiceImpl.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-module-member/yshop-module-member-biz/src/test/java/co/yixiang/yshop/module/member/dal/redis/order/MiniRedisDAOTest.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-boot3/yshop-module-system/yshop-module-system-biz/src/main/java/co/yixiang/yshop/module/system/service/social/SocialClientServiceImpl.java` — 可配置 session TTL、认证/审计/SQL 日志脱敏或相应测试
+- `yshop-drink-uniapp-vue3/App.vue` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/api/api.js` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/api/auth.js` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/pages-checkout/pay/pay.vue` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/pages-score/scoreproduct/confirm.vue` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/pages-user/address/add.vue` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/pages-user/address/address.vue` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/pages-user/login/login.vue` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/pages-user/mine/userinfo.vue` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/pages/index/index.vue` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/pages/menu/menu.vue` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/utils/auth-errors.js` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/utils/cookie.js` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/utils/router.js` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-uniapp-vue3/utils/wechat-login.js` — 认证错误处理、协议状态或安全调试日志
+- `yshop-drink-vue3/src/api/express/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/infra/demo/demo03/inner/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/infra/demo/demo03/normal/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/infra/file/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/mall/coupon/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/mall/coupon/user/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/mall/order/storeOrder/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/mall/product/product.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/mall/product/storeProductRelation/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/mall/product/storeProductReply/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/mall/shop/ads/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/mall/shop/materialGroup/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/mall/shop/recharge/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/mall/shop/service/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/mall/shop/storeProductRule/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/mall/store/shop/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/member/user/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/member/userAddress/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/member/userBill/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/message/wechatTemplate/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/pay/merchantDetails/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/score/order/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/score/product/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/api/system/tenant/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/components/Draggable/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/components/Materials/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/components/Materials/src/Materials.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/components/SimpleProcessDesigner/src/util.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/components/UploadFile/src/UploadFile.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/components/UploadFile/src/UploadImgs.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/components/UploadFile/src/useUpload.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/components/XButton/src/XButton.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/components/XButton/src/XTextButton.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/config/axios/service.ts` — 请求失败保留 rejection，日志改为安全类别与状态码
+- `yshop-drink-vue3/src/hooks/web/useTagsView.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/layout/components/Menu/src/Menu.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/layout/components/Message/src/Message.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/permission.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/plugins/tongji/index.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/utils/formCreate.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/utils/formatTime.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/Home/Index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/Login/components/LoginForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/apiAccessLog/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/apiErrorLog/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/codegen/ImportTable.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/codegen/components/GenerateInfoForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/codegen/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/config/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo01/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo02/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo03/erp/components/Demo03CourseForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo03/erp/components/Demo03GradeForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo03/erp/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo03/inner/Demo03StudentForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo03/inner/components/Demo03CourseForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo03/inner/components/Demo03CourseList.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo03/inner/components/Demo03GradeForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo03/inner/components/Demo03GradeList.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo03/inner/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo03/normal/Demo03StudentForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo03/normal/components/Demo03CourseForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo03/normal/components/Demo03GradeForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/demo/demo03/normal/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/file/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/fileConfig/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/infra/redis/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/coupon/Form.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/coupon/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/member/user/UserDetail.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/member/user/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/member/user/yue.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/order/storeOrder/OrderDetail.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/order/storeOrder/OrderRecord.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/order/storeOrder/OrderSend.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/order/storeOrder/OrderSendInfo.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/order/storeOrder/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/order/storeOrder/work.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/product/category/CategoryForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/product/storeProduct/StoreProductForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/product/storeProduct/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/shop/ads/AdsForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/shop/ads/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/shop/recharge/RechargeForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/shop/recharge/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/shop/service/ServiceForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/shop/service/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/shop/storeProductRule/StoreProductRuleForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/shop/storeProductRule/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/store/shop/ShopForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/store/shop/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mall/store/shop/map.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/message/wechatTemplate/WechatTemplateForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/message/wechatTemplate/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mp/draft/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mp/message/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mp/statistics/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/mp/user/UserForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/pay/merchantDetails/MerchantDetailsForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/score/order/OrderDetail.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/score/order/OrderForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/score/order/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/score/product/ProductForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/score/product/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/dict/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/loginlog/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/notify/message/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/notify/my/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/notify/template/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/operatelog/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/role/RoleAssignMenuForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/role/RoleDataPermissionForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/role/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/sms/channel/SmsChannelForm.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/sms/channel/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/sms/log/SmsLogDetail.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/sms/log/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/sms/template/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/social/user/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/tenant/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/tenantPackage/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/src/views/system/user/index.vue` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
+- `yshop-drink-vue3/tsconfig.json` — 修正声明解析配置与 qrcode 模块名，保留检查严格度
+- `yshop-drink-vue3/types/external.d.ts` — 后台声明、API/Form/组件类型或历史无效引用修复；不更新依赖和锁文件
