@@ -274,9 +274,36 @@ public class StoreOrderServiceImpl implements StoreOrderService {
     @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public void orderRefund(Long id, BigDecimal price, Integer type, Long salesId) {
 
-        StoreOrderDO storeOrderDO = storeOrderMapper.selectById(id);
+        // Choose the refund path from a current, locked row. Balance payment takes the same
+        // order -> user lock order; do not read the user or credit its wallet before this lock.
+        StoreOrderDO storeOrderDO = storeOrderMapper.selectOne(
+                new LambdaQueryWrapper<StoreOrderDO>().eq(StoreOrderDO::getId, id).last("FOR UPDATE"));
         if (storeOrderDO == null) {
             throw exception(STORE_ORDER_NOT_EXISTS);
+        }
+
+        boolean balanceRefund = PayTypeEnum.YUE.getValue().equals(storeOrderDO.getPayType());
+        if (balanceRefund) {
+            if (!OrderInfoEnum.PAY_STATUS_1.getValue().equals(storeOrderDO.getPaid())
+                    || Boolean.TRUE.equals(storeOrderDO.getDeleted())
+                    || !Integer.valueOf(0).equals(storeOrderDO.getIsSystemDel())) {
+                throw exception(ORDER_REFUND_NOT);
+            }
+            if (OrderInfoEnum.REFUND_STATUS_2.getValue().equals(storeOrderDO.getRefundStatus())) {
+                throw exception(ORDER_REFUNDED);
+            }
+            Integer status = storeOrderDO.getStatus();
+            boolean applying = OrderInfoEnum.STATUS_NE1.getValue().equals(status)
+                    && OrderInfoEnum.REFUND_STATUS_1.getValue().equals(storeOrderDO.getRefundStatus());
+            if ((!Integer.valueOf(0).equals(storeOrderDO.getRefundStatus())
+                    && !OrderInfoEnum.REFUND_STATUS_1.getValue().equals(storeOrderDO.getRefundStatus()))
+                    || (status == null || (!applying && (status < 0 || status > 3)))) {
+                throw exception(ORDER_REFUND_NOT);
+            }
+            if (price == null || price.signum() <= 0 || storeOrderDO.getPayPrice() == null
+                    || price.compareTo(storeOrderDO.getPayPrice()) > 0) {
+                throw exception(ORDER_PRICE_ERROR);
+            }
         }
 
         MemberUserDO userQueryVo = userService.getById(storeOrderDO.getUid());
@@ -305,6 +332,7 @@ public class StoreOrderServiceImpl implements StoreOrderService {
             var movement = walletService.credit(storeOrderDO.getUid(), price,
                     co.yixiang.yshop.module.member.service.wallet.WalletType.ORDER_REFUND,
                     storeOrderDO.getOrderId(), "refund:" + storeOrderDO.getOrderId());
+            if (!movement.first()) throw exception(ORDER_REFUNDED);
             balance = movement.transaction().getBalanceAfter();
 
         } else if (PayTypeEnum.WEIXIN.getValue().equals(storeOrderDO.getPayType())) {
@@ -338,7 +366,8 @@ public class StoreOrderServiceImpl implements StoreOrderService {
         }else if (PayTypeEnum.ALI.getValue().equals(storeOrderDO.getPayType())){
             throw exception(new ErrorCode(999997,"支付宝暂时不支持退款"));
         }
-        storeOrderMapper.updateById(storeOrderDO);
+        int updated = storeOrderMapper.updateById(storeOrderDO);
+        if (balanceRefund && updated != 1) throw exception(ORDER_STATUS_ERROR);
         //增加流水
         billService.income(storeOrderDO.getUid(), "商品退款", BillDetailEnum.CATEGORY_1.getValue(),
                 BillDetailEnum.TYPE_5.getValue(),

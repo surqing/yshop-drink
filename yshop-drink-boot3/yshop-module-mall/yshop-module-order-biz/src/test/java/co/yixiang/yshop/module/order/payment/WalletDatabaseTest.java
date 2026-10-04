@@ -1,17 +1,33 @@
 package co.yixiang.yshop.module.order.payment;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
+import co.yixiang.yshop.framework.common.exception.ServiceException;
 import co.yixiang.yshop.module.member.dal.dataobject.user.MemberUserDO;
 import co.yixiang.yshop.module.member.dal.mysql.user.MemberUserMapper;
 import co.yixiang.yshop.module.member.dal.mysql.wallet.*;
+import co.yixiang.yshop.module.member.service.user.MemberUserService;
+import co.yixiang.yshop.module.member.service.userbill.UserBillService;
 import co.yixiang.yshop.module.member.service.wallet.*;
+import co.yixiang.yshop.module.order.dal.dataobject.storeordercartinfo.StoreOrderCartInfoDO;
+import co.yixiang.yshop.module.order.dal.mysql.storeordercartinfo.StoreOrderCartInfoMapper;
+import co.yixiang.yshop.module.order.service.storeorder.*;
+import co.yixiang.yshop.module.order.service.storeorderstatus.StoreOrderStatusService;
 import co.yixiang.yshop.module.pay.callback.*;
+import co.yixiang.yshop.module.product.service.storeproduct.AppStoreProductService;
+
+import com.egzosn.pay.spring.boot.core.PayServiceManager;
 
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
@@ -22,6 +38,7 @@ class WalletDatabaseTest {
     PaymentDatabaseTest f;
     WalletService wallet;
     RechargeService recharge;
+    PayServiceManager refundProvider;
 
     @BeforeEach
     void setup() throws Exception {
@@ -33,6 +50,7 @@ class WalletDatabaseTest {
 
     @AfterEach
     void close() {
+        if (refundProvider != null) verifyNoInteractions(refundProvider);
         if (f != null) f.close();
     }
 
@@ -75,6 +93,270 @@ class WalletDatabaseTest {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    StoreOrderService refundService(boolean stockFailure) {
+        var target = new StoreOrderServiceImpl();
+        ReflectionTestUtils.setField(target, "storeOrderMapper", f.orders);
+        ReflectionTestUtils.setField(target, "walletService", wallet);
+        var users = f.ctx.getBean(MemberUserService.class);
+        when(users.getById(anyLong()))
+                .thenAnswer(
+                        call ->
+                                f.ctx.getBean(MemberUserMapper.class)
+                                        .selectById((Long) call.getArgument(0)));
+        ReflectionTestUtils.setField(target, "userService", users);
+        ReflectionTestUtils.setField(target, "billService", f.ctx.getBean(UserBillService.class));
+        ReflectionTestUtils.setField(
+                target, "storeOrderStatusService", f.ctx.getBean(StoreOrderStatusService.class));
+        var carts = mock(StoreOrderCartInfoMapper.class);
+        var item = new StoreOrderCartInfoDO();
+        item.setNumber(1);
+        item.setProductId(1L);
+        item.setSpec("synthetic");
+        when(carts.selectList(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class)))
+                .thenReturn(List.of(item));
+        ReflectionTestUtils.setField(target, "storeOrderCartInfoMapper", carts);
+        var products = mock(AppStoreProductService.class);
+        doAnswer(
+                        call -> {
+                            // Transaction-bound SQL, as in the cancellation acceptance fixture.
+                            // Throw AFTER
+                            // the stock write to prove that the outer refund transaction also rolls
+                            // it back.
+                            f.jdbc.update("UPDATE test_inventory SET stock=stock+1 WHERE id=1");
+                            if (stockFailure)
+                                throw new IllegalStateException("SYNTHETIC_REFUND_STOCK_FAILURE");
+                            return null;
+                        })
+                .when(products)
+                .incProductStock(
+                        anyInt(), anyLong(), anyString(), anyLong(), nullable(String.class));
+        ReflectionTestUtils.setField(target, "appStoreProductService", products);
+        refundProvider = mock(PayServiceManager.class);
+        ReflectionTestUtils.setField(target, "manager", refundProvider);
+        var factory = new ProxyFactory(target);
+        factory.setProxyTargetClass(true);
+        factory.addAdvice(
+                new TransactionInterceptor(
+                        f.ctx.getBean(PlatformTransactionManager.class),
+                        new AnnotationTransactionAttributeSource()));
+        return (StoreOrderService) factory.getProxy();
+    }
+
+    void refund(StoreOrderService refunds) {
+        refunds.orderRefund(1L, new BigDecimal("0.02"), 0, null);
+    }
+
+    void refundEffects(int expected) {
+        assertEquals(
+                expected,
+                count(
+                        "SELECT COUNT(*) FROM yshop_member_wallet_transaction WHERE"
+                            + " type='ORDER_REFUND'"));
+        assertEquals(
+                expected,
+                count("SELECT COUNT(*) FROM yshop_user_bill WHERE type='pay_product_refund'"));
+        assertEquals(
+                expected,
+                count(
+                        "SELECT COUNT(*) FROM yshop_store_order_status WHERE"
+                                + " change_type='refund_price_success'"));
+        assertEquals(expected, count("SELECT stock FROM test_inventory WHERE id=1"));
+    }
+
+    @Test
+    void unpaidBalanceRefundIsRejectedWithoutLedger() {
+        f.jdbc.update("UPDATE yshop_store_order SET pay_type='yue' WHERE id=1");
+        var refunds = refundService(false);
+        var ex = assertThrows(ServiceException.class, () -> refund(refunds));
+        assertEquals(1008007017, ex.getCode());
+        same(new BigDecimal("100"), balance());
+        assertEquals(0, count("SELECT COUNT(*) FROM yshop_member_wallet_transaction"));
+        assertEquals(0, count("SELECT paid FROM yshop_store_order WHERE id=1"));
+        assertEquals(0, count("SELECT refund_status FROM yshop_store_order WHERE id=1"));
+        refundEffects(0);
+    }
+
+    @Test
+    void missingBalanceRefundOrderIsRejected() {
+        var refunds = refundService(false);
+        var ex =
+                assertThrows(
+                        ServiceException.class,
+                        () -> refunds.orderRefund(999L, new BigDecimal("0.02"), 0, null));
+        assertEquals(1008007000, ex.getCode());
+        same(new BigDecimal("100"), balance());
+        assertEquals(0, count("SELECT COUNT(*) FROM yshop_member_wallet_transaction"));
+        refundEffects(0);
+    }
+
+    @Test
+    void sameBalanceOrderRefundTwentyCreditsOnce() throws Exception {
+        f.balanceService().yuePay("order-A", 1L);
+        var refunds = refundService(false);
+        var results =
+                concurrent(
+                        20,
+                        n -> {
+                            try {
+                                refund(refunds);
+                                return true;
+                            } catch (ServiceException duplicate) {
+                                assertEquals(1008007021, duplicate.getCode());
+                                return false;
+                            }
+                        });
+        assertEquals(1, results.stream().filter(Boolean::booleanValue).count());
+        same(new BigDecimal("100"), balance());
+        assertEquals(1, count("SELECT paid FROM yshop_store_order WHERE id=1"));
+        assertEquals(2, count("SELECT refund_status FROM yshop_store_order WHERE id=1"));
+        same(
+                new BigDecimal("0.02"),
+                f.jdbc.queryForObject(
+                        "SELECT refund_price FROM yshop_store_order WHERE id=1", BigDecimal.class));
+        refundEffects(1);
+        reconcile();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20})
+    void balancePayAndRefundRaceHasConsistentState(int repetition) throws Exception {
+        // Every repetition uses a fresh isolated schema/fixture, for both H2 and MySQL.
+        f.jdbc.update("UPDATE yshop_store_order SET pay_type='yue' WHERE id=1");
+        var pay = f.balanceService();
+        var refunds = refundService(false);
+        var results =
+                concurrent(
+                        2,
+                        n -> {
+                            if (n == 0) {
+                                pay.yuePay("order-A", 1L);
+                                return true;
+                            }
+                            try {
+                                refund(refunds);
+                                return true;
+                            } catch (ServiceException unpaid) {
+                                assertEquals(1008007017, unpaid.getCode());
+                                return false;
+                            }
+                        });
+        assertTrue(results.get(0));
+        int refunded = results.get(1) ? 1 : 0;
+        same(new BigDecimal(refunded == 1 ? "100" : "99.98"), balance());
+        assertEquals(1, count("SELECT paid FROM yshop_store_order WHERE id=1"));
+        assertEquals(0, count("SELECT status FROM yshop_store_order WHERE id=1"));
+        assertEquals(refunded * 2, count("SELECT refund_status FROM yshop_store_order WHERE id=1"));
+        assertEquals(
+                1,
+                count(
+                        "SELECT COUNT(*) FROM yshop_member_wallet_transaction WHERE"
+                            + " type='ORDER_PAYMENT'"));
+        assertEquals(1, count("SELECT COUNT(*) FROM yshop_order_payment WHERE status='SUCCESS'"));
+        assertEquals(1, count("SELECT pay_count FROM yshop_user WHERE id=1"));
+        assertEquals(1 + refunded, count("SELECT COUNT(*) FROM yshop_user_bill"));
+        refundEffects(refunded);
+        reconcile();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"REFUND_STATUS", "BILL", "STATUS", "STOCK"})
+    void balanceRefundPostCreditFailureRollsBackEverything(String point) {
+        f.balanceService().yuePay("order-A", 1L);
+        if (point.equals("REFUND_STATUS"))
+            f.jdbc.execute(
+                    "ALTER TABLE yshop_store_order ADD CONSTRAINT injected_fault"
+                        + " CHECK(refund_status<>2)");
+        if (point.equals("BILL"))
+            f.jdbc.execute("ALTER TABLE yshop_user_bill ADD CONSTRAINT injected_fault CHECK(pm=0)");
+        if (point.equals("STATUS"))
+            f.jdbc.execute(
+                    "ALTER TABLE yshop_store_order_status ADD CONSTRAINT injected_fault"
+                            + " CHECK(change_type<>'refund_price_success')");
+        var refunds = refundService(point.equals("STOCK"));
+        assertThrows(RuntimeException.class, () -> refund(refunds));
+        same(new BigDecimal("99.98"), balance());
+        assertEquals(2, count("SELECT COUNT(*) FROM yshop_member_wallet_transaction"));
+        assertEquals(0, count("SELECT refund_status FROM yshop_store_order WHERE id=1"));
+        assertEquals(1, count("SELECT paid FROM yshop_store_order WHERE id=1"));
+        assertEquals(0, count("SELECT status FROM yshop_store_order WHERE id=1"));
+        assertEquals(1, count("SELECT COUNT(*) FROM yshop_user_bill"));
+        assertEquals(1, count("SELECT COUNT(*) FROM yshop_store_order_status"));
+        refundEffects(0);
+        reconcile();
+        if (!point.equals("STOCK"))
+            f.dropFault(
+                    point.equals("REFUND_STATUS")
+                            ? "yshop_store_order"
+                            : point.equals("BILL")
+                                    ? "yshop_user_bill"
+                                    : "yshop_store_order_status");
+        refund(refundService(false));
+        same(new BigDecimal("100"), balance());
+        assertEquals(2, count("SELECT refund_status FROM yshop_store_order WHERE id=1"));
+        refundEffects(1);
+        reconcile();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"null", "0", "-0.01", "0.03", "0.001"})
+    void balanceRefundRejectsInvalidAmounts(String value) {
+        f.balanceService().yuePay("order-A", 1L);
+        var refunds = refundService(false);
+        assertThrows(
+                RuntimeException.class,
+                () ->
+                        refunds.orderRefund(
+                                1L, value.equals("null") ? null : new BigDecimal(value), 0, null));
+        same(new BigDecimal("99.98"), balance());
+        assertEquals(2, count("SELECT COUNT(*) FROM yshop_member_wallet_transaction"));
+        assertEquals(0, count("SELECT refund_status FROM yshop_store_order WHERE id=1"));
+        refundEffects(0);
+        reconcile();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "refunded",
+                "invalid-refund",
+                "finished-refund-status",
+                "invalid-status",
+                "deleted",
+                "system-deleted"
+            })
+    void balanceRefundRejectsIneligibleStates(String state) {
+        f.balanceService().yuePay("order-A", 1L);
+        String change =
+                switch (state) {
+                    case "refunded" -> "refund_status=2";
+                    case "invalid-refund" -> "refund_status=3";
+                    case "finished-refund-status" -> "status=-2";
+                    case "invalid-status" -> "status=4";
+                    case "deleted" -> "deleted=1";
+                    default -> "is_system_del=1";
+                };
+        f.jdbc.update("UPDATE yshop_store_order SET " + change + " WHERE id=1");
+        var refunds = refundService(false);
+        assertThrows(ServiceException.class, () -> refund(refunds));
+        same(new BigDecimal("99.98"), balance());
+        assertEquals(2, count("SELECT COUNT(*) FROM yshop_member_wallet_transaction"));
+        refundEffects(0);
+        reconcile();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2, 3, -1})
+    void balanceRefundAcceptsExistingPaidLifecycleStates(int status) {
+        f.balanceService().yuePay("order-A", 1L);
+        f.jdbc.update("UPDATE yshop_store_order SET status=?,refund_status=1 WHERE id=1", status);
+        refund(refundService(false));
+        same(new BigDecimal("100"), balance());
+        assertEquals(status, count("SELECT status FROM yshop_store_order WHERE id=1"));
+        assertEquals(2, count("SELECT refund_status FROM yshop_store_order WHERE id=1"));
+        refundEffects(1);
+        reconcile();
     }
 
     @Test
