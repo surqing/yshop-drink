@@ -644,7 +644,7 @@ const weixinPay = async(order) => {
 			timeStamp: data.data.timeStamp,
 			nonceStr: data.data.nonceStr,
 			package: data.data.package,
-			signType: 'MD5',
+			signType: data.data.signType,
 			paySign: data.data.paySign,
 			success: function(res) {
 

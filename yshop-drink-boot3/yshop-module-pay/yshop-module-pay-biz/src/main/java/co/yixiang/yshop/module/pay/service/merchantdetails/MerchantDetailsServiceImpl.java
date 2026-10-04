@@ -86,6 +86,9 @@ public class MerchantDetailsServiceImpl implements MerchantDetailsService {
     }
 
     private void encryptInputs(MerchantDetailsDO target, MerchantDetailsWriteVO input) {
+        if (!PaymentCredentialCryptoService.blank(input.getApiV3Key()) && input.getApiV3Key().getBytes(java.nio.charset.StandardCharsets.UTF_8).length != 32)
+            throw PaymentCredentialCryptoService.failure("API v3 key must contain 32 bytes");
+        target.setApiV3Key(credentialCrypto.encrypt(target.getDetailsId(), "apiV3Key", input.getApiV3Key()));
         target.setKeyPrivate(credentialCrypto.encrypt(target.getDetailsId(), "keyPrivate", input.getKeyPrivate()));
         target.setKeyCertPwd(credentialCrypto.encrypt(target.getDetailsId(), "keyCertPwd", input.getKeyCertPwd()));
         target.setKeyCert(credentialCrypto.encrypt(target.getDetailsId(), "keyCert", input.getKeyCert()));

@@ -59,6 +59,12 @@ public class PaymentProcessor {
                 return reject(event, PaymentState.UNSUPPORTED_RECHARGE, PaymentResult.REJECTED);
             return reject(event, PaymentState.UNKNOWN_ORDER, PaymentResult.UNKNOWN_ORDER);
         }
+        // A legacy business-order callback cannot complete any WeChat attempt-bound order.
+        // Held order lock serializes this guard with attempt creation (order -> attempt).
+        if (event.getAttemptId() == null
+                && "WECHAT".equals(event.getProvider())
+                && attempts.wechatHistory(order.getOrderId()) != null)
+            return reject(event, PaymentState.PAYMENT_CONFLICT, PaymentResult.REJECTED);
         PaymentAttempt attempt = null;
         if (event.getAttemptId() != null) {
             attempt = attempts.lock(event.getAttemptId());

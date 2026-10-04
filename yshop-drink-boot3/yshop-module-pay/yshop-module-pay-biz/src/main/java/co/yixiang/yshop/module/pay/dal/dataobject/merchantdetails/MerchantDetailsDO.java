@@ -103,4 +103,14 @@ public class MerchantDetailsDO extends BaseDO {
      */
     private Integer isTest;
 
+    /** V3 is an explicit operator choice; old rows stay unconfigured. */
+    private String wechatApiVersion;
+    private String merchantCertificateSerial;
+    private String platformPublicKeyId;
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @TableField(updateStrategy = FieldStrategy.NOT_NULL)
+    private String apiV3Key;
+
 }

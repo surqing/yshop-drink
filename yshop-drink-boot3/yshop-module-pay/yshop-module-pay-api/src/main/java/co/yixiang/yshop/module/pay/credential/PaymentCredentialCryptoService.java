@@ -17,7 +17,7 @@ import java.util.Set;
 @Component
 public final class PaymentCredentialCryptoService {
     public static final String PREFIX = "enc:v1:";
-    private static final Set<String> FIELDS = Set.of("keyPrivate", "keyCertPwd", "keyCert");
+    private static final Set<String> FIELDS = Set.of("keyPrivate", "keyCertPwd", "keyCert", "apiV3Key");
     private static final int NONCE_BYTES = 12;
     private static final int MAX_TEXT_BYTES = 262144;
     private final SecretKeySpec key;

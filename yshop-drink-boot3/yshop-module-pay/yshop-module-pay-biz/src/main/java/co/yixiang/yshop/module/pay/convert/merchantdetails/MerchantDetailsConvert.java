@@ -20,16 +20,19 @@ public interface MerchantDetailsConvert {
 
     MerchantDetailsConvert INSTANCE = Mappers.getMapper(MerchantDetailsConvert.class);
 
+    @Mapping(target = "apiV3Key", ignore = true)
     @Mapping(target = "keyPrivate", ignore = true)
     @Mapping(target = "keyCert", ignore = true)
     @Mapping(target = "keyCertPwd", ignore = true)
     MerchantDetailsDO convert(MerchantDetailsCreateReqVO bean);
 
+    @Mapping(target = "apiV3Key", ignore = true)
     @Mapping(target = "keyPrivate", ignore = true)
     @Mapping(target = "keyCert", ignore = true)
     @Mapping(target = "keyCertPwd", ignore = true)
     MerchantDetailsDO convert(MerchantDetailsUpdateReqVO bean);
 
+    @Mapping(target = "apiV3KeyConfigured", expression = "java(configured(bean.getApiV3Key()))")
     @Mapping(target = "privateKeyConfigured", expression = "java(configured(bean.getKeyPrivate()))")
     @Mapping(target = "certificatePasswordConfigured", expression = "java(configured(bean.getKeyCertPwd()))")
     @Mapping(target = "keyCertificateConfigured", expression = "java(configured(bean.getKeyCert()))")
@@ -39,6 +42,7 @@ public interface MerchantDetailsConvert {
 
     PageResult<MerchantDetailsRespVO> convertPage(PageResult<MerchantDetailsDO> page);
 
+    @Mapping(target = "apiV3KeyConfigured", expression = "java(configured(bean.getApiV3Key()))")
     @Mapping(target = "privateKeyConfigured", expression = "java(configured(bean.getKeyPrivate()))")
     @Mapping(target = "certificatePasswordConfigured", expression = "java(configured(bean.getKeyCertPwd()))")
     @Mapping(target = "keyCertificateConfigured", expression = "java(configured(bean.getKeyCert()))")

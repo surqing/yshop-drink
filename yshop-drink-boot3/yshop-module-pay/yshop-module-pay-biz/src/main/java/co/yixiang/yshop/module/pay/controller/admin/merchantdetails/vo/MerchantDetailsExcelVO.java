@@ -64,4 +64,12 @@ public class MerchantDetailsExcelVO {
     private boolean certificatePasswordConfigured;
     @ExcelProperty("附加证书已配置")
     private boolean keyCertificateConfigured;
+    @ExcelProperty("微信 API 版本")
+    private String wechatApiVersion;
+    @ExcelProperty("商户证书序列号")
+    private String merchantCertificateSerial;
+    @ExcelProperty("微信支付公钥 ID")
+    private String platformPublicKeyId;
+    @ExcelProperty("API v3 密钥已配置")
+    private boolean apiV3KeyConfigured;
 }

@@ -17,7 +17,7 @@ public interface PaymentAttemptMapper {
 
     @Select(
             "SELECT * FROM yshop_order_payment_attempt WHERE order_id=#{order} AND"
-                + " idempotency_key=#{key} FOR UPDATE")
+                    + " idempotency_key=#{key} FOR UPDATE")
     PaymentAttempt key(@Param("order") String order, @Param("key") String key);
 
     @Select("SELECT * FROM yshop_order_payment_attempt WHERE active_order_id=#{order} FOR UPDATE")
@@ -37,8 +37,19 @@ public interface PaymentAttemptMapper {
 
     @Update(
             "UPDATE yshop_order_payment_attempt SET"
+                + " prepay_requested_at=CURRENT_TIMESTAMP(6),update_time=CURRENT_TIMESTAMP(6) WHERE"
+                + " attempt_id=#{id} AND status='CREATED' AND prepay_requested_at IS NULL")
+    int claimPrepay(String id);
+
+    @Select(
+            "SELECT * FROM yshop_order_payment_attempt WHERE order_id=#{orderId} AND"
+                + " provider='WECHAT' ORDER BY create_time LIMIT 1 FOR UPDATE")
+    PaymentAttempt wechatHistory(String orderId);
+
+    @Update(
+            "UPDATE yshop_order_payment_attempt SET"
                 + " status=#{state},update_time=CURRENT_TIMESTAMP(6) WHERE attempt_id=#{id} AND"
-                + " status='CREATED' AND prepay_reference IS NULL")
+                + " status='CREATED' AND prepay_reference IS NULL AND prepay_requested_at IS NULL")
     int terminate(@Param("id") String id, @Param("state") String state);
 
     @Update(

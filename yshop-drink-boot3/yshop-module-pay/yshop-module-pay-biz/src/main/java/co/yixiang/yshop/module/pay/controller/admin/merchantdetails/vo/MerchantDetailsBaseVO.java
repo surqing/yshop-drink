@@ -65,4 +65,7 @@ public class MerchantDetailsBaseVO {
     @NotNull(message = "是否为测试环境: 0 否，1 测试环境不能为空")
     private Integer isTest;
 
+    private String wechatApiVersion;
+    private String merchantCertificateSerial;
+    private String platformPublicKeyId;
 }

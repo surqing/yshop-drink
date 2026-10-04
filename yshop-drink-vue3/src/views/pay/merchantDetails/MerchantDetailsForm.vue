@@ -44,6 +44,16 @@
         </el-select>
         <div style="color: red;">注意：需要证书的选择不需要不选择</div>
       </el-form-item>
+      <el-form-item label="微信 API 版本">
+        <el-select v-model="formData.wechatApiVersion" clearable><el-option label="API v3" value="V3" /></el-select>
+      </el-form-item>
+      <el-form-item label="商户证书序列号"><el-input v-model="formData.merchantCertificateSerial" /></el-form-item>
+      <el-form-item label="微信支付公钥 ID"><el-input v-model="formData.platformPublicKeyId" /></el-form-item>
+      <el-form-item label="API v3 密钥">
+        <el-tag>{{ credentialStatus.apiV3KeyConfigured ? '已配置' : '未配置' }}</el-tag>
+        <el-button v-if="formType === 'update'" link @click="replacement.apiV3Key = !replacement.apiV3Key">{{ replacement.apiV3Key ? '取消替换' : '替换' }}</el-button>
+        <el-input v-if="formType === 'create' || replacement.apiV3Key" v-model="formData.apiV3Key" type="password" autocomplete="new-password" placeholder="留空保持原值" />
+      </el-form-item>
       <el-form-item label="私钥 / API 密钥" prop="keyPrivate">
         <div class="w-full">
           <template v-if="formType === 'update'">
@@ -133,11 +143,12 @@ const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
 const credentialStatus = reactive({
+  apiV3KeyConfigured: false,
   privateKeyConfigured: false,
   certificatePasswordConfigured: false,
   keyCertificateConfigured: false
 })
-const replacement = reactive({ keyPrivate: false, keyCert: false, keyCertPwd: false })
+const replacement = reactive({ keyPrivate: false, keyCert: false, keyCertPwd: false, apiV3Key: false })
 const formData = ref<MerchantDetailsApi.MerchantDetailsWriteVO>({
   detailsId: undefined,
   payType: undefined,
@@ -176,9 +187,9 @@ const open = async (type: string, id?: string) => {
   if (id) {
     formLoading.value = true
     try {
-      const { privateKeyConfigured, certificatePasswordConfigured, keyCertificateConfigured, ...metadata } =
+      const { privateKeyConfigured, certificatePasswordConfigured, keyCertificateConfigured, apiV3KeyConfigured, ...metadata } =
         await MerchantDetailsApi.getMerchantDetails(id) as MerchantDetailsApi.MerchantDetailsVO
-      Object.assign(credentialStatus, { privateKeyConfigured, certificatePasswordConfigured, keyCertificateConfigured })
+      Object.assign(credentialStatus, { privateKeyConfigured, certificatePasswordConfigured, keyCertificateConfigured, apiV3KeyConfigured })
       formData.value = { ...metadata }
     } finally {
       formLoading.value = false
@@ -198,7 +209,7 @@ const submitForm = async () => {
   formLoading.value = true
   try {
     const data: MerchantDetailsApi.MerchantDetailsWriteVO = { ...formData.value }
-    for (const field of ['keyPrivate', 'keyCert', 'keyCertPwd'] as const) {
+    for (const field of ['keyPrivate', 'keyCert', 'keyCertPwd', 'apiV3Key'] as const) {
       if ((formType.value === 'update' && !replacement[field]) || !data[field]?.trim()) {
         delete data[field]
       }
@@ -220,8 +231,8 @@ const submitForm = async () => {
 
 /** 重置表单 */
 const resetForm = () => {
-  Object.assign(credentialStatus, { privateKeyConfigured: false, certificatePasswordConfigured: false, keyCertificateConfigured: false })
-  Object.assign(replacement, { keyPrivate: false, keyCert: false, keyCertPwd: false })
+  Object.assign(credentialStatus, { privateKeyConfigured: false, certificatePasswordConfigured: false, keyCertificateConfigured: false, apiV3KeyConfigured: false })
+  Object.assign(replacement, { keyPrivate: false, keyCert: false, keyCertPwd: false, apiV3Key: false })
   formData.value = {
     detailsId: undefined,
     payType: undefined,
