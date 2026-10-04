@@ -177,6 +177,70 @@ class PaymentLiveReadinessDatabaseTest {
                 assertThrows(IllegalStateException.class, () -> target.pay(1L, p)).getMessage());
     }
 
+    void assertAlipayAdmissionRejected(String id) {
+        live(false);
+        var provider = mock(com.egzosn.pay.spring.boot.core.PayServiceManager.class);
+        var target = new AppStoreOrderServiceImpl();
+        ReflectionTestUtils.setField(target, "wechatLiveEnabled", false);
+        ReflectionTestUtils.setField(target, "paymentAttempts", v.attempts);
+        ReflectionTestUtils.setField(target, "manager", provider);
+        var p = new AppPayParam();
+        p.setPaytype("alipay");
+        p.setUni("order-A");
+        assertEquals(
+                "LEGACY_EXTERNAL_PAYMENT_DISABLED",
+                assertThrows(IllegalStateException.class, () -> target.pay(1L, p)).getMessage());
+        verifyNoInteractions(provider);
+        active(id);
+    }
+
+    @Test
+    void disabledLiveActiveWechatRejectsAlipayBeforeProvider() {
+        var a = v.attempt();
+        assertNull(a.getPrepayRequestedAt());
+        assertAlipayAdmissionRejected(a.getAttemptId());
+    }
+
+    @Test
+    void disabledLiveUncertainWechatRejectsAlipayBeforeProvider() {
+        String id = claimed();
+        assertNotNull(v.attempts.read(1L, id).getPrepayRequestedAt());
+        assertAlipayAdmissionRejected(id);
+        assertEquals(0, queries.get());
+        assertEquals(0, closes.get());
+    }
+
+    @Test
+    void disabledLiveWithoutActiveAttemptPreservesLegacyAlipay() {
+        live(false);
+        var target = v.f.balanceService();
+        var provider = mock(com.egzosn.pay.spring.boot.core.PayServiceManager.class);
+        ReflectionTestUtils.setField(target, "wechatLiveEnabled", false);
+        ReflectionTestUtils.setField(target, "paymentAttempts", v.attempts);
+        ReflectionTestUtils.setField(target, "manager", provider);
+        ReflectionTestUtils.setField(
+                target,
+                "billService",
+                mock(co.yixiang.yshop.module.member.service.userbill.UserBillService.class));
+        doAnswer(
+                        call -> {
+                            assertFalse(
+                                    org.springframework.transaction.support
+                                            .TransactionSynchronizationManager
+                                            .isActualTransactionActive());
+                            return "synthetic-alipay-order";
+                        })
+                .when(provider)
+                .toPay(any());
+        var p = new AppPayParam();
+        p.setPaytype("alipay");
+        p.setUni("order-A");
+        assertEquals("synthetic-alipay-order", target.pay(1L, p).get("data"));
+        verify(provider, times(1)).toPay(any());
+        assertEquals(0, v.f.count("SELECT COUNT(*) FROM yshop_order_payment_attempt"));
+        v.f.effects(0);
+    }
+
     @Test
     void liveRejectsAlipayAttempt() {
         live(true);

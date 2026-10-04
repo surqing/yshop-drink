@@ -97,6 +97,9 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
 
 
     @Resource
+    private co.yixiang.yshop.module.order.service.payment.attempt.PaymentAttemptService paymentAttempts;
+
+    @Resource
     private StoreOrderMapper storeOrderMapper;
 
     @Resource
@@ -356,8 +359,11 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
      */
     @Override
     public Map<String, Object> pay(Long uid, AppPayParam param) {
-        if (wechatLiveEnabled && PayTypeEnum.toType(param.getPaytype()) == PayTypeEnum.ALI)
-            throw new IllegalStateException("LEGACY_EXTERNAL_PAYMENT_DISABLED");
+        if (PayTypeEnum.toType(param.getPaytype()) == PayTypeEnum.ALI) {
+            if (wechatLiveEnabled)
+                throw new IllegalStateException("LEGACY_EXTERNAL_PAYMENT_DISABLED");
+            paymentAttempts.assertLegacyExternalAllowed(param.getUni());
+        }
         if(PayTypeEnum.toType(param.getPaytype())==PayTypeEnum.WEIXIN) {
             boolean mini=AppFromEnum.ROUNTINE.getValue().equals(param.getFrom());
             if(!mini && !AppFromEnum.WECHAT.getValue().equals(param.getFrom()))throw new IllegalStateException("WECHAT_V3_JSAPI_CLIENT_REQUIRED");

@@ -31,6 +31,16 @@ public class PaymentAttemptService {
         this.merchants = merchants;
     }
 
+    /** Short admission transaction; no order/attempt locks are held during legacy provider I/O. */
+    @TenantIgnore
+    @Transactional(rollbackFor = Exception.class)
+    public void assertLegacyExternalAllowed(String orderId) {
+        reference(orderId, 64);
+        // A missing store order may be an existing legacy bill; preserve that compatibility.
+        orders.lockPaymentOrder(orderId);
+        if (attempts.active(orderId) != null) throw failure("LEGACY_EXTERNAL_PAYMENT_DISABLED");
+    }
+
     @TenantIgnore
     @Transactional(rollbackFor = Exception.class)
     public PaymentAttempt createOrGet(
