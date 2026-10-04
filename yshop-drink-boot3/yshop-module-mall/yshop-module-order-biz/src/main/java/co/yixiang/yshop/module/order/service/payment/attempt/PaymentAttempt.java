@@ -22,6 +22,7 @@ public class PaymentAttempt {
     private String providerTransactionId;
     private String status;
     private String paymentEventId;
+    private LocalDateTime prepayRequestedAt;
     private LocalDateTime paidAt;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

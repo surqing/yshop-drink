@@ -111,6 +111,20 @@ public class PaymentAttemptService {
         return attempts.lock(id);
     }
 
+    /** Commits before provider I/O. An uncertain request must never be automatically repeated. */
+    @TenantIgnore
+    @Transactional(rollbackFor = Exception.class)
+    public boolean claimPrepay(Long uid, String id) {
+        PaymentAttempt hint = read(uid, id);
+        PaymentOrder order = orders.lockPaymentOrder(hint.getOrderId());
+        payable(order, uid);
+        PaymentAttempt a = owned(attempts.lock(id), uid);
+        if (a.getAmountCents() != Money.cents(order.getPayPrice()))
+            throw failure("ATTEMPT_AMOUNT_CHANGED");
+        if (!"CREATED".equals(a.getStatus()) || a.getPrepayRequestedAt() != null) return false;
+        return attempts.claimPrepay(id) == 1;
+    }
+
     @TenantIgnore
     @Transactional(rollbackFor = Exception.class)
     public PaymentAttempt terminateCreated(Long uid, String id, PaymentAttemptState state) {

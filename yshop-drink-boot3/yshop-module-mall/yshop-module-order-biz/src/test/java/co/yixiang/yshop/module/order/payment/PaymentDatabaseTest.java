@@ -96,8 +96,8 @@ class PaymentDatabaseTest {
                 String url = settings.getProperty("url", "");
                 String user = settings.getProperty("username", "");
                 if (!url.matches(
-                                "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase5[bcd]_[a-f0-9]{8}(\\?.*)?")
-                        || !user.matches("accept5[bcd]_[a-f0-9]{8}")) {
+                                "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase5[bcde]_[a-f0-9]{8}(\\?.*)?")
+                        || !user.matches("accept5[bcde]_[a-f0-9]{8}")) {
                     throw new IllegalStateException("ISOLATED_DATABASE_REQUIRED");
                 }
                 var ds = new org.springframework.jdbc.datasource.DriverManagerDataSource();
@@ -441,6 +441,11 @@ class PaymentDatabaseTest {
                             .replace(" STORED", "");
             for (String sql : ddl.split(";")) if (!sql.isBlank()) jdbc.execute(sql);
             jdbc.execute("ALTER TABLE yshop_order_payment ADD COLUMN attempt_id VARCHAR(32)");
+        }
+        if(mysqlAcceptance()) {
+            var ddl=new ProcessBuilder("python3","../../../tests/payment/mysql-acceptance.py","--install-v3-migration").redirectErrorStream(true).start();ddl.getInputStream().readAllBytes();if(ddl.waitFor()!=0)throw new IllegalStateException("ISOLATED_V3_MIGRATION_FAILED");
+        } else {
+            jdbc.execute("ALTER TABLE yshop_order_payment_attempt ADD COLUMN prepay_requested_at TIMESTAMP");
         }
         jdbc.update(
                 "INSERT INTO yshop_user(id,pay_count,now_money,login_type,deleted)"

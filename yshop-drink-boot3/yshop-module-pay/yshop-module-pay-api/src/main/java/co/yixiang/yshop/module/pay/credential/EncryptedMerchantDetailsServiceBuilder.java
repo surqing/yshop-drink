@@ -41,6 +41,8 @@ public final class EncryptedMerchantDetailsServiceBuilder extends MerchantDetail
     }
 
     private ServerOnlyMerchantDetails runtime(ResultSet rs) throws SQLException {
+        if("wxPay".equals(rs.getString("pay_type")) && "V3".equals(rs.getString("wechat_api_version")))
+            throw PaymentCredentialCryptoService.failure("Legacy WeChat merchant runtime is disabled for V3");
         var merchant = new ServerOnlyMerchantDetails();
         String id = rs.getString("details_id");
         merchant.setDetailsId(id);

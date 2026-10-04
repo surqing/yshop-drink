@@ -45,7 +45,7 @@ class PaymentCredentialDatabaseTest {
     @BeforeEach void setup() {
         ctx=new AnnotationConfigApplicationContext(Config.class); jdbc=ctx.getBean(JdbcTemplate.class);
         crypto=ctx.getBean(PaymentCredentialCryptoService.class); service=ctx.getBean(MerchantDetailsServiceImpl.class);
-        jdbc.execute("CREATE TABLE merchant_details (details_id VARCHAR(32) PRIMARY KEY, appid VARCHAR(32), pay_type VARCHAR(16), mch_id VARCHAR(32), cert_store_type VARCHAR(16), key_private CLOB, key_cert_pwd CLOB, key_public CLOB, key_cert CLOB, notify_url VARCHAR(256), return_url VARCHAR(256), sign_type VARCHAR(16), seller VARCHAR(64), sub_app_id VARCHAR(32), sub_mch_id VARCHAR(32), input_charset VARCHAR(16), is_test INT, deleted BOOLEAN DEFAULT FALSE, create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, creator VARCHAR(64), updater VARCHAR(64))");
+        jdbc.execute("CREATE TABLE merchant_details (details_id VARCHAR(32) PRIMARY KEY, api_v3_key CLOB, wechat_api_version VARCHAR(8), merchant_certificate_serial VARCHAR(64), platform_public_key_id VARCHAR(64), appid VARCHAR(32), pay_type VARCHAR(16), mch_id VARCHAR(32), cert_store_type VARCHAR(16), key_private CLOB, key_cert_pwd CLOB, key_public CLOB, key_cert CLOB, notify_url VARCHAR(256), return_url VARCHAR(256), sign_type VARCHAR(16), seller VARCHAR(64), sub_app_id VARCHAR(32), sub_mch_id VARCHAR(32), input_charset VARCHAR(16), is_test INT, deleted BOOLEAN DEFAULT FALSE, create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, update_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP, creator VARCHAR(64), updater VARCHAR(64))");
     }
     @AfterEach void close() {ctx.close();}
     MerchantDetailsCreateReqVO create(String id) {
@@ -107,5 +107,37 @@ class PaymentCredentialDatabaseTest {
         assertThrows(IllegalStateException.class,()->builder.build().loadMerchantByMerchantId("test_merchant"));
         jdbc.update("UPDATE merchant_details SET key_private=NULL,deleted=TRUE WHERE details_id=?", "test_merchant");
         assertThrows(IllegalStateException.class,()->builder.build().loadMerchantByMerchantId("test_merchant"));
+    }
+
+    @Test void apiV3KeyEncryptedBoundAndPreserved() throws Exception {
+        String value=UUID.randomUUID().toString().replace("-","");
+        var req=create("test_merchant");req.setApiV3Key(value);service.createMerchantDetails(req);
+        String original=stored("test_merchant","api_v3_key");assertTrue(original.startsWith("enc:v1:"));assertTrue(value.equals(crypto.decrypt("test_merchant","apiV3Key",original)));
+        var edit=new MerchantDetailsUpdateReqVO();edit.setDetailsId("test_merchant");edit.setApiV3Key(" ");service.updateMerchantDetails(edit);assertEquals(original,stored("test_merchant","api_v3_key"));
+        assertThrows(IllegalStateException.class,()->crypto.decrypt("other","apiV3Key",original));assertThrows(IllegalStateException.class,()->crypto.decrypt("test_merchant","keyPrivate",original));
+        edit.setApiV3Key(UUID.randomUUID().toString().replace("-",""));service.updateMerchantDetails(edit);assertNotEquals(original,stored("test_merchant","api_v3_key"));
+        String output=new ObjectMapper().writeValueAsString(co.yixiang.yshop.module.pay.convert.merchantdetails.MerchantDetailsConvert.INSTANCE.convert(service.getMerchantDetails("test_merchant")));
+        assertFalse(output.contains(value));assertFalse(output.contains("enc:v1:"));assertTrue(output.contains("apiV3KeyConfigured"));
+    }
+    @Test void invalidApiV3KeyLengthRejectedBeforeDatabaseWrite() {
+        var req=create("test_merchant");req.setApiV3Key("short");assertThrows(IllegalStateException.class,()->service.createMerchantDetails(req));assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM merchant_details",Integer.class));
+    }
+    @Test void runtimeV3FactoryDisabledByDefaultWithoutCredentialReads() {
+        var mapper=org.mockito.Mockito.mock(MerchantDetailsMapper.class);
+        var factory=new co.yixiang.yshop.module.pay.v3.EncryptedWechatV3ClientFactory(mapper,crypto,false);
+        assertThrows(IllegalStateException.class,()->factory.forMerchant("test_merchant"));org.mockito.Mockito.verifyNoInteractions(mapper);
+    }
+    static String pem(String kind,byte[] encoded){return "-----BEGIN "+kind+"-----\n"+java.util.Base64.getMimeEncoder(64,new byte[]{10}).encodeToString(encoded)+"\n-----END "+kind+"-----\n";}
+    @Test void runtimeV3FactoryBuildsSdkFromEncryptedSyntheticMaterialsAndLegacyFailsClosed() throws Exception {
+        var generator=java.security.KeyPairGenerator.getInstance("RSA");generator.initialize(2048);var merchant=generator.generateKeyPair();var platform=generator.generateKeyPair();
+        var req=create("test_merchant");req.setIsTest(0);req.setWechatApiVersion("V3");req.setMerchantCertificateSerial("synthetic-serial");req.setPlatformPublicKeyId("PUB_KEY_ID_SYNTHETIC");req.setKeyPublic(pem("PUBLIC KEY",platform.getPublic().getEncoded()));req.setKeyPrivate(pem("PRIVATE KEY",merchant.getPrivate().getEncoded()));req.setApiV3Key(UUID.randomUUID().toString().replace("-",""));req.setNotifyUrl("https://synthetic.invalid/app-api/order/notify/wechat-v3/test_merchant");service.createMerchantDetails(req);
+        var factory=new co.yixiang.yshop.module.pay.v3.EncryptedWechatV3ClientFactory(ctx.getBean(MerchantDetailsMapper.class),crypto,true);
+        var client=factory.forMerchant("test_merchant");assertEquals("synthetic-app",client.appid());assertEquals(5,client.paymentParameters("synthetic-app","synthetic-prepay").size());assertTrue(stored("test_merchant","key_private").startsWith("enc:v1:"));assertTrue(stored("test_merchant","api_v3_key").startsWith("enc:v1:"));
+        var legacy=new EncryptedMerchantDetailsServiceBuilder(jdbc,crypto);assertThrows(IllegalStateException.class,()->legacy.build().loadMerchantByMerchantId("test_merchant"));
+        for(String change:java.util.List.of("wechat_api_version=NULL","merchant_certificate_serial=NULL","platform_public_key_id=NULL","notify_url='http://synthetic.invalid/app-api/order/notify/wechat-v3/test_merchant'","api_v3_key='synthetic-plaintext'","deleted=TRUE")) {
+            String column=change.substring(0,change.indexOf('='));Object original=jdbc.queryForObject("SELECT "+column+" FROM merchant_details WHERE details_id='test_merchant'",Object.class);
+            jdbc.update("UPDATE merchant_details SET "+change+" WHERE details_id='test_merchant'");assertThrows(IllegalStateException.class,()->factory.forMerchant("test_merchant"));
+            jdbc.update("UPDATE merchant_details SET "+column+"=? WHERE details_id='test_merchant'",original);
+        }
     }
 }

@@ -37,6 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class MerchantDetailsControllerSecurityTest {
     private final String secret="synthetic-controller-secret";
     private final PaymentCredentialCryptoService crypto=new PaymentCredentialCryptoService(PaymentCredentialCryptoServiceTest.randomKey());
+    private final String v3Secret=java.util.UUID.randomUUID().toString().replace("-","");
     MockMvc mvc;
     MerchantDetailsMapper mapper;
     ApiAccessLogFrameworkService access;
@@ -48,7 +49,7 @@ class MerchantDetailsControllerSecurityTest {
         var service=new MerchantDetailsServiceImpl(); ReflectionTestUtils.setField(service,"merchantDetailsMapper",mapper); ReflectionTestUtils.setField(service,"credentialCrypto",crypto);
         var controller=new MerchantDetailsController(); ReflectionTestUtils.setField(controller,"merchantDetailsService",service);
         row=MerchantDetailsDO.builder().detailsId("test_merchant").payType("wxPay").appid("synthetic-app").mchId("synthetic-merchant").signType("MD5").isTest(1)
-                .keyPrivate(crypto.encrypt("test_merchant","keyPrivate",secret)).keyCertPwd(crypto.encrypt("test_merchant","keyCertPwd",secret)).keyCert(crypto.encrypt("test_merchant","keyCert",secret)).build();
+                .apiV3Key(crypto.encrypt("test_merchant","apiV3Key",v3Secret)).keyPrivate(crypto.encrypt("test_merchant","keyPrivate",secret)).keyCertPwd(crypto.encrypt("test_merchant","keyCertPwd",secret)).keyCert(crypto.encrypt("test_merchant","keyCert",secret)).build();
         when(mapper.selectById("test_merchant")).thenReturn(row);
         when(mapper.selectBatchIds(anyCollection())).thenReturn(List.of(row));
         when(mapper.selectPage(any(MerchantDetailsPageReqVO.class))).thenReturn(new PageResult<>(List.of(row),1L));
@@ -59,18 +60,18 @@ class MerchantDetailsControllerSecurityTest {
     }
     void safeJson(MvcResult result) throws Exception {
         String json=result.getResponse().getContentAsString();
-        assertFalse(json.contains(secret)); assertFalse(json.contains("enc:v1:"));
+        assertFalse(json.contains(secret)); assertFalse(json.contains(v3Secret)); assertFalse(json.contains("enc:v1:"));
         for(String field:new String[]{"keyPrivate","privateKey","keyCertPwd","keyCert","apiV3Key","apiKey","mchKey","payKey"}) assertFalse(json.contains("\""+field+"\":"),field);
         assertTrue(json.contains("synthetic-merchant")); assertTrue(json.contains("privateKeyConfigured")); assertTrue(json.contains("certificatePasswordConfigured")); assertTrue(json.contains("keyCertificateConfigured"));
     }
     void safeAudit() throws Exception {
         var captor=ArgumentCaptor.forClass(ApiAccessLogCreateReqDTO.class); verify(access,atLeastOnce()).createApiAccessLog(captor.capture());
-        for(var dto:captor.getAllValues()) {String json=new ObjectMapper().findAndRegisterModules().writeValueAsString(dto); assertFalse(json.contains(secret)); assertFalse(json.contains("enc:v1:"));}
+        for(var dto:captor.getAllValues()) {String json=new ObjectMapper().findAndRegisterModules().writeValueAsString(dto); assertFalse(json.contains(secret)); assertFalse(json.contains(v3Secret)); assertFalse(json.contains("enc:v1:"));}
     }
-    String input() {return "{\"detailsId\":\"test_merchant\",\"payType\":\"wxPay\",\"signType\":\"MD5\",\"isTest\":1,\"appid\":\"synthetic-app\",\"mchId\":\"synthetic-merchant\",\"keyPrivate\":\""+secret+"\",\"keyCertPwd\":\""+secret+"\",\"keyCert\":\""+secret+"\"}";}
+    String input() {return "{\"apiV3Key\":\""+v3Secret+"\",\"detailsId\":\"test_merchant\",\"payType\":\"wxPay\",\"signType\":\"MD5\",\"isTest\":1,\"appid\":\"synthetic-app\",\"mchId\":\"synthetic-merchant\",\"keyPrivate\":\""+secret+"\",\"keyCertPwd\":\""+secret+"\",\"keyCert\":\""+secret+"\"}";}
     @Test void createEncryptsAtActualEntryAndDoesNotAuditSecrets() throws Exception {
         String response=mvc.perform(post("/admin-api/pay/merchant-details/create").contextPath("/admin-api").contentType(MediaType.APPLICATION_JSON).content(input())).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertFalse(response.contains(secret)); var captor=ArgumentCaptor.forClass(MerchantDetailsDO.class); verify(mapper).insert(captor.capture());
+        assertFalse(response.contains(secret)); assertFalse(response.contains(v3Secret)); var captor=ArgumentCaptor.forClass(MerchantDetailsDO.class); verify(mapper).insert(captor.capture());
         var stored=captor.getValue(); assertEquals(secret,crypto.decrypt(stored.getDetailsId(),"keyPrivate",stored.getKeyPrivate())); assertTrue(stored.getKeyCert().startsWith("enc:v1:")); safeAudit();
     }
     @Test void updateEncryptsAtActualEntryAndDoesNotAuditSecrets() throws Exception {
@@ -92,12 +93,12 @@ class MerchantDetailsControllerSecurityTest {
     @Test void realUpdateFailureCannotExposeRequestOrExceptionMaterial() throws Exception {
         doThrow(new IllegalStateException(secret,new IllegalArgumentException(secret))).when(mapper).updateById(any(MerchantDetailsDO.class));
         String json=mvc.perform(put("/admin-api/pay/merchant-details/update").contextPath("/admin-api").contentType(MediaType.APPLICATION_JSON).content(input())).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertFalse(json.contains(secret)); assertFalse(json.contains("enc:v1:"));safeAudit();
+        assertFalse(json.contains(secret)); assertFalse(json.contains(v3Secret)); assertFalse(json.contains("enc:v1:"));safeAudit();
         var captor=ArgumentCaptor.forClass(ApiErrorLogCreateReqDTO.class); verify(errors).createApiErrorLog(captor.capture());
         var dto=captor.getValue(); for(String value:new String[]{dto.getRequestParams(),dto.getExceptionMessage(),dto.getExceptionRootCauseMessage(),dto.getExceptionStackTrace()}) {assertNotNull(value); assertFalse(value.contains(secret)); assertFalse(value.contains("enc:v1:"));}
     }
     @Test void dtoAndDoSerializationAndToStringExcludeMaterial() throws Exception {
         var write=new ObjectMapper().readValue(input(),MerchantDetailsCreateReqVO.class);
-        for(Object value:new Object[]{write,row}) {assertFalse(value.toString().contains(secret));assertFalse(value.toString().contains("enc:v1:"));String json=new ObjectMapper().writeValueAsString(value);assertFalse(json.contains(secret));assertFalse(json.contains("enc:v1:"));}
+        for(Object value:new Object[]{write,row}) {assertFalse(value.toString().contains(secret));assertFalse(value.toString().contains("enc:v1:"));String json=new ObjectMapper().writeValueAsString(value);assertFalse(json.contains(secret)); assertFalse(json.contains(v3Secret));assertFalse(json.contains("enc:v1:"));}
     }
 }

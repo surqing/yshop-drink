@@ -31,4 +31,10 @@ public class MerchantDetailsWriteVO extends MerchantDetailsBaseVO {
     @EqualsAndHashCode.Exclude
     @Size(max = 65536, message = "支付凭据长度超出限制")
     private String keyCertPwd;
+    @Schema(description = "API v3 密钥，仅用于替换；留空保持原值", accessMode = Schema.AccessMode.WRITE_ONLY)
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @Size(max = 32, message = "API v3 密钥长度无效")
+    private String apiV3Key;
 }

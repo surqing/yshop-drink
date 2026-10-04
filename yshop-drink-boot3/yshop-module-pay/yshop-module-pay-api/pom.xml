@@ -42,6 +42,12 @@
         </dependency>
 
 
+        <!-- Official API v3 SDK; no live client is constructed during application startup. -->
+        <dependency>
+            <groupId>com.github.wechatpay-apiv3</groupId>
+            <artifactId>wechatpay-java</artifactId>
+            <version>0.2.17</version>
+        </dependency>
         <!-- 支付相关 -->
         <dependency>
             <groupId>com.egzosn</groupId>

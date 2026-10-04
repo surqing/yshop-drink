@@ -28,4 +28,8 @@ public class MerchantDetailsRespVO {
     private boolean certificatePasswordConfigured;
     @Schema(description = "附加证书已配置")
     private boolean keyCertificateConfigured;
+    private String wechatApiVersion;
+    private String merchantCertificateSerial;
+    private String platformPublicKeyId;
+    private boolean apiV3KeyConfigured;
 }

@@ -478,16 +478,11 @@ class PaymentAttemptDatabaseTest {
     }
 
     @Test
-    void legacyPaidOrderNotFulfilledAgain() {
-        var a = create();
-        assertEquals(PaymentResult.FIRST_SUCCESS, f.pay());
-        assertEquals(
-                PaymentResult.RECONCILIATION_REQUIRED,
-                f.service.acceptAttemptVerified(event(a, "synthetic-bound-other")));
-        f.effects(1);
-        assertEquals("CREATED", attempts.read(1L, a.getAttemptId()).getStatus());
-        assertEquals(
-                1, f.count("SELECT COUNT(*) FROM yshop_order_payment WHERE attempt_id IS NULL"));
+    void legacyCannotCompleteWechatAttemptOrder() {
+        var a=create();assertEquals(PaymentResult.REJECTED,f.pay());unpaid(a);
+        assertEquals(PaymentResult.FIRST_SUCCESS,f.service.acceptAttemptVerified(event(a,"synthetic-bound-other")));f.effects(1);
+        assertEquals("PAID",attempts.read(1L,a.getAttemptId()).getStatus());
+        assertEquals(1,f.count("SELECT COUNT(*) FROM yshop_order_payment WHERE attempt_id IS NULL AND status='PAYMENT_CONFLICT'"));
     }
 
     @ParameterizedTest

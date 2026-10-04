@@ -89,6 +89,9 @@ import static co.yixiang.yshop.module.order.enums.ErrorCodeConstants.*;
 @Service
 @Validated
 public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,StoreOrderDO> implements AppStoreOrderService {
+    @jakarta.annotation.Resource
+    private co.yixiang.yshop.module.order.service.payment.v3.WechatV3PaymentService wechatV3Payment;
+
 
     @Resource
     private StoreOrderMapper storeOrderMapper;
@@ -350,6 +353,14 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
      */
     @Override
     public Map<String, Object> pay(Long uid, AppPayParam param) {
+        if(PayTypeEnum.toType(param.getPaytype())==PayTypeEnum.WEIXIN) {
+            boolean mini=AppFromEnum.ROUNTINE.getValue().equals(param.getFrom());
+            if(!mini && !AppFromEnum.WECHAT.getValue().equals(param.getFrom()))throw new IllegalStateException("WECHAT_V3_JSAPI_CLIENT_REQUIRED");
+            MemberUserDO member=userService.getUser(uid);
+            if(member==null)throw new IllegalStateException("WECHAT_MEMBER_ID_REQUIRED");
+            String merchant=mini?PayIdEnum.WX_MINIAPP.getValue():PayIdEnum.WX_WECHAT.getValue();
+            return Map.of("data",wechatV3Payment.pay(uid,param.getUni(),merchant,mini?member.getRoutineOpenid():member.getOpenid()),"trade_type",mini?"JSAPI":"W-JSAPI");
+        }
         AppStoreOrderQueryVo orderInfo = getOrderInfo(param.getUni(), uid);
         UserBillDO userBillDO =  billService.getOne(new LambdaQueryWrapper<UserBillDO>().eq(UserBillDO::getUid,uid)
                 .eq(UserBillDO::getExtendField,param.getUni()));
@@ -377,46 +388,7 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
         }
         switch (PayTypeEnum.toType(param.getPaytype())){
             case WEIXIN:
-                if(AppFromEnum.H5.getValue().equals(param.getFrom())){
-                    detailsId = PayIdEnum.WX_WECHAT.getValue();
-                    //todo 如果启用微信H5支付充值 需要另外增加一个配置用于同步跳转页面 比如下面的增加了一个id=5的配置,微信支付公众号与H%配置是一样 基本
-//                    if(orderInfo != null) {
-//                        detailsId = "4";
-//                    }else{
-//                        detailsId = "5";
-//                    }
-                    MerchantPayOrder payOrder = new MerchantPayOrder(detailsId, "MWEB", msg,
-                            msg, price, param.getUni());
-
-                    Map<String, Object> payOrderInfo = manager.getOrderInfo(payOrder);
-                    MerchantDetailsDO merchantDetailsDO = merchantDetailsService.getMerchantDetails(detailsId);
-                    String url = merchantDetailsDO.getReturnUrl();
-
-                    String newUrl = "";
-                    try {
-                        newUrl =  String.format("%s%s", payOrderInfo.get("mweb_url"), "&redirect_url=" + URLEncoder.encode(url,"UTF-8"));
-                    } catch (UnsupportedEncodingException e) {
-                        log.error(e.getMessage());
-                    }
-                    map.put("data",newUrl);
-                    map.put("trade_type","MWEB");
-                } else if(AppFromEnum.WECHAT.getValue().equals(param.getFrom())){//微信公众号
-//                    MerchantPayOrder payOrder = new MerchantPayOrder("4", "JSAPI", msg,
-//                            msg, price, param.getUni());
-                    MerchantPayOrder payOrder = new MerchantPayOrder(PayIdEnum.WX_WECHAT.getValue(), "JSAPI", msg,
-                            msg, price, param.getUni());
-                    payOrder.setOpenid(memberUserDO.getOpenid());
-                    map.put("data",manager.getOrderInfo(payOrder));
-                    map.put("trade_type","W-JSAPI");
-                } else {//微信小程序
-                    MerchantPayOrder payOrder = new MerchantPayOrder(PayIdEnum.WX_MINIAPP.getValue(), "JSAPI", msg,
-                            msg, price, param.getUni());
-                    payOrder.setOpenid(memberUserDO.getRoutineOpenid());
-                    map.put("data",manager.getOrderInfo(payOrder));
-                    map.put("trade_type","JSAPI");
-
-                }
-                break;
+                throw new IllegalStateException("LEGACY_WECHAT_ORDER_CREATION_DISABLED");
             case YUE:
                 this.yuePay(param.getUni(), uid);
                 map.put("status","ok");

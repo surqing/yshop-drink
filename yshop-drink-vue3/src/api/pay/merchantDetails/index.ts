@@ -14,16 +14,21 @@ export interface MerchantDetailsMetadata {
   subAppId: string
   subMchId: string
   inputCharset: string
+  wechatApiVersion?: string
+  merchantCertificateSerial?: string
+  platformPublicKeyId?: string
   isTest: number
 }
 
 export interface MerchantDetailsVO extends MerchantDetailsMetadata {
+  apiV3KeyConfigured: boolean
   privateKeyConfigured: boolean
   certificatePasswordConfigured: boolean
   keyCertificateConfigured: boolean
 }
 
 export interface MerchantDetailsWriteVO extends Partial<MerchantDetailsMetadata> {
+  apiV3Key?: string
   keyPrivate?: string
   keyCert?: string
   keyCertPwd?: string
