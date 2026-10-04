@@ -68,6 +68,32 @@ public final class OfficialWechatV3Client implements WechatV3Client {
         }
     }
 
+    public Transaction query(String reference) {
+        if (reference == null || !reference.matches("[A-Za-z0-9]{32}")) throw failure();
+        try {
+            var request =
+                    new com.wechat.pay.java.service.payments.jsapi.model
+                            .QueryOrderByOutTradeNoRequest();
+            request.setMchid(mchid);
+            request.setOutTradeNo(reference);
+            return service.queryOrderByOutTradeNo(request);
+        } catch (RuntimeException ignored) {
+            throw failure();
+        }
+    }
+
+    public void close(String reference) {
+        if (reference == null || !reference.matches("[A-Za-z0-9]{32}")) throw failure();
+        try {
+            var request = new com.wechat.pay.java.service.payments.jsapi.model.CloseOrderRequest();
+            request.setMchid(mchid);
+            request.setOutTradeNo(reference);
+            service.closeOrder(request);
+        } catch (RuntimeException ignored) {
+            throw failure();
+        }
+    }
+
     public Map<String, String> paymentParameters(String expectedAppid, String ref) {
         if (!appid.equals(expectedAppid) || ref == null || !ref.matches("[A-Za-z0-9_:.@-]{1,128}"))
             throw failure();

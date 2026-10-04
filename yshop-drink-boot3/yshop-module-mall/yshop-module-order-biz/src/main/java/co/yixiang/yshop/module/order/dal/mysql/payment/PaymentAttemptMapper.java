@@ -43,7 +43,7 @@ public interface PaymentAttemptMapper {
 
     @Select(
             "SELECT * FROM yshop_order_payment_attempt WHERE order_id=#{orderId} AND"
-                + " provider='WECHAT' ORDER BY create_time LIMIT 1 FOR UPDATE")
+                    + " provider='WECHAT' ORDER BY create_time LIMIT 1 FOR UPDATE")
     PaymentAttempt wechatHistory(String orderId);
 
     @Update(
@@ -61,4 +61,59 @@ public interface PaymentAttemptMapper {
             @Param("id") String id,
             @Param("transaction") String transaction,
             @Param("event") String event);
+
+    @Update(
+            "UPDATE yshop_order_payment_attempt SET"
+                + " reconciliation_token=#{token},reconciliation_lease_until=TIMESTAMPADD(SECOND,#{lease},CURRENT_TIMESTAMP(6))"
+                + " WHERE attempt_id=#{id} AND provider='WECHAT' AND status IN"
+                + " ('CREATED','PREPAY_CREATED') AND (prepay_requested_at IS NOT NULL OR"
+                + " prepay_reference IS NOT NULL) AND"
+                + " TIMESTAMPDIFF(SECOND,COALESCE(prepay_requested_at,create_time),CURRENT_TIMESTAMP(6))>=#{age}"
+                + " AND (reconciliation_lease_until IS NULL OR"
+                + " reconciliation_lease_until<=CURRENT_TIMESTAMP(6))")
+    int claimReconciliation(
+            @Param("id") String id,
+            @Param("token") String token,
+            @Param("lease") int lease,
+            @Param("age") int age);
+
+    @Update(
+            "UPDATE yshop_order_payment_attempt SET"
+                + " reconciliation_token=NULL,reconciliation_lease_until=NULL WHERE"
+                + " attempt_id=#{id} AND reconciliation_token=#{token}")
+    int releaseReconciliation(@Param("id") String id, @Param("token") String token);
+
+    @Update(
+            "UPDATE yshop_order_payment_attempt SET"
+                + " status=#{status},remote_terminal_state=#{remote},remote_confirmed_at=CURRENT_TIMESTAMP(6),reconciliation_token=NULL,reconciliation_lease_until=NULL,update_time=CURRENT_TIMESTAMP(6)"
+                + " WHERE attempt_id=#{id} AND status IN ('CREATED','PREPAY_CREATED') AND"
+                + " reconciliation_token=#{token} AND"
+                + " reconciliation_lease_until>CURRENT_TIMESTAMP(6)")
+    int remoteTerminal(
+            @Param("id") String id,
+            @Param("token") String token,
+            @Param("status") String status,
+            @Param("remote") String remote);
+
+    @Select(
+            "SELECT attempt_id FROM yshop_order_payment_attempt WHERE provider='WECHAT' AND status"
+                + " IN ('CREATED','PREPAY_CREATED') AND (prepay_requested_at IS NOT NULL OR"
+                + " prepay_reference IS NOT NULL) AND"
+                + " TIMESTAMPDIFF(SECOND,COALESCE(prepay_requested_at,create_time),CURRENT_TIMESTAMP(6))>=#{age}"
+                + " AND (reconciliation_lease_until IS NULL OR"
+                + " reconciliation_lease_until<=CURRENT_TIMESTAMP(6)) ORDER BY create_time LIMIT"
+                + " #{limit}")
+    java.util.List<String> reconciliationCandidates(
+            @Param("age") int age, @Param("limit") int limit);
+
+    @Select(
+            "SELECT COUNT(*) FROM yshop_order_payment_attempt WHERE attempt_id=#{id} AND"
+                + " reconciliation_token=#{token} AND"
+                + " reconciliation_lease_until>CURRENT_TIMESTAMP(6)")
+    int leaseCurrent(@Param("id") String id, @Param("token") String token);
+
+    @Select(
+            "SELECT * FROM yshop_order_payment_attempt WHERE order_id=#{orderId} ORDER BY"
+                + " create_time DESC,attempt_id DESC LIMIT 1 FOR UPDATE")
+    PaymentAttempt latest(String orderId);
 }

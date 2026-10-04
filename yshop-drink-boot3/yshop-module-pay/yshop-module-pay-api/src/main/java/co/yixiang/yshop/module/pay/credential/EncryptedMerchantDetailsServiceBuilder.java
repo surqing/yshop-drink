@@ -17,8 +17,14 @@ import java.sql.SQLException;
 public final class EncryptedMerchantDetailsServiceBuilder extends MerchantDetailsServiceBuilder {
     private final JdbcTemplate jdbc;
     private final PaymentCredentialCryptoService crypto;
+    private final boolean live;
 
     public EncryptedMerchantDetailsServiceBuilder(JdbcTemplate jdbc, PaymentCredentialCryptoService crypto) {
+        this(jdbc, crypto, false);
+    }
+
+    public EncryptedMerchantDetailsServiceBuilder(JdbcTemplate jdbc, PaymentCredentialCryptoService crypto, boolean live) {
+        this.live = live;
         this.jdbc = jdbc;
         this.crypto = crypto;
     }
@@ -27,6 +33,7 @@ public final class EncryptedMerchantDetailsServiceBuilder extends MerchantDetail
     protected MerchantDetailsService performBuild() {
         return id -> {
             try {
+                if (live) throw PaymentCredentialCryptoService.failure("Legacy external payment runtime disabled");
                 var rows = jdbc.query("SELECT * FROM merchant_details WHERE details_id = ? AND deleted = 0",
                         (rs, index) -> runtime(rs), id);
                 if (rows.size() != 1) throw PaymentCredentialCryptoService.failure("Payment merchant configuration unavailable");

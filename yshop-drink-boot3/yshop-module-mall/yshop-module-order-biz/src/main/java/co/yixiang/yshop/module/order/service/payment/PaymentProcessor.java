@@ -18,6 +18,9 @@ import org.springframework.transaction.support.*;
 @Service
 @Slf4j
 public class PaymentProcessor {
+    @org.springframework.beans.factory.annotation.Value("${yshop.pay.wechat-v3.enabled:false}")
+    private boolean wechatLiveEnabled;
+
     private final PaymentMapper payments;
     private final StoreOrderMapper orders;
     private final PaymentEffects effects;
@@ -65,10 +68,16 @@ public class PaymentProcessor {
                 && "WECHAT".equals(event.getProvider())
                 && attempts.wechatHistory(order.getOrderId()) != null)
             return reject(event, PaymentState.PAYMENT_CONFLICT, PaymentResult.REJECTED);
+        if (external
+                && event.getAttemptId() == null
+                && (wechatLiveEnabled || attempts.active(order.getOrderId()) != null))
+            return reject(event, PaymentState.PAYMENT_CONFLICT, PaymentResult.REJECTED);
         PaymentAttempt attempt = null;
         if (event.getAttemptId() != null) {
             attempt = attempts.lock(event.getAttemptId());
-            if (!external || !PaymentAttemptService.matches(attempt, event, order))
+            if (!external
+                    || (wechatLiveEnabled && !"WECHAT".equals(event.getProvider()))
+                    || !PaymentAttemptService.matches(attempt, event, order))
                 return reject(event, PaymentState.PAYMENT_CONFLICT, PaymentResult.REJECTED);
             if (attempt.getAmountCents() != event.getAmountCents())
                 return reject(event, PaymentState.PAYMENT_AMOUNT_MISMATCH, PaymentResult.REJECTED);

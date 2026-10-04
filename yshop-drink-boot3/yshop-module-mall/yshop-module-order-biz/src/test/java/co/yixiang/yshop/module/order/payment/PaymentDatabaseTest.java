@@ -96,8 +96,8 @@ class PaymentDatabaseTest {
                 String url = settings.getProperty("url", "");
                 String user = settings.getProperty("username", "");
                 if (!url.matches(
-                                "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase5[bcde]_[a-f0-9]{8}(\\?.*)?")
-                        || !user.matches("accept5[bcde]_[a-f0-9]{8}")) {
+                                "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase5[bcdef]_[a-f0-9]{8}(\\?.*)?")
+                        || !user.matches("accept5[bcdef]_[a-f0-9]{8}")) {
                     throw new IllegalStateException("ISOLATED_DATABASE_REQUIRED");
                 }
                 var ds = new org.springframework.jdbc.datasource.DriverManagerDataSource();
@@ -446,6 +446,16 @@ class PaymentDatabaseTest {
             var ddl=new ProcessBuilder("python3","../../../tests/payment/mysql-acceptance.py","--install-v3-migration").redirectErrorStream(true).start();ddl.getInputStream().readAllBytes();if(ddl.waitFor()!=0)throw new IllegalStateException("ISOLATED_V3_MIGRATION_FAILED");
         } else {
             jdbc.execute("ALTER TABLE yshop_order_payment_attempt ADD COLUMN prepay_requested_at TIMESTAMP");
+        }
+        if(mysqlAcceptance()) {
+            var ddl=new ProcessBuilder("python3","../../../tests/payment/mysql-acceptance.py","--install-recovery-migration").redirectErrorStream(true).start();ddl.getInputStream().readAllBytes();if(ddl.waitFor()!=0)throw new IllegalStateException("ISOLATED_RECOVERY_MIGRATION_FAILED");
+        } else {
+            jdbc.execute("ALTER TABLE yshop_order_payment_attempt ADD COLUMN reconciliation_token VARCHAR(32)");
+            jdbc.execute("ALTER TABLE yshop_order_payment_attempt ADD COLUMN reconciliation_lease_until TIMESTAMP");
+            jdbc.execute("ALTER TABLE yshop_order_payment_attempt ADD COLUMN remote_terminal_state VARCHAR(16)");
+            jdbc.execute("ALTER TABLE yshop_order_payment_attempt ADD COLUMN remote_confirmed_at TIMESTAMP");
+            jdbc.execute("ALTER TABLE yshop_order_payment_attempt DROP CONSTRAINT chk_attempt_terminal");
+            jdbc.execute("ALTER TABLE yshop_order_payment_attempt ADD CONSTRAINT chk_attempt_remote_terminal CHECK ((status NOT IN ('FAILED','EXPIRED','CANCELED') OR prepay_reference IS NULL OR remote_confirmed_at IS NOT NULL) AND ((remote_terminal_state IS NULL AND remote_confirmed_at IS NULL) OR (provider='WECHAT' AND remote_confirmed_at IS NOT NULL AND ((status='CANCELED' AND remote_terminal_state IN ('CLOSED','REVOKED')) OR (status='FAILED' AND remote_terminal_state='PAYERROR')))))");
         }
         jdbc.update(
                 "INSERT INTO yshop_user(id,pay_count,now_money,login_type,deleted)"

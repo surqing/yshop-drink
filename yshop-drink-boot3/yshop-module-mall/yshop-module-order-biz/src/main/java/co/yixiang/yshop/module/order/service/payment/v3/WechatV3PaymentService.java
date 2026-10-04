@@ -36,13 +36,7 @@ public class WechatV3PaymentService {
         if (serverOpenid == null || !serverOpenid.matches("[A-Za-z0-9_-]{1,128}"))
             throw failure("WECHAT_MEMBER_ID_REQUIRED");
         WechatV3Client client = clients.forMerchant(selectedMerchant);
-        var a =
-                attempts.createOrGet(
-                        uid,
-                        orderId,
-                        PaymentSuccessEvent.Provider.WECHAT,
-                        selectedMerchant,
-                        "wechat-v3-jsapi");
+        var a = attempts.createWechatForPay(uid, orderId, selectedMerchant);
         identity(client, a);
         if ("PREPAY_CREATED".equals(a.getStatus()))
             return client.paymentParameters(a.getAppid(), a.getPrepayReference());
@@ -77,6 +71,13 @@ public class WechatV3PaymentService {
         noTransaction();
         WechatV3Client client = clients.forMerchant(verifierMerchant);
         Transaction transaction = client.verifyNotification(request);
+        return verifiedSuccess(verifierMerchant, transaction);
+    }
+
+    /** Internal trusted SDK query/notification result only; no HTTP transaction input. */
+    public PaymentResult verifiedSuccess(String verifierMerchant, Transaction transaction) {
+        noTransaction();
+        WechatV3Client client = clients.forMerchant(verifierMerchant);
         if (transaction == null
                 || transaction.getTradeState() != Transaction.TradeStateEnum.SUCCESS
                 || transaction.getTradeType() != Transaction.TradeTypeEnum.JSAPI

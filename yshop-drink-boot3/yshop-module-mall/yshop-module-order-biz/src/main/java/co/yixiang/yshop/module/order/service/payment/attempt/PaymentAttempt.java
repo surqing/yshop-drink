@@ -23,6 +23,10 @@ public class PaymentAttempt {
     private String status;
     private String paymentEventId;
     private LocalDateTime prepayRequestedAt;
+    private String reconciliationToken;
+    private LocalDateTime reconciliationLeaseUntil;
+    private String remoteTerminalState;
+    private LocalDateTime remoteConfirmedAt;
     private LocalDateTime paidAt;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

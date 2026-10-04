@@ -15,6 +15,9 @@ import java.util.UUID;
 /** No HTTP endpoint or SDK calls. Merchant selection is supplied by trusted server code. */
 @Service
 public class PaymentAttemptService {
+    @org.springframework.beans.factory.annotation.Value("${yshop.pay.wechat-v3.enabled:false}")
+    private boolean wechatLiveEnabled;
+
     private final PaymentAttemptMapper attempts;
     private final StoreOrderMapper orders;
     private final PaymentMerchantIdentityMapper merchants;
@@ -28,6 +31,16 @@ public class PaymentAttemptService {
         this.merchants = merchants;
     }
 
+    /** Short admission transaction; no order/attempt locks are held during legacy provider I/O. */
+    @TenantIgnore
+    @Transactional(rollbackFor = Exception.class)
+    public void assertLegacyExternalAllowed(String orderId) {
+        reference(orderId, 64);
+        // A missing store order may be an existing legacy bill; preserve that compatibility.
+        orders.lockPaymentOrder(orderId);
+        if (attempts.active(orderId) != null) throw failure("LEGACY_EXTERNAL_PAYMENT_DISABLED");
+    }
+
     @TenantIgnore
     @Transactional(rollbackFor = Exception.class)
     public PaymentAttempt createOrGet(
@@ -36,6 +49,8 @@ public class PaymentAttemptService {
             PaymentSuccessEvent.Provider provider,
             String merchantDetailsId,
             String key) {
+        if (wechatLiveEnabled && provider == PaymentSuccessEvent.Provider.ALIPAY)
+            throw failure("ALIPAY_ATTEMPT_NOT_LIVE_READY");
         reference(orderId, 64);
         reference(merchantDetailsId, 64);
         reference(key, 128);
@@ -82,6 +97,20 @@ public class PaymentAttemptService {
         a.setMerchantIdentity(identity);
         if (attempts.insert(a) != 1) throw failure("ATTEMPT_INSERT_FAILED");
         return attempts.lock(a.getAttemptId());
+    }
+
+    @TenantIgnore
+    @Transactional(rollbackFor = Exception.class)
+    public PaymentAttempt createWechatForPay(Long uid, String orderId, String merchant) {
+        payable(orders.lockPaymentOrder(orderId), uid);
+        PaymentAttempt latest = attempts.latest(orderId);
+        String key = "wechat-v3-jsapi";
+        if (latest != null)
+            key =
+                    PaymentAttemptState.valueOf(latest.getStatus()).active()
+                            ? latest.getIdempotencyKey()
+                            : "wechat-v3-jsapi:" + latest.getAttemptId();
+        return createOrGet(uid, orderId, PaymentSuccessEvent.Provider.WECHAT, merchant, key);
     }
 
     @TenantIgnore
@@ -133,6 +162,69 @@ public class PaymentAttemptService {
         if (state.name().equals(a.getStatus())) return a;
         if (attempts.terminate(id, state.name()) != 1) throw failure("ATTEMPT_STATE_CONFLICT");
         return attempts.lock(id);
+    }
+
+    /** Trusted recovery worker only: no endpoint and no provider I/O in this transaction. */
+    @TenantIgnore
+    @Transactional(rollbackFor = Exception.class)
+    public PaymentAttempt claimReconciliation(
+            String id, String token, int leaseSeconds, int minimumAgeSeconds) {
+        reference(token, 32);
+        if (leaseSeconds < 30 || leaseSeconds > 600 || minimumAgeSeconds < 0)
+            throw failure("INVALID_RECOVERY_LEASE");
+        PaymentAttempt hint = attempts.find(id);
+        if (hint == null) return null;
+        PaymentOrder order = orders.lockPaymentOrder(hint.getOrderId());
+        PaymentAttempt a = attempts.lock(id);
+        if (order == null || !a.getUid().equals(order.getUid())) return null;
+        if (attempts.claimReconciliation(id, token, leaseSeconds, minimumAgeSeconds) != 1)
+            return null;
+        return attempts.lock(id);
+    }
+
+    @TenantIgnore
+    @Transactional(rollbackFor = Exception.class)
+    public boolean confirmRemoteTerminal(String id, String token, String remoteState) {
+        if (!java.util.Set.of("CLOSED", "REVOKED", "PAYERROR").contains(remoteState))
+            throw failure("INVALID_REMOTE_TERMINAL");
+        PaymentAttempt hint = attempts.find(id);
+        if (hint == null) return false;
+        PaymentOrder order = orders.lockPaymentOrder(hint.getOrderId());
+        PaymentAttempt a = attempts.lock(id);
+        if (order == null
+                || !a.getUid().equals(order.getUid())
+                || !"WECHAT".equals(a.getProvider())) return false;
+        return attempts.remoteTerminal(
+                        id,
+                        token,
+                        "PAYERROR".equals(remoteState) ? "FAILED" : "CANCELED",
+                        remoteState)
+                == 1;
+    }
+
+    @TenantIgnore
+    @Transactional(rollbackFor = Exception.class)
+    public boolean mayClose(String id, String token) {
+        PaymentAttempt hint = attempts.find(id);
+        if (hint == null) return false;
+        PaymentOrder order = orders.lockPaymentOrder(hint.getOrderId());
+        PaymentAttempt a = attempts.lock(id);
+        return order != null
+                && a.getUid().equals(order.getUid())
+                && PaymentAttemptState.valueOf(a.getStatus()).active()
+                && token.equals(a.getReconciliationToken())
+                && attempts.leaseCurrent(id, token) > 0;
+    }
+
+    @TenantIgnore
+    public void releaseReconciliation(String id, String token) {
+        attempts.releaseReconciliation(id, token);
+    }
+
+    @TenantIgnore
+    public java.util.List<String> reconciliationCandidates(int age, int limit) {
+        return attempts.reconciliationCandidates(
+                Math.max(0, age), Math.min(100, Math.max(1, limit)));
     }
 
     private PaymentAttempt lockOwned(Long uid, String id) {
