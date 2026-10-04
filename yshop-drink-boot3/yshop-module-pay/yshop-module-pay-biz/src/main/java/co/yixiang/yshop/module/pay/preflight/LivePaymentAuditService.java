@@ -124,12 +124,27 @@ public class LivePaymentAuditService {
                                     "pay_price"),
                     "yshop_user", List.of("id", "now_money"));
 
+    /** Existing trigger migrations require MySQL >= 8.0.29; only the 8.x family is supported. */
+    static boolean supportedMysqlVersion(String version) {
+        if (version == null || version.toLowerCase(Locale.ROOT).contains("mariadb")) return false;
+        var match =
+                java.util.regex.Pattern.compile("^(\\d+)\\.(\\d+)\\.(\\d+)(?:[-+].*)?$")
+                        .matcher(version);
+        if (!match.matches()) return false;
+        try {
+            int major = Integer.parseInt(match.group(1));
+            int minor = Integer.parseInt(match.group(2));
+            int patch = Integer.parseInt(match.group(3));
+            return major == 8 && (minor > 0 || patch >= 29);
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
+    }
+
     public boolean schemaComplete() {
         try {
             String version = jdbc.queryForObject("SELECT VERSION()", String.class);
-            if (version == null
-                    || !version.matches("^8[.].*")
-                    || version.toLowerCase(Locale.ROOT).contains("mariadb")) return false;
+            if (!supportedMysqlVersion(version)) return false;
             for (var table : COLUMNS.entrySet()) {
                 if (!"InnoDB"
                         .equals(
