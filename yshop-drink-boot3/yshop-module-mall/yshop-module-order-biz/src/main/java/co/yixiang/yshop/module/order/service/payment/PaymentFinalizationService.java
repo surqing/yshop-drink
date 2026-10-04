@@ -21,18 +21,20 @@ public class PaymentFinalizationService implements PaymentCallbackService {
     private final PaymentMapper mapper;
     private final StoreOrderMapper orders;
     private final PayNoticeProducer producer;
+    private final co.yixiang.yshop.module.member.service.wallet.WalletService wallets;
 
     public PaymentFinalizationService(
             PaymentInbox inbox,
             PaymentProcessor processor,
             PaymentMapper mapper,
             StoreOrderMapper orders,
-            PayNoticeProducer producer) {
+            PayNoticeProducer producer, co.yixiang.yshop.module.member.service.wallet.WalletService wallets) {
         this.inbox = inbox;
         this.processor = processor;
         this.mapper = mapper;
         this.orders = orders;
         this.producer = producer;
+        this.wallets = wallets;
     }
 
     @Override
@@ -84,6 +86,7 @@ public class PaymentFinalizationService implements PaymentCallbackService {
             throw new IllegalArgumentException("INTERNAL_PROVIDER_REQUIRED");
         PaymentOrder order = orders.lockPaymentOrder(orderId);
         if (order == null) throw new IllegalArgumentException("UNKNOWN_ORDER");
+        if (provider == PaymentSuccessEvent.Provider.BALANCE) wallets.requireOrderDebit(order.getUid(), order.getOrderId(), order.getPayPrice());
         var event =
                 new PaymentSuccessEvent(
                         provider,
@@ -95,10 +98,10 @@ public class PaymentFinalizationService implements PaymentCallbackService {
                         "internal",
                         "SUCCESS",
                         LocalDateTime.now());
-        // Internal receipt is independently durable; debit/finalization still commit together.
-        // Internal receipts are never recovered by external jobs.
-        // capture() REQUIRES_NEW writes only the inbox, without taking the outer order lock.
-        var receipt = inbox.capture(event);
+        // BALANCE receipt, wallet movement, ledger and fulfillment share one transaction/connection.
+        // External receipts remain independently durable. CASH compatibility is unchanged.
+        var receipt = provider == PaymentSuccessEvent.Provider.BALANCE
+                ? inbox.captureBalance(event) : inbox.capture(event);
         if (receipt.conflict() != null) return receipt.conflict();
         return processor.process(receipt.id(), true);
     }

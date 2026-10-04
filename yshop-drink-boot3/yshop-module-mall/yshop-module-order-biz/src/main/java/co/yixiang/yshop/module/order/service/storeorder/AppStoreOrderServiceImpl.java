@@ -126,6 +126,8 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
     private co.yixiang.yshop.module.order.service.payment.PaymentFinalizationService paymentFinalizationService;
     @Resource
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
+    @Resource
+    private co.yixiang.yshop.module.member.service.wallet.WalletService walletService;
 
     private static final String LOCK_KEY = "cart:check:stock:lock";
     private static final String STOCK_LOCK_KEY = "cart:do:stock:lock";
@@ -457,13 +459,14 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
                 throw exception(ORDER_PAY_FINISH);
             }
 
-            AppUserQueryVo userInfo = userService.getAppUser(uid);
-
-            if (userInfo.getNowMoney().compareTo(orderInfo.getPayPrice()) < 0) {
-                throw exception(PAY_YUE_NOT);
-            }
-
-            userService.decPrice(uid, orderInfo.getPayPrice());
+            var locked = storeOrderMapper.lockPaymentOrder(orderInfo.getOrderId());
+            if (locked == null || !uid.equals(locked.getUid()) || Boolean.TRUE.equals(locked.getDeleted())
+                    || !Integer.valueOf(0).equals(locked.getStatus()) || !Integer.valueOf(0).equals(locked.getRefundStatus())
+                    || !Integer.valueOf(0).equals(locked.getIsSystemDel())) throw exception(STORE_ORDER_NOT_EXISTS);
+            if (Integer.valueOf(1).equals(locked.getPaid())) throw exception(ORDER_PAY_FINISH);
+            walletService.debit(uid, locked.getPayPrice(),
+                    co.yixiang.yshop.module.member.service.wallet.WalletType.ORDER_PAYMENT,
+                    locked.getOrderId(), "order:" + locked.getOrderId());
 
             //支付成功后处理
             var result = paymentFinalizationService.finalizeInternal(orderInfo.getOrderId(),

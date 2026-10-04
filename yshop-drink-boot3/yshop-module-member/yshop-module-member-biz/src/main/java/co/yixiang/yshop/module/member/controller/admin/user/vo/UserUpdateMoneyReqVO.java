@@ -14,6 +14,10 @@ public class UserUpdateMoneyReqVO {
     @NotNull(message = "用户id不能为空")
     private Long id;
 
+    @jakarta.validation.constraints.NotBlank
+    @jakarta.validation.constraints.Pattern(regexp="[A-Za-z0-9:_-]{1,64}")
+    private String idempotencyKey;
+
     @Schema(description = "修改金额类型")
     private Integer ptype;
 

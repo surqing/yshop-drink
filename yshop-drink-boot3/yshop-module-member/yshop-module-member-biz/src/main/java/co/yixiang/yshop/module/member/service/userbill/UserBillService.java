@@ -1,5 +1,7 @@
 package co.yixiang.yshop.module.member.service.userbill;
 
+import java.math.BigDecimal;
+
 import co.yixiang.yshop.framework.common.pojo.PageResult;
 import co.yixiang.yshop.module.member.controller.admin.userbill.vo.UserBillPageReqVO;
 import co.yixiang.yshop.module.member.controller.app.user.vo.AppUserBillVO;
@@ -34,6 +36,8 @@ public interface UserBillService extends IService<UserBillDO> {
      * @param balance 剩余
      * @param mark 备注
      */
+    void incomeExact(Long uid, String title, String category, String type, BigDecimal number, BigDecimal balance, String mark, String linkId);
+
     void expendExact(Long uid, String title, String category, String type, java.math.BigDecimal number,
                      java.math.BigDecimal balance, String mark);
 

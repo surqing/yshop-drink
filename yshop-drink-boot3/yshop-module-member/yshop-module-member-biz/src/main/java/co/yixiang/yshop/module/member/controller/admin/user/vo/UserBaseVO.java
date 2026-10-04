@@ -35,6 +35,7 @@ public class UserBaseVO {
 
     @Schema(description = "用户余额", required = true)
     //@NotNull(message = "用户余额不能为空")
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
     private BigDecimal nowMoney;
 
     @Schema(description = "佣金金额", required = true, example = "14395")

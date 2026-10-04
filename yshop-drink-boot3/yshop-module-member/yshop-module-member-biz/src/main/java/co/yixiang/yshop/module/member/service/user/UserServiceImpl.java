@@ -34,6 +34,8 @@ public class UserServiceImpl implements UserService {
     private MemberUserMapper userMapper;
     @Resource
     private UserBillService userBillService;
+    @Resource
+    private co.yixiang.yshop.module.member.service.wallet.WalletService wallets;
 
     @Override
     public Long createUser(UserCreateReqVO createReqVO) {
@@ -59,26 +61,22 @@ public class UserServiceImpl implements UserService {
      * @param updateReqVO 更新信息
      */
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor=Exception.class)
     public void updateMony(UserUpdateMoneyReqVO updateReqVO){
         MemberUserDO memberUserDO = userMapper.selectById(updateReqVO.getId());
-        double newMoney = 0d;
+        if (memberUserDO == null) throw exception(USER_NOT_EXISTS);
         String mark = "";
-        if(ShopCommonEnum.ADD_1.getValue().equals(updateReqVO.getPtype())){
-            mark = "系统增加了"+updateReqVO.getMoney()+"余额";
-            newMoney = NumberUtil.add(memberUserDO.getNowMoney(),new BigDecimal(updateReqVO.getMoney())).doubleValue();
-            userBillService.income(memberUserDO.getId(),"系统增加余额", BillDetailEnum.CATEGORY_1.getValue(),
-                    BillDetailEnum.TYPE_6.getValue(),Double.valueOf(updateReqVO.getMoney()),newMoney, mark,"");
-        }else{
-            mark = "系统扣除了"+updateReqVO.getMoney()+"余额";
-            newMoney = NumberUtil.sub(memberUserDO.getNowMoney(),new BigDecimal(updateReqVO.getMoney())).doubleValue();
-            if(newMoney < 0) {
-                newMoney = 0d;
-            }
-            userBillService.expend(memberUserDO.getId(), "系统减少余额",
-                    BillDetailEnum.CATEGORY_1.getValue(),
-                    BillDetailEnum.TYPE_7.getValue(),
-                    Double.valueOf(updateReqVO.getMoney()), newMoney, mark);
-        }
+        var amount = co.yixiang.yshop.module.member.service.wallet.WalletService.money(new BigDecimal(updateReqVO.getMoney()), false);
+        if (!Integer.valueOf(1).equals(updateReqVO.getPtype()) && !Integer.valueOf(2).equals(updateReqVO.getPtype()))
+            throw new IllegalArgumentException("INVALID_WALLET_DIRECTION");
+        String reference="admin:"+updateReqVO.getId()+":"+updateReqVO.getIdempotencyKey();
+        var type=co.yixiang.yshop.module.member.service.wallet.WalletType.ADMIN_ADJUSTMENT;
+        var movement=Integer.valueOf(1).equals(updateReqVO.getPtype())
+                ?wallets.credit(memberUserDO.getId(),amount,type,reference,reference)
+                :wallets.debit(memberUserDO.getId(),amount,type,reference,reference);
+        if (!movement.first()) return;
+        if(Integer.valueOf(1).equals(updateReqVO.getPtype())) userBillService.incomeExact(memberUserDO.getId(),"系统增加余额",BillDetailEnum.CATEGORY_1.getValue(),BillDetailEnum.TYPE_6.getValue(),amount,movement.transaction().getBalanceAfter(),"系统增加余额",reference);
+        else userBillService.expendExact(memberUserDO.getId(),"系统减少余额",BillDetailEnum.CATEGORY_1.getValue(),BillDetailEnum.TYPE_7.getValue(),amount,movement.transaction().getBalanceAfter(),"系统减少余额");
         double newIntegral = 0d;
         if(ShopCommonEnum.ADD_1.getValue().equals(updateReqVO.getItype())){
             mark = "系统增加了"+updateReqVO.getIntegral()+"积分";
@@ -97,7 +95,7 @@ public class UserServiceImpl implements UserService {
                     Double.valueOf(updateReqVO.getIntegral()), newIntegral, mark);
         }
         memberUserDO.setIntegral(BigDecimal.valueOf(newIntegral));
-        memberUserDO.setNowMoney(BigDecimal.valueOf(newMoney));
+
         userMapper.updateById(memberUserDO);
 
     }

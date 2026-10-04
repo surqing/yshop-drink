@@ -26,7 +26,7 @@
         <el-input v-model="formData.mark" placeholder="请输入用户备注" />
       </el-form-item>
       <el-form-item label="用户余额" prop="nowMoney">
-        <el-input v-model="formData.nowMoney" placeholder="请输入用户余额" />
+        <el-input :model-value="formData.nowMoney ?? 0" readonly />
       </el-form-item>
       <el-form-item label="佣金金额" prop="brokeragePrice">
         <el-input v-model="formData.brokeragePrice" placeholder="请输入佣金金额" />

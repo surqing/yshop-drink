@@ -58,7 +58,15 @@ export const updateUser = async (data: UserVO) => {
 }
 
 // 修改余额
-export const updateMony = async (data: UserVO) => {
+export interface MoneyAdjustmentVO {
+  id: number
+  idempotencyKey: string
+  ptype: number
+  money: string
+  itype: number
+  integral: string
+}
+export const updateMony = async (data: MoneyAdjustmentVO) => {
   return await request.put({ url: `/member/user/updateMony`, data })
 }
 

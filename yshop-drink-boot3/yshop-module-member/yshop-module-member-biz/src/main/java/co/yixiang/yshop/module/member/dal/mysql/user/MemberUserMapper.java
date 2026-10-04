@@ -51,9 +51,6 @@ public interface MemberUserMapper extends BaseMapperX<MemberUserDO> {
                 .orderByDesc(MemberUserDO::getId));
     }
 
-    @Update("update yshop_user set now_money=now_money-#{payPrice}" +
-            " where id=#{uid}")
-    int decPrice(@Param("payPrice") BigDecimal payPrice, @Param("uid") Long uid);
 
     @Update("update yshop_user set integral=integral-#{score}" +
             " where id=#{uid}")
@@ -63,8 +60,5 @@ public interface MemberUserMapper extends BaseMapperX<MemberUserDO> {
             " where id=#{uid}")
     int incPayCount(@Param("uid") Long uid);
 
-    @Update("update yshop_user set now_money=now_money+#{price}" +
-            " where id=#{uid}")
-    int incMoney(@Param("uid") Long uid,@Param("price") BigDecimal price);
 
 }

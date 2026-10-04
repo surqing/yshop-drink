@@ -22,6 +22,17 @@ public class PaymentInbox {
     /** Separate commit survives business rollback and Redis failure. */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public Receipt capture(PaymentSuccessEvent event) {
+        return record(event);
+    }
+
+    /** BALANCE receipt joins the wallet debit/finalization transaction, using one connection. */
+    @Transactional(rollbackFor=Exception.class)
+    public Receipt captureBalance(PaymentSuccessEvent event) {
+        if(event.provider()!=PaymentSuccessEvent.Provider.BALANCE) throw new IllegalArgumentException("BALANCE_PROVIDER_REQUIRED");
+        return record(event);
+    }
+
+    private Receipt record(PaymentSuccessEvent event) {
         PaymentRecord row = new PaymentRecord();
         row.setId(UUID.randomUUID().toString().replace("-", ""));
         row.setOrderId(event.outTradeNo());
