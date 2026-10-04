@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 public class PaymentRecord {
     private String id;
     private String orderId;
+    private String attemptId;
     private String provider;
     private String merchantDetailsId;
     private String outTradeNo;

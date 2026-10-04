@@ -28,12 +28,15 @@ def main():
     version = database.mysql('SELECT VERSION();').strip()
     if not version.startswith('8.0.'):
         raise RuntimeError('MYSQL_8_0_REQUIRED')
-    if '--install-triggers' in sys.argv[1:]:
+    if '--install-triggers' in sys.argv[1:] or '--install-attempt-migration' in sys.argv[1:]:
         # Privileged DDL only, scoped to the schema in this run's private JDBC configuration.
         settings = dict(line.split('=',1) for line in Path(os.environ['YSHOP_ACCEPTANCE_CONFIG']).read_text().splitlines() if '=' in line)
-        match = re.fullmatch(r'jdbc:mysql://127[.]0[.]0[.]1:3306/(yshop_acceptance_phase5[bc]_[a-f0-9]{8})[?].*',settings.get('url',''))
-        if not match or not re.fullmatch(r'accept5[bc]_[a-f0-9]{8}',settings.get('username','')):
+        match = re.fullmatch(r'jdbc:mysql://127[.]0[.]0[.]1:3306/(yshop_acceptance_phase5[bcd]_[a-f0-9]{8})[?].*',settings.get('url',''))
+        if not match or not re.fullmatch(r'accept5[bcd]_[a-f0-9]{8}',settings.get('username','')):
             raise RuntimeError('ISOLATED_DATABASE_REQUIRED')
+        if '--install-attempt-migration' in sys.argv[1:]:
+            database.mysql('USE `' + match.group(1) + '`; ' + (REPO / 'yshop-drink-boot3/sql/migrations/2026-10-04-payment-attempt.sql').read_text())
+            return 0
         statements = (REPO / 'yshop-drink-boot3/sql/migrations/2026-10-03-wallet-ledger.sql').read_text()
         statements = re.sub(r'(?m)^--.*$', '', statements)
         triggers = [statement.strip() for statement in statements.split(';') if statement.strip().startswith('CREATE TRIGGER')]
@@ -41,8 +44,9 @@ def main():
             raise RuntimeError('IMMUTABILITY_MIGRATION_INCOMPLETE')
         database.mysql('USE `' + match.group(1) + '`; ' + ';'.join(triggers) + ';')
         return 0
-    wallet_mode = '--wallet' in sys.argv[1:]
-    phase = '5c' if wallet_mode else '5b'
+    attempt_mode = '--attempt' in sys.argv[1:]
+    wallet_mode = '--wallet' in sys.argv[1:] or attempt_mode
+    phase = '5d' if attempt_mode else '5c' if wallet_mode else '5b'
     suffix = secrets.token_hex(4)
     schema = 'yshop_acceptance_phase' + phase + '_' + suffix
     account = 'accept' + phase + '_' + secrets.token_hex(4)
@@ -67,7 +71,7 @@ def main():
         command = [str(WORKSPACE / '.dev-tools/maven/bin/mvn'),
                    '-Dmaven.repo.local=' + str(WORKSPACE / '.local-dev/cache/maven'),
                    '-pl', 'yshop-module-mall/yshop-module-order-biz', '-Pmysql-acceptance',
-                   'test', '-Dtest=' + ('PaymentDatabaseTest,WalletDatabaseTest' if wallet_mode else 'PaymentDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=false']
+                   'test', '-Dtest=' + ('PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest' if attempt_mode else 'PaymentDatabaseTest,WalletDatabaseTest' if wallet_mode else 'PaymentDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=false']
         with log.open('w') as output:
             log.chmod(0o600)
             result = subprocess.run(command, cwd=REPO / 'yshop-drink-boot3', env=env,
@@ -76,16 +80,18 @@ def main():
             raise RuntimeError('MYSQL_ACCEPTANCE_FAILED_PRIVATE_LOG_SAVED')
         table_engines = database.mysql(f"SELECT COUNT(*),COALESCE(SUM(ENGINE='InnoDB'),0) FROM information_schema.TABLES "
                                        f"WHERE TABLE_SCHEMA='{schema}';").strip()
-        if table_engines != '10\t10':
+        if table_engines != '12\t12':
             raise RuntimeError('INNODB_REQUIRED')
         xml = REPO / 'yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/target/surefire-reports/TEST-co.yixiang.yshop.module.order.payment.PaymentDatabaseTest.xml'
         suites = [ET.parse(xml).getroot()]
         if wallet_mode:
             suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.WalletDatabaseTest.xml')).getroot())
+        if attempt_mode:
+            suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest.xml')).getroot())
         if any(suite.attrib['failures'] != '0' or suite.attrib['errors'] != '0' for suite in suites) or int(suites[0].attrib['tests']) < 55:
             raise RuntimeError('ACCEPTANCE_REPORT_INCOMPLETE')
         tests = sum(int(suite.attrib['tests']) for suite in suites)
-        summary = {'result': 'PASS', 'mysql': version, 'engine': 'InnoDB', 'tests': tests, 'walletMode': wallet_mode,
+        summary = {'result': 'PASS', 'mysql': version, 'engine': 'InnoDB', 'tests': tests, 'walletMode': wallet_mode, 'attemptMode': attempt_mode,
                    'failures': 0, 'errors': 0, 'developmentDatabaseUsed': False,
                    'realPaymentRequests': 0, 'log': str(log)}
         report.write_text(json.dumps(summary, indent=2) + '\n')
@@ -95,8 +101,8 @@ def main():
     finally:
         if created:
             # Names originate only from random fixed-length hexadecimal identifiers in this run.
-            assert re.fullmatch(r'yshop_acceptance_phase5[bc]_[a-f0-9]{8}', schema)
-            assert re.fullmatch(r'accept5[bc]_[a-f0-9]{8}', account)
+            assert re.fullmatch(r'yshop_acceptance_phase5[bcd]_[a-f0-9]{8}', schema)
+            assert re.fullmatch(r'accept5[bcd]_[a-f0-9]{8}', account)
             database.mysql(f"DROP DATABASE `{schema}`; DROP USER '{account}'@'%';")
         if jdbc.exists():
             jdbc.unlink()

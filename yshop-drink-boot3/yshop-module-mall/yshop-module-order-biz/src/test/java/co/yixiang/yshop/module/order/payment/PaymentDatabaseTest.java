@@ -19,11 +19,14 @@ import co.yixiang.yshop.module.message.mq.producer.WeixinNoticeProducer;
 import co.yixiang.yshop.module.order.controller.app.order.vo.AppStoreOrderQueryVo;
 import co.yixiang.yshop.module.order.dal.dataobject.storeorder.StoreOrderDO;
 import co.yixiang.yshop.module.order.dal.dataobject.storeordercartinfo.StoreOrderCartInfoDO;
+import co.yixiang.yshop.module.order.dal.mysql.payment.PaymentAttemptMapper;
 import co.yixiang.yshop.module.order.dal.mysql.payment.PaymentMapper;
+import co.yixiang.yshop.module.order.dal.mysql.payment.PaymentMerchantIdentityMapper;
 import co.yixiang.yshop.module.order.dal.mysql.storeorder.StoreOrderMapper;
 import co.yixiang.yshop.module.order.dal.mysql.storeorderstatus.StoreOrderStatusMapper;
 import co.yixiang.yshop.module.order.mq.consumer.PayNoticeConsumer;
 import co.yixiang.yshop.module.order.service.payment.*;
+import co.yixiang.yshop.module.order.service.payment.attempt.*;
 import co.yixiang.yshop.module.order.service.storeorder.*;
 import co.yixiang.yshop.module.order.service.storeordercartinfo.StoreOrderCartInfoService;
 import co.yixiang.yshop.module.order.service.storeorderstatus.*;
@@ -93,8 +96,8 @@ class PaymentDatabaseTest {
                 String url = settings.getProperty("url", "");
                 String user = settings.getProperty("username", "");
                 if (!url.matches(
-                                "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase5[bc]_[a-f0-9]{8}(\\?.*)?")
-                        || !user.matches("accept5[bc]_[a-f0-9]{8}")) {
+                                "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase5[bcd]_[a-f0-9]{8}(\\?.*)?")
+                        || !user.matches("accept5[bcd]_[a-f0-9]{8}")) {
                     throw new IllegalStateException("ISOLATED_DATABASE_REQUIRED");
                 }
                 var ds = new org.springframework.jdbc.datasource.DriverManagerDataSource();
@@ -138,6 +141,8 @@ class PaymentDatabaseTest {
                             WalletMapper.class,
                             RechargeMapper.class,
                             PaymentMapper.class,
+                            PaymentAttemptMapper.class,
+                            PaymentMerchantIdentityMapper.class,
                             StoreOrderMapper.class,
                             MemberUserMapper.class,
                             UserBillMapper.class,
@@ -169,6 +174,22 @@ class PaymentDatabaseTest {
         @Bean
         RechargeService recharge(RechargeMapper m, WalletService w) {
             return new RechargeService(m, w, true);
+        }
+
+        @Bean
+        PaymentAttemptMapper attempts(SqlSessionFactory f) {
+            return new SqlSessionTemplate(f).getMapper(PaymentAttemptMapper.class);
+        }
+
+        @Bean
+        PaymentMerchantIdentityMapper merchantIdentity(SqlSessionFactory f) {
+            return new SqlSessionTemplate(f).getMapper(PaymentMerchantIdentityMapper.class);
+        }
+
+        @Bean
+        PaymentAttemptService attemptService(
+                PaymentAttemptMapper a, StoreOrderMapper o, PaymentMerchantIdentityMapper m) {
+            return new PaymentAttemptService(a, o, m);
         }
 
         @Bean
@@ -282,8 +303,11 @@ class PaymentDatabaseTest {
 
         @Bean
         PaymentProcessor processor(
-                PaymentMapper mapper, StoreOrderMapper orders, PaymentEffects effects) {
-            return new PaymentProcessor(mapper, orders, effects);
+                PaymentMapper mapper,
+                StoreOrderMapper orders,
+                PaymentEffects effects,
+                PaymentAttemptMapper attempts) {
+            return new PaymentProcessor(mapper, orders, effects, attempts);
         }
 
         @Bean
@@ -293,9 +317,10 @@ class PaymentDatabaseTest {
                 PaymentMapper mapper,
                 StoreOrderMapper orders,
                 PayNoticeProducer wakeup,
-                WalletService wallets) {
+                WalletService wallets,
+                PaymentAttemptService attempts) {
             return new PaymentFinalizationService(
-                    inbox, processor, mapper, orders, wakeup, wallets);
+                    inbox, processor, mapper, orders, wakeup, wallets, attempts);
         }
     }
 
@@ -310,6 +335,8 @@ class PaymentDatabaseTest {
             // The temporary account is granted only its isolated schema. Never use the dev DB.
             for (String table :
                     List.of(
+                            "yshop_order_payment_attempt",
+                            "merchant_details",
                             "yshop_member_wallet_transaction",
                             "yshop_member_recharge_order",
                             "yshop_order_payment_conflict",
@@ -340,6 +367,16 @@ class PaymentDatabaseTest {
                             co.yixiang.yshop.module.order.dal.dataobject.storeorderstatus
                                     .StoreOrderStatusDO.class)) createEntityTable(entity);
         }
+        jdbc.execute(
+                "CREATE TABLE merchant_details(details_id VARCHAR(64) PRIMARY KEY,pay_type"
+                    + " VARCHAR(16),appid VARCHAR(64),mch_id VARCHAR(64),seller VARCHAR(64),deleted"
+                    + " INT NOT NULL DEFAULT 0)");
+        for (String id : List.of("merchant-wx", "merchant-wx-2", "merchant-ali"))
+            jdbc.update(
+                    "INSERT INTO merchant_details(details_id,pay_type,appid,mch_id,seller)"
+                        + " VALUES(?,?, 'synthetic-app','synthetic-merchant','synthetic-seller')",
+                    id,
+                    id.equals("merchant-ali") ? "aliPay" : "wxPay");
         jdbc.execute("CREATE TABLE test_inventory(id INT PRIMARY KEY, stock INT)");
         jdbc.update("INSERT INTO test_inventory VALUES(1,0)");
         jdbc.execute("CREATE TABLE test_coupon(id INT PRIMARY KEY, status INT)");
@@ -379,6 +416,31 @@ class PaymentDatabaseTest {
             ddl.getInputStream().readAllBytes();
             if (ddl.waitFor() != 0)
                 throw new IllegalStateException("ISOLATED_IMMUTABILITY_MIGRATION_FAILED");
+        }
+        if (mysqlAcceptance()) {
+            var ddl =
+                    new ProcessBuilder(
+                                    "python3",
+                                    "../../../tests/payment/mysql-acceptance.py",
+                                    "--install-attempt-migration")
+                            .redirectErrorStream(true)
+                            .start();
+            ddl.getInputStream().readAllBytes();
+            if (ddl.waitFor() != 0)
+                throw new IllegalStateException("ISOLATED_ATTEMPT_MIGRATION_FAILED");
+        } else {
+            String ddl =
+                    java.nio.file.Files.readString(
+                            java.nio.file.Path.of(
+                                    "../../sql/migrations/2026-10-04-payment-attempt.sql"));
+            ddl =
+                    ddl.substring(0, ddl.indexOf("-- MySQL 8"))
+                            .replaceAll("(?m)^--.*$", "")
+                            .replace("CHARACTER SET ascii COLLATE ascii_bin", "")
+                            .replace("ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "")
+                            .replace(" STORED", "");
+            for (String sql : ddl.split(";")) if (!sql.isBlank()) jdbc.execute(sql);
+            jdbc.execute("ALTER TABLE yshop_order_payment ADD COLUMN attempt_id VARCHAR(32)");
         }
         jdbc.update(
                 "INSERT INTO yshop_user(id,pay_count,now_money,login_type,deleted)"
@@ -835,8 +897,8 @@ class PaymentDatabaseTest {
                                 jdbc
                                         .query(
                                                 "SELECT id,order_id,uid,paid,pay_price FROM"
-                                                    + " yshop_store_order WHERE order_id=? AND"
-                                                    + " uid=? AND deleted=0",
+                                                        + " yshop_store_order WHERE order_id=? AND"
+                                                        + " uid=? AND deleted=0",
                                                 (rs, n) -> {
                                                     var vo = new AppStoreOrderQueryVo();
                                                     vo.setId(rs.getLong(1));

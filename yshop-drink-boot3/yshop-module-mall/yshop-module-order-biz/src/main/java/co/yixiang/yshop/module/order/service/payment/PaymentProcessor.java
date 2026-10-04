@@ -1,8 +1,12 @@
 package co.yixiang.yshop.module.order.service.payment;
 
 import co.yixiang.yshop.framework.tenant.core.aop.TenantIgnore;
+import co.yixiang.yshop.module.order.dal.mysql.payment.PaymentAttemptMapper;
 import co.yixiang.yshop.module.order.dal.mysql.payment.PaymentMapper;
 import co.yixiang.yshop.module.order.dal.mysql.storeorder.StoreOrderMapper;
+import co.yixiang.yshop.module.order.service.payment.attempt.PaymentAttempt;
+import co.yixiang.yshop.module.order.service.payment.attempt.PaymentAttemptService;
+import co.yixiang.yshop.module.order.service.payment.attempt.PaymentAttemptState;
 import co.yixiang.yshop.module.pay.callback.*;
 
 import lombok.extern.slf4j.Slf4j;
@@ -17,12 +21,17 @@ public class PaymentProcessor {
     private final PaymentMapper payments;
     private final StoreOrderMapper orders;
     private final PaymentEffects effects;
+    private final PaymentAttemptMapper attempts;
 
     public PaymentProcessor(
-            PaymentMapper payments, StoreOrderMapper orders, PaymentEffects effects) {
+            PaymentMapper payments,
+            StoreOrderMapper orders,
+            PaymentEffects effects,
+            PaymentAttemptMapper attempts) {
         this.payments = payments;
         this.orders = orders;
         this.effects = effects;
+        this.attempts = attempts;
     }
 
     @TenantIgnore
@@ -43,10 +52,25 @@ public class PaymentProcessor {
                 && state != PaymentState.UNKNOWN_ORDER) return PaymentResult.REJECTED;
 
         PaymentOrder order = orders.lockPaymentOrder(event.getOrderId());
-        if (order == null || !order.getOrderId().equals(event.getOutTradeNo())) {
+        if (order == null
+                || (event.getAttemptId() == null
+                        && !order.getOrderId().equals(event.getOutTradeNo()))) {
             if (payments.rechargeReference(event.getOrderId()) > 0)
                 return reject(event, PaymentState.UNSUPPORTED_RECHARGE, PaymentResult.REJECTED);
             return reject(event, PaymentState.UNKNOWN_ORDER, PaymentResult.UNKNOWN_ORDER);
+        }
+        PaymentAttempt attempt = null;
+        if (event.getAttemptId() != null) {
+            attempt = attempts.lock(event.getAttemptId());
+            if (!external || !PaymentAttemptService.matches(attempt, event, order))
+                return reject(event, PaymentState.PAYMENT_CONFLICT, PaymentResult.REJECTED);
+            if (attempt.getAmountCents() != event.getAmountCents())
+                return reject(event, PaymentState.PAYMENT_AMOUNT_MISMATCH, PaymentResult.REJECTED);
+            if (!PaymentAttemptState.valueOf(attempt.getStatus()).active())
+                return reject(
+                        event,
+                        PaymentState.RECONCILIATION_REQUIRED,
+                        PaymentResult.RECONCILIATION_REQUIRED);
         }
         if (Boolean.TRUE.equals(order.getDeleted())
                 || !Integer.valueOf(0).equals(order.getIsSystemDel())
@@ -109,6 +133,9 @@ public class PaymentProcessor {
         }
         // All database effects and the SUCCESS unique constraint share the same transaction.
         effects.apply(order, payType);
+        if (attempt != null
+                && attempts.paid(attempt.getAttemptId(), event.getProviderTransactionId(), eventId)
+                        != 1) throw new IllegalStateException("ATTEMPT_PAID_TRANSITION_FAILED");
         payments.state(eventId, PaymentState.SUCCESS.name(), null, order.getOrderId());
         TransactionSynchronizationManager.registerSynchronization(
                 new TransactionSynchronization() {

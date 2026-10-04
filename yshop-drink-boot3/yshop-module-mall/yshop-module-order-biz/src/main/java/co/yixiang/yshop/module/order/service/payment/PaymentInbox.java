@@ -1,6 +1,7 @@
 package co.yixiang.yshop.module.order.service.payment;
 
 import co.yixiang.yshop.module.order.dal.mysql.payment.PaymentMapper;
+import co.yixiang.yshop.module.order.service.payment.attempt.PaymentAttempt;
 import co.yixiang.yshop.module.pay.callback.*;
 
 import org.springframework.stereotype.Service;
@@ -22,20 +23,30 @@ public class PaymentInbox {
     /** Separate commit survives business rollback and Redis failure. */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public Receipt capture(PaymentSuccessEvent event) {
-        return record(event);
+        return record(event, event.outTradeNo(), null);
+    }
+
+    /** Caller holds no order/attempt lock. Immutable binding is persisted with the receipt. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public Receipt captureAttempt(PaymentSuccessEvent event, PaymentAttempt attempt) {
+        if (!event.external() || !event.outTradeNo().equals(attempt.getProviderOrderReference()))
+            throw new IllegalArgumentException("INVALID_ATTEMPT_RECEIPT");
+        return record(event, attempt.getOrderId(), attempt.getAttemptId());
     }
 
     /** BALANCE receipt joins the wallet debit/finalization transaction, using one connection. */
-    @Transactional(rollbackFor=Exception.class)
+    @Transactional(rollbackFor = Exception.class)
     public Receipt captureBalance(PaymentSuccessEvent event) {
-        if(event.provider()!=PaymentSuccessEvent.Provider.BALANCE) throw new IllegalArgumentException("BALANCE_PROVIDER_REQUIRED");
-        return record(event);
+        if (event.provider() != PaymentSuccessEvent.Provider.BALANCE)
+            throw new IllegalArgumentException("BALANCE_PROVIDER_REQUIRED");
+        return record(event, event.outTradeNo(), null);
     }
 
-    private Receipt record(PaymentSuccessEvent event) {
+    private Receipt record(PaymentSuccessEvent event, String orderId, String attemptId) {
         PaymentRecord row = new PaymentRecord();
         row.setId(UUID.randomUUID().toString().replace("-", ""));
-        row.setOrderId(event.outTradeNo());
+        row.setOrderId(orderId);
+        row.setAttemptId(attemptId);
         row.setOutTradeNo(event.outTradeNo());
         row.setProvider(event.provider().name());
         row.setProviderTransactionId(event.providerTransactionId());
@@ -55,8 +66,10 @@ public class PaymentInbox {
         if (existing == null) throw new IllegalStateException("PAYMENT_RECORD_NOT_FOUND");
         if (row.getId().equals(existing.getId())) return new Receipt(row.getId(), null);
         mapper.seen(existing.getId());
-        boolean sameOrder = existing.getOrderId().equals(event.outTradeNo());
+        boolean sameOrder = existing.getOrderId().equals(orderId);
         if (!sameOrder
+                || !existing.getOutTradeNo().equals(event.outTradeNo())
+                || !Objects.equals(existing.getAttemptId(), attemptId)
                 || existing.getAmountCents() != event.totalFeeCents()
                 || !Objects.equals(existing.getMerchantDetailsId(), event.merchantDetailsId())
                 || !Objects.equals(existing.getAppid(), event.appid())
@@ -64,7 +77,7 @@ public class PaymentInbox {
             mapper.conflict(
                     row.getId(),
                     existing.getId(),
-                    event.outTradeNo(),
+                    orderId,
                     sameOrder ? "PAYMENT_CONFLICT" : "TRANSACTION_ORDER_CONFLICT");
             return new Receipt(existing.getId(), PaymentResult.REJECTED);
         }
