@@ -26,6 +26,9 @@ import jakarta.annotation.Resource;
  */
 @Configuration
 public class MerchantPayServiceConfigurer implements PayServiceConfigurer {
+    @org.springframework.beans.factory.annotation.Value("${yshop.pay.wechat-v3.enabled:false}")
+    private boolean wechatLiveEnabled;
+
 
     @Resource
     private JdbcTemplate jdbcTemplate;
@@ -43,7 +46,7 @@ public class MerchantPayServiceConfigurer implements PayServiceConfigurer {
      */
     @Override
     public void configure(MerchantDetailsServiceConfigurer merchants)  {
-        merchants.setBuilder(new EncryptedMerchantDetailsServiceBuilder(jdbcTemplate, credentialCrypto));
+        merchants.setBuilder(new EncryptedMerchantDetailsServiceBuilder(jdbcTemplate, credentialCrypto, wechatLiveEnabled));
 
     }
     /**

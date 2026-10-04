@@ -15,6 +15,10 @@ public interface WechatV3Client {
 
     String prepay(PrepayRequest request);
 
+    Transaction query(String providerOrderReference);
+
+    void close(String providerOrderReference);
+
     Map<String, String> paymentParameters(String appid, String prepayReference);
 
     Transaction verifyNotification(RequestParam request);

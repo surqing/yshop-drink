@@ -140,4 +140,11 @@ class PaymentCredentialDatabaseTest {
             jdbc.update("UPDATE merchant_details SET "+column+"=? WHERE details_id='test_merchant'",original);
         }
     }
+    @Test void liveBlocksLegacySdkBeforeAnyDatabaseOrCredentialRead() {
+        var db=org.mockito.Mockito.mock(JdbcTemplate.class);
+        var builder=new EncryptedMerchantDetailsServiceBuilder(db,crypto,true);
+        assertThrows(IllegalStateException.class,()->builder.build().loadMerchantByMerchantId("test_merchant"));
+        org.mockito.Mockito.verifyNoInteractions(db);
+    }
+
 }

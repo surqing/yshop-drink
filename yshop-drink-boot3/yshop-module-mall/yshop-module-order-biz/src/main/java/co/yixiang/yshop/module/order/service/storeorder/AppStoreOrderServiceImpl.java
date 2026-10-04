@@ -89,6 +89,9 @@ import static co.yixiang.yshop.module.order.enums.ErrorCodeConstants.*;
 @Service
 @Validated
 public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,StoreOrderDO> implements AppStoreOrderService {
+    @org.springframework.beans.factory.annotation.Value("${yshop.pay.wechat-v3.enabled:false}")
+    private boolean wechatLiveEnabled;
+
     @jakarta.annotation.Resource
     private co.yixiang.yshop.module.order.service.payment.v3.WechatV3PaymentService wechatV3Payment;
 
@@ -353,6 +356,8 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
      */
     @Override
     public Map<String, Object> pay(Long uid, AppPayParam param) {
+        if (wechatLiveEnabled && PayTypeEnum.toType(param.getPaytype()) == PayTypeEnum.ALI)
+            throw new IllegalStateException("LEGACY_EXTERNAL_PAYMENT_DISABLED");
         if(PayTypeEnum.toType(param.getPaytype())==PayTypeEnum.WEIXIN) {
             boolean mini=AppFromEnum.ROUNTINE.getValue().equals(param.getFrom());
             if(!mini && !AppFromEnum.WECHAT.getValue().equals(param.getFrom()))throw new IllegalStateException("WECHAT_V3_JSAPI_CLIENT_REQUIRED");
