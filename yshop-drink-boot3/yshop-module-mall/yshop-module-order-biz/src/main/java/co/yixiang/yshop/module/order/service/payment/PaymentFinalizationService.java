@@ -2,6 +2,7 @@ package co.yixiang.yshop.module.order.service.payment;
 
 import co.yixiang.yshop.module.order.dal.mysql.payment.PaymentMapper;
 import co.yixiang.yshop.module.order.dal.mysql.storeorder.StoreOrderMapper;
+import co.yixiang.yshop.module.order.service.payment.attempt.PaymentAttemptService;
 import co.yixiang.yshop.module.pay.callback.*;
 import co.yixiang.yshop.module.pay.mq.producer.PayNoticeProducer;
 
@@ -22,19 +23,23 @@ public class PaymentFinalizationService implements PaymentCallbackService {
     private final StoreOrderMapper orders;
     private final PayNoticeProducer producer;
     private final co.yixiang.yshop.module.member.service.wallet.WalletService wallets;
+    private final PaymentAttemptService attempts;
 
     public PaymentFinalizationService(
             PaymentInbox inbox,
             PaymentProcessor processor,
             PaymentMapper mapper,
             StoreOrderMapper orders,
-            PayNoticeProducer producer, co.yixiang.yshop.module.member.service.wallet.WalletService wallets) {
+            PayNoticeProducer producer,
+            co.yixiang.yshop.module.member.service.wallet.WalletService wallets,
+            PaymentAttemptService attempts) {
         this.inbox = inbox;
         this.processor = processor;
         this.mapper = mapper;
         this.orders = orders;
         this.producer = producer;
         this.wallets = wallets;
+        this.attempts = attempts;
     }
 
     @Override
@@ -47,6 +52,29 @@ public class PaymentFinalizationService implements PaymentCallbackService {
             log.warn("payment inbox unavailable category={}", failure.getClass().getSimpleName());
             return PaymentResult.RETRY;
         }
+        return dispatch(receipt);
+    }
+
+    /** Server-internal verified-event entry. Not wired to the legacy HTTP callback. */
+    @co.yixiang.yshop.framework.tenant.core.aop.TenantIgnore
+    public PaymentResult acceptAttemptVerified(PaymentSuccessEvent event) {
+        if (!event.external()) throw new IllegalArgumentException("EXTERNAL_PROVIDER_REQUIRED");
+        if (org.springframework.transaction.support.TransactionSynchronizationManager
+                .isActualTransactionActive())
+            throw new IllegalStateException("ATTEMPT_RECEIPT_REQUIRES_NO_CALLER_TRANSACTION");
+        var attempt = attempts.resolve(event.outTradeNo());
+        if (attempt == null) return PaymentResult.UNKNOWN_ORDER;
+        PaymentInbox.Receipt receipt;
+        try {
+            receipt = inbox.captureAttempt(event, attempt);
+        } catch (RuntimeException failure) {
+            log.warn("attempt inbox unavailable category={}", failure.getClass().getSimpleName());
+            return PaymentResult.RETRY;
+        }
+        return dispatch(receipt);
+    }
+
+    private PaymentResult dispatch(PaymentInbox.Receipt receipt) {
         if (receipt.conflict() != null) return receipt.conflict();
         // A hint only. Receipt already committed; database recovery does not depend on Redis.
         try {
@@ -86,7 +114,8 @@ public class PaymentFinalizationService implements PaymentCallbackService {
             throw new IllegalArgumentException("INTERNAL_PROVIDER_REQUIRED");
         PaymentOrder order = orders.lockPaymentOrder(orderId);
         if (order == null) throw new IllegalArgumentException("UNKNOWN_ORDER");
-        if (provider == PaymentSuccessEvent.Provider.BALANCE) wallets.requireOrderDebit(order.getUid(), order.getOrderId(), order.getPayPrice());
+        if (provider == PaymentSuccessEvent.Provider.BALANCE)
+            wallets.requireOrderDebit(order.getUid(), order.getOrderId(), order.getPayPrice());
         var event =
                 new PaymentSuccessEvent(
                         provider,
@@ -98,10 +127,13 @@ public class PaymentFinalizationService implements PaymentCallbackService {
                         "internal",
                         "SUCCESS",
                         LocalDateTime.now());
-        // BALANCE receipt, wallet movement, ledger and fulfillment share one transaction/connection.
+        // BALANCE receipt, wallet movement, ledger and fulfillment share one
+        // transaction/connection.
         // External receipts remain independently durable. CASH compatibility is unchanged.
-        var receipt = provider == PaymentSuccessEvent.Provider.BALANCE
-                ? inbox.captureBalance(event) : inbox.capture(event);
+        var receipt =
+                provider == PaymentSuccessEvent.Provider.BALANCE
+                        ? inbox.captureBalance(event)
+                        : inbox.capture(event);
         if (receipt.conflict() != null) return receipt.conflict();
         return processor.process(receipt.id(), true);
     }

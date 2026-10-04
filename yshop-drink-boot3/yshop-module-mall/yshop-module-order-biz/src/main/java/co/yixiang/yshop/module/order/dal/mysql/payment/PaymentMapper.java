@@ -11,8 +11,8 @@ import java.util.List;
 public interface PaymentMapper {
     @Insert(
             "INSERT INTO"
-                + " yshop_order_payment(id,order_id,provider,merchant_details_id,out_trade_no,provider_transaction_id,amount_cents,appid,mch_id,result_code,status,received_at,last_seen_at)"
-                + " VALUES(#{id},#{orderId},#{provider},#{merchantDetailsId},#{outTradeNo},"
+                + " yshop_order_payment(id,order_id,attempt_id,provider,merchant_details_id,out_trade_no,provider_transaction_id,amount_cents,appid,mch_id,result_code,status,received_at,last_seen_at)"
+                + " VALUES(#{id},#{orderId},#{attemptId},#{provider},#{merchantDetailsId},#{outTradeNo},"
                 + "#{providerTransactionId},#{amountCents},#{appid},#{mchId},#{resultCode},'RECEIVED',#{receivedAt},#{receivedAt})"
                 + " ON DUPLICATE KEY UPDATE id=id")
     int insertOrLock(PaymentRecord record);
