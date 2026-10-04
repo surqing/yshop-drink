@@ -31,8 +31,8 @@ def main():
     if '--install-recovery-migration' in sys.argv[1:] or '--install-triggers' in sys.argv[1:] or '--install-attempt-migration' in sys.argv[1:] or '--install-v3-migration' in sys.argv[1:]:
         # Privileged DDL only, scoped to the schema in this run's private JDBC configuration.
         settings = dict(line.split('=',1) for line in Path(os.environ['YSHOP_ACCEPTANCE_CONFIG']).read_text().splitlines() if '=' in line)
-        match = re.fullmatch(r'jdbc:mysql://127[.]0[.]0[.]1:3306/(yshop_acceptance_phase5[bcdef]_[a-f0-9]{8})[?].*',settings.get('url',''))
-        if not match or not re.fullmatch(r'accept5[bcdef]_[a-f0-9]{8}',settings.get('username','')):
+        match = re.fullmatch(r'jdbc:mysql://127[.]0[.]0[.]1:3306/(yshop_acceptance_phase5[bcdefg]_[a-f0-9]{8})[?].*',settings.get('url',''))
+        if not match or not re.fullmatch(r'accept5[bcdefg]_[a-f0-9]{8}',settings.get('username','')):
             raise RuntimeError('ISOLATED_DATABASE_REQUIRED')
         if '--install-recovery-migration' in sys.argv[1:]:
             database.mysql('USE `' + match.group(1) + '`; ' + (REPO / 'yshop-drink-boot3/sql/migrations/2026-10-04-payment-live-readiness.sql').read_text())
@@ -50,11 +50,12 @@ def main():
             raise RuntimeError('IMMUTABILITY_MIGRATION_INCOMPLETE')
         database.mysql('USE `' + match.group(1) + '`; ' + ';'.join(triggers) + ';')
         return 0
-    readiness_mode = '--readiness' in sys.argv[1:]
+    preflight_mode = '--preflight' in sys.argv[1:]
+    readiness_mode = '--readiness' in sys.argv[1:] or preflight_mode
     v3_mode = '--v3' in sys.argv[1:] or readiness_mode
     attempt_mode = '--attempt' in sys.argv[1:] or v3_mode
     wallet_mode = '--wallet' in sys.argv[1:] or attempt_mode
-    phase = '5f' if readiness_mode else '5e' if v3_mode else '5d' if attempt_mode else '5c' if wallet_mode else '5b'
+    phase = '5g' if preflight_mode else '5f' if readiness_mode else '5e' if v3_mode else '5d' if attempt_mode else '5c' if wallet_mode else '5b'
     suffix = secrets.token_hex(4)
     schema = 'yshop_acceptance_phase' + phase + '_' + suffix
     account = 'accept' + phase + '_' + secrets.token_hex(4)
@@ -79,7 +80,7 @@ def main():
         command = [str(WORKSPACE / '.dev-tools/maven/bin/mvn'),
                    '-Dmaven.repo.local=' + str(WORKSPACE / '.local-dev/cache/maven'),
                    '-pl', 'yshop-module-mall/yshop-module-order-biz', '-Pmysql-acceptance',
-                   'test', '-Dtest=' + ('PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest,PaymentLiveReadinessDatabaseTest' if readiness_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest' if v3_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest' if attempt_mode else 'PaymentDatabaseTest,WalletDatabaseTest' if wallet_mode else 'PaymentDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=false']
+                   'test', '-Dtest=' + ('PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest,PaymentLiveReadinessDatabaseTest,LiveMerchantPreflightDatabaseTest' if preflight_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest,PaymentLiveReadinessDatabaseTest' if readiness_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest' if v3_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest' if attempt_mode else 'PaymentDatabaseTest,WalletDatabaseTest' if wallet_mode else 'PaymentDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=false']
         with log.open('w') as output:
             log.chmod(0o600)
             result = subprocess.run(command, cwd=REPO / 'yshop-drink-boot3', env=env,
@@ -100,10 +101,12 @@ def main():
             suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.WechatV3DatabaseTest.xml')).getroot())
         if readiness_mode:
             suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.PaymentLiveReadinessDatabaseTest.xml')).getroot())
+        if preflight_mode:
+            suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.LiveMerchantPreflightDatabaseTest.xml')).getroot())
         if any(suite.attrib['failures'] != '0' or suite.attrib['errors'] != '0' for suite in suites) or int(suites[0].attrib['tests']) < 55:
             raise RuntimeError('ACCEPTANCE_REPORT_INCOMPLETE')
         tests = sum(int(suite.attrib['tests']) for suite in suites)
-        summary = {'result': 'PASS', 'mysql': version, 'engine': 'InnoDB', 'tests': tests, 'walletMode': wallet_mode, 'attemptMode': attempt_mode, 'v3Mode': v3_mode, 'readinessMode': readiness_mode,
+        summary = {'result': 'PASS', 'mysql': version, 'engine': 'InnoDB', 'tests': tests, 'walletMode': wallet_mode, 'attemptMode': attempt_mode, 'v3Mode': v3_mode, 'readinessMode': readiness_mode, 'preflightMode': preflight_mode,
                    'failures': 0, 'errors': 0, 'developmentDatabaseUsed': False,
                    'realPaymentRequests': 0, 'log': str(log)}
         report.write_text(json.dumps(summary, indent=2) + '\n')
@@ -113,8 +116,8 @@ def main():
     finally:
         if created:
             # Names originate only from random fixed-length hexadecimal identifiers in this run.
-            assert re.fullmatch(r'yshop_acceptance_phase5[bcdef]_[a-f0-9]{8}', schema)
-            assert re.fullmatch(r'accept5[bcdef]_[a-f0-9]{8}', account)
+            assert re.fullmatch(r'yshop_acceptance_phase5[bcdefg]_[a-f0-9]{8}', schema)
+            assert re.fullmatch(r'accept5[bcdefg]_[a-f0-9]{8}', account)
             database.mysql(f"DROP DATABASE `{schema}`; DROP USER '{account}'@'%';")
         if jdbc.exists():
             jdbc.unlink()
