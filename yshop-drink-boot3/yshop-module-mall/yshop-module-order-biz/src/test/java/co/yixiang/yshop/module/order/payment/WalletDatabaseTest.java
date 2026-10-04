@@ -12,6 +12,7 @@ import co.yixiang.yshop.module.member.service.user.MemberUserService;
 import co.yixiang.yshop.module.member.service.userbill.UserBillService;
 import co.yixiang.yshop.module.member.service.wallet.*;
 import co.yixiang.yshop.module.order.dal.dataobject.storeordercartinfo.StoreOrderCartInfoDO;
+import co.yixiang.yshop.module.order.dal.mysql.storeorder.StoreOrderMapper;
 import co.yixiang.yshop.module.order.dal.mysql.storeordercartinfo.StoreOrderCartInfoMapper;
 import co.yixiang.yshop.module.order.service.storeorder.*;
 import co.yixiang.yshop.module.order.service.storeorderstatus.StoreOrderStatusService;
@@ -39,6 +40,7 @@ class WalletDatabaseTest {
     WalletService wallet;
     RechargeService recharge;
     PayServiceManager refundProvider;
+    boolean syntheticProviderQuery;
 
     @BeforeEach
     void setup() throws Exception {
@@ -50,7 +52,7 @@ class WalletDatabaseTest {
 
     @AfterEach
     void close() {
-        if (refundProvider != null) verifyNoInteractions(refundProvider);
+        if (refundProvider != null && !syntheticProviderQuery) verifyNoInteractions(refundProvider);
         if (f != null) f.close();
     }
 
@@ -96,8 +98,12 @@ class WalletDatabaseTest {
     }
 
     StoreOrderService refundService(boolean stockFailure) {
+        return refundService(stockFailure, f.orders);
+    }
+
+    StoreOrderService refundService(boolean stockFailure, StoreOrderMapper orders) {
         var target = new StoreOrderServiceImpl();
-        ReflectionTestUtils.setField(target, "storeOrderMapper", f.orders);
+        ReflectionTestUtils.setField(target, "storeOrderMapper", orders);
         ReflectionTestUtils.setField(target, "walletService", wallet);
         var users = f.ctx.getBean(MemberUserService.class);
         when(users.getById(anyLong()))
@@ -135,6 +141,8 @@ class WalletDatabaseTest {
         ReflectionTestUtils.setField(target, "appStoreProductService", products);
         refundProvider = mock(PayServiceManager.class);
         ReflectionTestUtils.setField(target, "manager", refundProvider);
+        ReflectionTestUtils.setField(
+                target, "isDemo", false); // Provider transport is always mocked.
         var factory = new ProxyFactory(target);
         factory.setProxyTargetClass(true);
         factory.addAdvice(
@@ -163,6 +171,82 @@ class WalletDatabaseTest {
                         "SELECT COUNT(*) FROM yshop_store_order_status WHERE"
                                 + " change_type='refund_price_success'"));
         assertEquals(expected, count("SELECT stock FROM test_inventory WHERE id=1"));
+    }
+
+    @Test
+    void syntheticWeChatQueryDoesNotHoldOrderLock() throws Exception {
+        f.jdbc.update(
+                "UPDATE yshop_store_order SET"
+                    + " paid=1,pay_type='weixin',out_trade_no='synthetic-refund' WHERE id=1");
+        var refunds = refundService(false);
+        syntheticProviderQuery = true;
+        when(refundProvider.refundQuery(anyString(), any()))
+                .thenAnswer(
+                        call -> {
+                            // No network or real refund. An independent connection must be able
+                            // to lock the order while the fake provider is queried. A shared
+                            // FOR UPDATE would time out.
+                            try (var connection =
+                                            f.ctx.getBean(javax.sql.DataSource.class)
+                                                    .getConnection();
+                                    var statement = connection.createStatement()) {
+                                connection.setAutoCommit(false);
+                                statement.execute(
+                                        PaymentDatabaseTest.mysqlAcceptance()
+                                                ? "SET SESSION innodb_lock_wait_timeout=1"
+                                                : "SET LOCK_TIMEOUT 1000");
+                                try (var rows =
+                                        statement.executeQuery(
+                                                "SELECT id FROM yshop_store_order WHERE id=1 FOR"
+                                                    + " UPDATE")) {
+                                    assertTrue(rows.next());
+                                }
+                                connection.rollback();
+                            }
+                            return Map.of("'return_code'", "SUCCESS");
+                        });
+        refund(refunds);
+        verify(refundProvider).refundQuery(anyString(), any());
+        verifyNoMoreInteractions(refundProvider);
+        same(new BigDecimal("100"), balance());
+        assertEquals(0, count("SELECT COUNT(*) FROM yshop_member_wallet_transaction"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"paid", "refund", "pay-type", "price"})
+    void balanceRefundValidatesLockedRowAfterOrdinaryRead(String changed) {
+        f.balanceService().yuePay("order-A", 1L);
+        var orders = spy(f.orders);
+        doAnswer(
+                        call -> {
+                            var earlier = f.orders.selectById(1L);
+                            String update =
+                                    switch (changed) {
+                                        case "paid" -> "paid=0";
+                                        case "refund" -> "refund_status=2";
+                                        case "pay-type" -> "pay_type='weixin'";
+                                        default -> "pay_price=0.01";
+                                    };
+                            // Commit on a different connection after the ordinary read creates
+                            // a snapshot. The locking read must observe this change even at
+                            // MySQL REPEATABLE READ.
+                            CompletableFuture.runAsync(
+                                            () ->
+                                                    f.jdbc.update(
+                                                            "UPDATE yshop_store_order SET "
+                                                                    + update
+                                                                    + " WHERE id=1"))
+                                    .get(10, TimeUnit.SECONDS);
+                            return earlier;
+                        })
+                .when(orders)
+                .selectById(1L);
+        var refunds = refundService(false, orders);
+        assertThrows(ServiceException.class, () -> refund(refunds));
+        same(new BigDecimal("99.98"), balance());
+        assertEquals(2, count("SELECT COUNT(*) FROM yshop_member_wallet_transaction"));
+        refundEffects(0);
+        reconcile();
     }
 
     @Test

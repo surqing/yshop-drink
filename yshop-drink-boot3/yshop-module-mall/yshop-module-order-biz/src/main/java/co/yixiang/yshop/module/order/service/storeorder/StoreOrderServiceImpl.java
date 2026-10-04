@@ -274,16 +274,21 @@ public class StoreOrderServiceImpl implements StoreOrderService {
     @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public void orderRefund(Long id, BigDecimal price, Integer type, Long salesId) {
 
-        // Choose the refund path from a current, locked row. Balance payment takes the same
-        // order -> user lock order; do not read the user or credit its wallet before this lock.
-        StoreOrderDO storeOrderDO = storeOrderMapper.selectOne(
-                new LambdaQueryWrapper<StoreOrderDO>().eq(StoreOrderDO::getId, id).last("FOR UPDATE"));
+        StoreOrderDO storeOrderDO = storeOrderMapper.selectById(id);
         if (storeOrderDO == null) {
             throw exception(STORE_ORDER_NOT_EXISTS);
         }
 
         boolean balanceRefund = PayTypeEnum.YUE.getValue().equals(storeOrderDO.getPayType());
         if (balanceRefund) {
+            // Only balance refunds lock the order, in the same order -> user sequence as yuePay.
+            // Validate the current row, not the earlier read; never reroute to a provider while locked.
+            storeOrderDO = storeOrderMapper.selectOne(
+                    new LambdaQueryWrapper<StoreOrderDO>().eq(StoreOrderDO::getId, id).last("FOR UPDATE"));
+            if (storeOrderDO == null) throw exception(STORE_ORDER_NOT_EXISTS);
+            if (!PayTypeEnum.YUE.getValue().equals(storeOrderDO.getPayType())) {
+                throw exception(ORDER_REFUND_NOT);
+            }
             if (!OrderInfoEnum.PAY_STATUS_1.getValue().equals(storeOrderDO.getPaid())
                     || Boolean.TRUE.equals(storeOrderDO.getDeleted())
                     || !Integer.valueOf(0).equals(storeOrderDO.getIsSystemDel())) {
