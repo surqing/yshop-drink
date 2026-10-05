@@ -64,7 +64,8 @@ public class PaymentEffects {
                 BillDetailEnum.TYPE_3.getValue(),
                 order.getPayPrice(),
                 user.getNowMoney(),
-                PayTypeEnum.toType(payType).getDesc() + order.getPayPrice() + "元购买商品");
+                PayTypeEnum.toType(payType).getDesc() + order.getPayPrice() + "元购买商品",
+                order.getOrderId());
     }
 
     public void afterCommit(PaymentOrder order) {

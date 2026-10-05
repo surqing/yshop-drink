@@ -96,8 +96,8 @@ class PaymentDatabaseTest {
                 String url = settings.getProperty("url", "");
                 String user = settings.getProperty("username", "");
                 if (!url.matches(
-                                "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase5[bcdefg]_[a-f0-9]{8}(\\?.*)?")
-                        || !user.matches("accept5[bcdefg]_[a-f0-9]{8}")) {
+                                "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase5[bcdefgh]_[a-f0-9]{8}(\\?.*)?")
+                        || !user.matches("accept5[bcdefgh]_[a-f0-9]{8}")) {
                     throw new IllegalStateException("ISOLATED_DATABASE_REQUIRED");
                 }
                 var ds = new org.springframework.jdbc.datasource.DriverManagerDataSource();
@@ -904,6 +904,7 @@ class PaymentDatabaseTest {
         ReflectionTestUtils.setField(
                 target, "transactionManager", ctx.getBean(PlatformTransactionManager.class));
         ReflectionTestUtils.setField(target, "paymentFinalizationService", service);
+        ReflectionTestUtils.setField(target, "paymentAttempts", ctx.getBean(co.yixiang.yshop.module.order.service.payment.attempt.PaymentAttemptService.class));
         ReflectionTestUtils.setField(target, "userService", ctx.getBean(MemberUserService.class));
         ReflectionTestUtils.setField(target, "storeOrderMapper", orders);
         ReflectionTestUtils.setField(target, "walletService", ctx.getBean(WalletService.class));

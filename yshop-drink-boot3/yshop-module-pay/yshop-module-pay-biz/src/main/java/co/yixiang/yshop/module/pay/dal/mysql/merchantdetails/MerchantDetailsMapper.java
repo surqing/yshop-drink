@@ -17,6 +17,16 @@ import co.yixiang.yshop.module.pay.controller.admin.merchantdetails.vo.*;
 @Mapper
 public interface MerchantDetailsMapper extends BaseMapperX<MerchantDetailsDO> {
 
+    @org.apache.ibatis.annotations.Update(
+            "UPDATE merchant_details SET"
+                + " deleted=0,appid=#{appid},mch_id=#{mchId},wechat_api_version=#{wechatApiVersion},merchant_certificate_serial=#{merchantCertificateSerial},platform_public_key_id=#{platformPublicKeyId},key_public=#{keyPublic},key_private=#{keyPrivate},api_v3_key=#{apiV3Key},notify_url=#{notifyUrl},is_test=#{isTest},sign_type=#{signType},input_charset=#{inputCharset},cert_store_type=#{certStoreType},update_time=CURRENT_TIMESTAMP"
+                + " WHERE details_id=#{detailsId} AND details_id IN"
+                + " ('wx_miniapp','wx_wechat','wx_h5') AND pay_type='wxPay' AND deleted=1 AND appid"
+                + " LIKE 'local-unconfigured%' AND COALESCE(mch_id,'')='' AND"
+                + " COALESCE(key_private,'')='' AND COALESCE(api_v3_key,'')='' AND"
+                + " COALESCE(key_cert,'')='' AND COALESCE(key_cert_pwd,'')=''")
+    int provisionEmptyPlaceholder(MerchantDetailsDO value);
+
     default PageResult<MerchantDetailsDO> selectPage(MerchantDetailsPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<MerchantDetailsDO>()
                 .eqIfPresent(MerchantDetailsDO::getPayType, reqVO.getPayType())

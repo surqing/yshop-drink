@@ -119,8 +119,7 @@ class LiveMerchantPreflightDatabaseTest {
         var inbox = v.f.ctx.getBean(PaymentInbox.class);
         var event = inbox.capture(v.f.event("order-A", "synthetic-conflict", 2));
         v.f.jdbc.update(
-                "UPDATE yshop_order_payment SET status='PAYMENT_CONFLICT' WHERE id=?",
-                event.id());
+                "UPDATE yshop_order_payment SET status='PAYMENT_CONFLICT' WHERE id=?", event.id());
         var before = fingerprint();
         var r = preflight.check("merchant-wx");
         assertEquals(1L, r.audit().counts().get("UNCERTAIN_ATTEMPTS"));
@@ -139,7 +138,7 @@ class LiveMerchantPreflightDatabaseTest {
         v.f.order("historical-unpaid", 2L);
         v.f.jdbc.update(
                 "UPDATE yshop_store_order SET pay_type='alipay' WHERE"
-                    + " order_id='historical-unpaid'");
+                        + " order_id='historical-unpaid'");
         var before = fingerprint();
         var r = audit.snapshot();
         assertEquals(1L, r.counts().get("TERMINAL_LATE_SUCCESS"));
@@ -196,5 +195,47 @@ class LiveMerchantPreflightDatabaseTest {
         v.mvc().perform(missing).andExpect(status().isBadRequest());
         v.f.effects(0);
         assertEquals(0, v.f.count("SELECT COUNT(*) FROM yshop_order_payment"));
+    }
+
+    @Test
+    void deploymentDiagnosticsDoNotHashOrExposeCredentialStorage() {
+        var first = preflight.deployment("merchant-wx");
+        assertTrue(first.masterKeyAvailable());
+        assertEquals(64, first.merchantFingerprint().length());
+        v.f.jdbc.update(
+                "UPDATE merchant_details SET"
+                    + " key_private='synthetic-private-canary',api_v3_key='synthetic-api-canary'"
+                    + " WHERE details_id='merchant-wx'");
+        var second = preflight.deployment("merchant-wx");
+        assertEquals(first.merchantFingerprint(), second.merchantFingerprint());
+        assertFalse(second.toString().contains("canary"));
+        assertEquals("UNVERIFIED", second.buildRevision());
+        assertTrue(
+                PaymentDatabaseTest.mysqlAcceptance()
+                        ? second.schemaComplete()
+                        : !second.schemaComplete());
+    }
+
+    @Test
+    void renewablePrivateClockEvidenceFailsClosedWhenMissingOrPublic() throws Exception {
+        var file = java.nio.file.Files.createTempFile("synthetic-ntp-", ".properties");
+        try {
+            java.nio.file.Files.setPosixFilePermissions(
+                    file, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+            java.nio.file.Files.writeString(
+                    file,
+                    "yshop.pay.preflight.clock.observed-at="
+                            + Instant.now()
+                            + "\nyshop.pay.preflight.clock.ntp-offset-millis=12\n");
+            ReflectionTestUtils.setField(preflight, "clockEvidenceFile", file.toString());
+            assertTrue(preflight.check("merchant-wx").clock().freshNtpEvidence());
+            java.nio.file.Files.setPosixFilePermissions(
+                    file, java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--"));
+            assertFalse(preflight.check("merchant-wx").clock().freshNtpEvidence());
+            java.nio.file.Files.delete(file);
+            assertFalse(preflight.check("merchant-wx").clock().freshNtpEvidence());
+        } finally {
+            java.nio.file.Files.deleteIfExists(file);
+        }
     }
 }

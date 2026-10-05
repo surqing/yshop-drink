@@ -447,6 +447,7 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
                     || !Integer.valueOf(0).equals(locked.getStatus()) || !Integer.valueOf(0).equals(locked.getRefundStatus())
                     || !Integer.valueOf(0).equals(locked.getIsSystemDel())) throw exception(STORE_ORDER_NOT_EXISTS);
             if (Integer.valueOf(1).equals(locked.getPaid())) throw exception(ORDER_PAY_FINISH);
+            paymentAttempts.assertInternalFundingAllowed(locked.getOrderId());
             walletService.debit(uid, locked.getPayPrice(),
                     co.yixiang.yshop.module.member.service.wallet.WalletType.ORDER_PAYMENT,
                     locked.getOrderId(), "order:" + locked.getOrderId());

@@ -31,4 +31,11 @@ public class LivePaymentPreflightController {
     public CommonResult<LivePaymentAuditService.Snapshot> audit() {
         return CommonResult.success(audit.snapshot());
     }
+
+    @GetMapping("/deployment")
+    @PreAuthorize("@ss.hasPermission('pay:merchant-details:query')")
+    public CommonResult<LivePaymentPreflightService.Deployment> deployment(
+            @RequestParam("detailsId") String id) {
+        return CommonResult.success(service.deployment(id));
+    }
 }

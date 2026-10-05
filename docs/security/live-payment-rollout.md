@@ -55,7 +55,7 @@ Public path: `POST https://<owned-domain>/app-api/order/notify/wechat-v3/<detail
 Example location snippet inside an already configured/verified TLS server (a **template**, not a deployed ingress):
 
 ```nginx
-location ~ ^/app-api/order/notify/wechat-v3/[A-Za-z0-9_-]{1,32}$ {
+location ~ "^/app-api/order/notify/wechat-v3/[A-Za-z0-9_-]{1,32}$" {
     client_max_body_size 64k;
     proxy_pass http://127.0.0.1:48081; # no URI replacement/trailing path
     proxy_pass_request_body on;
@@ -115,3 +115,7 @@ Synthetic tests cover missing/malformed/wrong-key credentials, notify URL/identi
 Still human-required before real acceptance: genuine direct-merchant entitlement and AppID binding; private provisioning/ownership of all key/certificate material; owned public domain/TLS/HTTPS deployment and proxy acceptance; fresh trustworthy NTP evidence; full multi-instance upgrade and historical provider investigation; incident operator/rollback coverage; an explicitly approved server-priced ≤¥0.10 order/payer; new authorization for the particular real API/client-payment actions. **None of these has been claimed completed by synthetic tests.**
 
 Acceptance (2026-10-04): **396 focused PASS**, **294 isolated MySQL 8.0.46/InnoDB PASS** (12/12 InnoDB, 0 failures/errors, auto-cleaned), backend **55/55 SUCCESS**, Vue type/build PASS, UniApp compile PASS, mini-program **14/14 PASS** with zero uncaught exceptions and `paymentRequests=0`, frontend 6 PASS, scanner regression 3 PASS, strict source/runtime/current-identity scan PASS. Runtime admin endpoints work and anonymous access is rejected; local schema PASS, no active/uncertain/conflict/late-success rows, **11 historical unpaid legacy-external candidates**. Local `configurationReady=false` / `liveReady=false` remain expected without genuine merchant provisioning, public-ingress/history attestations and fresh NTP evidence. No real merchant/provider or financial action was performed.
+
+## Phase 5H tooling
+
+See [production-prepayment-readiness.md](production-prepayment-readiness.md) for offline provisioning, actual local TLS ingress, per-instance verification, history exports and the read-only first-payment harness. Active external attempts now reject BALANCE/CASH admission before wallet debit. Synthetic passing checks do not authorize live provider requests.

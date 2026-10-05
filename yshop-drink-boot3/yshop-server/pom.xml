@@ -101,6 +101,8 @@
 
     </dependencies>
 
+    <properties><yshop.build.revision>UNVERIFIED</yshop.build.revision></properties>
+
     <build>
         <!-- 设置构建的 jar 包名 -->
         <finalName>${project.artifactId}</finalName>
@@ -111,6 +113,9 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring.boot.version}</version>
                 <executions>
+                    <execution><id>build-provenance</id><goals><goal>build-info</goal></goals>
+                        <configuration><additionalProperties><sourceRevision>${yshop.build.revision}</sourceRevision></additionalProperties></configuration>
+                    </execution>
                     <execution>
                         <goals>
                             <goal>repackage</goal> <!-- 将引入的 jar 打入其中 -->

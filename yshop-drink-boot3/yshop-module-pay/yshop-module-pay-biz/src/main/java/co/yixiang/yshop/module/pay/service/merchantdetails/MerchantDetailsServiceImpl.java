@@ -36,7 +36,18 @@ public class MerchantDetailsServiceImpl implements MerchantDetailsService {
         // 插入
         MerchantDetailsDO merchantDetails = MerchantDetailsConvert.INSTANCE.convert(createReqVO);
         encryptInputs(merchantDetails, createReqVO);
-        merchantDetailsMapper.insert(merchantDetails);
+        if (Boolean.TRUE.equals(createReqVO.getRestoreEmptyPlaceholder())) {
+            if (!"wxPay".equals(merchantDetails.getPayType())
+                    || !"V3".equals(merchantDetails.getWechatApiVersion())
+                    || !Integer.valueOf(0).equals(merchantDetails.getIsTest())
+                    || PaymentCredentialCryptoService.blank(merchantDetails.getKeyPrivate())
+                    || PaymentCredentialCryptoService.blank(merchantDetails.getApiV3Key())
+                    || merchantDetailsMapper.provisionEmptyPlaceholder(merchantDetails) != 1)
+                throw PaymentCredentialCryptoService.failure(
+                        "Sanitized merchant placeholder unavailable");
+        } else {
+            merchantDetailsMapper.insert(merchantDetails);
+        }
         // 返回
         return merchantDetails.getDetailsId();
     }

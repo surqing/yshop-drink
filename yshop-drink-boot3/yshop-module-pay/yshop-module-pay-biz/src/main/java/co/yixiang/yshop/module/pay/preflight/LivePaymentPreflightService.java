@@ -38,6 +38,9 @@ public class LivePaymentPreflightService {
     @Value("${yshop.pay.preflight.clock.ntp-offset-millis:}")
     private String ntpOffset = "";
 
+    @Value("${yshop.pay.preflight.clock.evidence-file:}")
+    private String clockEvidenceFile = "";
+
     private final Clock clock;
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -140,11 +143,30 @@ public class LivePaymentPreflightService {
         Long offset = null;
         boolean fresh = false;
         try {
-            Instant observed = Instant.parse(clockObservedAt);
+            String observedAt = clockObservedAt, measuredOffset = ntpOffset;
+            if (present(clockEvidenceFile)) {
+                var path = java.nio.file.Path.of(clockEvidenceFile);
+                if (java.nio.file.Files.isSymbolicLink(path)
+                        || !java.nio.file.Files.isRegularFile(path)
+                        || java.nio.file.Files.size(path) > 4096
+                        || java.nio.file.Files.getPosixFilePermissions(path).stream()
+                                .anyMatch(
+                                        p ->
+                                                p.name().startsWith("GROUP_")
+                                                        || p.name().startsWith("OTHERS_")))
+                    throw new IllegalStateException();
+                var p = new java.util.Properties();
+                try (var in = java.nio.file.Files.newInputStream(path)) {
+                    p.load(in);
+                }
+                observedAt = p.getProperty("yshop.pay.preflight.clock.observed-at", "");
+                measuredOffset = p.getProperty("yshop.pay.preflight.clock.ntp-offset-millis", "");
+            }
+            Instant observed = Instant.parse(observedAt);
             long age = Duration.between(observed, now).getSeconds();
-            offset = Long.valueOf(ntpOffset);
+            offset = Long.valueOf(measuredOffset);
             fresh = age >= 0 && age <= 300;
-        } catch (RuntimeException ignored) {
+        } catch (RuntimeException | java.io.IOException ignored) {
             /* Unknown NTP is not proof of synchronization. */
         }
         Long databaseOffset = audit.databaseOffsetMillis(now);
@@ -171,6 +193,85 @@ public class LivePaymentPreflightService {
                 Collections.unmodifiableMap(checks),
                 snapshot,
                 timing);
+    }
+
+    public record Deployment(
+            String buildRevision,
+            String mysqlVersion,
+            boolean schemaComplete,
+            boolean liveEnabled,
+            boolean reconciliationEnabled,
+            String callbackRoute,
+            boolean masterKeyAvailable,
+            boolean merchantConfigurationReady,
+            String merchantFingerprint,
+            LivePaymentAuditService.Snapshot audit) {}
+
+    @TenantIgnore
+    public Deployment deployment(String detailsId) {
+        String revision = "UNVERIFIED", fingerprint = "UNAVAILABLE";
+        boolean master = false;
+        try {
+            crypto.requireKey();
+            master = true;
+        } catch (RuntimeException ignored) {
+        }
+        try (var in = getClass().getResourceAsStream("/META-INF/build-info.properties")) {
+            var p = new java.util.Properties();
+            if (in != null) {
+                p.load(in);
+                String value = p.getProperty("build.sourceRevision", "");
+                if (value.matches("[a-f0-9]{40}")) revision = value;
+            }
+        } catch (java.io.IOException ignored) {
+        }
+        try {
+            if (detailsId != null && detailsId.matches("[A-Za-z0-9_-]{1,32}")) {
+                var m = merchants.selectById(detailsId);
+                if (m != null) {
+                    var fields =
+                            new String[] {
+                                detailsId,
+                                m.getPayType(),
+                                m.getWechatApiVersion(),
+                                m.getAppid(),
+                                m.getMchId(),
+                                m.getMerchantCertificateSerial(),
+                                m.getPlatformPublicKeyId(),
+                                m.getKeyPublic(),
+                                m.getNotifyUrl()
+                            };
+                    // Length-prefixed metadata and public material only. Never hash a
+                    // secret/envelope.
+                    var bytes = new java.io.ByteArrayOutputStream();
+                    var out = new java.io.DataOutputStream(bytes);
+                    for (String value : fields) {
+                        byte[] b =
+                                String.valueOf(value)
+                                        .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                        out.writeInt(b.length);
+                        out.write(b);
+                    }
+                    fingerprint =
+                            java.util.HexFormat.of()
+                                    .formatHex(
+                                            java.security.MessageDigest.getInstance("SHA-256")
+                                                    .digest(bytes.toByteArray()));
+                }
+            }
+        } catch (java.io.IOException | java.security.NoSuchAlgorithmException ignored) {
+        }
+        return new Deployment(
+                revision,
+                audit.mysqlVersion(),
+                audit.schemaComplete(),
+                live,
+                recovery,
+                "/app-api/order/notify/wechat-v3/{detailsId}",
+                master,
+                check(detailsId).configurationReady(),
+                fingerprint,
+                audit.snapshot());
     }
 
     private static boolean present(String s) {

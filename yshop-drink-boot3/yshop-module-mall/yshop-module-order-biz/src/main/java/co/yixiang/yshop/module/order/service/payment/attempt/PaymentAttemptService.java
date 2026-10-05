@@ -41,6 +41,18 @@ public class PaymentAttemptService {
         if (attempts.active(orderId) != null) throw failure("LEGACY_EXTERNAL_PAYMENT_DISABLED");
     }
 
+    /** Internal funding must not race an externally payable or uncertain attempt. */
+    @TenantIgnore
+    @Transactional(rollbackFor = Exception.class)
+    public void assertInternalFundingAllowed(String orderId) {
+        reference(orderId, 64);
+        PaymentOrder order = orders.lockPaymentOrder(orderId);
+        if (order == null) throw failure("UNKNOWN_ORDER");
+        // Already-paid retries cannot introduce another debit or fulfillment.
+        if (Integer.valueOf(0).equals(order.getPaid()) && attempts.active(orderId) != null)
+            throw failure("EXTERNAL_PAYMENT_ATTEMPT_ACTIVE");
+    }
+
     @TenantIgnore
     @Transactional(rollbackFor = Exception.class)
     public PaymentAttempt createOrGet(
