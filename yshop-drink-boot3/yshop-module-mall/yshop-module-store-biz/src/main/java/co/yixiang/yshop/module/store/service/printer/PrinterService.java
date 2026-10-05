@@ -7,6 +7,7 @@ import co.yixiang.yshop.framework.tenant.core.context.TenantContextHolder;
 import co.yixiang.yshop.module.store.dal.mysql.printer.PrinterRepository;
 import co.yixiang.yshop.module.store.dal.mysql.printer.PrinterRepository.Device;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -19,16 +20,25 @@ public class PrinterService {
     private final PrinterProviderRegistry registry;
     private final PrinterSecretCipher cipher;
     private final TransactionTemplate tx;
-    public PrinterService(PrinterRepository repo,PrinterProviderRegistry registry,PrinterSecretCipher cipher,TransactionTemplate tx) {
+    private final boolean tenantEnabled;
+    public PrinterService(PrinterRepository repo,PrinterProviderRegistry registry,PrinterSecretCipher cipher,TransactionTemplate tx,
+            @Value("${yshop.tenant.enable:false}") boolean tenantEnabled) {
         this.repo=repo; this.registry=registry; this.cipher=cipher; this.tx=tx;
+        this.tenantEnabled=tenantEnabled;
     }
     private long tenant() {
         var user=SecurityFrameworkUtils.getLoginUser();
         Long contextTenant=TenantContextHolder.getTenantId();
-        // Tenant filters are disabled in the current single-tenant deployment. Always scope
-        // by the verified token principal, and reject a conflicting context when one exists.
-        if(user==null||user.getId()==null||!Long.valueOf(0).equals(user.getShopId())
-                ||user.getTenantId()==null||(contextTenant!=null&&!contextTenant.equals(user.getTenantId())))
+        if(user==null||user.getId()==null||!Long.valueOf(0).equals(user.getShopId()))
+            throw new PrinterFailure("HEADQUARTERS_ONLY",false);
+        // With tenant filters disabled, OAuth caches a null tenant while the database
+        // defaults it to 0. Both identify the same single-tenant scope; never use a header
+        // to select a tenant for that principal. Tenant-enabled deployments remain strict.
+        if(user.getTenantId()==null) {
+            if(tenantEnabled||contextTenant!=null) throw new PrinterFailure("HEADQUARTERS_ONLY",false);
+            return 0L;
+        }
+        if((tenantEnabled&&contextTenant==null)||(contextTenant!=null&&!contextTenant.equals(user.getTenantId())))
             throw new PrinterFailure("HEADQUARTERS_ONLY",false);
         return user.getTenantId();
     }

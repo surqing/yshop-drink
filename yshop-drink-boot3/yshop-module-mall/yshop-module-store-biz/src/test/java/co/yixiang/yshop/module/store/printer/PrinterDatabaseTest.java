@@ -58,7 +58,7 @@ class PrinterDatabaseTest {
         jdbc.update("DELETE FROM yshop_printer_provider_token"); jdbc.update("DELETE FROM yshop_printer");
         cipher=new PrinterSecretCipher(Base64.getEncoder().encodeToString(new byte[32])); fake=new FakeProvider("YILIAN_YUN");
         // A second transport deliberately needs no edits to the business service or the first provider.
-        service=new PrinterService(repo,new PrinterProviderRegistry(List.of(fake,new FakeProvider("SECOND_VENDOR"))),cipher,new TransactionTemplate(manager));
+        service=new PrinterService(repo,new PrinterProviderRegistry(List.of(fake,new FakeProvider("SECOND_VENDOR"))),cipher,new TransactionTemplate(manager),false);
         login(1,0);
     }
     private void fixture() {
@@ -106,7 +106,7 @@ class PrinterDatabaseTest {
         assertThrows(PrinterFailure.class,()->cipher.decrypt(another,"wrong-context"));
     }
     @Test void localManagementWorksWithoutServiceOrEncryptionConfiguration() {
-        PrinterService local=new PrinterService(repo,new PrinterProviderRegistry(List.of(fake)),new PrinterSecretCipher(""),new TransactionTemplate(manager));
+        PrinterService local=new PrinterService(repo,new PrinterProviderRegistry(List.of(fake)),new PrinterSecretCipher(""),new TransactionTemplate(manager),false);
         long id=local.save(request(null,"4000000001",Map.of()),false);
         assertTrue(local.get(id).configuredFields().isEmpty());
         local.bind(new BindingRequest(id,1L));
@@ -136,6 +136,19 @@ class PrinterDatabaseTest {
         login(1,1); assertThrows(PrinterFailure.class,service::providers); assertThrows(PrinterFailure.class,()->service.bind(new BindingRequest(id,1L)));
         login(1,0); TenantContextHolder.clear(); assertEquals(id,service.get(id).id());
         TenantContextHolder.setTenantId(2L); assertThrows(PrinterFailure.class,()->service.get(id));
+    }
+    @Test void singleTenantNullTokenAndDatabaseDefaultShareScopeButTenantModeRejectsMissingIdentity() {
+        login(1,0); TenantContextHolder.clear();
+        var user=(LoginUser)SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        user.setTenantId(null);
+        long id=device("4000000001");
+        assertEquals(0L,jdbc.queryForObject("SELECT tenant_id FROM yshop_printer WHERE id=?",Long.class,id));
+        user.setTenantId(0L); assertEquals(id,service.get(id).id());
+        user.setTenantId(null);
+        PrinterService strict=new PrinterService(repo,new PrinterProviderRegistry(List.of(fake)),cipher,new TransactionTemplate(manager),true);
+        assertThrows(PrinterFailure.class,()->strict.get(id));
+        TenantContextHolder.setTenantId(1L); assertThrows(PrinterFailure.class,()->service.get(id));
+        TenantContextHolder.clear(); user.setShopId(1L); assertThrows(PrinterFailure.class,()->service.get(id));
     }
     @Configuration @EnableTransactionManagement
     static class ShopTransactions {}
