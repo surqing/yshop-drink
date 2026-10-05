@@ -13,7 +13,8 @@ public final class PrinterModels {
     public record Field(String key, String label, boolean secret, boolean required) {}
     public record Capabilities(boolean authorize, boolean deauthorize, boolean status, boolean textPrint) {}
     public record ProviderInfo(String code, String name, List<String> connectionTypes,
-                               List<Field> configFields, Capabilities capabilities, boolean configured) {}
+                               List<Field> configFields, Capabilities capabilities, boolean configured,
+                               boolean requiresAuthorization) {}
     public record SaveRequest(Long id, @NotBlank @Size(max=80) String name,
             @NotBlank @Size(max=40) String providerCode, @NotBlank @Size(max=100) String deviceCode,
             @Size(max=80) String model, @NotBlank String connectionType, @NotNull Boolean enabled,
@@ -25,7 +26,7 @@ public final class PrinterModels {
             @NotBlank @Pattern(regexp="[a-zA-Z0-9_-]{16,64}") String requestId) {}
     public record ShopOption(Long id, String name) {}
     public record DeviceView(Long id, String name, String providerCode, String deviceCode, String model,
-            String connectionType, boolean enabled, Authorization authorization, DeviceState deviceState,
+            String connectionType, boolean enabled, boolean deleted, Authorization authorization, DeviceState deviceState,
             LocalDateTime stateCheckedAt, Long shopId, String shopName, Set<String> configuredFields,
             String lastError, LocalDateTime createTime) {}
     public record JobView(String requestId, Long printerId, String printerName, JobState state,

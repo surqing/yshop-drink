@@ -40,7 +40,13 @@ public class PrinterRepository {
         Timestamp value=rs.getTimestamp(column); return value==null?null:value.toLocalDateTime();
     }
     public Device require(long tenant, long id, boolean lock) {
-        List<Device> rows=jdbc.query("SELECT * FROM yshop_printer WHERE tenant_id=? AND id=? AND deleted=0"
+        return require(tenant,id,lock,false);
+    }
+    public Device requireIncludingDeleted(long tenant,long id,boolean lock) {
+        return require(tenant,id,lock,true);
+    }
+    private Device require(long tenant,long id,boolean lock,boolean includeDeleted) {
+        List<Device> rows=jdbc.query("SELECT * FROM yshop_printer WHERE tenant_id=? AND id=?"+(includeDeleted?"":" AND deleted=0")
                 +(lock?" FOR UPDATE":""),this::map,tenant,id);
         if(rows.isEmpty()) throw new PrinterFailure("PRINTER_NOT_FOUND",false);
         Device d=rows.get(0); fillBinding(d); return d;
@@ -57,8 +63,11 @@ public class PrinterRepository {
         return rows.isEmpty()?null:rows.get(0);
     }
     public PageResult<Device> page(long tenant,int pageNo,int pageSize,String name,Long shopId) {
-        String where=" FROM yshop_printer p WHERE p.tenant_id=? AND p.deleted=0";
-        List<Object> args=new ArrayList<>(List.of(tenant));
+        return page(tenant,pageNo,pageSize,name,shopId,false);
+    }
+    public PageResult<Device> page(long tenant,int pageNo,int pageSize,String name,Long shopId,boolean deleted) {
+        String where=" FROM yshop_printer p WHERE p.tenant_id=? AND p.deleted=?";
+        List<Object> args=new ArrayList<>(List.of(tenant,deleted));
         if(name!=null&&!name.isBlank()) { where+=" AND p.name LIKE ?"; args.add("%"+name+"%"); }
         if(shopId!=null) { where+=" AND EXISTS (SELECT 1 FROM yshop_printer_binding b WHERE b.tenant_id=p.tenant_id AND b.printer_id=p.id AND b.shop_id=?)"; args.add(shopId); }
         Long total=jdbc.queryForObject("SELECT COUNT(*)"+where,Long.class,args.toArray());

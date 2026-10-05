@@ -15,6 +15,7 @@ import static org.mockito.Mockito.*;
 
 class YilianyunProviderTest {
     HttpServer server; ExecutorService executor; YilianyunPrinterProvider provider;
+    YilianyunTokenStore tokens;
     List<Map<String,String>> requests=new CopyOnWriteArrayList<>();
     volatile String response="{\"error\":0,\"body\":{\"access_token\":\"synthetic-token\",\"state\":1,\"id\":2099743426}}";
     volatile int httpStatus=200; volatile long bodyDelayMillis;
@@ -33,13 +34,13 @@ class YilianyunProviderTest {
             }
         }); server.start();
         YilianyunProperties properties=new YilianyunProperties(); properties.setEnabled(true); properties.setClientId("synthetic-app"); properties.setClientSecret("synthetic-app-secret");
-        YilianyunTokenStore tokens=mock(YilianyunTokenStore.class);
+        tokens=mock(YilianyunTokenStore.class);
         when(tokens.get(anyString(),any())).thenAnswer(call->{ Supplier<String> fetch=call.getArgument(1); return fetch.get(); });
         provider=new YilianyunPrinterProvider(properties,new YilianyunHttpTransport(URI.create("http://127.0.0.1:"+server.getAddress().getPort()+"/v2")),tokens);
     }
     @AfterEach void cleanup() { server.stop(0); executor.shutdownNow(); }
     @Test void officialFormSignatureAuthorizationAndEndpointContract() {
-        provider.authorize("4000000001","测试设备",Map.of("terminalKey","synthetic-key"));
+        provider.openSession().authorize("4000000001","测试设备",Map.of("terminalKey","synthetic-key"));
         assertEquals(2,requests.size()); Map<String,String> oauth=requests.get(0),device=requests.get(1);
         assertEquals("/v2/oauth/oauth",oauth.get("path")); assertEquals("client_credentials",oauth.get("grant_type")); assertEquals("all",oauth.get("scope"));
         assertEquals("/v2/printer/addprinter",device.get("path")); assertEquals("synthetic-key",device.get("msign"));
@@ -49,20 +50,20 @@ class YilianyunProviderTest {
             assertEquals(cn.hutool.crypto.digest.DigestUtil.md5Hex("synthetic-app"+form.get("timestamp")+"synthetic-app-secret"),form.get("sign"));
             assertEquals(4,UUID.fromString(form.get("id")).version()); assertFalse(form.containsKey("client_secret"));
         }
-        provider.deauthorize("4000000001"); assertEquals("/v2/printer/deleteprinter",requests.get(3).get("path"));
+        provider.openSession().deauthorize("4000000001"); assertEquals("/v2/printer/deleteprinter",requests.get(3).get("path"));
     }
     @Test void normalizedStatusCoversOnlineOfflinePaperOutAndUnknown() {
         DeviceState[] expected={DeviceState.OFFLINE,DeviceState.ONLINE,DeviceState.PAPER_OUT,DeviceState.UNKNOWN};
         int[] codes={0,1,2,99};
         for(int i=0;i<codes.length;i++) {
             response="{\"error\":0,\"body\":{\"access_token\":\"synthetic-token\",\"state\":"+codes[i]+"}}";
-            assertEquals(expected[i],provider.status("4000000001"));
+            assertEquals(expected[i],provider.openSession().status("4000000001"));
             assertEquals("/v2/printer/getprintstatus",requests.get(requests.size()-1).get("path"));
         }
     }
     @Test void receiptCommandsAndIdempotencyAreContainedInAdapter() {
         Receipt receipt=new Receipt("中文测试",List.of("门店<MN>9</MN> **9 @@2","ABC 123 ￥1.00"),1);
-        PrintResult result=provider.print("4000000001","stable-origin-1",receipt);
+        PrintResult result=provider.openSession().print("4000000001","stable-origin-1",receipt);
         var form=requests.get(1); assertEquals("/v2/print/index",form.get("path"));
         assertEquals("stable-origin-1",form.get("origin_id")); assertEquals("1",form.get("idempotence"));
         assertTrue(form.get("content").startsWith("<FB>中文测试</FB>")); assertFalse(form.get("content").contains("<MN>"));
@@ -79,14 +80,14 @@ class YilianyunProviderTest {
     }
     @Test void providerErrorsNeverEchoRawSecrets() {
         response="{\"error\":42,\"error_description\":\"synthetic-private-provider-response\"}";
-        PrinterFailure failure=assertThrows(PrinterFailure.class,()->provider.status("4000000001"));
+        PrinterFailure failure=assertThrows(PrinterFailure.class,()->provider.openSession().status("4000000001"));
         assertEquals("PROVIDER_REJECTED_42",failure.getMessage()); assertFalse(failure.uncertain()); assertNull(failure.getCause());
     }
     @Test void missingConfigurationAndSecretMakeNoNetworkRequests() {
         YilianyunProperties properties=new YilianyunProperties();
         YilianyunPrinterProvider disabled=new YilianyunPrinterProvider(properties,mock(YilianyunTransport.class),mock(YilianyunTokenStore.class));
-        assertFalse(disabled.info().configured()); assertThrows(PrinterFailure.class,()->disabled.status("4000000001"));
-        assertThrows(PrinterFailure.class,()->provider.authorize("4000000001","test",Map.of())); assertTrue(requests.isEmpty());
+        assertFalse(disabled.info().configured()); assertThrows(PrinterFailure.class,()->disabled.openSession());
+        assertThrows(PrinterFailure.class,()->provider.validateAuthorization(Map.of())); assertTrue(requests.isEmpty());
         assertThrows(PrinterFailure.class,()->provider.validate("bad-code","USB",Map.of()));
     }
     @Test void malformedMutationResponsesAreUncertainAndResponsesAreBounded() {
@@ -95,5 +96,20 @@ class YilianyunProviderTest {
         response="x".repeat(70000); assertThrows(PrinterFailure.class,()->transport.post("/print/index",Map.of("x","y")));
         response="{}"; assertThrows(PrinterFailure.class,()->transport.post("/printer/getprintstatus",Map.of("x","y")));
         httpStatus=503; assertTrue(assertThrows(PrinterFailure.class,()->transport.post("/printer/deleteprinter",Map.of("x","y"))).uncertain());
+    }
+    @Test void preparedSessionNeverReadsTokensInsideADeviceTransaction() {
+        var session=provider.openSession();
+        var ds=new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:h2:mem:session_"+UUID.randomUUID());
+        var tx=new org.springframework.transaction.support.TransactionTemplate(new org.springframework.jdbc.datasource.DataSourceTransactionManager(ds));
+        tx.executeWithoutResult(status->{
+            assertThrows(PrinterFailure.class,provider::openSession);
+            assertEquals(DeviceState.ONLINE,session.status("4000000001"));
+            session.authorize("4000000001","测试",Map.of("terminalKey","synthetic-key"));
+            session.print("4000000001","session-origin-1",new Receipt("测试",List.of("ABC"),1));
+            session.deauthorize("4000000001");
+        });
+        verify(tokens,times(1)).get(anyString(),any());
+        assertEquals(1,requests.stream().filter(form->form.get("path").equals("/v2/oauth/oauth")).count());
+        assertFalse(session.toString().contains("synthetic-token"));
     }
 }

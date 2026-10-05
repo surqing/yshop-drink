@@ -27,8 +27,9 @@ public class PrinterController {
     @GetMapping("/page") @PreAuthorize("@ss.hasPermission('store:web-print:query')")
     public CommonResult<PageResult<DeviceView>> page(@RequestParam(defaultValue="1") @Min(1) @Max(100000) int pageNo,
             @RequestParam(defaultValue="10") @Min(1) @Max(100) int pageSize,
-            @RequestParam(required=false) @Size(max=80) String name,@RequestParam(required=false) Long shopId) {
-        return success(service.page(pageNo,pageSize,name,shopId));
+            @RequestParam(required=false) @Size(max=80) String name,@RequestParam(required=false) Long shopId,
+            @RequestParam(defaultValue="false") boolean deleted) {
+        return success(service.page(pageNo,pageSize,name,shopId,deleted));
     }
     @GetMapping("/get") @PreAuthorize("@ss.hasPermission('store:web-print:query')")
     public CommonResult<DeviceView> get(@RequestParam @Positive long id) { return success(service.get(id)); }
@@ -42,6 +43,8 @@ public class PrinterController {
     public CommonResult<Boolean> delete(@RequestParam @Positive long id) { service.delete(id); return success(true); }
     @PostMapping("/authorize") @PreAuthorize("@ss.hasPermission('store:web-print:authorize')")
     public CommonResult<OperationResult> authorize(@RequestParam @Positive long id) { return success(service.authorize(id,false)); }
+    @PostMapping("/reconnect") @PreAuthorize("@ss.hasPermission('store:web-print:authorize')")
+    public CommonResult<OperationResult> reconnect(@RequestParam @Positive long id) { return success(service.reconnect(id)); }
     @PostMapping("/deauthorize") @PreAuthorize("@ss.hasPermission('store:web-print:authorize')")
     public CommonResult<OperationResult> deauthorize(@RequestParam @Positive long id) { return success(service.authorize(id,true)); }
     @PutMapping("/binding") @PreAuthorize("@ss.hasPermission('store:web-print:binding')")
@@ -52,6 +55,9 @@ public class PrinterController {
     public CommonResult<StatusResult> status(@RequestParam @Positive long id) { return success(service.status(id)); }
     @PostMapping("/test-print") @PreAuthorize("@ss.hasPermission('store:web-print:test')")
     public CommonResult<JobView> test(@Valid @RequestBody TestRequest request) { return success(service.test(request)); }
+    @GetMapping("/test-print/get") @PreAuthorize("@ss.hasPermission('store:web-print:query')")
+    public CommonResult<JobView> getJob(@RequestParam @Positive long id,
+            @RequestParam @Pattern(regexp="[a-zA-Z0-9_-]{16,64}") String requestId) { return success(service.getJob(id,requestId)); }
     @GetMapping("/test-print/page") @PreAuthorize("@ss.hasPermission('store:web-print:query')")
     public CommonResult<PageResult<JobView>> jobs(@RequestParam @Positive long id,
             @RequestParam(defaultValue="1") @Min(1) @Max(100000) int pageNo,

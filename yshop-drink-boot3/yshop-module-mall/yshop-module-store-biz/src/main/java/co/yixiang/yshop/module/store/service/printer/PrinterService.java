@@ -55,7 +55,7 @@ public class PrinterService {
     private DeviceView view(Device d) {
         // Reads remain usable without a key: expose presence, never decrypted values.
         Set<String> fields=d.configuredFields==null?Set.of():new HashSet<>(JsonUtils.parseArray(d.configuredFields,String.class));
-        return new DeviceView(d.id,d.name,d.providerCode,d.deviceCode,d.model,d.connectionType,d.enabled,
+        return new DeviceView(d.id,d.name,d.providerCode,d.deviceCode,d.model,d.connectionType,d.enabled,d.deleted,
                 d.authorization,d.state,d.stateCheckedAt,d.shopId,d.shopName,fields,d.lastError,d.createTime);
     }
     private void idle(Device d) {
@@ -65,7 +65,10 @@ public class PrinterService {
     public List<ProviderInfo> providers() { tenant(); return registry.list(); }
     public List<ShopOption> shops() { tenant(); return repo.shops(); }
     public PageResult<DeviceView> page(int pageNo,int pageSize,String name,Long shopId) {
-        PageResult<Device> page=repo.page(tenant(),pageNo,pageSize,name,shopId);
+        return page(pageNo,pageSize,name,shopId,false);
+    }
+    public PageResult<DeviceView> page(int pageNo,int pageSize,String name,Long shopId,boolean deleted) {
+        PageResult<Device> page=repo.page(tenant(),pageNo,pageSize,name,shopId,deleted);
         return new PageResult<>(page.getList().stream().map(this::view).toList(),page.getTotal());
     }
     public DeviceView get(long id) { return view(repo.require(tenant(),id,false)); }
@@ -94,7 +97,7 @@ public class PrinterService {
                 if(!value.isBlank()) merged.put(key,value.trim());
             });
             provider.validate(code,request.connectionType(),merged);
-            if(!existing.equals(merged)&&d.authorization!=Authorization.UNAUTHORIZED)
+            if(!existing.equals(merged)&&provider.info().requiresAuthorization()&&d.authorization!=Authorization.UNAUTHORIZED)
                 throw new PrinterFailure("DEAUTHORIZE_FIRST",false);
             d.name=request.name().trim(); d.model=request.model()==null?null:request.model().trim(); d.enabled=request.enabled();
             d.configuredFields=JsonUtils.toJsonString(merged.keySet());
@@ -109,7 +112,8 @@ public class PrinterService {
             Device d=repo.require(tenant,id,true);
             idle(d);
             if(d.shopId!=null) throw new PrinterFailure("UNBIND_FIRST",false);
-            if(d.authorization!=Authorization.UNAUTHORIZED) throw new PrinterFailure("DEAUTHORIZE_FIRST",false);
+            if(registry.require(d.providerCode).info().requiresAuthorization()&&d.authorization!=Authorization.UNAUTHORIZED)
+                throw new PrinterFailure("DEAUTHORIZE_FIRST",false);
             repo.delete(d,actor);
         });
     }
@@ -130,36 +134,73 @@ public class PrinterService {
             Device d=repo.require(tenant,id,true); idle(d); repo.unbind(d);
         });
     }
-    public OperationResult authorize(long id,boolean revoke) {
+    private record AuthorizationIntent(String providerCode, Authorization previous) {}
+    private record Prepared(PrinterSession session, PrinterFailure failure) {}
+    private Prepared prepare(String providerCode) {
+        PrinterProvider.assertOutsideTransaction();
+        try { return new Prepared(registry.require(providerCode).openSession(),null); }
+        catch(PrinterFailure ex) { return new Prepared(null,ex); }
+    }
+    private boolean expired(LocalDateTime created) {
+        return created==null||!created.isAfter(LocalDateTime.now().minusMinutes(1));
+    }
+    private void ready(Device d,PrinterProvider provider) {
+        if(!d.enabled) throw new PrinterFailure("PRINTER_DISABLED",false);
+        if(provider.info().requiresAuthorization()&&d.authorization!=Authorization.AUTHORIZED)
+            throw new PrinterFailure("PRINTER_NOT_AUTHORIZED",false);
+        if(!provider.info().capabilities().textPrint()) throw new PrinterFailure("UNSUPPORTED_OPERATION",false);
+    }
+    public OperationResult authorize(long id,boolean revoke) { return authorization(id,revoke,false); }
+    public OperationResult reconnect(long id) { return authorization(id,false,true); }
+    private OperationResult authorization(long id,boolean revoke,boolean reconnect) {
+        PrinterProvider.assertOutsideTransaction();
         long tenant=tenant(),actor=actor();
         String operation=UUID.randomUUID().toString();
-        Authorization previous=tx.execute(status->{
-            Device d=repo.require(tenant,id,true); PrinterProvider provider=registry.require(d.providerCode);
+        AuthorizationIntent intent=tx.execute(status->{
+            Device d=repo.require(tenant,id,true);
+            PrinterProvider provider=registry.require(d.providerCode);
             idle(d);
             if(revoke&&d.shopId!=null) throw new PrinterFailure("UNBIND_FIRST",false);
-            if(revoke&&d.authorization==Authorization.UNAUTHORIZED||!revoke&&d.authorization==Authorization.AUTHORIZED) return null;
+            if(!reconnect&&((revoke&&d.authorization==Authorization.UNAUTHORIZED)
+                    ||(!revoke&&d.authorization==Authorization.AUTHORIZED))) return null;
             if(revoke?!provider.info().capabilities().deauthorize():!provider.info().capabilities().authorize())
                 throw new PrinterFailure("UNSUPPORTED_OPERATION",false);
             if(!provider.info().configured()) throw new PrinterFailure("PROVIDER_NOT_CONFIGURED",false);
-            repo.beginAuthorization(d,operation,actor); return d.authorization;
+            if(!revoke&&!reconnect&&d.authorization==Authorization.UNAUTHORIZED) provider.validateAuthorization(config(d));
+            repo.beginAuthorization(d,operation,actor);
+            return new AuthorizationIntent(d.providerCode,d.authorization);
         });
-        if(previous==null) return new OperationResult(revoke?Authorization.UNAUTHORIZED:Authorization.AUTHORIZED,null);
+        if(intent==null) return new OperationResult(revoke?Authorization.UNAUTHORIZED:Authorization.AUTHORIZED,null);
+        // This stage owns at most one connection and no device row lock.
+        Prepared prepared=prepare(intent.providerCode());
         return tx.execute(status->{
-            Device d=repo.require(tenant,id,true); PrinterProvider provider=registry.require(d.providerCode);
+            Device d=repo.require(tenant,id,true);
             if(!operation.equals(d.authorizationOperation)) throw new PrinterFailure("PRINTER_BUSY",false);
+            if(expired(d.authorizationOperationAt)) {
+                repo.authorization(d,Authorization.UNKNOWN,"RESULT_UNKNOWN",actor);
+                return new OperationResult(Authorization.UNKNOWN,"RESULT_UNKNOWN");
+            }
             Authorization next; String error=null;
             try {
+                if(prepared.failure()!=null) throw prepared.failure();
+                PrinterSession session=prepared.session();
                 if(revoke&&d.shopId!=null) throw new PrinterFailure("UNBIND_FIRST",false);
                 boolean reconciled=false;
-                if(!revoke&&previous==Authorization.UNKNOWN) {
-                    try { reconciled=provider.status(d.deviceCode)!=DeviceState.UNKNOWN; }
-                    catch(PrinterFailure ignored) { /* Retry registration only on explicit user action. */ }
+                if(!revoke&&(reconnect||intent.previous()==Authorization.UNKNOWN)
+                        &&registry.require(d.providerCode).info().capabilities().status()) {
+                    try {
+                        DeviceState state=session.status(d.deviceCode);
+                        reconciled=state!=DeviceState.UNKNOWN;
+                        if(reconciled) repo.status(d,state,null,LocalDateTime.now());
+                    } catch(PrinterFailure ignored) { /* One registration is allowed by this explicit operation. */ }
                 }
-                if(revoke) provider.deauthorize(d.deviceCode);
-                else if(!reconciled) provider.authorize(d.deviceCode,d.name,config(d));
+                // Status I/O may have consumed the remaining intent lifetime.
+                if(!reconciled&&expired(d.authorizationOperationAt)) throw new PrinterFailure("RESULT_UNKNOWN",true);
+                if(revoke) session.deauthorize(d.deviceCode);
+                else if(!reconciled) session.authorize(d.deviceCode,d.name,config(d));
                 next=revoke?Authorization.UNAUTHORIZED:Authorization.AUTHORIZED;
             } catch(PrinterFailure ex) {
-                next=ex.uncertain()?Authorization.UNKNOWN:previous; error=ex.getMessage();
+                next=reconnect||ex.uncertain()?Authorization.UNKNOWN:intent.previous(); error=ex.getMessage();
             }
             repo.authorization(d,next,error,actor);
             if(next==Authorization.UNAUTHORIZED) repo.status(d,DeviceState.UNKNOWN,null,LocalDateTime.now());
@@ -167,49 +208,56 @@ public class PrinterService {
         });
     }
     public StatusResult status(long id) {
-        long tenant=tenant(); return tx.execute(transaction->{
-            Device d=repo.require(tenant,id,true);
-            idle(d);
+        PrinterProvider.assertOutsideTransaction();
+        long tenant=tenant();
+        Device snapshot=repo.require(tenant,id,false);
+        if(!registry.require(snapshot.providerCode).info().capabilities().status())
+            throw new PrinterFailure("UNSUPPORTED_OPERATION",false);
+        Prepared prepared=prepare(snapshot.providerCode);
+        return tx.execute(transaction->{
+            Device d=repo.require(tenant,id,true); idle(d);
             DeviceState state; String error=null;
             try {
-                PrinterProvider provider=registry.require(d.providerCode);
-                if(!provider.info().capabilities().status()) throw new PrinterFailure("UNSUPPORTED_OPERATION",false);
-                state=provider.status(d.deviceCode);
-            }
-            catch(PrinterFailure ex) { state=DeviceState.UNKNOWN; error=ex.getMessage(); }
+                if(prepared.failure()!=null) throw prepared.failure();
+                state=prepared.session().status(d.deviceCode);
+            } catch(PrinterFailure ex) { state=DeviceState.UNKNOWN; error=ex.getMessage(); }
             LocalDateTime checked=LocalDateTime.now(); repo.status(d,state,error,checked);
             return new StatusResult(state,checked,error);
         });
     }
     public JobView test(TestRequest request) {
+        PrinterProvider.assertOutsideTransaction();
         long tenant=tenant(),actor=actor();
-        // Commit intent BEFORE external I/O. A crash cannot erase the idempotency key.
-        Boolean created=tx.execute(status->{
-            Device d=repo.require(tenant,request.id(),true);
-            idle(d);
+        // Commit intent BEFORE preparation/external I/O. A crash cannot erase the key.
+        String providerCode=tx.execute(status->{
+            Device d=repo.require(tenant,request.id(),true); idle(d);
             JobView old=repo.job(tenant,request.requestId());
-            if(old!=null) { sameDevice(old,request.id()); return false; }
-            if(!d.enabled) throw new PrinterFailure("PRINTER_DISABLED",false);
-            if(d.authorization!=Authorization.AUTHORIZED) throw new PrinterFailure("PRINTER_NOT_AUTHORIZED",false);
-            repo.insertJob(d,request.requestId(),actor); return true;
+            if(old!=null) { sameDevice(old,request.id()); return null; }
+            ready(d,registry.require(d.providerCode));
+            repo.insertJob(d,request.requestId(),actor); return d.providerCode;
         });
-        if(!Boolean.TRUE.equals(created)) return observedJob(tenant,request);
+        if(providerCode==null) return getJob(request.id(),request.requestId());
+        Prepared prepared=prepare(providerCode);
         return tx.execute(status->{
             Device d=repo.require(tenant,request.id(),true);
             JobView job=repo.job(tenant,request.requestId());
-            if(job.state()!=JobState.SUBMITTING) return job;
+            if(job.state()!=JobState.SUBMITTING) return observed(job);
+            if(expired(job.createTime())) {
+                repo.finishJob(tenant,request.requestId(),JobState.UNKNOWN,null,"RESULT_UNKNOWN");
+                return repo.job(tenant,request.requestId());
+            }
             JobState state; String providerId=null,error=null;
             try {
-                if(!d.enabled) throw new PrinterFailure("PRINTER_DISABLED",false);
-                if(d.authorization!=Authorization.AUTHORIZED) throw new PrinterFailure("PRINTER_NOT_AUTHORIZED",false);
+                if(prepared.failure()!=null) throw prepared.failure();
+                ready(d,registry.require(d.providerCode));
                 Receipt receipt=new Receipt("打印机测试小票",List.of("设备："+d.name,"门店："+(d.shopName==null?"未绑定":d.shopName),
                         "时间："+job.createTime().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
                         "测试编号："+request.requestId(),"中文 ABC 123 ￥1.00","仅供设备测试"),1);
                 String origin=cn.hutool.crypto.digest.DigestUtil.sha256Hex(tenant+":"+request.requestId());
-                PrinterProvider provider=registry.require(d.providerCode);
-                if(!provider.info().capabilities().textPrint()) throw new PrinterFailure("UNSUPPORTED_OPERATION",false);
-                providerId=provider.print(d.deviceCode,origin,receipt).providerJobId(); state=JobState.ACCEPTED;
-            } catch(PrinterFailure ex) { state=ex.uncertain()?JobState.UNKNOWN:JobState.FAILED; error=ex.getMessage(); }
+                providerId=prepared.session().print(d.deviceCode,origin,receipt).providerJobId(); state=JobState.ACCEPTED;
+            } catch(PrinterFailure ex) {
+                state=prepared.failure()==null&&ex.uncertain()?JobState.UNKNOWN:JobState.FAILED; error=ex.getMessage();
+            }
             repo.finishJob(tenant,request.requestId(),state,providerId,error);
             return repo.job(tenant,request.requestId());
         });
@@ -217,21 +265,22 @@ public class PrinterService {
     private void sameDevice(JobView job,long id) {
         if(!job.printerId().equals(id)) throw new PrinterFailure("REQUEST_CONFLICT",false);
     }
-    private JobView observedJob(long tenant,TestRequest request) {
-        return tx.execute(status->{
-            repo.require(tenant,request.id(),true); JobView job=repo.job(tenant,request.requestId()); sameDevice(job,request.id());
-            if(job.state()==JobState.SUBMITTING&&job.createTime().isBefore(LocalDateTime.now().minusMinutes(1))) {
-                repo.finishJob(tenant,job.requestId(),JobState.UNKNOWN,null,"RESULT_UNKNOWN"); return repo.job(tenant,job.requestId());
-            }
-            return job;
-        });
+    private JobView observed(JobView job) {
+        if(job!=null&&job.state()==JobState.SUBMITTING&&expired(job.createTime()))
+            return new JobView(job.requestId(),job.printerId(),job.printerName(),JobState.UNKNOWN,
+                    job.providerJobId(),"RESULT_UNKNOWN",job.createTime());
+        return job;
+    }
+    /** Read only: even a missing/stale request must never create or dispatch a print. */
+    public JobView getJob(long id,String requestId) {
+        long tenant=tenant(); repo.requireIncludingDeleted(tenant,id,false);
+        JobView job=repo.job(tenant,requestId);
+        if(job!=null) sameDevice(job,id);
+        return observed(job);
     }
     public PageResult<JobView> jobs(long id,int pageNo,int pageSize) {
-        long tenant=tenant(); repo.require(tenant,id,false);
+        long tenant=tenant(); repo.requireIncludingDeleted(tenant,id,false);
         PageResult<JobView> page=repo.jobs(tenant,id,pageNo,pageSize);
-        return new PageResult<>(page.getList().stream().map(job->
-                job.state()==JobState.SUBMITTING&&job.createTime().isBefore(LocalDateTime.now().minusMinutes(1))
-                    ?new JobView(job.requestId(),job.printerId(),job.printerName(),JobState.UNKNOWN,job.providerJobId(),"RESULT_UNKNOWN",job.createTime())
-                    :job).toList(),page.getTotal());
+        return new PageResult<>(page.getList().stream().map(this::observed).toList(),page.getTotal());
     }
 }

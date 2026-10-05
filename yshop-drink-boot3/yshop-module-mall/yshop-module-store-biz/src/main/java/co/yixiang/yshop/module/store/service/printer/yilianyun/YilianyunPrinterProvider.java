@@ -18,7 +18,7 @@ public class YilianyunPrinterProvider implements PrinterProvider {
     public ProviderInfo info() {
         return new ProviderInfo("YILIAN_YUN","易联云",List.of("CLOUD"),
                 List.of(new Field("terminalKey","终端密钥",true,false)),
-                new Capabilities(true,true,true,true),settings.configured());
+                new Capabilities(true,true,true,true),settings.configured(),true);
     }
     public void validate(String code,String connection,Map<String,String> config) {
         if(!code.matches("[0-9]{5,32}")||!"CLOUD".equals(connection)||config.keySet().stream().anyMatch(key->!key.equals("terminalKey"))
@@ -32,6 +32,9 @@ public class YilianyunPrinterProvider implements PrinterProvider {
         form.put("timestamp",timestamp); form.put("id",UUID.randomUUID().toString());
         form.put("sign",DigestUtil.md5Hex(settings.getClientId()+timestamp+settings.getClientSecret())); return form;
     }
+    public void validateAuthorization(Map<String,String> config) {
+        if(!config.containsKey("terminalKey")) throw new PrinterFailure("TERMINAL_KEY_REQUIRED",false);
+    }
     private String token() {
         String key=DigestUtil.sha256Hex(settings.getClientId()+":"+settings.getClientSecret());
         return tokens.get(key,()->{
@@ -42,27 +45,36 @@ public class YilianyunPrinterProvider implements PrinterProvider {
             return body.path("access_token").asText();
         });
     }
-    private Map<String,String> device(String code) {
-        Map<String,String> form=common(); form.put("access_token",token()); form.put("machine_code",code); return form;
+    public PrinterSession openSession() {
+        PrinterProvider.assertOutsideTransaction();
+        if(!settings.configured()) throw new PrinterFailure("PROVIDER_NOT_CONFIGURED",false);
+        return new Session(token());
     }
-    public void authorize(String code,String name,Map<String,String> config) {
-        if(!config.containsKey("terminalKey")) throw new PrinterFailure("TERMINAL_KEY_REQUIRED",false);
-        Map<String,String> form=device(code); form.put("msign",config.get("terminalKey")); form.put("print_name",plain(name));
-        transport.post("/printer/addprinter",form);
-    }
-    public void deauthorize(String code) { transport.post("/printer/deleteprinter",device(code)); }
-    public DeviceState status(String code) {
-        var body=transport.post("/printer/getprintstatus",device(code));
-        if(!body.path("state").isIntegralNumber()) throw new PrinterFailure("PROVIDER_INVALID_RESPONSE",false);
-        return switch(body.path("state").asInt()) { case 0->DeviceState.OFFLINE; case 1->DeviceState.ONLINE;
-            case 2->DeviceState.PAPER_OUT; default->DeviceState.UNKNOWN; };
-    }
-    public PrintResult print(String code,String requestId,Receipt receipt) {
-        Map<String,String> form=device(code); form.put("origin_id",requestId); form.put("idempotence","1");
-        form.put("content",render(receipt));
-        var body=transport.post("/print/index",form);
-        if(!body.path("id").isIntegralNumber()) throw new PrinterFailure("PROVIDER_INVALID_RESPONSE",true);
-        return new PrintResult(body.path("id").asText());
+    private final class Session implements PrinterSession {
+        private final String accessToken;
+        private Session(String accessToken) { this.accessToken=accessToken; }
+        private Map<String,String> device(String code) {
+            Map<String,String> form=common(); form.put("access_token",accessToken); form.put("machine_code",code); return form;
+        }
+        public void authorize(String code,String name,Map<String,String> config) {
+            validateAuthorization(config);
+            Map<String,String> form=device(code); form.put("msign",config.get("terminalKey")); form.put("print_name",plain(name));
+            transport.post("/printer/addprinter",form);
+        }
+        public void deauthorize(String code) { transport.post("/printer/deleteprinter",device(code)); }
+        public DeviceState status(String code) {
+            var body=transport.post("/printer/getprintstatus",device(code));
+            if(!body.path("state").isIntegralNumber()) throw new PrinterFailure("PROVIDER_INVALID_RESPONSE",false);
+            return switch(body.path("state").asInt()) { case 0->DeviceState.OFFLINE; case 1->DeviceState.ONLINE;
+                case 2->DeviceState.PAPER_OUT; default->DeviceState.UNKNOWN; };
+        }
+        public PrintResult print(String code,String requestId,Receipt receipt) {
+            Map<String,String> form=device(code); form.put("origin_id",requestId); form.put("idempotence","1");
+            form.put("content",render(receipt));
+            var body=transport.post("/print/index",form);
+            if(!body.path("id").isIntegralNumber()) throw new PrinterFailure("PROVIDER_INVALID_RESPONSE",true);
+            return new PrintResult(body.path("id").asText());
+        }
     }
     static String render(Receipt receipt) {
         if(receipt.copies()!=1) throw new PrinterFailure("UNSUPPORTED_CAPABILITY",false);

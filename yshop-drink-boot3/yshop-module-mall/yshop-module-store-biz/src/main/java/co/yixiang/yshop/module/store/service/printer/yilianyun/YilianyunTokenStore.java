@@ -2,6 +2,7 @@ package co.yixiang.yshop.module.store.service.printer.yilianyun;
 
 import co.yixiang.yshop.module.store.dal.mysql.printer.PrinterRepository;
 import co.yixiang.yshop.module.store.service.printer.PrinterSecretCipher;
+import co.yixiang.yshop.module.store.service.printer.PrinterProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -18,6 +19,7 @@ public class YilianyunTokenStore {
         tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
     public String get(String accountKey,Supplier<String> fetch) {
+        PrinterProvider.assertOutsideTransaction();
         return tx.execute(status->{
             repo.ensureToken(accountKey);
             String encrypted=repo.lockToken(accountKey);

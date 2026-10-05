@@ -38,12 +38,12 @@ class PrinterControllerTest {
             SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("test",null,List.of()));
             List<Action> actions=List.of(
                 new Action("query",controller::providers),new Action("query",controller::shops),
-                new Action("query",()->controller.page(1,10,null,null)),new Action("query",()->controller.get(1)),
-                new Action("query",()->controller.status(1)),new Action("query",()->controller.jobs(1,1,10)),
+                new Action("query",()->controller.page(1,10,null,null,false)),new Action("query",()->controller.get(1)),
+                new Action("query",()->controller.status(1)),new Action("query",()->controller.getJob(1,"synthetic-request-01")),new Action("query",()->controller.jobs(1,1,10)),
                 new Action("create",()->controller.create(new SaveRequest(null,"测试","YILIAN_YUN","40000001","","CLOUD",true,Map.of()))),
                 new Action("update",()->controller.update(new SaveRequest(1L,"测试","YILIAN_YUN","40000001","","CLOUD",true,Map.of()))),
                 new Action("delete",()->controller.delete(1)),new Action("authorize",()->controller.authorize(1)),
-                new Action("authorize",()->controller.deauthorize(1)),new Action("binding",()->controller.bind(new BindingRequest(1L,1L))),
+                new Action("authorize",()->controller.deauthorize(1)),new Action("authorize",()->controller.reconnect(1)),new Action("binding",()->controller.bind(new BindingRequest(1L,1L))),
                 new Action("binding",()->controller.unbind(1)),new Action("test",()->controller.test(new TestRequest(1L,"synthetic-request-01"))));
             for(Action action:actions) {
                 permissions.allowed=Set.of(); clearInvocations(service);

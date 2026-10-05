@@ -21,6 +21,7 @@ import co.yixiang.yshop.module.store.service.storeshop.StoreShopService;
 import co.yixiang.yshop.module.store.dal.mysql.storeshop.StoreShopMapper;
 import co.yixiang.yshop.module.store.dal.dataobject.storeshop.StoreShopDO;
 import javax.sql.DataSource;
+import com.alibaba.druid.pool.DruidDataSource;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -247,14 +248,173 @@ class PrinterDatabaseTest {
             assertEquals("synthetic-token",new YilianyunTokenStore(repo,cipher,manager).get("synthetic-account",()->{fail("must reuse persisted token");return "";}));
         } finally { executor.shutdownNow(); }
     }
-    static class FakeProvider implements PrinterProvider {
+    @Test void sessionAndIoEntrypointsRejectAnExistingTransactionBeforeExternalWork() {
+        long id=device("4000000001");
+        var tokens=new YilianyunTokenStore(repo,cipher,manager);
+        new TransactionTemplate(manager).executeWithoutResult(tx->{
+            assertEquals("SESSION_IN_TRANSACTION",assertThrows(PrinterFailure.class,fake::openSession).getMessage());
+            assertThrows(PrinterFailure.class,()->tokens.get("guard-account",()->{fail("no token fetch");return "";}));
+            assertThrows(PrinterFailure.class,()->service.authorize(id,false));
+            assertThrows(PrinterFailure.class,()->service.reconnect(id));
+            assertThrows(PrinterFailure.class,()->service.status(id));
+            assertThrows(PrinterFailure.class,()->service.test(new TestRequest(id,"guard-request-00001")));
+        });
+        assertEquals(0,fake.sessionCalls.get());
+        assertEquals(Authorization.UNAUTHORIZED,service.get(id).authorization());
+    }
+    @Test void reconnectVerifiesAndRepairsCloudStateWithoutDroppingShopBinding() {
+        long id=device("4000000001"); service.authorize(id,false); service.bind(new BindingRequest(id,1L));
+        assertEquals(Authorization.AUTHORIZED,service.reconnect(id).authorization());
+        assertEquals(1,fake.authorizeCalls.get()); assertEquals(DeviceState.ONLINE,service.get(id).deviceState());
+        fake.statusFailure=new PrinterFailure("PROVIDER_REJECTED_42",false);
+        assertEquals(Authorization.AUTHORIZED,service.reconnect(id).authorization());
+        assertEquals(2,fake.authorizeCalls.get()); assertEquals(1L,service.get(id).shopId());
+        fake.authorizeFailure=new PrinterFailure("PROVIDER_REJECTED_43",false);
+        var failed=service.reconnect(id);
+        assertEquals(Authorization.UNKNOWN,failed.authorization()); assertEquals("PROVIDER_REJECTED_43",failed.errorCode());
+        assertEquals(3,fake.authorizeCalls.get()); assertEquals(1L,service.get(id).shopId());
+        assertThrows(PrinterFailure.class,()->service.authorize(id,true));
+    }
+    @Test void reconnectPreparationFailureDoesNotReportCachedAuthorizationAsSuccess() {
+        long id=device("4000000001"); service.authorize(id,false);
+        fake.preparationFailure=new PrinterFailure("PROVIDER_TIMEOUT",false);
+        var result=service.reconnect(id);
+        assertEquals(Authorization.UNKNOWN,result.authorization()); assertEquals("PROVIDER_TIMEOUT",result.errorCode());
+        assertEquals(1,fake.authorizeCalls.get());
+    }
+    @Test void expiredAuthorizationIntentNeverDispatchesAfterSessionPreparation() {
+        long id=device("4000000001");
+        fake.preparation=()->jdbc.update("UPDATE yshop_printer SET authorization_operation_at=? WHERE id=?",java.time.LocalDateTime.now().minusMinutes(2),id);
+        var result=service.authorize(id,false);
+        assertEquals(Authorization.UNKNOWN,result.authorization()); assertEquals("RESULT_UNKNOWN",result.errorCode());
+        assertEquals(0,fake.authorizeCalls.get());
+    }
+    @Test void missingRequestLookupIsReadOnlyAndExplicitSubmissionReusesItsId() {
+        long id=device("4000000001"); var request=new TestRequest(id,"lookup-request-0001");
+        assertThrows(PrinterFailure.class,()->service.test(request));
+        assertNull(service.getJob(id,request.requestId()));
+        assertEquals(0L,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_printer_test_job",Long.class));
+        assertEquals(0,fake.sessionCalls.get());
+        service.authorize(id,false); service.test(request);
+        assertEquals(JobState.ACCEPTED,service.getJob(id,request.requestId()).state());
+        service.test(request); assertEquals(1,fake.printCalls.get());
+    }
+    @Test void staleLookupDoesNotChangeTheDatabaseOrDispatchAnyPrint() {
+        long id=device("4000000001"); service.authorize(id,false); fake.crash=true;
+        var request=new TestRequest(id,"lookup-crash-00001"); assertThrows(IllegalStateException.class,()->service.test(request));
+        jdbc.update("UPDATE yshop_printer_test_job SET create_time=? WHERE request_id=?",java.time.LocalDateTime.now().minusMinutes(2),request.requestId());
+        int sessions=fake.sessionCalls.get();
+        assertEquals(JobState.UNKNOWN,service.getJob(id,request.requestId()).state());
+        assertEquals("SUBMITTING",jdbc.queryForObject("SELECT state FROM yshop_printer_test_job WHERE request_id=?",String.class,request.requestId()));
+        assertEquals(sessions,fake.sessionCalls.get()); assertEquals(1,fake.printCalls.get());
+    }
+    @Test void expiredTestIntentNeverDispatchesAfterSessionPreparation() {
+        long id=device("4000000001"); service.authorize(id,false);
+        fake.preparation=()->jdbc.update("UPDATE yshop_printer_test_job SET create_time=?",java.time.LocalDateTime.now().minusMinutes(2));
+        var request=new TestRequest(id,"expired-print-00001");
+        assertEquals(JobState.UNKNOWN,service.test(request).state());
+        assertEquals(JobState.UNKNOWN,service.test(request).state()); assertEquals(0,fake.printCalls.get());
+    }
+    @Test void preparationFailureEndsThePrintWithoutCallingTheDevice() {
+        long id=device("4000000001"); service.authorize(id,false);
+        fake.preparationFailure=new PrinterFailure("PROVIDER_TIMEOUT",false);
+        var request=new TestRequest(id,"prepare-print-00001");
+        assertEquals(JobState.FAILED,service.test(request).state()); assertEquals(0,fake.printCalls.get());
+        assertEquals(JobState.FAILED,service.getJob(id,request.requestId()).state());
+    }
+    @Test void deletedDevicesKeepReadableHistoryButAllDeviceOperationsRemainBlocked() {
+        long id=device("4000000001"); service.authorize(id,false);
+        var request=new TestRequest(id,"deleted-record-0001"); service.test(request);
+        service.authorize(id,true); service.delete(id);
+        assertEquals(0L,service.page(1,10,null,null).getTotal());
+        assertTrue(service.page(1,10,null,null,true).getList().get(0).deleted());
+        assertEquals(1L,service.jobs(id,1,10).getTotal());
+        assertEquals(JobState.ACCEPTED,service.getJob(id,request.requestId()).state());
+        assertThrows(PrinterFailure.class,()->service.get(id));
+        assertThrows(PrinterFailure.class,()->service.save(request(id,"4000000001",Map.of()),true));
+        assertThrows(PrinterFailure.class,()->service.bind(new BindingRequest(id,1L)));
+        assertThrows(PrinterFailure.class,()->service.unbind(id));
+        assertThrows(PrinterFailure.class,()->service.authorize(id,false));
+        assertThrows(PrinterFailure.class,()->service.reconnect(id));
+        assertThrows(PrinterFailure.class,()->service.status(id));
+        assertThrows(PrinterFailure.class,()->service.test(request));
+        login(2,0); assertEquals(0L,service.page(1,10,null,null,true).getTotal());
+        assertThrows(PrinterFailure.class,()->service.jobs(id,1,10));
+        assertThrows(PrinterFailure.class,()->service.getJob(id,request.requestId()));
+        login(1,1); assertThrows(PrinterFailure.class,()->service.jobs(id,1,10));
+        assertThrows(PrinterFailure.class,()->service.getJob(id,request.requestId()));
+    }
+    @Test void requestLookupCannotMixDevicesEvenInsideTheSameTenant() {
+        long one=device("4000000001"),two=device("4000000002"); service.authorize(one,false);
+        var request=new TestRequest(one,"device-lookup-0001"); service.test(request);
+        assertEquals("REQUEST_CONFLICT",assertThrows(PrinterFailure.class,()->service.getJob(two,request.requestId())).getMessage());
+    }
+    @Test void devicesWithoutAuthorizationUseUsbAndLanThroughTheSameBusinessService() {
+        FakeProvider local=new FakeProvider("LOCAL_TEST",false);
+        var localService=new PrinterService(repo,new PrinterProviderRegistry(List.of(local)),cipher,new TransactionTemplate(manager),false);
+        for(String connection:List.of("USB","LAN")) {
+            long id=localService.save(new SaveRequest(null,"本地设备","LOCAL_TEST","local-"+connection,"",connection,true,Map.of()),false);
+            assertEquals(Authorization.UNAUTHORIZED,localService.get(id).authorization());
+            assertThrows(PrinterFailure.class,()->localService.authorize(id,false));
+            localService.bind(new BindingRequest(id,1L));
+            assertEquals(DeviceState.ONLINE,localService.status(id).state());
+            assertEquals(JobState.ACCEPTED,localService.test(new TestRequest(id,"local-print-0001-"+connection)).state());
+            localService.unbind(id); localService.delete(id);
+        }
+        assertEquals(2,local.printCalls.get());
+    }
+    @Test void twentyRequestsShareTwoConnectionsWithoutNestedTokenTransactions() throws Exception {
+        Properties properties=new Properties(); String url,user,password;
+        if(mysql()) {
+            try(var input=Files.newInputStream(Path.of(System.getenv("PRINTER_ACCEPTANCE_CONFIG")))) { properties.load(input); }
+            url=properties.getProperty("url"); user=properties.getProperty("username"); password=properties.getProperty("password");
+        } else {
+            try(var connection=jdbc.getDataSource().getConnection()) { url=connection.getMetaData().getURL(); }
+            user=""; password="";
+        }
+        try(var pool=new DruidDataSource()) {
+            pool.setUrl(url); pool.setUsername(user); pool.setPassword(password); pool.setMaxActive(2);
+            pool.setMaxWait(3000); pool.setValidationQuery("SELECT 1");
+            var poolManager=new DataSourceTransactionManager(pool);
+            var poolRepo=new PrinterRepository(new JdbcTemplate(pool));
+            var tokens=new YilianyunTokenStore(poolRepo,cipher,poolManager);
+            AtomicInteger fetches=new AtomicInteger();
+            FakeProvider adapter=new FakeProvider("POOL_TEST",false) {
+                @Override public PrinterSession openSession() {
+                    PrinterProvider.assertOutsideTransaction();
+                    assertEquals("pool-token",tokens.get("pool-account",()->{fetches.incrementAndGet();return "pool-token";}));
+                    return this;
+                }
+            };
+            var pooled=new PrinterService(poolRepo,new PrinterProviderRegistry(List.of(adapter)),cipher,new TransactionTemplate(poolManager),false);
+            List<Long> ids=new ArrayList<>();
+            for(int i=0;i<20;i++) ids.add(pooled.save(new SaveRequest(null,"并发设备","POOL_TEST","pool-"+i,"","LAN",true,Map.of()),false));
+            var workers=Executors.newFixedThreadPool(21); CountDownLatch start=new CountDownLatch(1);
+            try {
+                List<Future<DeviceState>> results=new ArrayList<>();
+                for(long id:ids) results.add(workers.submit(()->{login(1,0); try {start.await();return pooled.status(id).state();} finally {cleanup();}}));
+                Future<Integer> ordinary=workers.submit(()->{start.await();return new JdbcTemplate(pool).queryForObject("SELECT 1",Integer.class);});
+                start.countDown(); assertEquals(1,ordinary.get(5,TimeUnit.SECONDS));
+                for(var result:results) assertEquals(DeviceState.ONLINE,result.get(10,TimeUnit.SECONDS));
+                assertEquals(1,fetches.get());
+                assertEquals("pool-token",tokens.get("pool-account",()->{fail("persisted token must be reused");return "";}));
+            } finally { workers.shutdownNow(); }
+        }
+    }
+    static class FakeProvider implements PrinterProvider, PrinterSession {
         final String code; final AtomicInteger printCalls=new AtomicInteger();
         volatile PrinterFailure authorizeFailure,printFailure,statusFailure; volatile boolean crash;
         DeviceState deviceState=DeviceState.ONLINE;
-        FakeProvider(String code) { this.code=code; }
-        public ProviderInfo info() { return new ProviderInfo(code,code,List.of("CLOUD"),List.of(new Field("terminalKey","密钥",true,false)),new Capabilities(true,true,true,true),true); }
+        final boolean requiresAuthorization;
+        Runnable preparation=()->{};
+        final AtomicInteger authorizeCalls=new AtomicInteger(),sessionCalls=new AtomicInteger();
+        PrinterFailure preparationFailure;
+        FakeProvider(String code) { this(code,true); }
+        FakeProvider(String code,boolean requiresAuthorization) { this.code=code; this.requiresAuthorization=requiresAuthorization; }
+        public PrinterSession openSession() { PrinterProvider.assertOutsideTransaction(); sessionCalls.incrementAndGet(); preparation.run(); if(preparationFailure!=null) throw preparationFailure; return this; }
+        public ProviderInfo info() { return new ProviderInfo(code,code,requiresAuthorization?List.of("CLOUD"):List.of("USB","LAN"),List.of(new Field("terminalKey","密钥",true,false)),new Capabilities(requiresAuthorization,requiresAuthorization,true,true),true,requiresAuthorization); }
         public void validate(String device,String connection,Map<String,String> config) {}
-        public void authorize(String device,String name,Map<String,String> config) { if(crash) throw new IllegalStateException("SIMULATED_CRASH"); if(authorizeFailure!=null) throw authorizeFailure; }
+        public void authorize(String device,String name,Map<String,String> config) { authorizeCalls.incrementAndGet(); if(crash) throw new IllegalStateException("SIMULATED_CRASH"); if(authorizeFailure!=null) throw authorizeFailure; }
         public void deauthorize(String device) {}
         public DeviceState status(String device) { if(statusFailure!=null) throw statusFailure;return deviceState; }
         public PrintResult print(String device,String request,Receipt receipt) { printCalls.incrementAndGet(); if(crash) throw new IllegalStateException("SIMULATED_CRASH"); if(printFailure!=null) throw printFailure; assertEquals(1,receipt.copies()); return new PrintResult("123456789"); }
