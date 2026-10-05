@@ -65,6 +65,7 @@ class LivePaymentPreflightSecurityTest {
         var c = ctx.getBean(LivePaymentPreflightController.class);
         assertThrows(AccessDeniedException.class, () -> c.check("synthetic"));
         assertThrows(AccessDeniedException.class, c::audit);
+        assertThrows(AccessDeniedException.class, () -> c.deployment("synthetic"));
         verifyNoInteractions(
                 ctx.getBean(LivePaymentPreflightService.class),
                 ctx.getBean(LivePaymentAuditService.class));
@@ -78,6 +79,7 @@ class LivePaymentPreflightSecurityTest {
         var c = ctx.getBean(LivePaymentPreflightController.class);
         assertThrows(AccessDeniedException.class, () -> c.check("synthetic"));
         assertThrows(AccessDeniedException.class, c::audit);
+        assertThrows(AccessDeniedException.class, () -> c.deployment("synthetic"));
         verifyNoInteractions(
                 ctx.getBean(LivePaymentPreflightService.class),
                 ctx.getBean(LivePaymentAuditService.class));
@@ -92,7 +94,9 @@ class LivePaymentPreflightSecurityTest {
         var c = ctx.getBean(LivePaymentPreflightController.class);
         c.check("synthetic");
         c.audit();
+        c.deployment("synthetic");
         verify(ctx.getBean(LivePaymentPreflightService.class)).check("synthetic");
+        verify(ctx.getBean(LivePaymentPreflightService.class)).deployment("synthetic");
         verify(ctx.getBean(LivePaymentAuditService.class)).snapshot();
     }
 }

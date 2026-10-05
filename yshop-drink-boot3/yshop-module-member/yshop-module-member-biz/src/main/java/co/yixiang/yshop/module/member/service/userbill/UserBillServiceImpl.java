@@ -73,8 +73,14 @@ public class UserBillServiceImpl extends ServiceImpl<UserBillMapper, UserBillDO>
     @Override
     public void expendExact(Long uid, String title, String category, String type, BigDecimal number,
                             BigDecimal balance, String mark) {
+        expendExact(uid, title, category, type, number, balance, mark, null);
+    }
+
+    @Override
+    public void expendExact(Long uid, String title, String category, String type, BigDecimal number,
+                            BigDecimal balance, String mark, String orderId) {
         UserBillDO bill = UserBillDO.builder().uid(uid).title(title).category(category).type(type)
-                .number(number).balance(balance).mark(mark).pm(BillEnum.PM_0.getValue()).build();
+                .number(number).balance(balance).mark(mark).extendField(orderId).pm(BillEnum.PM_0.getValue()).build();
         userBillMapper.insert(bill);
     }
 

@@ -2,6 +2,8 @@
 """Exact-value regression scan of committed PR changes, working changes and runtime."""
 import argparse
 import json
+import io
+import zipfile
 from pathlib import Path
 import shlex
 import subprocess
@@ -33,6 +35,23 @@ def scan_repository(repo, private_values, base_ref=DEFAULT_BASE):
     return failed, {'base': base, 'committedFiles': len(set(filter(None, committed))),
                     'workingFiles': len(set(filter(None, working))),
                     'untrackedFiles': len(set(filter(None, untracked)))}
+
+
+def artifact_contains_private(data, values, depth=0):
+    """Inspect compressed JVM artifacts in memory; never extract or echo entries."""
+    if any(value in data for value in values):
+        return True
+    if not data.startswith(b'PK\x03\x04'):
+        return False
+    if depth > 3:
+        raise ValueError('Archive nesting unavailable')
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        if sum(x.file_size for x in archive.infolist()) > 1024*1024*1024:
+            raise ValueError('Archive scan bound exceeded')
+        for entry in archive.infolist():
+            if entry.is_dir():continue
+            if artifact_contains_private(archive.read(entry), values, depth+1):return True
+    return False
 
 
 def main():
@@ -79,7 +98,7 @@ def main():
                 continue
             files = target.rglob('*') if target.is_dir() else [target]
             for file in files:
-                if file.is_file() and any(value in file.read_bytes() for value in private_values):
+                if file.is_file() and artifact_contains_private(file.read_bytes(), private_values):
                     failed.append(str(file))
         print(json.dumps({'result': 'FAIL' if failed else 'PASS', 'files': sorted(set(failed)), **coverage}))
         return 1 if failed else 0

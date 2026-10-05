@@ -66,7 +66,7 @@ class PaymentLiveReadinessDatabaseTest {
     String currentReference() {
         return v.f.jdbc.queryForObject(
                 "SELECT provider_order_reference FROM yshop_order_payment_attempt ORDER BY"
-                    + " create_time DESC LIMIT 1",
+                        + " create_time DESC LIMIT 1",
                 String.class);
     }
 
@@ -810,10 +810,122 @@ class PaymentLiveReadinessDatabaseTest {
         active(id);
     }
 
+    // Isolated historical fixture: preserves recovery coverage for pre-guard deployments.
+    String historicalWalletPaidAttempt() {
+        v.f.balanceService().yuePay("order-A", 1L);
+        String id = UUID.randomUUID().toString().replace("-", "");
+        v.f.jdbc.update(
+                "INSERT INTO"
+                    + " yshop_order_payment_attempt(attempt_id,order_id,uid,idempotency_key,provider,merchant_details_id,amount_cents,currency,appid,merchant_identity,provider_order_reference,status,prepay_reference,prepay_requested_at)"
+                    + " VALUES(?,"
+                    + " 'order-A',1,'historical-fixture','WECHAT','merchant-wx',2,'CNY','synthetic-app','synthetic-merchant',?,'PREPAY_CREATED','synthetic-prepay',CURRENT_TIMESTAMP)",
+                id,
+                id);
+        return id;
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void activeOrUncertainAttemptRejectsBalanceBeforeDebit(boolean uncertain) {
+        String id = uncertain ? claimed() : v.attempt().getAttemptId();
+        var before =
+                v.f.jdbc.queryForObject(
+                        "SELECT now_money FROM yshop_user WHERE id=1", java.math.BigDecimal.class);
+        assertEquals(
+                "EXTERNAL_PAYMENT_ATTEMPT_ACTIVE",
+                assertThrows(
+                                IllegalStateException.class,
+                                () -> v.f.balanceService().yuePay("order-A", 1L))
+                        .getMessage());
+        assertEquals(
+                before,
+                v.f.jdbc.queryForObject(
+                        "SELECT now_money FROM yshop_user WHERE id=1", java.math.BigDecimal.class));
+        assertEquals(0, v.f.count("SELECT COUNT(*) FROM yshop_member_wallet_transaction"));
+        active(id);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void activeOrUncertainAttemptRejectsCashWithoutReceipt(boolean uncertain) {
+        String id = uncertain ? claimed() : v.attempt().getAttemptId();
+        assertEquals(
+                "EXTERNAL_PAYMENT_ATTEMPT_ACTIVE",
+                assertThrows(
+                                IllegalStateException.class,
+                                () ->
+                                        v.f.service.finalizeInternal(
+                                                "order-A", PaymentSuccessEvent.Provider.CASH))
+                        .getMessage());
+        assertEquals(0, v.f.count("SELECT COUNT(*) FROM yshop_order_payment"));
+        active(id);
+    }
+
+    @RepeatedTest(20)
+    void balanceAdmissionRacesExternalAttemptWithoutSecondFunding() throws Exception {
+        var pool = Executors.newFixedThreadPool(2);
+        var gate = new CountDownLatch(1);
+        try {
+            Future<Boolean> balance =
+                    pool.submit(
+                            () -> {
+                                gate.await();
+                                try {
+                                    v.f.balanceService().yuePay("order-A", 1L);
+                                    return true;
+                                } catch (IllegalStateException e) {
+                                    assertEquals("EXTERNAL_PAYMENT_ATTEMPT_ACTIVE", e.getMessage());
+                                    return false;
+                                }
+                            });
+            Future<Boolean> attempt =
+                    pool.submit(
+                            () -> {
+                                gate.await();
+                                try {
+                                    v.attempt();
+                                    return true;
+                                } catch (IllegalStateException e) {
+                                    assertEquals("ORDER_NOT_PAYABLE", e.getMessage());
+                                    return false;
+                                }
+                            });
+            gate.countDown();
+            boolean paid = balance.get(20, TimeUnit.SECONDS),
+                    external = attempt.get(20, TimeUnit.SECONDS);
+            assertNotEquals(paid, external);
+            assertEquals(
+                    paid ? 1 : 0,
+                    v.f.count(
+                            "SELECT COUNT(*) FROM yshop_member_wallet_transaction WHERE"
+                                + " type='ORDER_PAYMENT'"));
+            assertEquals(
+                    external ? 1 : 0,
+                    v.f.count(
+                            "SELECT COUNT(*) FROM yshop_order_payment_attempt WHERE active_order_id"
+                                + " IS NOT NULL"));
+            v.f.effects(paid ? 1 : 0);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
+    void fulfillmentBillIsBoundToOrderAndReplayCannotDuplicateIt() throws Exception {
+        String id = prepared();
+        assertEquals(PaymentResult.FIRST_SUCCESS, v.complete(id, "synthetic-T1"));
+        assertEquals(PaymentResult.IDEMPOTENT_DUPLICATE, v.complete(id, "synthetic-T1"));
+        assertEquals(
+                1,
+                v.f.count(
+                        "SELECT COUNT(*) FROM yshop_user_bill WHERE extend_field='order-A' AND"
+                            + " category='now_money' AND type='pay_product'"));
+        v.f.effects(1);
+    }
+
     @Test
     void walletPaidOrderCanCloseOutstandingUnpaidWechatAttempt() {
-        String id = prepared();
-        v.f.balanceService().yuePay("order-A", 1L);
+        String id = historicalWalletPaidAttempt();
         v.f.effects(1);
         assertEquals(WechatV3ReconciliationService.Result.TERMINATED, recovery.reconcile(id, true));
         assertEquals("CANCELED", state(id));
@@ -828,8 +940,7 @@ class PaymentLiveReadinessDatabaseTest {
 
     @Test
     void walletPaidOrderWithWechatSuccessRequiresReviewNotSecondFulfillment() {
-        String id = prepared();
-        v.f.balanceService().yuePay("order-A", 1L);
+        String id = historicalWalletPaidAttempt();
         query("SUCCESS");
         assertEquals(
                 WechatV3ReconciliationService.Result.RECONCILIATION, recovery.reconcile(id, true));

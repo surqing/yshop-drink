@@ -62,6 +62,15 @@ class SecretScanTest(unittest.TestCase):
         with self.assertRaises(subprocess.CalledProcessError):
             scanner.scan_repository(self.repo, [self.value], 'missing-base-ref')
 
+    def test_nested_compressed_artifact_is_scanned_without_extracting(self):
+        import io, zipfile
+        inner=io.BytesIO()
+        with zipfile.ZipFile(inner,'w',zipfile.ZIP_DEFLATED) as z:z.writestr('application.properties',self.value)
+        outer=io.BytesIO()
+        with zipfile.ZipFile(outer,'w',zipfile.ZIP_DEFLATED) as z:z.writestr('BOOT-INF/lib/synthetic.jar',inner.getvalue())
+        self.assertTrue(scanner.artifact_contains_private(outer.getvalue(),[self.value]))
+        self.assertFalse(scanner.artifact_contains_private(outer.getvalue(),[b'different-private-value']))
+
 
 if __name__ == '__main__':
     unittest.main()

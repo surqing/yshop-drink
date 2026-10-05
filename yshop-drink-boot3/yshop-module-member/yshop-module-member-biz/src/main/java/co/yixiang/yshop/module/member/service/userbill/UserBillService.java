@@ -41,6 +41,10 @@ public interface UserBillService extends IService<UserBillDO> {
     void expendExact(Long uid, String title, String category, String type, java.math.BigDecimal number,
                      java.math.BigDecimal balance, String mark);
 
+    /** Order association is fulfillment evidence, not a second wallet balance. */
+    void expendExact(Long uid, String title, String category, String type, BigDecimal number,
+                     BigDecimal balance, String mark, String orderId);
+
     void expend(Long uid,String title,String category,String type,double number,double balance,String mark);
 
     /**

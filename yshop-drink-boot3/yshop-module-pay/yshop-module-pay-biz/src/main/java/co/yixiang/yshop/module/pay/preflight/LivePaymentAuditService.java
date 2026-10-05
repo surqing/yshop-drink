@@ -141,6 +141,14 @@ public class LivePaymentAuditService {
         }
     }
 
+    public String mysqlVersion() {
+        try {
+            return jdbc.queryForObject("SELECT VERSION()", String.class);
+        } catch (RuntimeException ignored) {
+            return "UNAVAILABLE";
+        }
+    }
+
     public boolean schemaComplete() {
         try {
             String version = jdbc.queryForObject("SELECT VERSION()", String.class);

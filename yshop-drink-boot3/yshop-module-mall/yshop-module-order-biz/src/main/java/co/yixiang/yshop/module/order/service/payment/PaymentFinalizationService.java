@@ -114,6 +114,7 @@ public class PaymentFinalizationService implements PaymentCallbackService {
             throw new IllegalArgumentException("INTERNAL_PROVIDER_REQUIRED");
         PaymentOrder order = orders.lockPaymentOrder(orderId);
         if (order == null) throw new IllegalArgumentException("UNKNOWN_ORDER");
+        attempts.assertInternalFundingAllowed(order.getOrderId());
         if (provider == PaymentSuccessEvent.Provider.BALANCE)
             wallets.requireOrderDebit(order.getUid(), order.getOrderId(), order.getPayPrice());
         var event =
