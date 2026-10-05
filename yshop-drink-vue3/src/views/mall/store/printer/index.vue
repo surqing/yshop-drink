@@ -12,6 +12,12 @@
       class="mb-16px"
     />
     <el-form :inline="true" @submit.prevent="search">
+      <el-form-item label="设备范围">
+        <el-select v-model="query.deleted" style="width: 140px" @change="search">
+          <el-option label="现有设备" :value="false" />
+          <el-option label="已删除" :value="true" />
+        </el-select>
+      </el-form-item>
       <el-form-item label="设备名称"
         ><el-input v-model="query.name" placeholder="搜索设备名称" clearable @keyup.enter="search"
       /></el-form-item>
@@ -29,7 +35,7 @@
         <el-button
           v-hasPermi="['store:web-print:create']"
           type="primary"
-          :disabled="!providerList.length"
+          :disabled="!providerList.length || query.deleted"
           @click="openForm()"
           >新增打印机</el-button
         >
@@ -53,7 +59,7 @@
       <el-table-column label="授权状态" min-width="120"
         ><template #default="{ row }">
           <el-tag :type="row.authorization === 'AUTHORIZED' ? 'success' : 'info'">{{
-            authorizationLabels[row.authorization]
+            requiresAuthorization(row) ? authorizationLabels[row.authorization] : '无需授权'
           }}</el-tag>
         </template></el-table-column
       >
@@ -70,71 +76,81 @@
       >
       <el-table-column label="操作" min-width="330" fixed="right"
         ><template #default="{ row }">
-          <el-button
-            v-hasPermi="['store:web-print:update']"
-            link
-            type="primary"
-            :disabled="busy[row.id]"
-            @click="openForm(row)"
-            >编辑</el-button
-          >
-          <el-button
-            v-if="provider(row)?.capabilities.authorize && row.authorization !== 'AUTHORIZED'"
-            v-hasPermi="['store:web-print:authorize']"
-            link
-            type="primary"
-            :disabled="busy[row.id] || !provider(row)?.configured"
-            @click="connect(row)"
-            >连接设备</el-button
-          >
-          <el-button
-            v-if="provider(row)?.capabilities.deauthorize && row.authorization !== 'UNAUTHORIZED'"
-            v-hasPermi="['store:web-print:authorize']"
-            link
-            type="warning"
-            :disabled="busy[row.id] || !!row.shopId || !provider(row)?.configured"
-            @click="connect(row, true)"
-            >取消授权</el-button
-          >
-          <el-button
-            v-hasPermi="['store:web-print:binding']"
-            link
-            type="primary"
-            :disabled="busy[row.id]"
-            @click="openBinding(row)"
-            >{{ row.shopId ? '解绑门店' : '绑定门店' }}</el-button
-          >
-          <el-button
-            v-if="provider(row)?.capabilities.status"
-            link
-            type="primary"
-            :disabled="busy[row.id] || !provider(row)?.configured"
-            @click="refreshStatus(row)"
-            >刷新状态</el-button
-          >
-          <el-button
-            v-if="provider(row)?.capabilities.textPrint"
-            v-hasPermi="['store:web-print:test']"
-            link
-            type="primary"
-            :disabled="
-              busy[row.id] ||
-              !row.enabled ||
-              row.authorization !== 'AUTHORIZED' ||
-              !provider(row)?.configured
-            "
-            @click="printTest(row)"
-            >测试打印</el-button
-          >
+          <template v-if="!row.deleted">
+            <el-button
+              v-hasPermi="['store:web-print:update']"
+              link
+              type="primary"
+              :disabled="busy[row.id]"
+              @click="openForm(row)"
+              >编辑</el-button
+            >
+            <el-button
+              v-if="provider(row)?.capabilities.authorize && row.authorization !== 'AUTHORIZED'"
+              v-hasPermi="['store:web-print:authorize']"
+              link
+              type="primary"
+              :disabled="busy[row.id] || !provider(row)?.configured"
+              @click="connect(row)"
+              >连接设备</el-button
+            >
+            <el-button
+              v-if="provider(row)?.capabilities.authorize && row.authorization !== 'UNAUTHORIZED'"
+              v-hasPermi="['store:web-print:authorize']"
+              link
+              type="primary"
+              :disabled="busy[row.id] || !provider(row)?.configured"
+              @click="reconnect(row)"
+              >重新连接</el-button
+            >
+            <el-button
+              v-if="provider(row)?.capabilities.deauthorize && row.authorization !== 'UNAUTHORIZED'"
+              v-hasPermi="['store:web-print:authorize']"
+              link
+              type="warning"
+              :disabled="busy[row.id] || !!row.shopId || !provider(row)?.configured"
+              @click="connect(row, true)"
+              >取消授权</el-button
+            >
+            <el-button
+              v-hasPermi="['store:web-print:binding']"
+              link
+              type="primary"
+              :disabled="busy[row.id]"
+              @click="openBinding(row)"
+              >{{ row.shopId ? '解绑门店' : '绑定门店' }}</el-button
+            >
+            <el-button
+              v-if="provider(row)?.capabilities.status"
+              link
+              type="primary"
+              :disabled="busy[row.id] || !provider(row)?.configured"
+              @click="refreshStatus(row)"
+              >刷新状态</el-button
+            >
+            <el-button
+              v-if="provider(row)?.capabilities.textPrint"
+              v-hasPermi="['store:web-print:test']"
+              link
+              type="primary"
+              :disabled="testActionDisabled(row)"
+              @click="printTest(row)"
+              >{{ testActionLabel(row) }}</el-button
+            >
+            <el-button
+              v-hasPermi="['store:web-print:delete']"
+              link
+              type="danger"
+              :disabled="
+                busy[row.id] ||
+                !!row.shopId ||
+                (requiresAuthorization(row) && row.authorization !== 'UNAUTHORIZED')
+              "
+              @click="remove(row)"
+              >删除</el-button
+            >
+          </template>
           <el-button link type="primary" @click="openJobs(row)">测试记录</el-button>
-          <el-button
-            v-hasPermi="['store:web-print:delete']"
-            link
-            type="danger"
-            :disabled="busy[row.id] || !!row.shopId || row.authorization !== 'UNAUTHORIZED'"
-            @click="remove(row)"
-            >删除</el-button
-          >
         </template></el-table-column
       >
     </el-table>
@@ -200,7 +216,11 @@
           :type="field.secret ? 'password' : 'text'"
           :show-password="field.secret"
           autocomplete="new-password"
-          :disabled="!!form.id && editingAuthorization !== 'UNAUTHORIZED'"
+          :disabled="
+            !!form.id &&
+            (selectedProvider?.requiresAuthorization ?? true) &&
+            editingAuthorization !== 'UNAUTHORIZED'
+          "
           :placeholder="
             configuredFields.includes(field.key)
               ? '已设置，留空保留原值'
@@ -258,7 +278,7 @@
         ><template #default="{ row }">
           <div>{{ jobLabels[row.state] }}</div>
           <el-button
-            v-if="row.state === 'UNKNOWN'"
+            v-if="row.state === 'UNKNOWN' && !jobsPrinter?.deleted"
             v-hasPermi="['store:web-print:test']"
             link
             type="primary"
@@ -317,9 +337,11 @@ const query = reactive({
   pageNo: 1,
   pageSize: 10,
   name: '',
+  deleted: false,
   shopId: undefined as number | undefined
 })
 const provider = (p: Api.Printer) => providerList.value.find((item) => item.code === p.providerCode)
+const requiresAuthorization = (p: Api.Printer) => provider(p)?.requiresAuthorization ?? true
 const stateLabels: Record<Api.Printer['deviceState'], string> = {
   ONLINE: '在线',
   OFFLINE: '离线',
@@ -356,17 +378,21 @@ const errorText = (code: string) =>
     ? `打印服务拒绝请求（${code.slice(18)}）`
     : '操作未完成，请检查设备')
 const displayTime = (value: Api.PrinterTime) => formatDate(new Date(value))
+let listRequestSequence = 0
 async function load() {
+  const sequence = ++listRequestSequence
+  const params = { ...query }
   loading.value = true
   try {
-    const page = await Api.page(query)
+    const page = await Api.page(params)
+    if (sequence !== listRequestSequence) return
     list.value = page.list
     total.value = page.total
     loadError.value = false
   } catch {
-    loadError.value = true
+    if (sequence === listRequestSequence) loadError.value = true
   } finally {
-    loading.value = false
+    if (sequence === listRequestSequence) loading.value = false
   }
 }
 async function initialize() {
@@ -468,6 +494,14 @@ async function connect(row: Api.Printer, revoke = false) {
     else message.success(revoke ? '已取消设备授权' : '设备已连接')
   })
 }
+async function reconnect(row: Api.Printer) {
+  if (!(await confirm(`核验“${row.name}”的云端连接，必要时重新授权？门店绑定将保留。`))) return
+  await operation(row, async () => {
+    const result = await Api.reconnect(row.id)
+    if (result.errorCode) message.warning(errorText(result.errorCode))
+    else message.success('设备连接已恢复')
+  })
+}
 async function refreshStatus(row: Api.Printer) {
   await operation(row, async () => {
     const result = await Api.status(row.id)
@@ -510,29 +544,67 @@ function requestKey(id: number) {
   const user = wsCache.get(CACHE_KEY.USER)?.user?.id
   return `printer-test:${wsCache.get(CACHE_KEY.TenantId)}:${user}:${id}`
 }
-async function printTest(row: Api.Printer) {
-  const key = requestKey(row.id)
-  let requestId = sessionStorage.getItem(key)
-  if (
-    !(await confirm(
-      requestId
-        ? '上次请求尚未确认。查询同一次测试的结果，不会创建新的打印请求。'
-        : `向“${row.name}”发送一份测试小票？`
-    ))
+const pendingRequests = reactive<Record<number, string>>({})
+const missingRequests = reactive<Record<number, string>>({})
+function testActionLabel(row: Api.Printer) {
+  const pending = pendingRequests[row.id] || sessionStorage.getItem(requestKey(row.id))
+  return pending
+    ? missingRequests[row.id] === pending
+      ? '发送此测试请求'
+      : '查询测试结果'
+    : '测试打印'
+}
+function testActionDisabled(row: Api.Printer) {
+  if (busy[row.id]) return true
+  const pending = pendingRequests[row.id] || sessionStorage.getItem(requestKey(row.id))
+  if (pending && missingRequests[row.id] !== pending) return false
+  return (
+    !row.enabled ||
+    (requiresAuthorization(row) && row.authorization !== 'AUTHORIZED') ||
+    !provider(row)?.configured
   )
-    return
+}
+function showTestResult(row: Api.Printer, result: Api.Job) {
+  if (result.state === 'ACCEPTED' || result.state === 'FAILED') {
+    sessionStorage.removeItem(requestKey(row.id))
+    delete pendingRequests[row.id]
+    delete missingRequests[row.id]
+  }
+  if (result.state === 'ACCEPTED') message.success('测试小票已提交，请查看设备确认出纸')
+  else
+    message.warning(
+      result.state === 'FAILED'
+        ? errorText(result.errorCode || '')
+        : '结果待确认，请检查设备；再次点击仅查询同一次请求'
+    )
+}
+async function printTest(row: Api.Printer) {
   await operation(row, async () => {
+    const key = requestKey(row.id)
+    let requestId = sessionStorage.getItem(key)
+    if (requestId && missingRequests[row.id] !== requestId) {
+      if (!(await confirm('查询上次测试结果。本次查询不会发送打印。'))) return
+      const result = await Api.getJob(row.id, requestId)
+      if (result) showTestResult(row, result)
+      else {
+        missingRequests[row.id] = requestId
+        message.warning('未找到任务，本次未发送打印；如需发送，请点击“发送此测试请求”并确认')
+      }
+      return
+    }
+    if (
+      !(await confirm(
+        requestId
+          ? `尚未查到上次任务。使用同一测试编号向“${row.name}”发送一份小票？`
+          : `向“${row.name}”发送一份测试小票？`
+      ))
+    )
+      return
     requestId = requestId || crypto.randomUUID()
     sessionStorage.setItem(key, requestId)
-    const result = await Api.testPrint(row.id, requestId)
-    if (result.state === 'ACCEPTED' || result.state === 'FAILED') sessionStorage.removeItem(key)
-    if (result.state === 'ACCEPTED') message.success('测试小票已提交，请查看设备确认出纸')
-    else
-      message.warning(
-        result.state === 'FAILED'
-          ? errorText(result.errorCode || '')
-          : '结果待确认，请检查设备；再次点击仅查询同一次请求'
-      )
+    pendingRequests[row.id] = requestId
+    delete missingRequests[row.id]
+    showTestResult(row, await Api.testPrint(row.id, requestId))
   })
 }
 const jobsVisible = ref(false)
@@ -542,7 +614,19 @@ const jobsPrinter = ref<Api.Printer>()
 const jobList = ref<Api.Job[]>([])
 const jobTotal = ref(0)
 const jobQuery = reactive({ pageNo: 1, pageSize: 10 })
+let jobsRequestSequence = 0
+watch(
+  jobsVisible,
+  (visible) => {
+    if (!visible) {
+      jobsRequestSequence++
+      jobsLoading.value = false
+    }
+  },
+  { flush: 'sync' }
+)
 async function openJobs(row: Api.Printer) {
+  jobsRequestSequence++
   jobsPrinter.value = row
   jobList.value = []
   jobTotal.value = 0
@@ -552,17 +636,23 @@ async function openJobs(row: Api.Printer) {
   await loadJobs()
 }
 async function loadJobs() {
-  if (!jobsPrinter.value) return
+  if (!jobsPrinter.value || !jobsVisible.value) return
+  const id = jobsPrinter.value.id
+  const sequence = ++jobsRequestSequence
+  const params = { ...jobQuery }
+  const current = () =>
+    jobsVisible.value && sequence === jobsRequestSequence && jobsPrinter.value?.id === id
   jobsLoading.value = true
   try {
-    const result = await Api.jobs(jobsPrinter.value.id, jobQuery)
+    const result = await Api.jobs(id, params)
+    if (!current()) return
     jobList.value = result.list
     jobTotal.value = result.total
     jobsError.value = false
   } catch {
-    jobsError.value = true
+    if (current()) jobsError.value = true
   } finally {
-    jobsLoading.value = false
+    if (current()) jobsLoading.value = false
   }
 }
 async function allowNewTest(job: Api.Job) {
@@ -576,7 +666,12 @@ async function allowNewTest(job: Api.Job) {
     !(await confirm('请先查看设备确认是否已出纸。允许新测试后，再次点击测试打印可能多出一份小票。'))
   )
     return
-  if (sessionStorage.getItem(key) === job.requestId) sessionStorage.removeItem(key)
+  if (jobsPrinter.value?.deleted) return
+  if (sessionStorage.getItem(key) === job.requestId) {
+    sessionStorage.removeItem(key)
+    delete pendingRequests[job.printerId]
+    delete missingRequests[job.printerId]
+  }
   message.success('可以返回设备列表发起新的测试')
 }
 onMounted(initialize)

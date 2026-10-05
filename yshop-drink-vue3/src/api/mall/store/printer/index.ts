@@ -10,6 +10,7 @@ export interface ProviderInfo {
   configFields: { key: string; label: string; secret: boolean; required: boolean }[]
   capabilities: { authorize: boolean; deauthorize: boolean; status: boolean; textPrint: boolean }
   configured: boolean
+  requiresAuthorization?: boolean
 }
 export interface Printer {
   id: number
@@ -19,6 +20,7 @@ export interface Printer {
   model?: string
   connectionType: string
   enabled: boolean
+  deleted: boolean
   authorization: 'UNAUTHORIZED' | 'AUTHORIZED' | 'UNKNOWN'
   deviceState: 'ONLINE' | 'OFFLINE' | 'PAPER_OUT' | 'UNKNOWN'
   stateCheckedAt?: PrinterTime
@@ -53,7 +55,7 @@ export interface ShopOption {
 }
 export const providers = () => request.get<ProviderInfo[]>({ url: '/store/printer/providers' })
 export const shops = () => request.get<ShopOption[]>({ url: '/store/printer/shops' })
-export const page = (params: PageParam & { name?: string; shopId?: number }) =>
+export const page = (params: PageParam & { name?: string; shopId?: number; deleted?: boolean }) =>
   request.get<{ list: Printer[]; total: number }>({ url: '/store/printer/page', params })
 export const get = (id: number) =>
   request.get<Printer>({ url: '/store/printer/get', params: { id } })
@@ -68,6 +70,11 @@ export const authorize = (id: number, revoke = false) =>
     url: `/store/printer/${revoke ? 'deauthorize' : 'authorize'}`,
     params: { id }
   })
+export const reconnect = (id: number) =>
+  request.post<{ authorization: Printer['authorization']; errorCode?: string }>({
+    url: '/store/printer/reconnect',
+    params: { id }
+  })
 export const bind = (id: number, shopId: number) =>
   request.put({ url: '/store/printer/binding', data: { id, shopId } })
 export const unbind = (id: number) =>
@@ -79,6 +86,8 @@ export const status = (id: number) =>
   })
 export const testPrint = (id: number, requestId: string) =>
   request.post<Job>({ url: '/store/printer/test-print', data: { id, requestId } })
+export const getJob = (id: number, requestId: string) =>
+  request.get<Job | null>({ url: '/store/printer/test-print/get', params: { id, requestId } })
 export const jobs = (id: number, params: PageParam) =>
   request.get<{ list: Job[]; total: number }>({
     url: '/store/printer/test-print/page',

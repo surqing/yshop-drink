@@ -16,7 +16,8 @@ const provider = () => ({
   connectionTypes: ['CLOUD'],
   configFields: [{ key: 'terminalKey', label: '终端密钥', secret: true, required: false }],
   capabilities: { authorize: true, deauthorize: true, status: true, textPrint: true },
-  configured
+  configured,
+  requiresAuthorization: true
 })
 const shops = [
   { id: 1, name: '测试门店一' },
@@ -72,6 +73,7 @@ const server = await createServer({
             case 'page': {
               const filtered = devices.filter(
                 (d) =>
+                  d.deleted === (url.searchParams.get('deleted') === 'true') &&
                   (!url.searchParams.get('name') ||
                     d.name.includes(url.searchParams.get('name'))) &&
                   (!url.searchParams.get('shopId') ||
@@ -88,6 +90,7 @@ const server = await createServer({
               const row = {
                 ...publicFields,
                 id: nextId++,
+                deleted: false,
                 authorization: 'UNAUTHORIZED',
                 deviceState: 'UNKNOWN',
                 configuredFields: Object.keys(configuration).filter((key) => configuration[key]),
@@ -120,6 +123,7 @@ const server = await createServer({
               data = true
               break
             }
+            case 'reconnect':
             case 'authorize':
               device.authorization = 'AUTHORIZED'
               data = { authorization: device.authorization }
@@ -150,6 +154,9 @@ const server = await createServer({
               data = job
               break
             }
+            case 'test-print/get':
+              data = jobs.find((j) => j.printerId === id && j.requestId === url.searchParams.get('requestId')) || null
+              break
             case 'test-print/page':
               data = {
                 list: jobs.filter((j) => j.printerId === id),
@@ -157,7 +164,8 @@ const server = await createServer({
               }
               break
             case 'delete':
-              devices = devices.filter((d) => d.id !== id)
+              device.deleted = true
+              device.enabled = false
               data = true
               break
             default:
