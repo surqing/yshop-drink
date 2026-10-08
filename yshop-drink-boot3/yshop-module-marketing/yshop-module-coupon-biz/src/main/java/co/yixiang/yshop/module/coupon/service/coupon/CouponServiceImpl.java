@@ -25,7 +25,16 @@ public class CouponServiceImpl implements CouponService {
     private CouponDO safe(CouponDO c) {if(c!=null){c.setExchangeCode(null);c.setRedemptionCodeHash(null);}return c;}
     @Override @Transactional(isolation=Isolation.READ_COMMITTED,rollbackFor=Exception.class)
     public Long create(CouponCreateReqVO request) {
+        if("CODE".equals(request.getClaimMode())) throw CouponPolicy.reject("COUPON_USE_SECURE_CODE_CREATION");
         var c=CouponConvert.INSTANCE.convert(request);c.setId(null);marketing.validate(c,null);mapper.insert(c);marketing.auditTemplate(c.getId(),"CREATE","创建活动，不发行到会员");return c.getId();
+    }
+    @Override @Transactional(isolation=Isolation.READ_COMMITTED,rollbackFor=Exception.class)
+    public CodeCreation createCode(CouponCreateReqVO request) {
+        if(!"CODE".equals(request.getClaimMode())) throw CouponPolicy.reject("COUPON_TEMPLATE_INVALID");
+        var c=CouponConvert.INSTANCE.convert(request);c.setId(null);
+        String generated=marketing.validate(c,null);
+        mapper.insert(c);marketing.auditTemplate(c.getId(),"CREATE","服务端随机公共码，仅创建响应一次返回");
+        return new CodeCreation(c.getId(),generated);
     }
     @Override @Transactional(isolation=Isolation.READ_COMMITTED,rollbackFor=Exception.class)
     public void update(CouponUpdateReqVO request) {

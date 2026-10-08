@@ -1,5 +1,21 @@
 # Phase 6C 验收证据
 
+## PR #12 兑换码 review-fix（2026-10-08）
+
+本节为后续小范围复测，不将下文首次交付结果冒充本轮新结果。实现与上线注意事项见[兑换码安全补充](phase6c-code-security.md)。
+
+- 普通focused **1097 PASS**，另真实Redis两客户端 **65 PASS**，共 **1162 PASS / 24 suites**；0 failure/error/skip。保留原优惠券、订单、商品、payment/wallet/attempt/cancellation回归；新增88项安全测试。
+- 真实MySQL8.0.46/InnoDB业务 **486 PASS**，23/23 InnoDB；最终隐藏活动防枚举及领取重试契约再跑 **5项定向PASS**，均自动清理隔离库/账户。5项为重复定向覆盖，不与486相加作为独立场景。本轮金融状态机执行普通集成回归，没有将前轮497项金融MySQL结果当作本轮执行。
+- 最新后端完整构建 **55/55 SUCCESS**；Vue ts:check/build:prod PASS。未修改UniApp源码，本次没有重编译或复制旧UniApp/smoke数字作为新结果。
+- 真实Redis三组 **20并发×20轮**：不同短错误码、轮换requestKey、32位可预测错误码。分别只允许3、3、5个请求进入领取服务，其余429；另验共享网络20会员、小时限额、IP/短码日限额、TTL恢复。
+- 当前微信模拟器已认证会话直接请求本机48083：20个不同32位错误码/key，**5个统一400 + 15个429**；券模板/权益/领取记录指纹不变，访问审计和服务日志原码匹配 **0**。隐藏CODE活动与不存在活动的id-only请求同错误，无领券或支付副作用。
+- Redis故障fail-closed、异常日志不带请求或异常cause、既有AOP不打印参数、请求及一次性创建响应脱敏、新码192随机位、手工短/长弱码拒绝、历史短摘要/plaintext兼容、丢失领取响应重试不重发均已验证。
+- 开发库金融指纹未变；真实支付和reconciliation仍false。Strict Secret扫描见交付报告的最终结果；没有改扫描器来放行。
+
+私有证据：.local-dev/logs/phase6c-code-regression.log、phase6c-code-backend-build.log、phase6c-code-vue-types.log、phase6c-code-vue-build.log、phase6c-code-http-smoke.json、phase6c-code-enum.json、phase6c-code-mysql-business.log、phase6c-code-mysql-final.log。详细MySQL日志在.local-dev/acceptance，不提交凭据或原始身份。
+
+原DesensitizeTest历史1 FAIL记录保留，本轮未扩大范围修复，不宣称全仓库历史测试零失败。未做schema migration、旧码重置或金融核心修改，不开始6D。
+
 2026-10-08，分支feature/phase6c-coupon-marketing，基线develop/PR11 merge fa39ef2b854eb21655390866090f61b0c4d52a11。Merge前核对批准head ad7b96513b92c7090bbfff41382ffb3b7540ef8a、OPEN/MERGEABLE、develop及工作区clean；无新增CI失败。annotated baseline-phase6b-product-catalog-2026-10-08已push，tag object bc12caa4fe481a022ba46600d22d24c215736a47，peeled为merge。master b8800d4071dd601b50f8be75b1b2811ba0558d30未改动。
 
 ## 实际结果

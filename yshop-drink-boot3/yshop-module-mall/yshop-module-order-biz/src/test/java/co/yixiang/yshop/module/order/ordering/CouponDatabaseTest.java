@@ -80,7 +80,44 @@ class CouponDatabaseTest {
     @Test void limitNThenRejectDifferentKeys(){for(int i=0;i<3;i++)claim(1,4);assertThrows(RuntimeException.class,()->claim(1,4));assertEquals(3,n("SELECT COUNT(*) FROM yshop_coupon_user WHERE user_id=1 AND coupon_id=4"));}
     @Test void newUserRequiresRegistrationEvidenceAndOnceAcrossStores(){f.db.update("UPDATE yshop_coupon SET coupon_kind='NEW_USER' WHERE id IN (1,2)");long id=claim(1,1);assertThrows(RuntimeException.class,()->claim(1,2));assertEquals(1,n("SELECT COUNT(*) FROM yshop_coupon_newcomer"));assertEquals("AVAILABLE",marketing.state(row(id)));}
     @Test void historicalMemberDoesNotBecomeNewByChangingShop(){f.db.update("UPDATE yshop_user SET create_time='2020-01-01' WHERE id=1");f.db.update("UPDATE yshop_coupon SET coupon_kind='NEW_USER' WHERE id IN (1,2)");for(long c:List.of(1L,2L))assertThrows(RuntimeException.class,()->claim(1,c));assertEquals(0,n("SELECT COUNT(*) FROM yshop_coupon_newcomer"));}
-    @Test void publicCodeCannotBeBypassedWithIdAndIsNeverReturned(){f.db.update("UPDATE yshop_coupon SET claim_mode='CODE',redemption_code_hash=? WHERE id=1",CouponMarketingService.codeHash("SYNTHETIC-CODE"));assertThrows(RuntimeException.class,()->claim(1,1));String k=key();long id=marketing.claim(1,null,"SYNTHETIC-CODE",k);assertEquals(id,marketing.claim(1,null,"SYNTHETIC-CODE",k));assertThrows(RuntimeException.class,()->marketing.claim(2,null,"WRONG-CODE",key()));assertNull(templates.get(1L).getExchangeCode());assertNull(templates.get(1L).getRedemptionCodeHash());assertNull(row(id).get("exchange_code"));}
+    @Test void publicCodeCannotBeBypassedWithIdAndIsNeverReturned(){f.db.update("UPDATE yshop_coupon SET claim_mode='CODE',redemption_code_hash=? WHERE id=1",CouponMarketingService.codeHash("SYNTHETIC-CODE"));var hidden=assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,()->claim(1,1));var unknown=assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,()->claim(1,999));assertEquals(unknown.getCode(),hidden.getCode());assertEquals(unknown.getMessage(),hidden.getMessage());String k=key();long id=marketing.claim(1,null,"SYNTHETIC-CODE",k);assertEquals(id,marketing.claim(1,null,"SYNTHETIC-CODE",k));assertThrows(RuntimeException.class,()->marketing.claim(2,null,"WRONG-CODE",key()));assertNull(templates.get(1L).getExchangeCode());assertNull(templates.get(1L).getRedemptionCodeHash());assertNull(row(id).get("exchange_code"));}
+    @Test void newCodeCreationIsServerRandomAndDigestOnly() {
+        var request=co.yixiang.yshop.framework.common.util.object.BeanUtils.toBean(edit(1),CouponCreateReqVO.class);request.setClaimMode("CODE");
+        var result=templates.createCode(request);assertEquals(32,result.exchangeCode().length());
+        assertEquals(CouponMarketingService.codeHash(result.exchangeCode()),f.db.queryForObject("SELECT redemption_code_hash FROM yshop_coupon WHERE id=?",String.class,result.id()));
+        assertNull(f.db.queryForObject("SELECT exchange_code FROM yshop_coupon WHERE id=?",String.class,result.id()));
+        assertNull(templates.get(result.id()).getExchangeCode());assertNull(templates.get(result.id()).getRedemptionCodeHash());
+        var app=new AppCouponServiceImpl();field(app,"marketing",marketing);
+        var limiter=org.mockito.Mockito.mock(co.yixiang.yshop.framework.ratelimiter.core.redis.RateLimiterRedisDAO.class);
+        org.mockito.Mockito.when(limiter.tryAcquireFixedWindow(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyInt(),org.mockito.ArgumentMatchers.anyInt())).thenReturn(true);
+        var controller=new co.yixiang.yshop.module.coupon.controller.app.coupon.AppCouponController(org.mockito.Mockito.mock(AppCouponUserService.class),app,new CouponCodeGuard(limiter));
+        CouponCodeSecurityTest.login(1);var http=new org.springframework.mock.web.MockHttpServletRequest();http.setRemoteAddr("192.0.2.10");
+        String key=key();var body=CouponCodeSecurityTest.body(result.exchangeCode(),key);
+        controller.receive(body,http); // Simulate losing this successful response, then replay unchanged.
+        controller.receive(body,http);
+        assertEquals(1,n("SELECT receive FROM yshop_coupon WHERE id=?",result.id()));
+        assertEquals(1,n("SELECT COUNT(*) FROM yshop_coupon_claim WHERE coupon_id=?",result.id()));
+        assertEquals(1,n("SELECT COUNT(*) FROM yshop_coupon_operation WHERE coupon_id=? AND kind='CLAIM'",result.id()));
+        org.mockito.Mockito.verify(limiter,org.mockito.Mockito.times(8)).tryAcquireFixedWindow(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyInt(),org.mockito.ArgumentMatchers.anyInt());
+    }
+    @Test void manualWeakOrLongPredictableCodesCannotBeCreatedOrRotated() {
+        var request=co.yixiang.yshop.framework.common.util.object.BeanUtils.toBean(edit(1),CouponCreateReqVO.class);request.setClaimMode("CODE");
+        for(String code:List.of("ABCD","AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")){request.setExchangeCode(code);assertThrows(RuntimeException.class,()->templates.createCode(request));assertThrows(RuntimeException.class,()->templates.create(request));}
+        var update=edit(1);update.setExchangeCode("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");assertThrows(RuntimeException.class,()->templates.update(update));assertEquals(4,n("SELECT COUNT(*) FROM yshop_coupon"));
+    }
+    @Test void historicalShortDigestCodeAndRequestRetryRemainCompatibleWithoutReset() {
+        f.db.update("UPDATE yshop_coupon SET claim_mode='CODE',redemption_code_hash=? WHERE id=1",CouponMarketingService.codeHash("ABCD"));
+        String key=key();long right=marketing.claim(1,null,"ABCD",key);assertEquals(right,marketing.claim(1,null,"ABCD",key));
+        assertEquals(CouponMarketingService.codeHash("ABCD"),f.db.queryForObject("SELECT redemption_code_hash FROM yshop_coupon WHERE id=1",String.class));
+        assertEquals(1,n("SELECT receive FROM yshop_coupon WHERE id=1"));
+    }
+    @Test void historicalPlaintextCodeSurvivesUnrelatedTemplateEdit() {
+        f.db.update("UPDATE yshop_coupon SET claim_mode='CODE',exchange_code='ABCD',redemption_code_hash=NULL WHERE id=1");
+        var update=edit(1);update.setClaimMode("CODE");templates.update(update);
+        assertEquals("ABCD",f.db.queryForObject("SELECT exchange_code FROM yshop_coupon WHERE id=1",String.class));
+        assertNull(f.db.queryForObject("SELECT redemption_code_hash FROM yshop_coupon WHERE id=1",String.class));
+        String k=key();long right=marketing.claim(1,null,"ABCD",k);assertEquals(right,marketing.claim(1,null,"ABCD",k));
+    }
     @Test void claimAuditFailureRollsBackCountersInstanceAndNewUser(){f.db.update("UPDATE yshop_coupon SET coupon_kind='NEW_USER' WHERE id=1");f.db.execute("ALTER TABLE yshop_coupon_operation ADD CONSTRAINT injected_claim_fault CHECK(kind<>'CLAIM')");assertThrows(RuntimeException.class,()->claim(1,1));assertEquals(0,n("SELECT receive FROM yshop_coupon WHERE id=1"));assertEquals(0,n("SELECT COUNT(*) FROM yshop_coupon_user"));assertEquals(0,n("SELECT COUNT(*) FROM yshop_coupon_claim"));assertEquals(0,n("SELECT COUNT(*) FROM yshop_coupon_newcomer"));}
     @Test void issuedSnapshotDoesNotFollowTemplateEditsOrDisable(){long id=claim(1,1);String old=row(id).toString();var r=edit(1);r.setValue(new BigDecimal("0.20"));r.setShopId("1,2");r.setIsSwitch(0);templates.update(r);assertEquals(old,row(id).toString());String order=f.place(request(id));assertEquals(new BigDecimal("1.13"),f.db.queryForObject("SELECT pay_price FROM yshop_store_order WHERE order_id=?",BigDecimal.class,order));assertEquals("RESERVED",marketing.state(row(id)));}
     CouponUpdateReqVO edit(long id){var r=new CouponUpdateReqVO();r.setId(id);r.setTemplateVersion(1L);r.setShopId("1");r.setTitle("Synthetic edit");r.setIsSwitch(1);r.setType(0);r.setLeast(BigDecimal.ZERO);r.setValue(new BigDecimal("0.10"));r.setStartTime(now.minusDays(1));r.setEndTime(now.plusDays(30));r.setClaimStartTime(now.minusHours(2));r.setClaimEndTime(now.plusDays(10));r.setDistribute(100);r.setLimit(3);r.setCouponKind("REGULAR");r.setClaimMode("PUBLIC");r.setInstructions("Synthetic rules");return r;}

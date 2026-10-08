@@ -44,6 +44,9 @@ export const createCoupon = async (data: VO) => {
   return await request.post({ url: `/coupon/create`, data })
 }
 
+export const createCodeCoupon = (data: VO): Promise<{id: number; exchangeCode: string}> =>
+  request.post({url: '/coupon/create-code', data})
+
 // 修改优惠券
 export const updateCoupon = async (data: VO) => {
   return await request.put({ url: `/coupon/update`, data })

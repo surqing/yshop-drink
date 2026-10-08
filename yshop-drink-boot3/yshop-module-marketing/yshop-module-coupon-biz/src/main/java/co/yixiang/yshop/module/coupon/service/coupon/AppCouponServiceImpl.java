@@ -34,7 +34,7 @@ public class AppCouponServiceImpl extends ServiceImpl<CouponMapper,CouponDO> imp
     }
     @Override public void receive(Long uid,Long id,String code) {
         // Compatible legacy retry semantics: a single deterministic request, never unlimited retries.
-        marketing.claim(uid,id,code,"legacy_"+CouponMarketingService.digest(id==null?code:id.toString()).substring(0,32));
+        marketing.claim(uid,id,code,"legacy_"+CouponMarketingService.digest(id==null?Objects.toString(code,""):id.toString()).substring(0,32));
     }
     @Override public void receive(Long uid,Long id,String code,String key) {
         marketing.claim(uid,id,code,key);

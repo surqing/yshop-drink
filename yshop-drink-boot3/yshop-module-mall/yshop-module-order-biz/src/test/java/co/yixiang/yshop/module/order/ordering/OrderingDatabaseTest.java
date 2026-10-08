@@ -1059,7 +1059,8 @@ class OrderingDatabaseTest {
         var controller =
                 new co.yixiang.yshop.module.coupon.controller.app.coupon.AppCouponController(
                         users,
-                        mock(co.yixiang.yshop.module.coupon.service.coupon.AppCouponService.class));
+                        mock(co.yixiang.yshop.module.coupon.service.coupon.AppCouponService.class),
+                        mock(co.yixiang.yshop.module.coupon.service.marketing.CouponCodeGuard.class));
         access(1, false);
         var now = LocalDateTime.now(ZoneId.of("Asia/Shanghai"));
         db.update(

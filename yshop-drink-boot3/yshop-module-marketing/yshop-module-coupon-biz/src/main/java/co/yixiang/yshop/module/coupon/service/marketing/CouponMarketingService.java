@@ -29,8 +29,15 @@ public class CouponMarketingService {
         catch (java.security.NoSuchAlgorithmException error) { throw new IllegalStateException(error); }
     }
     public static String codeHash(String code) {
+        // Read compatibility only. New codes are never accepted from caller-provided strings.
         if (code == null || !code.matches("[A-Za-z0-9_-]{4,32}")) throw reject("COUPON_CODE_INVALID");
         return digest(code);
+    }
+    private static final java.security.SecureRandom CODE_RANDOM = new java.security.SecureRandom();
+    public static String generateCode() {
+        byte[] entropy = new byte[24]; // 192 uniformly random bits, not a length/character heuristic.
+        CODE_RANDOM.nextBytes(entropy);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(entropy);
     }
     public void requireScope(String scope) {
         var shops = shops(scope); var allowed = access.allowedShopIds();
@@ -49,7 +56,7 @@ public class CouponMarketingService {
         String ids=allowed.stream().sorted().map(Object::toString).collect(java.util.stream.Collectors.joining("|"));
         return "^("+ids+")(,("+ids+"))*$";
     }
-    public void validate(CouponDO c, Map<String,Object> previous) {
+    public String validate(CouponDO c, Map<String,Object> previous) {
         if (previous != null && number(previous,"template_version") > 0
                 && !Objects.equals(c.getTemplateVersion(), number(previous,"template_version")))
             throw reject("COUPON_TEMPLATE_CHANGED_REFRESH");
@@ -90,11 +97,14 @@ public class CouponMarketingService {
         if(Math.abs((long)c.getWeigh())>1000000) throw reject("COUPON_TEMPLATE_INVALID");
         c.setInstructions(Objects.requireNonNullElse(c.getInstructions(),""));c.setImage(Objects.requireNonNullElse(c.getImage(),""));
         if(c.getInstructions().length()>1000 || c.getImage().length()>150) throw reject("COUPON_TEMPLATE_INVALID");
-        if(c.getExchangeCode()!=null && !c.getExchangeCode().isBlank()) c.setRedemptionCodeHash(codeHash(c.getExchangeCode()));
-        else c.setRedemptionCodeHash(previous==null?null:(String)previous.get("redemption_code_hash"));
-        if("CODE".equals(c.getClaimMode()) && c.getRedemptionCodeHash()==null) throw reject("COUPON_CODE_REQUIRED");
+        if(c.getExchangeCode()!=null && !c.getExchangeCode().isBlank()) throw reject("COUPON_CODE_SERVER_GENERATED_ONLY");
+        String generated = previous==null && "CODE".equals(c.getClaimMode()) ? generateCode() : null;
+        c.setRedemptionCodeHash(generated!=null?codeHash(generated):previous==null?null:(String)previous.get("redemption_code_hash"));
+        boolean legacyCode = previous!=null && previous.get("exchange_code")!=null && !previous.get("exchange_code").toString().isBlank();
+        if("CODE".equals(c.getClaimMode()) && c.getRedemptionCodeHash()==null && !legacyCode) throw reject("COUPON_CREATE_NEW_CODE_CAMPAIGN");
         c.setExchangeCode(null); // never copy a code into issued rights or a returned template
         c.setTemplateVersion(previous==null?1:number(previous,"template_version")+1);
+        return generated;
     }
     public void auditTemplate(long id,String kind,String reason) {
         new CouponLifecycle(jdbc).audit(UUID.randomUUID().toString(),id,null,null,SecurityFrameworkUtils.getLoginUserId(),"ADMIN",kind,reason);
@@ -143,6 +153,8 @@ public class CouponMarketingService {
         }
         var rows=jdbc.queryForList("SELECT *, (type+0) AS coupon_type FROM yshop_coupon WHERE id=? FOR UPDATE",id);
         if(rows.size()!=1) throw reject("COUPON_NOT_EXISTS");var c=rows.get(0);c.put("type",c.get("coupon_type"));
+        // Hidden code activities must not be discoverable by probing the public id-only path.
+        if("CODE".equals(c.get("claim_mode")) && !"CODE".equals(mode)) throw reject("COUPON_NOT_EXISTS");
         var replay=jdbc.queryForList("SELECT * FROM yshop_coupon_claim WHERE user_id=? AND request_key=? FOR UPDATE",uid,requestKey);
         if(!replay.isEmpty()) {
             var saved=replay.get(0);
@@ -150,7 +162,6 @@ public class CouponMarketingService {
             return number(saved,"coupon_user_id");
         }
         if(jdbc.queryForObject("SELECT COUNT(*) FROM yshop_user WHERE id=? AND deleted=0",Long.class,uid)!=1) throw reject("COUPON_MEMBER_NOT_FOUND");
-        if("CODE".equals(c.get("claim_mode")) && !"CODE".equals(mode)) throw reject("COUPON_CODE_REQUIRED");
         if("CODE".equals(mode) && !(codeHash(code).equals(c.get("redemption_code_hash")) || (c.get("redemption_code_hash")==null && code.equals(c.get("exchange_code"))))) throw reject("COUPON_CODE_INVALID");
         String reason=claimReason(c,uid);if(!"AVAILABLE".equals(reason)) throw reject(reason);
         var key=new GeneratedKeyHolder(); final long coupon=id;

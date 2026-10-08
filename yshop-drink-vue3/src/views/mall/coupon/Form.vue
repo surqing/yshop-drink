@@ -15,12 +15,17 @@
       <el-form-item label="发行总量" prop="distribute"><el-input-number v-model="data.distribute" :min="0" :max="1000000" :precision="0" /><span class="ml-10px">已领 {{ data.receive || 0 }} 张</span></el-form-item>
       <el-form-item label="每人限领" prop="limit"><el-input-number v-model="data.limit" :min="1" :max="1000" :precision="0" /> 张，已用/过期券仍计入限额</el-form-item>
       <el-form-item label="领取方式"><el-radio-group v-model="data.claimMode"><el-radio label="PUBLIC">公开领取</el-radio><el-radio label="CODE">公共兑换码</el-radio></el-radio-group></el-form-item>
-      <el-form-item v-if="data.claimMode === 'CODE'" label="公共兑换码"><el-input v-model="data.exchangeCode" type="password" autocomplete="off" show-password maxlength="32" :placeholder="data.id ? '留空保留原码；不会回显' : '4–32位字母、数字、下划线或横线'" /><div class="text-xs">公共码不是一次性码；仍受总量及每人限领约束。</div></el-form-item>
+      <el-form-item v-if="data.claimMode === 'CODE'" label="公共兑换码"><div>{{ data.id ? '保留原码，不回显或重置。历史短码建议停止新领取并另建随机码活动。' : '保存时由服务端安全随机生成，只显示一次，请妥善保存。' }} 公共码仍受总量及每人限领约束。</div></el-form-item>
       <el-form-item label="图片"><Materials v-model="data.image" :num="1" type="image" /></el-form-item>
       <el-form-item label="使用说明"><el-input v-model="data.instructions" type="textarea" :rows="3" maxlength="1000" /></el-form-item>
       <el-form-item label="活动启用"><el-switch v-model="enabled" /></el-form-item>
     </el-form>
     <template #footer><el-button type="primary" :loading="loading" @click="save">保存</el-button><el-button @click="close">取消</el-button></template>
+  </Dialog>
+  <Dialog title="公共兑换码已生成" v-model="codeVisible" width="min(560px,95vw)">
+    <el-alert title="只显示本次，请复制保存后再关闭。系统仅保存摘要，不提供再次读取。不要将兑换码写入日志。" type="warning" :closable="false" />
+    <el-input :model-value="generatedCode" readonly class="mt-15px" />
+    <template #footer><el-button @click="generatedCode='';codeVisible=false">已保存，关闭</el-button></template>
   </Dialog>
 </template>
 <script setup lang="ts">
@@ -29,6 +34,8 @@ import * as ShopApi from '@/api/mall/store/shop'
 const message = useMessage()
 const visible = ref(false), loading = ref(false), formType = ref('create'), formRef = ref()
 const data = ref<Partial<Api.VO>>({})
+const generatedCode = ref(''), codeVisible = ref(false)
+watch(codeVisible, value => { if(!value) generatedCode.value='' })
 const shops = ref<ShopApi.ShopVO[]>([])
 const selectedShops = ref<string[]>([])
 const enabled = computed({get: () => data.value.isSwitch === 1, set: value => {data.value.isSwitch = value ? 1 : 0}})
@@ -55,11 +62,13 @@ const save = async () => {
   if(selectedShops.value.includes('0') && selectedShops.value.length!==1){message.error('全店通用不能与具体门店混选');return}
   const begin=Number(data.value.claimStartTime), claimEnd=Number(data.value.claimEndTime), start=Number(data.value.startTime), end=Number(data.value.endTime)
   if(begin>=claimEnd || start>=end || claimEnd>end){message.error('请检查领取/使用时间，领取截止不能晚于使用截止');return}
-  if(data.value.claimMode==='CODE' && !data.value.id && !data.value.exchangeCode){message.error('请设置公共兑换码');return}
   loading.value=true
   try {
     const payload = {...data.value,shopId:selectedShops.value.join(','),score:0,startTime:start,endTime:end,claimStartTime:begin,claimEndTime:claimEnd} as unknown as Api.VO
-    if(formType.value==='create')await Api.createCoupon(payload);else await Api.updateCoupon(payload)
+    if(formType.value==='create' && payload.claimMode==='CODE') {
+      const result = await Api.createCodeCoupon(payload)
+      generatedCode.value=result.exchangeCode;codeVisible.value=true
+    } else if(formType.value==='create')await Api.createCoupon(payload);else await Api.updateCoupon(payload)
     message.success('活动已保存，已领取权益保持不变');visible.value=false;emit('success')
   } finally {loading.value=false}
 }

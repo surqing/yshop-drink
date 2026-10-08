@@ -50,6 +50,7 @@ public class AppCouponController {
 
     private final AppCouponUserService appCouponUserService;
     private final AppCouponService appCouponService;
+    private final co.yixiang.yshop.module.coupon.service.marketing.CouponCodeGuard codeGuard;
 
 
     @PreAuthenticated
@@ -135,13 +136,21 @@ public class AppCouponController {
                     example = "1")
     })
     @Operation(summary = "获取未被领取优惠券")
-    public CommonResult<Boolean> receive(@RequestBody AppReceVO appReceVO){
+    public CommonResult<Boolean> receive(@RequestBody AppReceVO appReceVO, jakarta.servlet.http.HttpServletRequest request){
         Long uid = getLoginUserId();
-        if (appReceVO.getRequestKey() == null) appCouponService.receive(uid,appReceVO.getId(),appReceVO.getCode());
-        else appCouponService.receive(uid,appReceVO.getId(),appReceVO.getCode(),appReceVO.getRequestKey());
+        boolean codeRequest = appReceVO.getCode() != null || appReceVO.getId() == null;
+        // Only the servlet's trusted peer address. Never parse arbitrary Forwarded/XFF headers.
+        if (codeRequest) codeGuard.admit(uid, request.getRemoteAddr(), appReceVO.getCode()==null || appReceVO.getCode().length()<32);
+        try {
+            if (appReceVO.getRequestKey() == null) appCouponService.receive(uid,appReceVO.getId(),appReceVO.getCode());
+            else appCouponService.receive(uid,appReceVO.getId(),appReceVO.getCode(),appReceVO.getRequestKey());
+        } catch (co.yixiang.yshop.framework.common.exception.ServiceException rejected) {
+            if (!codeRequest) throw rejected;
+            throw new co.yixiang.yshop.framework.common.exception.ServiceException(400,
+                    "兑换码无效或当前不可兑换，请检查兑换码及活动规则");
+        }
         return success(true);
     }
 
 
 }
-

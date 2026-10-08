@@ -53,6 +53,10 @@
         <!-- DB 相关 -->
         <dependency>
             <groupId>co.yixiang.boot</groupId>
+            <artifactId>yshop-spring-boot-starter-protection</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>co.yixiang.boot</groupId>
             <artifactId>yshop-spring-boot-starter-mybatis</artifactId>
         </dependency>
 

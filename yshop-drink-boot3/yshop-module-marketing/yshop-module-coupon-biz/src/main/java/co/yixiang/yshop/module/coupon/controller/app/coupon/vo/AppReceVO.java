@@ -20,8 +20,8 @@ public class AppReceVO {
     /**
      * 优惠券兑换码
      */
-    private String code;
+    @ToString.Exclude private String code;
 
 
-    private String requestKey;
+    @ToString.Exclude private String requestKey;
 }

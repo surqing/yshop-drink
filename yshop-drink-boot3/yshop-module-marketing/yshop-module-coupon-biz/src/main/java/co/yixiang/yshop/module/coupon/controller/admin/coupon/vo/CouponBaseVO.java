@@ -60,7 +60,7 @@ public class CouponBaseVO {
     private Integer type;
 
     @Schema(description = "兑换码")
-    private String exchangeCode;
+    @ToString.Exclude private String exchangeCode;
 
     @Schema(description = "已领取", required = true)
     private Integer receive;

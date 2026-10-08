@@ -45,6 +45,14 @@ public class CouponController {
         return success(Service.create(createReqVO));
     }
 
+    @PostMapping("/create-code")
+    @PreAuthorize("@ss.hasPermission('coupon::create')")
+    public CommonResult<CouponService.CodeCreation> createCode(@Valid @RequestBody CouponCreateReqVO request,
+                                                               HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-store");
+        return success(Service.createCode(request));
+    }
+
     @PutMapping("/update")
     @Operation(summary = "更新优惠券")
     @PreAuthorize("@ss.hasPermission('coupon::update')")
