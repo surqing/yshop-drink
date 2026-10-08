@@ -616,6 +616,9 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
                 OrderLogEnum.REMOVE_ORDER.getDesc());
     }
 
+    @jakarta.annotation.Resource
+    private co.yixiang.yshop.module.order.service.payment.attempt.PaymentCancellationGuard cancellationGuard;
+
     /**
      * 未付款取消订单
      *
@@ -623,7 +626,7 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
      * @param uid     用户id
      */
     @Override
-    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class, isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void cancelOrder(String orderId, Long uid) {
         if (orderPlacementService.ownsVersion(orderId)) {
             orderPlacementService.cancel(orderId,uid,uid==null);
@@ -640,8 +643,9 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
 
 
         var locked = storeOrderMapper.lockCancellationOrder(order.getId());
-        if (locked == null || !Integer.valueOf(0).equals(locked.getPaid()) ||
-                storeOrderMapper.markCanceled(order.getId()) != 1) throw exception(ORDER_NOT_CANCEL);
+        if (locked == null || !Integer.valueOf(0).equals(locked.getPaid())) throw exception(ORDER_NOT_CANCEL);
+        cancellationGuard.assertSafeAfterOrderLock(orderId);
+        if (storeOrderMapper.markCanceled(order.getId()) != 1) throw exception(ORDER_NOT_CANCEL);
         // The conditional deletion and both restorations commit or roll back together.
         this.regressionStock(order);
         this.regressionCoupon(order, 0);

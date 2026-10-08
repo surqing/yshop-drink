@@ -26,6 +26,8 @@ import java.util.*;
 public class OrderPlacementService {
     private final JdbcTemplate jdbc;
     private final PlatformTransactionManager transactions;
+    private final co.yixiang.yshop.module.order.service.payment.attempt.PaymentCancellationGuard
+            cancellationGuard;
     private Clock clock = Clock.system(ZoneId.of("Asia/Shanghai"));
 
     record Line(long productId, String sku, int quantity) {}
@@ -378,8 +380,15 @@ public class OrderPlacementService {
                 > 0;
     }
 
+    private TransactionTemplate cancellationTransaction() {
+        var cancellation = new TransactionTemplate(transactions);
+        cancellation.setIsolationLevel(
+                org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
+        return cancellation;
+    }
+
     public void cancel(String orderId, Long uid, boolean expiredOnly) {
-        new TransactionTemplate(transactions)
+        cancellationTransaction()
                 .executeWithoutResult(
                         tx -> {
                             var order =
@@ -398,6 +407,7 @@ public class OrderPlacementService {
                                     && dateTime(order.get("create_time"))
                                             .isAfter(LocalDateTime.now(clock).minusMinutes(30)))
                                 throw reject("ORDER_NOT_EXPIRED");
+                            cancellationGuard.assertSafeAfterOrderLock(orderId);
                             if (jdbc.queryForObject(
                                             "SELECT COUNT(*) FROM yshop_store_order WHERE"
                                                     + " order_id=? AND deleted=1",

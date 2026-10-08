@@ -78,7 +78,12 @@ class OrderingDatabaseTest {
         data = ds;
         db = new JdbcTemplate(ds);
         tm = new DataSourceTransactionManager(ds);
-        orders = new OrderPlacementService(db, tm);
+        orders =
+                new OrderPlacementService(
+                        db,
+                        tm,
+                        new co.yixiang.yshop.module.order.service.payment.attempt
+                                .PaymentCancellationGuard(db));
         ReflectionTestUtils.setField(
                 orders,
                 "clock",
@@ -105,6 +110,22 @@ class OrderingDatabaseTest {
                                             "yshop-module-mall/yshop-module-order-biz/src/test/resources/ordering-h2.sql"))
                             .split(";")) if (!ddl.isBlank()) db.execute(ddl);
         }
+        for (String table :
+                List.of(
+                        "yshop_order_payment_attempt",
+                        "yshop_order_payment",
+                        "yshop_order_payment_conflict"))
+            db.execute("DROP TABLE IF EXISTS " + table);
+        db.execute(
+                "CREATE TABLE yshop_order_payment_attempt(attempt_id VARCHAR(32) PRIMARY"
+                    + " KEY,order_id VARCHAR(64),status VARCHAR(32),provider"
+                    + " VARCHAR(16),prepay_requested_at TIMESTAMP,prepay_reference"
+                    + " VARCHAR(128),provider_transaction_id VARCHAR(128),payment_event_id"
+                    + " VARCHAR(32),paid_at TIMESTAMP,reconciliation_token"
+                    + " VARCHAR(32),reconciliation_lease_until TIMESTAMP,remote_terminal_state"
+                    + " VARCHAR(16),remote_confirmed_at TIMESTAMP)");
+        db.execute("CREATE TABLE yshop_order_payment(order_id VARCHAR(64))");
+        db.execute("CREATE TABLE yshop_order_payment_conflict(claimed_order_id VARCHAR(64))");
         fixtures();
     }
 

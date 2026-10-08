@@ -48,7 +48,7 @@ def main():
         if result.returncode:
             raise RuntimeError('ORDERING_ACCEPTANCE_FAILED_PRIVATE_LOG_SAVED')
         engines = db.mysql(f"SELECT COUNT(*),SUM(ENGINE='InnoDB') FROM information_schema.TABLES WHERE TABLE_SCHEMA='{schema}';").strip()
-        if engines != '13\t13':
+        if engines != '16\t16':
             raise RuntimeError('INNODB_REQUIRED')
         xml = REPO / 'yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/target/surefire-reports/TEST-co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest.xml'
         suite = ET.parse(xml).getroot()

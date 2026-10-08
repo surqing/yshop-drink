@@ -1,5 +1,7 @@
 # Phase 6A 验收记录
 
+本页记录初次交付 head `b39bdc6` 的验收。取消与 PaymentAttempt 互斥的后续 review-fix 见 [专项审计](phase6a-cancellation-safety.md) 与 PR 最新验收数字。
+
 基线：develop `ca16926b36d7080bbf4018bc93471dd93eb93e95` / `baseline-production-prepayment-readiness-2026-10-05`。交付分支 `feature/phase6a-multistore-ordering`，仅提交 PR，等待人工审查，不合并。
 
 ## 结果与边界
