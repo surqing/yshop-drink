@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 
 import cookie from '@/utils/cookie'
+import { switchStore } from '@/utils/ordering-context'
 import { navigateTo } from '@/utils/router'
 
 export const useMainStore = defineStore('main', {
@@ -34,7 +35,8 @@ export const useMainStore = defineStore('main', {
 	  	this.mycoupon = coupon
 	},
 	SET_ORDER_TYPE(type) {
-	  	this.orderType = type
+		if (this.orderType !== type) this.DEL_COUPON()
+	  this.orderType = type
 	},
 	SET_MEMBER(member) {
 		this.member = member
@@ -47,7 +49,7 @@ export const useMainStore = defineStore('main', {
 		this.addresses = addresses
 	},
 	SET_STORE(store) {
-		this.store = store
+		switchStore(this, uni, store)
 	},
 	SET_CART(cart) {
 		this.cart = cart
@@ -82,6 +84,8 @@ export const useMainStore = defineStore('main', {
       this.address = list.find(item => item.id == id) || {}
     },
     init() {
+      const selected = uni.getStorageSync('selectedStore')
+      if (selected?.id) this.store = selected
       const accessToken = cookie.get('accessToken')
       const userinfo = cookie.get('userinfo')
       if (accessToken) {

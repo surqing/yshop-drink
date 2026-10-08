@@ -78,6 +78,8 @@ public class AppMyCouponVO {
      * 已使用:0=否,1=是
      */
     private Integer status;
+    /** AVAILABLE / RESERVED / USED / EXPIRED / NOT_YET_VALID. */
+    private String reservationState;
     /**
      * 优惠券id
      */

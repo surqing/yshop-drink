@@ -25,13 +25,10 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 public interface StoreProductMapper extends BaseMapperX<StoreProductDO> {
 
-    default PageResult<StoreProductDO> selectPage(StoreProductPageReqVO reqVO) {
+    default PageResult<StoreProductDO> selectPage(StoreProductPageReqVO reqVO, Collection<Long> allowedShops) {
         LambdaQueryWrapperX<StoreProductDO> wrapper = new LambdaQueryWrapperX<>();
 
-        Long shopId = SecurityFrameworkUtils.getLoginUser().getShopId();
-        if(shopId > 0) {
-            wrapper.eq(StoreProductDO::getShopId,shopId);
-        }
+        if(allowedShops!=null) wrapper.in(StoreProductDO::getShopId,allowedShops);
 
         wrapper.likeIfPresent(StoreProductDO::getStoreName, reqVO.getStoreName())
                 .likeIfPresent(StoreProductDO::getShopName, reqVO.getShopName())
@@ -52,8 +49,9 @@ public interface StoreProductMapper extends BaseMapperX<StoreProductDO> {
 
     }
 
-    default List<StoreProductDO> selectList(StoreProductExportReqVO reqVO) {
+    default List<StoreProductDO> selectList(StoreProductExportReqVO reqVO, Collection<Long> allowedShops) {
         return selectList(new LambdaQueryWrapperX<StoreProductDO>()
+                .inIfPresent(StoreProductDO::getShopId,allowedShops)
                 .likeIfPresent(StoreProductDO::getStoreName, reqVO.getStoreName())
                 .eqIfPresent(StoreProductDO::getIsPostage, reqVO.getIsPostage())
                 .orderByDesc(StoreProductDO::getId));

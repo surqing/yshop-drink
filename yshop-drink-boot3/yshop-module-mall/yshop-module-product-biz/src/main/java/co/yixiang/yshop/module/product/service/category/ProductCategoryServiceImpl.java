@@ -32,6 +32,12 @@ import static co.yixiang.yshop.module.product.enums.ErrorCodeConstants.*;
 @Validated
 public class ProductCategoryServiceImpl extends ServiceImpl<ProductCategoryMapper, ProductCategoryDO> implements ProductCategoryService {
 
+    @jakarta.annotation.Resource
+    private co.yixiang.yshop.module.store.service.storeshop.StoreAccessService storeAccess;
+
+    @Resource
+    private org.springframework.jdbc.core.JdbcTemplate orderingJdbc;
+
     @Resource
     private ProductCategoryMapper productCategoryMapper;
     @Resource
@@ -39,8 +45,9 @@ public class ProductCategoryServiceImpl extends ServiceImpl<ProductCategoryMappe
 
     @Override
     public Long createCategory(ProductCategoryCreateReqVO createReqVO) {
-        // 校验父分类存在
-        //validateParentProductCategory(createReqVO.getParentId());
+        storeAccess.requireShop(createReqVO.getShopId().longValue());
+        validateParentProductCategory(createReqVO.getParentId());
+        if(createReqVO.getParentId()!=null && createReqVO.getParentId()>0 && !java.util.Objects.equals(productCategoryMapper.selectById(createReqVO.getParentId()).getShopId(),createReqVO.getShopId())) throw new org.springframework.security.access.AccessDeniedException("CATEGORY_STORE_MISMATCH");
 
         // 插入
         ProductCategoryDO category = ProductCategoryConvert.INSTANCE.convert(createReqVO);
@@ -54,6 +61,12 @@ public class ProductCategoryServiceImpl extends ServiceImpl<ProductCategoryMappe
     @Override
     public void updateCategory(ProductCategoryUpdateReqVO updateReqVO) {
         // 校验分类是否存在
+        storeAccess.requireCategory(updateReqVO.getId());
+        storeAccess.requireShop(updateReqVO.getShopId().longValue());
+        if(!java.util.Objects.equals(productCategoryMapper.selectById(updateReqVO.getId()).getShopId(),updateReqVO.getShopId())) throw new org.springframework.security.access.AccessDeniedException("CATEGORY_STORE_IMMUTABLE");
+        if(java.util.Objects.equals(updateReqVO.getParentId(),updateReqVO.getId())) throw new IllegalArgumentException("INVALID_CATEGORY_HIERARCHY");
+        validateParentProductCategory(updateReqVO.getParentId());
+        if(updateReqVO.getParentId()!=null && updateReqVO.getParentId()>0 && !java.util.Objects.equals(productCategoryMapper.selectById(updateReqVO.getParentId()).getShopId(),updateReqVO.getShopId())) throw new org.springframework.security.access.AccessDeniedException("CATEGORY_STORE_MISMATCH");
         validateProductCategoryExists(updateReqVO.getId());
         // 校验父分类存在
        //validateParentProductCategory(updateReqVO.getParentId());
@@ -68,17 +81,20 @@ public class ProductCategoryServiceImpl extends ServiceImpl<ProductCategoryMappe
     @Override
     public void deleteCategory(Long id) {
         // 校验分类是否存在
+        storeAccess.requireCategory(id);
         validateProductCategoryExists(id);
         // 校验是否还有子分类
         if (productCategoryMapper.selectCountByParentId(id) > 0) {
             throw exception(CATEGORY_EXISTS_CHILDREN);
         }
-        // TODO yshop 补充只有不存在商品才可以删除
+        if(getBaseMapper()==null) throw new IllegalStateException("CATEGORY_MAPPER_REQUIRED");
+        if(orderingJdbc.queryForObject("SELECT COUNT(*) FROM yshop_store_product WHERE cate_id=? AND deleted=0",Long.class,id.toString())>0) throw new IllegalArgumentException("CATEGORY_HAS_PRODUCTS");
         // 删除
         productCategoryMapper.deleteById(id);
     }
 
     private void validateParentProductCategory(Long id) {
+        if(id==null || id<0) throw new IllegalArgumentException("INVALID_CATEGORY_PARENT");
         // 如果是根分类，无需验证
         if (Objects.equals(id, ProductCategoryDO.PARENT_ID_NULL)) {
             return;
@@ -142,7 +158,7 @@ public class ProductCategoryServiceImpl extends ServiceImpl<ProductCategoryMappe
 
     @Override
     public List<ProductCategoryDO> getEnableCategoryList(ProductCategoryListReqVO listReqVO) {
-        return productCategoryMapper.selectList(listReqVO);
+        return productCategoryMapper.selectList(listReqVO,storeAccess.allowedShopIds());
     }
 
     @Override

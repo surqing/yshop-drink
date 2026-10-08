@@ -51,8 +51,8 @@
 									<view class="coupons-ticket__btn coupons-ticket__btn--use immediate-use" :round="true" @tap="receive(item, index)">立即领取</view>
 								</view>
 								<view class="coupons-ticket__right" @click.stop="" v-if="activeTabIndex == 0">
-									<view v-if="item.status == 0" class="coupons-ticket__btn coupons-ticket__btn--use immediate-use" :round="true" @tap="useCouponWith(item)">立即使用</view>
-									<view v-else class="coupons-ticket__btn coupons-ticket__btn--used">已使用</view>
+									<view v-if="item.reservationState === 'AVAILABLE'" class="coupons-ticket__btn coupons-ticket__btn--use immediate-use" :round="true" @tap="useCouponWith(item)">立即使用</view>
+									<view v-else class="coupons-ticket__btn coupons-ticket__btn--used">{{ item.reservationState === 'RESERVED' ? '待付款预占' : item.reservationState === 'EXPIRED' ? '已过期' : '已使用' }}</view>
 								</view>
 							</view>
 						</view>
@@ -86,8 +86,8 @@
 									<view v-else class="coupons-ticket__btn coupons-ticket__btn--used immediate-use">已领取</view>
 								</view>
 								<view class="coupons-ticket__right" @click.stop="" v-if="activeTabIndex == 0">
-									<view v-if="item.status == 0" class="coupons-ticket__btn coupons-ticket__btn--use immediate-use" :round="true" @tap="useCouponWith(item)">立即使用</view>
-									<view v-else class="coupons-ticket__btn coupons-ticket__btn--used">已使用</view>
+									<view v-if="item.reservationState === 'AVAILABLE'" class="coupons-ticket__btn coupons-ticket__btn--use immediate-use" :round="true" @tap="useCouponWith(item)">立即使用</view>
+									<view v-else class="coupons-ticket__btn coupons-ticket__btn--used">{{ item.reservationState === 'RESERVED' ? '待付款预占' : item.reservationState === 'EXPIRED' ? '已过期' : '已使用' }}</view>
 								</view>
 							</view>
 						</view>

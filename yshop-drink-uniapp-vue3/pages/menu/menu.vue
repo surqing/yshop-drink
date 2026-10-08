@@ -240,6 +240,7 @@ import {
   nextTick
 } from 'vue'
 import { useMainStore } from '@/store/store'
+import { reconcileCart } from '@/utils/ordering-context'
 import { storeToRefs } from 'pinia'
 import { onLoad,onShow ,onPullDownRefresh,onHide,onUnload} from '@dcloudio/uni-app'
 import { formatDateTime,kmUnit,throttle } from '@/utils/util'
@@ -403,7 +404,12 @@ const  init = async() => { //页面初始化
    
 	
 }
+let menuRequest = 0
 const getShopList = async(res) => {
+    const request = ++menuRequest
+    goods.value = []
+    loading.value = true
+    try {
 	 console.debug('[location] acquired')
 	if (res) {
 		main.SET_LOCATION(res);
@@ -419,9 +425,10 @@ const getShopList = async(res) => {
 			shop_id: shop_id,
 			kw: ''
 		});
+		if (request !== menuRequest || (shop_id && String(store.value.id) !== String(shop_id))) return
 		if (shop) {
 			//广告图
-			getAds(shop.id);
+			getAds(shop.id).catch(() => { if (request === menuRequest) ads.value = [] });
 	
 			shop.notice = shop.status == 1 ? shop.notice : '店铺营业时间为:' + formatDateTime(shop.startTime,'hh:mm')+' - '+formatDateTime(shop.endTime,'hh:mm') +
 			'，不在营业时间内无法下单';
@@ -430,6 +437,7 @@ const getShopList = async(res) => {
 			let mygoods = await menuGoods({
 				shopId: shop.id
 			});
+			if (request !== menuRequest || String(store.value.id) !== String(shop.id)) return
 			if (mygoods) {
 				goods.value = mygoods;
 				refreshCart();
@@ -440,27 +448,17 @@ const getShopList = async(res) => {
 			uni.stopPullDownRefresh();
 		}
 	}
+    } catch {
+        if (request === menuRequest) uni.showToast({title: '商品加载失败，请下拉重试', icon: 'none'})
+    } finally {
+        if (request === menuRequest) { loading.value = false; uni.stopPullDownRefresh() }
+    }
 }
-const refreshCart = () =>{
-	if (goods.value && goods.value.length > 0) {
-		let newGoods = goods.value;
-		cart.value = [];
-		let newCart = uni.getStorageSync('cart') || [];
-		let tmpCart = [];
-		if (newCart) {
-			for (let i in newCart) {
-				for (let ii in newGoods) {
-					for (let iii in newGoods[ii].goodsList) {
-						if (newCart[i].id == newGoods[ii].goodsList[iii].id) {
-							tmpCart.push(newCart[i]);
-						}
-					}
-				}
-			}
-			cart.value = tmpCart;
-			cartPopupVisible.value = false;
-		}
-	}
+const refreshCart = () => {
+    cart.value = reconcileCart(uni.getStorageSync('cart'), goods.value, store.value.id)
+    uni.setStorageSync('cart', JSON.parse(JSON.stringify(cart.value)))
+    main.SET_CART(cart.value)
+    cartPopupVisible.value = false
 }
 const  getAds = async(shop_id) =>{
 	let data = await menuAds({
@@ -540,9 +538,18 @@ const calcSize = () => {
 	sizeCalcState.value = true
 }
 const handleAddToCart = (cate, newGood, num) =>{ //添加到购物车
+    const sku = String(good.value.valueStr || '').replace(/\|/g, ',')
+    const value = newGood?.productValue?.[sku]
+    const existing = cart.value.find(item => item.id === newGood.id && String(item.valueStr).replace(/\|/g, ',') === sku)
+    const available = Math.min(Number(newGood?.stock), Number(value?.stock))
+    if (String(newGood?.shopId) !== String(store.value.id) || !value || !Number.isInteger(num)
+        || num <= 0 || (existing?.number || 0) + num > available || store.value.status !== 1) {
+        uni.showToast({ title: '商品暂不可售或库存不足', icon: 'none' })
+        return
+    }
 	const index = cart.value.findIndex(item => {
 		if (newGood) {
-			return (item.id === newGood.id) && (item.valueStr === good.value.valueStr)
+			return (item.id === newGood.id) && (String(item.valueStr).replace(/\|/g, ',') === sku)
 		} else {
 			return item.id === newGood.id
 		}
@@ -554,10 +561,12 @@ const handleAddToCart = (cate, newGood, num) =>{ //添加到购物车
 			id: newGood.id,
 			cate_id: cate.id,
 			name: newGood.storeName,
-			price: newGood.price,
+			price: Number(value.price),
+            shopId: store.value.id,
+            maxQuantity: available,
 			number: num,
 			image: newGood.image,
-			valueStr: good.value.valueStr
+			valueStr: sku
 		})
 	}
 	uni.setStorageSync('cart', JSON.parse(JSON.stringify(cart.value)))
@@ -655,6 +664,9 @@ const handleCartClear = () => { //清空购物车
 	})
 }
 const handleCartItemAdd = (index) => {
+    if (!Number.isInteger(cart.value[index].maxQuantity) || cart.value[index].number >= cart.value[index].maxQuantity) {
+        uni.showToast({title: '库存不足，请刷新商品', icon: 'none'}); return
+    }
 	cart.value[index].number += 1
 	uni.setStorageSync('cart', JSON.parse(JSON.stringify(cart.value)))
 }

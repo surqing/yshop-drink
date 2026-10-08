@@ -31,6 +31,9 @@ import static co.yixiang.yshop.framework.common.pojo.CommonResult.success;
 @Validated
 public class StoreProductController {
 
+    @jakarta.annotation.Resource
+    private co.yixiang.yshop.module.store.service.storeshop.StoreAccessService storeAccess;
+
     @Resource
     private StoreProductService storeProductService;
 
@@ -99,20 +102,27 @@ public class StoreProductController {
 
     @Operation(summary = "获取商品信息")
     @GetMapping(value = "/info/{id}")
+    @PreAuthorize("@ss.hasPermission('shop:store-product:query')")
     public CommonResult<Map<String,Object>> info(@PathVariable Long id){
+        storeAccess.requireProduct(id);
         return success(storeProductService.getProductInfo(id));
     }
 
 
     @Operation(summary = "生成属性")
     @PostMapping(value = "/isFormatAttr/{id}")
+    @PreAuthorize("@ss.hasPermission('shop:store-product:update')")
     public CommonResult<Map<String,Object>> isFormatAttr(@PathVariable Long id,@RequestBody String jsonStr){
+        if(id>0) storeAccess.requireProduct(id); else storeAccess.allowedShopIds();
         return success(storeProductService.getFormatAttr(id,jsonStr,false));
     }
 
     @Operation(summary = "商品上架/下架")
     @GetMapping(value = "/sale")
+    @PreAuthorize("@ss.hasPermission('shop:store-product:update')")
     public CommonResult<Boolean> onSale(@RequestParam("id") Long id,@RequestParam("type") int status){
+        storeAccess.requireProduct(id);
+        if(status!=0 && status!=1) throw new IllegalArgumentException("INVALID_PRODUCT_STATUS");
         storeProductService.onSale(id,status);
         return success(true);
     }

@@ -137,7 +137,7 @@
 			<view class="pay-page__notice d-flex align-items-center justify-content-start font-size-sm text-color-warning">
 			</view>
 			<!-- 支付方式 begin -->
-			<view class="pay-page__payment">
+			<view class="pay-page__payment" v-if="!PAYMENT_FROZEN">
 				<list-cell last :hover="false"><text>支付方式</text></list-cell>
 				<list-cell>
 					<view class="pay-page__payment-row pay-page__payment-row--disabled d-flex align-items-center justify-content-between w-100"
@@ -186,7 +186,7 @@
 			<view class="pay-page__footer-label font-size-sm">合计：</view>
 			<view class="pay-page__footer-amount font-size-lg flex-fill">￥{{ amount }}</view>
 			<view class="pay-page__footer-btn bg-primary h-100 d-flex align-items-center just-content-center text-color-white font-size-base"
-				@tap="debounce(submit, 500)">付款</view>
+				@tap="debounce(submit, 500)">{{ submitting ? '提交中' : '提交订单' }}</view>
 		</view>
 		<!-- 付款栏 end -->
 		<modal :show="ensureAddressModalVisible" custom :mask-closable="false" :radius="'0rpx'" width="90%">
@@ -208,7 +208,7 @@
 					<button type="primary" size="mini" plain class="pay-page__modal-change-btn"
 						@click="chooseAddress">修改地址</button>
 				</view>
-				<button type="primary" class="pay-page__modal-submit" @tap="debounce(pay, 500)">确认并付款</button>
+				<button type="primary" class="pay-page__modal-submit" @tap="debounce(pay, 500)">确认并提交</button>
 			</view>
 		</modal>
 		<uv-toast ref="uToast"></uv-toast>
@@ -222,6 +222,7 @@ import {
   nextTick
 } from 'vue'
 import { useMainStore } from '@/store/store'
+import { PAYMENT_FROZEN } from '@/utils/ordering-context'
 import { storeToRefs } from 'pinia'
 import { onLoad,onShow ,onPullDownRefresh,onHide} from '@dcloudio/uni-app'
 import { formatDateTime,isWeixin } from '@/utils/util'
@@ -241,7 +242,8 @@ import * as jweixin from 'weixin-js-sdk'
 const main = useMainStore()
 const { orderType,address, store,location,isLogin,member,mycoupon } = storeToRefs(main)
 const active = ref(false)
-const title = ref('支付')
+const title = ref('确认订单')
+const submitting = ref(false)
 const jsStr = ref('')
 const cart = ref([])
 const form = ref({
@@ -349,7 +351,7 @@ onHide(() => {
 	coupons.value = 0;
 })
 onLoad((option) => {
-	cart.value = uni.getStorageSync('cart')
+	cart.value = uni.getStorageSync('cart') || []
 	if(option.remark) {
 		form.value.remark = option.remark
 	}
@@ -494,95 +496,42 @@ const submit = () => {
 	}
 }
 const pay = async() => {
-	let that = this;
-	// // #ifdef MP-WEIXIN
-	// await new Promise(function(revolve) {
-	// 	//订阅号信息id
-	// 	 let subscribeMss = ['KBtfY9G1IWCzC6q-ZKo-Q-MmdP7aaF79nx0XFcBf3h4'];
-
-	// 	wx.showModal({
-	// 		title: '温馨提示',
-	// 		content: '为更好的促进您与商家的交流，小程序需要在您成交时向您发送消息',
-	// 		confirmText: "同意",
-	// 		cancelText: "拒绝",
-	// 		success: function(res) {
-	// 			if (res.confirm) {
-	// 				uni.requestSubscribeMessage({
-	// 					tmplIds: subscribeMss,
-	// 					complete(res) {
-	// 						console.log(res)
-	// 						revolve(true)
-	// 					}
-	// 				});
-	// 			} else {
-	// 				revolve(true)
-	// 			}
-	// 		}
-	// 	})
-	// });
-	
-
-	// #endif
-	if(amount.value == 0){
-		payType.value = 'yue'
-	}
-	uni.showLoading({
-		title: '加载中'
-	});
-
-	let data = {
-		orderType: orderType.value, // 购买类型:takein=自取,takeout=外卖
-		addressId:orderType.value == 'takeout' ? address.value.id : 0, // 外卖配送地址
-		shopId: store.value.id, // 店铺id
-		mobile: member.value.mobile, // 联系电话
-		gettime: takeinRange.value[defaultSelector.value[0]].value, // 取餐时间
-		payType: payType.value, // 支付类型
-		remark: form.value.remark, // 备注
-		productId: [],
-		spec: [],
-		number: [],
-		couponId: coupon.value.id ? coupon.value.id : 0 // 优惠券id
-	};
-
-	cart.value.forEach((item, index) => {
-		data.productId.push(item.id);
-		data.spec.push(item.valueStr.replace(/,/g, '|'));
-		//data.spec.push(item.valueStr);
-		data.number.push(item.number);
-	});
-
-	//console.log(data);
-	let order = await orderSubmit(data);
-	if (!order) {
-		uni.hideLoading();
-		return;
-	}
-	
-	main.DEL_COUPON()
-    if(amount.value == 0){
-		uToast.value.show({
-			message: '订单金额为0自动走余额支付',
-			type: 'success'
-		});
-		balancePay(order);
-		uni.hideLoading()
-		return
-   }
-
-	if (payType.value == 'weixin') {
-		// 微信支付
-		weixinPay(order);
-	} else if (payType.value == 'yue') {
-		// 余额支付
-		balancePay(order);
-	} else if (payType.value == 'alipay') {
-		// 余额支付
-		aliPay(order);
-	} 
-	uni.hideLoading()
-	return
+    if (submitting.value) return
+    if (!cart.value.length || cart.value.some(item => String(item.shopId) !== String(store.value.id))) {
+        uni.showToast({ title: '门店已变化，请重新选择商品', icon: 'none' })
+        return
+    }
+    submitting.value = true
+    uni.showLoading({ title: '提交中' })
+    try {
+        const data = {
+            orderType: orderType.value,
+            addressId: orderType.value === 'takeout' ? address.value.id : 0,
+            shopId: store.value.id,
+            gettime: takeinRange.value[defaultSelector.value[0]].value,
+            payType: 'weixin', remark: form.value.remark,
+            productId: cart.value.map(item => item.id),
+            spec: cart.value.map(item => item.valueStr.replace(/,/g, '|')),
+            number: cart.value.map(item => item.number),
+            couponId: coupon.value.id || 0
+        }
+        const order = await orderSubmit(data)
+        if (!order?.orderId) return
+        main.DEL_COUPON()
+        main.REMOVE_CART()
+        uni.removeStorageSync('cart')
+        uni.removeStorageSync('checkoutSubmission')
+        await uni.redirectTo({ url: '/pages-order/orders/detail?id=' + order.orderId })
+    } catch (error) {
+        // Preserve the cart and submission key: a failed response can follow a committed order.
+        uni.showToast({ title: '提交未确认，请重试；不会重复创建订单', icon: 'none' })
+    } finally {
+        submitting.value = false
+        uni.hideLoading()
+    }
 }
 const balancePay = async(order) => {
+    if (PAYMENT_FROZEN) { uni.showToast({ title: '支付暂未开放', icon: 'none' }); return }
 	let from = 'routine'
 	// #ifdef H5
 	from = 'h5'
@@ -609,6 +558,7 @@ const balancePay = async(order) => {
 	});
 }
 const weixinPay = async(order) => {
+    if (PAYMENT_FROZEN) { uni.showToast({ title: '支付暂未开放', icon: 'none' }); return }
 	let from = 'routine'
 	// #ifdef H5
 	from = 'h5'
@@ -667,6 +617,7 @@ const weixinPay = async(order) => {
 	}
 }
 const aliPay = async(order) => {
+    if (PAYMENT_FROZEN) { uni.showToast({ title: '支付暂未开放', icon: 'none' }); return }
 
 	// #ifdef H5
 	//let that = this;

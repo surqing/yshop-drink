@@ -58,14 +58,19 @@ public class AppCouponController {
     public CommonResult<Long> getCount(@RequestParam("shop_id") Integer shopId,
                                                       @RequestParam("type") Integer type) {
         Long uid = getLoginUserId();
-        LocalDateTime nowTime = LocalDateTime.now();
-        Long count = appCouponUserService.count(new LambdaQueryWrapper<CouponUserDO>()
+        LocalDateTime nowTime = LocalDateTime.now(java.time.ZoneId.of("Asia/Shanghai"));
+        if(shopId==null || shopId<0 || type==null || type<0 || type>2) throw new IllegalArgumentException("INVALID_COUPON_CONTEXT");
+        var wrapper=new LambdaQueryWrapper<CouponUserDO>()
                 .eq(CouponUserDO::getUserId,uid)
-                .eq(CouponUserDO::getShopId,shopId)
-                .lt(CouponUserDO::getStartTime,nowTime)
+                .le(CouponUserDO::getStartTime,nowTime)
                 .gt(CouponUserDO::getEndTime,nowTime)
                 .and(i->i.eq(CouponUserDO::getType,type).or().eq(CouponUserDO::getType,0))
-                .eq(CouponUserDO::getStatus, ShopCommonEnum.IS_STATUS_0));
+                .eq(CouponUserDO::getStatus,ShopCommonEnum.IS_STATUS_0.getValue())
+                .isNull(CouponUserDO::getReservedOrderId);
+        if(shopId>0) wrapper.and(i->i.eq(CouponUserDO::getShopId,"0").or()
+                .apply("CONCAT(',',shop_id,',') LIKE {0}","%,"+shopId+",%"));
+        else wrapper.eq(CouponUserDO::getShopId,"0");
+        Long count=appCouponUserService.count(wrapper);
 
         return success(count);
     }

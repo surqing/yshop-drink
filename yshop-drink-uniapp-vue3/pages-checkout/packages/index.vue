@@ -84,6 +84,7 @@ import {
   watch,
   toRaw
 } from 'vue'
+import { eligibleCoupons } from '@/utils/ordering-context'
 import { useMainStore } from '@/store/store'
 import { storeToRefs } from 'pinia'
 import { onLoad,onShow ,onPullDownRefresh,onHide} from '@dcloudio/uni-app'
@@ -92,7 +93,7 @@ import {
   couponMine
 } from '@/api/coupon'
 const main = useMainStore()
-const { isLogin } = storeToRefs(main)
+const { isLogin, store, orderType } = storeToRefs(main)
 const title = ref('优惠券')
 const activeTabIndex = ref(0)
 const detailModalVisible = ref(false)
@@ -140,10 +141,10 @@ const typeInfo = (type) => {
 	}
 }
 const getCoupons = async() => {
-	let data = await couponMine({shop_id: shop_id.value, type: type.value, page:1, pagesize:10000});
+	let data = await couponMine({shopId: shop_id.value, type: 0, page:1, pagesize:100});
 	uni.stopPullDownRefresh();
 	if (data) {
-		coupons.value = data;
+		coupons.value = eligibleCoupons(data, shop_id.value, Number(type.value) === 2 ? 'takeout' : 'takein', amount.value);
 	}
 }
 const openDetailModal = (mycoupon, index) => {
@@ -160,7 +161,8 @@ const useCouponWith = (mycoupon) => {
 const cancelCoupon = () => {
 	coupon.value = {}
 	coupon_id.value = 0
-	prePage().coupon = {}
+	main.DEL_COUPON()
+	uni.navigateBack()
 }
 const closeDetailModal = () => {
 	detailModalVisible.value = false;
@@ -169,6 +171,9 @@ const closeDetailModal = () => {
 // 使用优惠及
 
 const useCoupon = () => {
+	if (String(store.value.id) !== String(shop_id.value) || !eligibleCoupons([coupon.value], store.value.id, orderType.value, amount.value).length) {
+        uni.showToast({title: '优惠券不适用于当前门店或订单', icon: 'none'}); return
+    }
 	if (buttonLock.value == true) {
 		return;
 	}
@@ -182,8 +187,8 @@ const useCoupon = () => {
 		});
 		buttonLock.value = false
 	} else {
-	    main.SET_COUPON(coupon)
-		console.log('main.myconpon:',main.mycoupon)
+	    main.SET_COUPON(coupon.value)
+
 		//prePage().coupon = coupon.value;
 		//prePage().coupons = 1; // 哨兵
 		

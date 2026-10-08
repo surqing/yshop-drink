@@ -24,15 +24,9 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 public interface StoreShopMapper extends BaseMapperX<StoreShopDO> {
 
-    default PageResult<StoreShopDO> selectPage(StoreShopPageReqVO reqVO) {
-        Long shopId = SecurityFrameworkUtils.getLoginUser().getShopId();
-        System.out.println("shopId2:"+shopId);
-        if(shopId == 0) {
-            reqVO.setShopId(null);
-        }else {
-            reqVO.setShopId(shopId);
-        }
+    default PageResult<StoreShopDO> selectPage(StoreShopPageReqVO reqVO, Collection<Long> allowedShops) {
         return selectPage(reqVO, new LambdaQueryWrapperX<StoreShopDO>()
+                .inIfPresent(StoreShopDO::getId,allowedShops)
                 .likeIfPresent(StoreShopDO::getName, reqVO.getName())
                 .eqIfPresent(StoreShopDO::getMobile, reqVO.getMobile())
                 .eqIfPresent(StoreShopDO::getId, reqVO.getShopId())
@@ -47,8 +41,9 @@ public interface StoreShopMapper extends BaseMapperX<StoreShopDO> {
                 .orderByDesc(StoreShopDO::getId));
     }
 
-    default List<StoreShopDO> selectList(StoreShopExportReqVO reqVO) {
+    default List<StoreShopDO> selectList(StoreShopExportReqVO reqVO, Collection<Long> allowedShops) {
         return selectList(new LambdaQueryWrapperX<StoreShopDO>()
+                .inIfPresent(StoreShopDO::getId,allowedShops)
                 .likeIfPresent(StoreShopDO::getName, reqVO.getName())
                 .eqIfPresent(StoreShopDO::getMobile, reqVO.getMobile())
                 .eqIfPresent(StoreShopDO::getImage, reqVO.getImage())

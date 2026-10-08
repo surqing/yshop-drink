@@ -993,6 +993,8 @@ class PaymentDatabaseTest {
                                         .orElse(null))
                 .when(target)
                 .getOrderInfo(anyString(), nullable(Long.class));
+        ReflectionTestUtils.setField(target, "orderPlacementService", mock(co.yixiang.yshop.module.order.service.ordering.OrderPlacementService.class));
+        ReflectionTestUtils.setField(target, "cancellationGuard", new co.yixiang.yshop.module.order.service.payment.attempt.PaymentCancellationGuard(jdbc));
         var products = mock(AppStoreProductService.class);
         doAnswer(
                         call -> {

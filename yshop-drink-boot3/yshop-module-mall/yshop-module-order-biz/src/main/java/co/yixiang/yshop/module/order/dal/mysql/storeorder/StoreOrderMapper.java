@@ -46,12 +46,9 @@ public interface StoreOrderMapper extends BaseMapperX<StoreOrderDO> {
     int markCanceled(Long id);
 
 
-    default PageResult<StoreOrderDO> selectPage(StoreOrderPageReqVO reqVO) {
+    default PageResult<StoreOrderDO> selectPage(StoreOrderPageReqVO reqVO, Collection<Long> allowedShops) {
         LambdaQueryWrapperX<StoreOrderDO> wrapper = new LambdaQueryWrapperX();
-        Long shopId = SecurityFrameworkUtils.getLoginUser().getShopId();
-        if(shopId > 0) {
-            wrapper.eq(StoreOrderDO::getShopId,shopId);
-        }
+        if (allowedShops != null) wrapper.in(StoreOrderDO::getShopId,allowedShops);
         wrapper.eqIfPresent(StoreOrderDO::getOrderId, reqVO.getOrderId())
                 .eqIfPresent(StoreOrderDO::getNumberId, reqVO.getNumberId())
                 .eqIfPresent(StoreOrderDO::getShopId, reqVO.getShopId())
@@ -128,8 +125,9 @@ public interface StoreOrderMapper extends BaseMapperX<StoreOrderDO> {
         return selectPage(reqVO, wrapper);
     }
 
-    default List<StoreOrderDO> selectList(StoreOrderExportReqVO reqVO) {
+    default List<StoreOrderDO> selectList(StoreOrderExportReqVO reqVO, Collection<Long> allowedShops) {
         return selectList(new LambdaQueryWrapperX<StoreOrderDO>()
+                .inIfPresent(StoreOrderDO::getShopId,allowedShops)
                 .eqIfPresent(StoreOrderDO::getOrderId, reqVO.getOrderId())
                 .likeIfPresent(StoreOrderDO::getRealName, reqVO.getRealName())
                 .eqIfPresent(StoreOrderDO::getUserPhone, reqVO.getUserPhone())

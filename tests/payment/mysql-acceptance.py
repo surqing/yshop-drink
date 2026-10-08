@@ -50,11 +50,12 @@ def main():
             raise RuntimeError('IMMUTABILITY_MIGRATION_INCOMPLETE')
         database.mysql('USE `' + match.group(1) + '`; ' + ';'.join(triggers) + ';')
         return 0
+    cancellation_mode = '--cancellation' in sys.argv[1:]
     prepayment_mode = '--prepayment' in sys.argv[1:]
     ingress_only = '--ingress-only' in sys.argv[1:]
     if ingress_only and not prepayment_mode:
         raise RuntimeError('PREPAYMENT_ISOLATION_REQUIRED')
-    preflight_mode = '--preflight' in sys.argv[1:] or prepayment_mode
+    preflight_mode = '--preflight' in sys.argv[1:] or prepayment_mode or cancellation_mode
     readiness_mode = '--readiness' in sys.argv[1:] or preflight_mode
     v3_mode = '--v3' in sys.argv[1:] or readiness_mode
     attempt_mode = '--attempt' in sys.argv[1:] or v3_mode
@@ -85,6 +86,8 @@ def main():
                    '-Dmaven.repo.local=' + str(WORKSPACE / '.local-dev/cache/maven'),
                    '-pl', 'yshop-module-mall/yshop-module-order-biz', '-Pmysql-acceptance',
                    'test', '-Dtest=' + ('PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest,PaymentLiveReadinessDatabaseTest,LiveMerchantPreflightDatabaseTest' if preflight_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest,PaymentLiveReadinessDatabaseTest' if readiness_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest' if v3_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest' if attempt_mode else 'PaymentDatabaseTest,WalletDatabaseTest' if wallet_mode else 'PaymentDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=false']
+        if cancellation_mode:
+            command[-2] += ',PaymentCancellationDatabaseTest'
         if prepayment_mode:
             if env.get('YSHOP_INGRESS_BASE_URL') != 'https://localhost:48443' or not env.get('YSHOP_INGRESS_CA'):
                 raise RuntimeError('SYNTHETIC_LOOPBACK_INGRESS_REQUIRED')
@@ -118,6 +121,10 @@ def main():
                 suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.PaymentLiveReadinessDatabaseTest.xml')).getroot())
             if preflight_mode:
                 suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.LiveMerchantPreflightDatabaseTest.xml')).getroot())
+            if cancellation_mode:
+                suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest.xml')).getroot())
+                if int(suites[-1].attrib['tests']) < 60:
+                    raise RuntimeError('CANCELLATION_RACES_REQUIRED')
             if prepayment_mode:
                 suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.CallbackIngressEndToEndTest.xml')).getroot())
                 if int(suites[-1].attrib['tests']) != 10 or suites[-1].attrib.get('skipped') != '0':
@@ -125,7 +132,7 @@ def main():
         if any(suite.attrib['failures'] != '0' or suite.attrib['errors'] != '0' or suite.attrib.get('skipped', '0') != '0' for suite in suites) or (not ingress_only and int(suites[0].attrib['tests']) < 55):
             raise RuntimeError('ACCEPTANCE_REPORT_INCOMPLETE')
         tests = sum(int(suite.attrib['tests']) for suite in suites)
-        summary = {'result': 'PASS', 'mysql': version, 'engine': 'InnoDB', 'tests': tests, 'walletMode': wallet_mode, 'attemptMode': attempt_mode, 'v3Mode': v3_mode, 'readinessMode': readiness_mode, 'preflightMode': preflight_mode,
+        summary = {'result': 'PASS', 'mysql': version, 'engine': 'InnoDB', 'tests': tests, 'walletMode': wallet_mode, 'attemptMode': attempt_mode, 'v3Mode': v3_mode, 'readinessMode': readiness_mode, 'preflightMode': preflight_mode, 'cancellationMode': cancellation_mode,
                    'failures': 0, 'errors': 0, 'developmentDatabaseUsed': False, 'ingressOnly': ingress_only,
                    'realPaymentRequests': 0, 'log': str(log)}
         report.write_text(json.dumps(summary, indent=2) + '\n')

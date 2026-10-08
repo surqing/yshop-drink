@@ -82,6 +82,8 @@ public class CouponUserDO extends BaseDO {
      * 已使用:0=否,1=是
      */
     private Integer status;
+    /** Phase 6A reservation; status=1 remains unavailable to legacy clients. */
+    private String reservedOrderId;
     /**
      * 优惠券id
      */

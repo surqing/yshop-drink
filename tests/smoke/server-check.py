@@ -16,7 +16,7 @@ try:
         result = {'marker': db.mysql('SELECT COALESCE(MAX(id),0) FROM infra_api_access_log;').strip()}
     elif args['action'] == 'checkpoint':
         order_id = str(args['orderId'])
-        if not re.fullmatch(r'\d{1,24}', order_id):
+        if not re.fullmatch(r'(?:\d{1,24}|[a-f0-9]{32})', order_id):
             raise ValueError('Invalid business ID')
         rows = db.mysql("SELECT paid,CAST(deleted AS UNSIGNED) FROM yshop_store_order WHERE order_id='" + order_id + "';").splitlines()
         result = {'found': len(rows) == 1}
@@ -26,7 +26,7 @@ try:
     else:
         marker = str(args['marker'])
         order_id = str(args['orderId'])
-        if not re.fullmatch(r'\d{1,24}', marker) or not re.fullmatch(r'\d{1,24}', order_id):
+        if not re.fullmatch(r'\d{1,24}', marker) or not re.fullmatch(r'(?:\d{1,24}|[a-f0-9]{32})', order_id):
             raise ValueError('Invalid business ID')
         result = {'paymentRequests': int(db.mysql(
             "SELECT COUNT(*) FROM infra_api_access_log WHERE id>" + marker +

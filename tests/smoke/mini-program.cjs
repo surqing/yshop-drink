@@ -157,6 +157,7 @@ async function run() {
           header: { Authorization: 'Bearer ' + wx.getStorageSync('accessToken') },
           data: { orderType: 'takein', addressId: '0', shopId: '2', mobile: member.mobile || '',
             gettime: 5, payType: 'weixin', remark: 'baseline smoke: unpaid local test',
+            idempotencyKey: 'baseline_' + Date.now() + '_' + Math.random().toString(36).slice(2),
             productId: cart.map(row => String(row.id)), spec: cart.map(row => row.valueStr.replace(/,/g, '|')),
             number: cart.map(() => '1'), couponId: '0' },
           success: r => resolve({ ok: r.data?.code === 0 && !!r.data?.data?.orderId, code: r.data?.code,

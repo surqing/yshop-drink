@@ -29,6 +29,9 @@ import static co.yixiang.yshop.framework.common.pojo.CommonResult.success;
 @Validated
 public class ProductCategoryController {
 
+    @jakarta.annotation.Resource
+    private co.yixiang.yshop.module.store.service.storeshop.StoreAccessService storeAccess;
+
     @Resource
     private ProductCategoryService categoryService;
 
@@ -61,6 +64,7 @@ public class ProductCategoryController {
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('product:category:query')")
     public CommonResult<ProductCategoryRespVO> getCategory(@RequestParam("id") Long id) {
+        storeAccess.requireCategory(id);
         ProductCategoryDO category = categoryService.getCategory(id);
         return success(ProductCategoryConvert.INSTANCE.convert(category));
     }

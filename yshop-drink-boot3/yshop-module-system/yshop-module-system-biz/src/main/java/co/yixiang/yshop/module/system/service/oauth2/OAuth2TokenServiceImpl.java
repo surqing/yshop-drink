@@ -176,8 +176,9 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
     }
 
     private Long getShopId(Long userId) {
-        StoreShopDO storeShopDO = storeShopMapper.selectOne(new LambdaQueryWrapper<StoreShopDO>()
-                .apply(userId > 0, "FIND_IN_SET ('" + userId + "',admin_id)"));
+        StoreShopDO storeShopDO = storeShopMapper.selectList(new LambdaQueryWrapper<StoreShopDO>()
+                .apply("FIND_IN_SET ({0},admin_id)", userId).orderByAsc(StoreShopDO::getId))
+                .stream().findFirst().orElse(null);
         if (storeShopDO == null) {
             return 0L;
         }
