@@ -33,6 +33,7 @@ public class StoreProductAttrValueDO {
      */
     @TableId
     private Long id;
+    private Integer isShow;
     /**
      * 商品ID
      */

@@ -16,6 +16,7 @@ PRIVATE = WORKSPACE / '.local-dev/acceptance'
 
 
 def main():
+    catalog = '--catalog' in sys.argv
     PRIVATE.mkdir(parents=True, exist_ok=True)
     spec = importlib.util.spec_from_file_location('local_database', WORKSPACE / '.local-dev/database.py')
     db = importlib.util.module_from_spec(spec)
@@ -41,20 +42,30 @@ def main():
         command = [str(WORKSPACE / '.dev-tools/maven/bin/mvn'),
                    '-Dmaven.repo.local=' + str(WORKSPACE / '.local-dev/cache/maven'),
                    '-pl', 'yshop-module-mall/yshop-module-order-biz', '-Pmysql-acceptance', 'test',
-                   '-Dtest=OrderingDatabaseTest', '-Dsurefire.failIfNoSpecifiedTests=false']
+                   '-Dtest=' + ('OrderingDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance' if catalog else 'OrderingDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=false']
         with log.open('w') as output:
             log.chmod(0o600)
             result = subprocess.run(command, cwd=REPO / 'yshop-drink-boot3', env=env, stdout=output, stderr=subprocess.STDOUT)
         if result.returncode:
             raise RuntimeError('ORDERING_ACCEPTANCE_FAILED_PRIVATE_LOG_SAVED')
         engines = db.mysql(f"SELECT COUNT(*),SUM(ENGINE='InnoDB') FROM information_schema.TABLES WHERE TABLE_SCHEMA='{schema}';").strip()
-        if engines != '16\t16':
+        if engines != ('19\t19' if catalog else '16\t16'):
             raise RuntimeError('INNODB_REQUIRED')
         xml = REPO / 'yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/target/surefire-reports/TEST-co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest.xml'
         suite = ET.parse(xml).getroot()
         if any(suite.attrib.get(k, '0') != '0' for k in ('errors', 'failures', 'skipped')) or int(suite.attrib['tests']) < 80:
             raise RuntimeError('ACCEPTANCE_REPORT_INCOMPLETE')
-        summary = dict(result='PASS', mysql=version, engine='InnoDB', tests=int(suite.attrib['tests']), failures=0, errors=0, developmentDatabaseUsed=False, paymentRequests=0, log=str(log))
+        test_count = int(suite.attrib['tests'])
+        if catalog:
+            extra = ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest.xml')).getroot()
+            if any(extra.attrib.get(k,'0') != '0' for k in ('errors','failures','skipped')) or int(extra.attrib['tests']) < 88:
+                raise RuntimeError('CATALOG_ACCEPTANCE_REPORT_INCOMPLETE')
+            test_count += int(extra.attrib['tests'])
+            editing = ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.ordering.CatalogEditingMysqlAcceptance.xml')).getroot()
+            if any(editing.attrib.get(k,'0') != '0' for k in ('errors','failures','skipped')) or int(editing.attrib['tests']) < 24:
+                raise RuntimeError('CATALOG_EDITING_ACCEPTANCE_INCOMPLETE')
+            test_count += int(editing.attrib['tests'])
+        summary = dict(result='PASS', mysql=version, engine='InnoDB', tests=test_count, catalog=catalog, failures=0, errors=0, developmentDatabaseUsed=False, paymentRequests=0, log=str(log))
         report = log.with_suffix('.json')
         report.write_text(json.dumps(summary, indent=2) + '\n')
         report.chmod(0o600)

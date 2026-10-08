@@ -82,7 +82,7 @@
 								<view class="w-100 d-flex align-items-center mb-40" v-for="(good, index) in order.products" :key="good.id || `${good.title}-${index}`">
 									<view class="d-flex flex-column w-60 overflow-hidden">
 										<view class="font-size-lg text-color-base mb-10 text-truncate">{{ good.title }}</view>
-										<view class="font-size-sm text-color-assist text-truncate">{{ good.spec }}</view>
+										<view class="font-size-sm text-color-assist text-truncate">{{ good.spec }} {{ customizationLabel(good) }}</view>
 									</view>
 									<view class="d-flex w-40 align-items-center justify-content-between pl-30">
 										<view class="font-size-base text-color-base">x{{ good.number }}</view>
@@ -102,7 +102,7 @@
 								<image :src="good.image" mode="aspectFill" class="order-detail-page__thumb" lazy-load></image>
 								<view class="d-flex flex-column w-60 overflow-hidden">
 									<view class="font-size-lg text-color-base mb-10 text-truncate">{{ good.title }}</view>
-									<view class="font-size-sm text-color-assist text-truncate">{{ good.spec }}</view>
+									<view class="font-size-sm text-color-assist text-truncate">{{ good.spec }} {{ customizationLabel(good) }}</view>
 								</view>
 								<view class="d-flex w-40 align-items-center justify-content-between pl-30">
 									<view class="font-size-base text-color-base">x{{ good.number }}</view>
@@ -196,6 +196,10 @@
 </template>
 
 <script setup>
+const customizationLabel = (good) => {
+    try { const snapshot = typeof good.cartInfo === 'string' ? JSON.parse(good.cartInfo) : good.cartInfo; return (snapshot?.options || []).map(o => `${o.groupName}：${o.name}${o.quantity > 1 ? '×' + o.quantity : ''}`).join('，') }
+    catch { return '' }
+}
 import {
   ref
 } from 'vue'

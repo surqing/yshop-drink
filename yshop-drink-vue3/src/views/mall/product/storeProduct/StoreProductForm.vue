@@ -13,6 +13,7 @@
           <el-select
             v-model="(formValidate.shopId as number | undefined)"
             placeholder="选择店铺"
+            :disabled="formValidate.id > 0"
             @change="selectShop"
           >
             <el-option
@@ -30,7 +31,6 @@
           <el-select
             v-model="formValidate.cate_id"
             placeholder="选择分类"
-            @change="selectShop"
           >
             <el-option
               v-for="item in categoryTree"
@@ -53,7 +53,7 @@
           <el-input v-model="formValidate.otPrice" class="input-width" placeholder="请输入市场价" />
         </el-form-item>
          <el-form-item label="库存" prop="stock">
-          <el-input v-model="formValidate.stock" class="input-width" placeholder="请输入库存" />
+          <el-input v-model="formValidate.stock" :disabled="formValidate.id > 0" class="input-width" placeholder="请输入库存" />
         </el-form-item>
         <el-form-item label="封面图" prop="image">
           <Materials v-model="formValidate.image" :num="1" type="image" />
@@ -151,7 +151,7 @@
                           <a align="center">无</a>
                         </div>
                         <div v-else align="center">
-                          <el-input  v-model="scope.row[item.slot]" align="center" />
+                          <el-input v-model="scope.row[item.slot]" :disabled="item.slot === 'stock' && formValidate.id > 0" align="center" />
                         </div>
                       </template>
                     </el-table-column>
@@ -187,7 +187,7 @@
                 </el-table-column>
                 <el-table-column prop="stock" label="库存" align="center">
                   <template #default="scope">
-                    <el-input type="text" v-model="scope.row.stock" maxlength="7"/>
+                    <el-input type="text" v-model="scope.row.stock" :disabled="formValidate.id > 0" maxlength="7"/>
                   </template>
                 </el-table-column>
                 <el-table-column prop="bar_code" label="商品编号" align="center">
@@ -251,6 +251,9 @@ const formType = ref('') // 表单的类型：create - 新增；update - 修改
 interface AttributeRule { value: string; detail: string[] & { attrsVal?: string } }
 interface ProductAttribute {
   imageArr?: string[]
+  detail?: Record<string, string>
+  value1?: string
+  value2?: string
   pic: string
   price: number | string
   cost: number | string
@@ -268,6 +271,7 @@ interface ProductAttribute {
   brokerage_two?: number
 }
 interface ProductForm {
+  catalogVersion?: number
   shopId?: number | null
   imageArr: string[]
   sliderImageArr: string[]
@@ -532,6 +536,7 @@ const open = async (type: string, id?: number) => {
 
 
 const selectShop = (val) => {
+  formValidate.value.cate_id = ''
   getTree(val)
 }
 
@@ -551,13 +556,7 @@ const emit = defineEmits(['success']) // 定义 success 事件，用于操作成
 const submitForm = async () => {
   // 校验表单
   if (!formRef) return 
-  formRef.value.validate((valid, fields) => {
-  if (valid) {
-    console.log(fields)
-  } else {
-    return message.warning('请添加基本信息')
-  }
-  })
+  if (!await formRef.value.validate().catch(() => false)) return
 
 
   // 提交请求
@@ -573,6 +572,7 @@ const submitForm = async () => {
       }
       if(formValidate.value.spec_type === 1 && manyFormValidate.value.length===0){
         message.warning('请点击生成规格！');
+        return
       }
       await StoreProductApi.createStoreProduct(formValidate.value)
     dialogVisible.value = false
@@ -623,6 +623,9 @@ if (activeName.value == 'one') {
 
 /** 重置表单 */
 const resetForm = () => {
+  createBnt.value = false
+  showIput.value = false
+  manyFormValidate.value = []
   formData.value = {
     id: undefined as number | undefined,
     image: undefined,
@@ -746,10 +749,17 @@ const  getInfo  = (id) => {
            console.log('shopId:',formValidate.value.shopId)
             await getTree(formValidate.value.shopId)
           }
-        oneFormValidate.value = [data.attr];
-        formValidate.value.header = [];
-        generate();
-        manyFormValidate.value = data.attrs;
+        oneFormValidate.value = data.attr ? [data.attr] : oneFormValidate.value;
+        formValidate.value.header = [
+          ...(data.items || []).map((item: AttributeRule, index: number) => ({ title: item.value, slot: `value${index + 1}` })),
+          ...[['图片', 'pic'], ['售价', 'price'], ['成本价', 'cost'], ['原价', 'ot_price'], ['库存', 'stock'], ['产品编号', 'bar_code']].map(([title, slot]) => ({ title, slot }))
+        ];
+        // Keep loaded SKU values; asynchronous generation used to overwrite edited values.
+        manyFormValidate.value = (data.attrs || []).map((item: ProductAttribute) => {
+          const row: ProductAttribute & Record<string, unknown> = { ...item };
+          (data.items || []).forEach((rule: AttributeRule, index: number) => { row[`value${index + 1}`] = item.detail?.[rule.value] || ''; });
+          return row;
+        });
         console.log('data2:',formValidate.value.spec_type)
         if(data.spec_type === 0){
           manyFormValidate.value = [];
@@ -851,17 +861,19 @@ const addCustomDialog  = () => {
 
 // 改变规格
 const changeSpec = () => {
+  if (formValidate.value.spec_type === 1) createBnt.value = true
 }
 
 const confirm = () => {
   createBnt.value = true;
   if (formValidate.value.selectRule.trim().length <= 0) {
-    message.error('请选择属性')
+    message.error('请选择规格模板，或直接添加新规格')
+    return
   }
   ruleList.value.forEach(function (item, index) {
      console.log(index)
     if (item.ruleName === formValidate.value.selectRule) {
-      attrs.value = item.ruleValue;
+      attrs.value = JSON.parse(JSON.stringify(item.ruleValue));
     }
   })
 }

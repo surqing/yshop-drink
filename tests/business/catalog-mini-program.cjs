@@ -2,8 +2,12 @@
 const fs = require('node:fs'), path = require('node:path'), {spawnSync} = require('node:child_process');
 const workspace = path.resolve(__dirname, '../../..');
 const automator = require(path.join(workspace, '.uniapp-dev/automation/node_modules/miniprogram-automator'));
-const reportPath = path.join(workspace, '.uniapp-dev/logs/phase6a-smoke.json');
-const port = Number(process.env.YSHOP_API_PORT || 48081);
+const reportPath = path.join(workspace, '.uniapp-dev/logs/phase6b-smoke.json');
+const port = Number(process.env.YSHOP_API_PORT || 48083);
+const fixture = JSON.parse(fs.readFileSync(process.env.YSHOP_CATALOG_FIXTURE || path.join(workspace,'.local-dev/private/phase6b/catalog-fixture.json'),'utf8'));
+const shopA=fixture.shops[0].id,shopB=fixture.shops[1].id;
+const drink=fixture.products.find(p=>p.shopId===shopA&&p.name.startsWith('经典拿铁'));
+if(!drink || fixture.shops.length!==2) throw new Error('Synthetic A/B fixture required');
 if (![48081,48082,48083].includes(port)) throw new Error('Local API required');
 const report = {checks:[], uncaughtExceptions:0, paymentRequests:0, apiPort:port};
 const save = () => fs.writeFileSync(reportPath,JSON.stringify(report,null,2),{mode:0o600});
@@ -41,11 +45,29 @@ async function run() {
       if(!selected)throw new Error('Expected local store unavailable');await (await selected.$('.shop-page__body')).tap();await pause(1000);page=await mini.currentPage();
     }
     async function addItem(){await element(page,'.property_btn');await (await page.$('.property_btn')).tap();await element(page,'.add-to-cart-btn');await (await page.$('.add-to-cart-btn')).tap();await pause(500);}
-    await selectStore(2);await addItem();
-    await check('store A SKU and cart use selected store',()=>mini.evaluate(()=>({ok:(wx.getStorageSync('cart')||[]).length>0&&(wx.getStorageSync('cart')||[]).every(x=>Number(x.shopId)===2&&x.price>0)})));
-    await selectStore(3);
-    await check('switch to store B clears old cart and submission',()=>mini.evaluate(()=>({ok:!(wx.getStorageSync('cart')||[]).length&&!wx.getStorageSync('checkoutSubmission')&&Number(wx.getStorageSync('selectedStore')?.id)===3})));
-    await selectStore(2);await addItem();page=await mini.navigateTo('/pages-checkout/cart/cart');await element(page,'.cart-item');
+    await selectStore(shopA);await addItem();
+    await check('store A SKU and cart use selected store',()=>mini.evaluate(shopA=>({ok:(wx.getStorageSync('cart')||[]).length>0&&(wx.getStorageSync('cart')||[]).every(x=>Number(x.shopId)===shopA&&x.price>0)}),shopA));
+    await selectStore(shopB);
+    await check('switch to store B clears old cart and submission',()=>mini.evaluate(shopB=>({ok:!(wx.getStorageSync('cart')||[]).length&&!wx.getStorageSync('checkoutSubmission')&&Number(wx.getStorageSync('selectedStore')?.id)===shopB}),shopB));
+    await selectStore(shopA);
+    let selectedCard;for(const card of await page.$$('.good')) if((await card.text()).includes(drink.name)){selectedCard=card;break;}
+    if(!selectedCard)throw new Error('Synthetic drink unavailable');await (await selectedCard.$('.property_btn')).tap();
+    await element(page,'.customization-group');
+    let medium;for(const value of await page.$$('.properties .value')) if((await value.text()).startsWith('中杯')){medium=value;break;}
+    if(!medium)throw new Error('Expected medium cup SKU missing');await medium.tap();await pause(300);
+    await check('hot default hides ice',async()=>({ok:!(await page.$('.customization-group[data-group-id="ice"]'))}));
+    await (await element(page,'.customization-option[data-option-id="cold"]')).tap();await element(page,'.customization-group[data-group-id="ice"]');
+    await check('cold activates required ice group',async()=>({ok:!!await page.$('.customization-group[data-group-id="ice"]')}));
+    await (await element(page,'.customization-option[data-option-id="normal"]')).tap();
+    await (await element(page,'.customization-option[data-option-id="hot"]')).tap();await pause(400);
+    await check('hot switch removes inapplicable ice',async()=>({ok:!(await page.$('.customization-group[data-group-id="ice"]'))}));
+    for(let i=0;i<2;i++){await (await element(page,'.customization-option[data-option-id="pearl"]')).tap();await pause(200);}
+    const priceText=await (await element(page,'.good-detail-modal .action .price')).text();
+    await check('two toppings update preview price',async()=>({ok:Number(priceText.replace(/[^0-9.]/g,''))===20,preview:priceText}));
+    await (await element(page,'.good-detail-modal .iconadd-select')).tap();
+    await (await element(page,'.add-to-cart-btn')).tap();await pause(500);
+    await check('cart keeps customization quantity and precise unit price',()=>mini.evaluate(({shopA,id})=>{const c=wx.getStorageSync('cart')||[];return {ok:c.length===1&&c[0].id===id&&Number(c[0].shopId)===shopA&&c[0].number===2&&c[0].price===20&&c[0].selections.some(s=>s.optionId==='pearl'&&s.quantity===2)&&!c[0].selections.some(s=>s.groupId==='ice')};},{shopA,id:drink.id}));
+    page=await mini.navigateTo('/pages-checkout/cart/cart');await element(page,'.cart-item');
     await check('cart page renders selected store item',async()=>({ok:(await page.$$('.cart-item')).length>0}));
     page=await mini.navigateTo('/pages-checkout/pay/pay');await element(page,'.pay-page__footer-btn');await pause(600);
     await check('checkout exposes submit without payment selectors',async()=>({ok:(await (await page.$('.pay-page__footer-btn')).text()).includes('提交订单')&&!await page.$('.pay-page__payment')}));
@@ -56,7 +78,8 @@ async function run() {
     let reached=false;for(let i=0;i<60;i++){await pause(200);page=await mini.currentPage();if(page.path==='pages-order/orders/detail'){reached=true;break;}}
     await check('retry enters pending order detail',async()=>({ok:reached&&!!await page.$('.order-detail-page')}));
     await pause(600);
-    const created=await check('server generated one unpaid order; no payment',()=>mini.evaluate(port=>new Promise(resolve=>{const s=wx.__phase6aSafety;wx.request({url:`http://127.0.0.1:${port}/app-api/order/detail/${s.lastOrderId}`,header:{Authorization:'Bearer '+wx.getStorageSync('accessToken')},success:r=>resolve({ok:r.data?.code===0&&r.data.data.paid===0&&Number(r.data.data.shopId)===2&&s.paymentRequests===0,orderId:s.lastOrderId,paid:r.data?.data?.paid}),fail:()=>resolve({ok:false})});}),port));
+    const created=await check('server generated one unpaid order; no payment',()=>mini.evaluate(({port,shopA})=>new Promise(resolve=>{const s=wx.__phase6aSafety;wx.request({url:`http://127.0.0.1:${port}/app-api/order/detail/${s.lastOrderId}`,header:{Authorization:'Bearer '+wx.getStorageSync('accessToken')},success:r=>resolve({ok:r.data?.code===0&&r.data.data.paid===0&&Number(r.data.data.shopId)===shopA&&s.paymentRequests===0,orderId:s.lastOrderId,paid:r.data?.data?.paid}),fail:()=>resolve({ok:false})});}),{port,shopA}));
+    await check('server snapshot matches options and quantity',async()=>database({action:'catalog',orderId:created.orderId,productId:drink.id,unitPrice:20,quantity:2}));
     await mini.mockWxMethod('showModal',{confirm:true,cancel:false});
     const component=await element(page,'.order-cancel-button');
     const cancel=await component.$('button');
@@ -69,4 +92,4 @@ async function run() {
   } finally {try{await Promise.race([mini.evaluate(()=>{if(wx.__phase6aOriginalRequest)wx.request=wx.__phase6aOriginalRequest;if(wx.__phase6aOriginalPayment)wx.requestPayment=wx.__phase6aOriginalPayment;}),pause(2000)]);}catch{}save();mini.disconnect();}
 }
 const watchdog=setTimeout(()=>{report.failure='Automation watchdog timeout';report.ok=false;save();process.exit(1);},180000);
-run().then(()=>{clearTimeout(watchdog);console.log('PASS: store switch, SKU/cart, network retry, unpaid order, cancel; paymentRequests=0.');}).catch(error=>{clearTimeout(watchdog);report.ok=false;report.failure=String(error.message).slice(0,1200);save();console.error('FAIL: inspect private phase6a smoke report.');process.exitCode=1;});
+run().then(()=>{clearTimeout(watchdog);console.log('PASS: catalog customizations, toppings, quantity, server snapshot, store switch, retry and cancel; paymentRequests=0.');}).catch(error=>{clearTimeout(watchdog);report.ok=false;report.failure=String(error.message).slice(0,1200);save();console.error('FAIL: inspect private phase6b smoke report.');process.exitCode=1;});

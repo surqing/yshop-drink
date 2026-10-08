@@ -40,7 +40,7 @@ public class StoreProductController {
 
     @PostMapping("/create")
     @Operation(summary = "创建商品")
-    @PreAuthorize("@ss.hasPermission('shop:store-product:create')")
+    @PreAuthorize("(#storeProductDto.id == null or #storeProductDto.id == 0) ? @ss.hasPermission('shop:store-product:create') : @ss.hasPermission('shop:store-product:update')")
     public CommonResult<Boolean> createStoreProduct(@Validated @RequestBody StoreProductDto storeProductDto) {
         storeProductService.insertAndEditYxStoreProduct(storeProductDto);
         return success(true);
@@ -104,7 +104,7 @@ public class StoreProductController {
     @GetMapping(value = "/info/{id}")
     @PreAuthorize("@ss.hasPermission('shop:store-product:query')")
     public CommonResult<Map<String,Object>> info(@PathVariable Long id){
-        storeAccess.requireProduct(id);
+        if(id>0) storeAccess.requireProduct(id); else storeAccess.allowedShopIds();
         return success(storeProductService.getProductInfo(id));
     }
 

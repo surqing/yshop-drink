@@ -8,6 +8,14 @@ try:
     args=json.load(sys.stdin)
     if args['action']=='marker':
         result={'marker':int(db.mysql('SELECT COALESCE(MAX(id),0) FROM infra_api_access_log;').strip())}
+    elif args['action']=='catalog':
+        from decimal import Decimal
+        oid=str(args['orderId']);pid=str(args['productId'])
+        if not re.fullmatch('[a-f0-9]{32}',oid) or not re.fullmatch('[0-9]{1,20}',pid):raise ValueError()
+        snapshot=json.loads(db.mysql("SELECT cart_info FROM yshop_store_order_cart_info WHERE order_id='"+oid+"' AND product_id="+pid+";").strip())
+        unit=Decimal(str(args['unitPrice']));quantity=int(args['quantity'])
+        reserved=int(db.mysql("SELECT SUM(quantity) FROM yshop_order_inventory_reservation WHERE order_id='"+oid+"' AND product_id="+pid+" AND released_at IS NULL;").strip())
+        result={'ok':snapshot['productId']==int(pid) and Decimal(str(snapshot['unitPrice']))==unit and snapshot['quantity']==quantity and Decimal(str(snapshot['lineTotal']))==unit*quantity and reserved==quantity and any(x['optionId']=='pearl' and x['quantity']==2 for x in snapshot['options']) and not any(x['groupId']=='ice' for x in snapshot['options']), 'snapshotVersion':snapshot['version'],'reservedQuantity':reserved}
     else:
         oid=str(args['orderId']);marker=str(args['marker'])
         if not re.fullmatch('[a-f0-9]{32}',oid) or not re.fullmatch('[0-9]{1,24}',marker):raise ValueError()

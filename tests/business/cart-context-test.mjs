@@ -2,7 +2,9 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 const file = new URL('../../yshop-drink-uniapp-vue3/utils/ordering-context.js', import.meta.url)
-const { switchStore, reconcileCart, submissionKey, PAYMENT_FROZEN, eligibleCoupons } = await import('data:text/javascript;base64,' + readFileSync(file).toString('base64'))
+const optionsUrl = 'data:text/javascript;base64,' + readFileSync(new URL('../../yshop-drink-uniapp-vue3/utils/catalog-options.js', import.meta.url)).toString('base64')
+const source = readFileSync(file, 'utf8').replace("'./catalog-options.js'", JSON.stringify(optionsUrl))
+const { switchStore, reconcileCart, submissionKey, PAYMENT_FROZEN, eligibleCoupons } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'))
 function storage() { const data = new Map(); return { getStorageSync:k=>data.get(k), setStorageSync:(k,v)=>data.set(k,v), removeStorageSync:k=>data.delete(k) } }
 const groups = [{goodsList:[{id:11,shopId:1,stock:2,storeName:'Fresh server title',image:'local.png',productValue:{'cold,normal':{stock:1,price:'1.23'}}}]}]
 const line = {id:11,shopId:1,number:1,valueStr:'cold,normal',price:999}

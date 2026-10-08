@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import jakarta.annotation.Resource;
+import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -145,9 +146,12 @@ public class AppStoreProductServiceImpl extends ServiceImpl<StoreProductMapper,S
             for (StoreProductDO storeProductDO : storeProductDOList) {
                 Map<String, Object> returnMap = appStoreProductAttrService.getProductAttrDetail(storeProductDO.getId());
                 AppStoreProductRespVo storeProductQueryVo = StoreProductConvert.INSTANCE.convert01(storeProductDO);
+                storeProductQueryVo.setCatalogVersion(storeProductDO.getCatalogVersion());
+                storeProductQueryVo.setCatalogConfiguration(co.yixiang.yshop.module.product.service.catalog.CatalogOptions.read(storeProductDO.getCatalogConfig()));
 
                 storeProductQueryVo.setProductAttr((List<AppStoreProductAttrQueryVo>) returnMap.get("productAttr"));
                 storeProductQueryVo.setProductValue((Map<String, StoreProductAttrValueDO>) returnMap.get("productValue"));
+                applySaleSummary(storeProductQueryVo);
 
                 appStoreProductRespVoList.add(storeProductQueryVo);
             }
@@ -198,10 +202,21 @@ public class AppStoreProductServiceImpl extends ServiceImpl<StoreProductMapper,S
     @Override
     public AppStoreProductRespVo getStoreProductById(Long id) {
         AppStoreProductRespVo storeProductRespVo = StoreProductConvert.INSTANCE.convert01(this.baseMapper.selectById(id));
+        var catalogProduct=this.baseMapper.selectById(id);
+        storeProductRespVo.setCatalogVersion(catalogProduct.getCatalogVersion());
+        storeProductRespVo.setCatalogConfiguration(co.yixiang.yshop.module.product.service.catalog.CatalogOptions.read(catalogProduct.getCatalogConfig()));
         Map<String, Object> returnMap = appStoreProductAttrService.getProductAttrDetail(id);
         storeProductRespVo.setProductAttr((List<AppStoreProductAttrQueryVo>) returnMap.get("productAttr"));
         storeProductRespVo.setProductValue((Map<String, StoreProductAttrValueDO>) returnMap.get("productValue"));
+        applySaleSummary(storeProductRespVo);
         return  storeProductRespVo;
+    }
+
+    private void applySaleSummary(AppStoreProductRespVo view) {
+        var sale=view.getProductValue().values().stream().filter(v->!Integer.valueOf(0).equals(v.getIsShow())).toList();
+        long available=sale.stream().mapToLong(v->Math.max(0,v.getStock())).sum();
+        view.setStock((int)Math.min(Integer.MAX_VALUE,available));
+        sale.stream().map(StoreProductAttrValueDO::getPrice).filter(java.util.Objects::nonNull).min(BigDecimal::compareTo).ifPresent(view::setPrice);
     }
 
 

@@ -33,6 +33,8 @@ public class StoreProductDO extends BaseDO {
      */
     @TableId
     private Long id;
+    private Long catalogVersion;
+    private String catalogConfig;
 
     /**
      * 店铺id

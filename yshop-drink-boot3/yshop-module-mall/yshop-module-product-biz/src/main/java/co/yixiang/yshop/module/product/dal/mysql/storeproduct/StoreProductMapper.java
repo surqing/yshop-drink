@@ -31,6 +31,7 @@ public interface StoreProductMapper extends BaseMapperX<StoreProductDO> {
         if(allowedShops!=null) wrapper.in(StoreProductDO::getShopId,allowedShops);
 
         wrapper.likeIfPresent(StoreProductDO::getStoreName, reqVO.getStoreName())
+                .eqIfPresent(StoreProductDO::getShopId,reqVO.getShopId())
                 .likeIfPresent(StoreProductDO::getShopName, reqVO.getShopName())
                 .eqIfPresent(StoreProductDO::getIsPostage, reqVO.getIsPostage())
                 .eqIfPresent(StoreProductDO::getCateId,reqVO.getCateId())

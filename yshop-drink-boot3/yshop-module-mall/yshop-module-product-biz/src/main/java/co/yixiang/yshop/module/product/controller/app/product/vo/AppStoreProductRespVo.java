@@ -27,6 +27,8 @@ public class AppStoreProductRespVo implements Serializable {
 
     @Schema(description = "id", required = true)
     private Long id;
+    private Long catalogVersion;
+    private co.yixiang.yshop.module.product.service.catalog.CatalogOptions.Configuration catalogConfiguration;
 
     @Schema(description = "商品所属门店")
     private Integer shopId;

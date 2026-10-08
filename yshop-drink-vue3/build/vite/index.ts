@@ -64,7 +64,16 @@ export function createVitePlugins() {
       dts: 'src/types/auto-components.d.ts',
       // 自定义组件的解析器
       resolvers: [ElementPlusResolver()],
-      globs: ["src/components/**/**.{vue, md}", '!src/components/DiyEditor/components/mobile/**']
+      // 0.25.x checks watcher globs with OR: a negative glob matches build artifacts.
+      // Positive extglobs preserve the mobile-editor exclusion without scanning dist/types.
+      globs: [
+        'src/components/*.{vue,md}',
+        'src/components/!(DiyEditor)/**/*.{vue,md}',
+        'src/components/DiyEditor/*.{vue,md}',
+        'src/components/DiyEditor/!(components)/**/*.{vue,md}',
+        'src/components/DiyEditor/components/*.{vue,md}',
+        'src/components/DiyEditor/components/!(mobile)/**/*.{vue,md}'
+      ]
     }),
     EslintPlugin({
       cache: false,

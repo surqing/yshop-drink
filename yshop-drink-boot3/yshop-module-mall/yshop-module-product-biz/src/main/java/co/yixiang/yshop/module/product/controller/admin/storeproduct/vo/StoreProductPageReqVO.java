@@ -18,6 +18,7 @@ public class StoreProductPageReqVO extends PageParam {
     private String storeName;
 
     private String shopName;
+    private Integer shopId;
 
     @Schema(description = "是否包邮")
     private Byte isPostage;
