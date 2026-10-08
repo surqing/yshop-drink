@@ -45,6 +45,9 @@ public class AppStoreProductController {
 
     private final AppStoreProductService storeProductService;
 
+    @jakarta.annotation.Resource
+    private co.yixiang.yshop.module.product.service.storeproduct.AppStoreProductServiceImpl catalog;
+
 
     /**
      * 获取产品列表
@@ -60,7 +63,8 @@ public class AppStoreProductController {
      */
     @GetMapping("/detail/{id}")
     @Operation(summary = "获取产品详情")
-    public CommonResult<AppStoreProductRespVo> goodsDetail(@PathVariable Long id){
+    public CommonResult<AppStoreProductRespVo> goodsDetail(@PathVariable Long id, @org.springframework.web.bind.annotation.RequestParam Integer shopId){
+        catalog.requireCatalogContext(shopId,id);
         return success(storeProductService.getStoreProductById(id));
     }
 

@@ -50,6 +50,16 @@ import static co.yixiang.yshop.module.product.enums.ErrorCodeConstants.STORE_PRO
 public class AppStoreProductServiceImpl extends ServiceImpl<StoreProductMapper,StoreProductDO> implements AppStoreProductService {
 
     @Resource
+    private org.springframework.jdbc.core.JdbcTemplate orderingJdbc;
+
+    public void requireCatalogContext(Integer shopId, Long productId) {
+        if(shopId==null || shopId<=0 || orderingJdbc.queryForObject("SELECT COUNT(*) FROM yshop_store_shop WHERE id=? AND deleted=0",Long.class,shopId)!=1)
+            throw new IllegalArgumentException("STORE_CONTEXT_REQUIRED");
+        if(productId!=null && orderingJdbc.queryForObject("SELECT COUNT(*) FROM yshop_store_product p JOIN yshop_store_product_category c ON c.id=p.cate_id LEFT JOIN yshop_store_product_category parent ON parent.id=c.parent_id WHERE p.id=? AND p.shop_id=? AND p.is_show=1 AND p.is_integral=0 AND p.deleted=0 AND c.shop_id=p.shop_id AND c.status=0 AND c.deleted=0 AND (c.parent_id=0 OR (parent.shop_id=p.shop_id AND parent.status=0 AND parent.deleted=0 AND parent.parent_id=0))",Long.class,productId,shopId)!=1)
+            throw new IllegalArgumentException("PRODUCT_NOT_AVAILABLE_IN_STORE");
+    }
+
+    @Resource
     private AppStoreProductAttrService appStoreProductAttrService;
     @Resource
     private AppStoreProductReplyService appStoreProductReplyService;
@@ -115,8 +125,12 @@ public class AppStoreProductServiceImpl extends ServiceImpl<StoreProductMapper,S
      */
     @Override
     public List<AppCategoryRespVO> getGoodsList(AppStoreProductQueryParam productQueryParam) {
+        requireCatalogContext(productQueryParam.getShopId(),null);
 
         List<ProductCategoryDO> list = categoryService.getEnableCategoryList(productQueryParam.getShopId());
+        var enabled = list.stream().collect(java.util.stream.Collectors.toMap(ProductCategoryDO::getId, c -> c));
+        list.removeIf(c -> c.getParentId()==null || (c.getParentId()!=0 &&
+                (!enabled.containsKey(c.getParentId()) || !Long.valueOf(0).equals(enabled.get(c.getParentId()).getParentId()))));
         list.sort(Comparator.comparing(ProductCategoryDO::getSort));
         List<AppCategoryRespVO> appCategoryRespVOS =  ProductCategoryConvert.INSTANCE.convertList03(list);
 
@@ -124,7 +138,8 @@ public class AppStoreProductServiceImpl extends ServiceImpl<StoreProductMapper,S
             LambdaQueryWrapper<StoreProductDO> wrapper = new LambdaQueryWrapper<>();
             wrapper.eq(StoreProductDO::getIsShow, ShopCommonEnum.SHOW_1.getValue())
                     .eq(StoreProductDO::getCateId,appCategoryRespVO.getId())
-                    .eq(StoreProductDO::getShopId,productQueryParam.getShopId());
+                    .eq(StoreProductDO::getShopId,productQueryParam.getShopId())
+                    .eq(StoreProductDO::getIsIntegral,0);
             List<StoreProductDO> storeProductDOList = this.baseMapper.selectList(wrapper);
             List<AppStoreProductRespVo> appStoreProductRespVoList = ListUtil.list(false);
             for (StoreProductDO storeProductDO : storeProductDOList) {

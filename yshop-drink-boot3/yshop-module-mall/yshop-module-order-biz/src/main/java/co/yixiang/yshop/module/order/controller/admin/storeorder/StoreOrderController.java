@@ -35,6 +35,9 @@ import static co.yixiang.yshop.framework.common.pojo.CommonResult.success;
 @Validated
 public class StoreOrderController {
 
+    @jakarta.annotation.Resource
+    private co.yixiang.yshop.module.store.service.storeshop.StoreAccessService storeAccess;
+
     @Resource
     private StoreOrderService storeOrderService;
     @Resource
@@ -49,13 +52,14 @@ public class StoreOrderController {
     @Operation(summary = "创建订单")
     @PreAuthorize("@ss.hasPermission('order:store-order:create')")
     public CommonResult<Long> createStoreOrder(@Valid @RequestBody StoreOrderCreateReqVO createReqVO) {
-        return success(storeOrderService.createStoreOrder(createReqVO));
+        throw new org.springframework.security.access.AccessDeniedException("USE_VALIDATED_CUSTOMER_ORDER_CREATION");
     }
 
     @PutMapping("/update")
     @Operation(summary = "更新订单")
     @PreAuthorize("@ss.hasPermission('order:store-order:update')")
     public CommonResult<Boolean> updateStoreOrder(@Valid @RequestBody StoreOrderUpdateReqVO updateReqVO) {
+        storeAccess.requireOrder(updateReqVO.getId());
         storeOrderService.updateStoreOrder(updateReqVO);
         return success(true);
     }
@@ -65,6 +69,7 @@ public class StoreOrderController {
     @Parameter(name = "id", description = "编号", required = true)
     @PreAuthorize("@ss.hasPermission('order:store-order:delete')")
     public CommonResult<Boolean> deleteStoreOrder(@RequestParam("id") Long id) {
+        storeAccess.requireOrder(id);
         storeOrderService.deleteStoreOrder(id);
         return success(true);
     }
@@ -74,6 +79,7 @@ public class StoreOrderController {
     @Parameter(name = "id", description = "编号", required = true)
     @PreAuthorize("@ss.hasPermission('order:store-order:delete')")
     public CommonResult<Boolean> payStoreOrder(@RequestParam("id") Long id) {
+        storeAccess.requireOrder(id);
         storeOrderService.payStoreOrder(id);
         return success(true);
     }
@@ -83,6 +89,7 @@ public class StoreOrderController {
     @Parameter(name = "id", description = "编号", required = true)
     @PreAuthorize("@ss.hasPermission('order:store-order:delete')")
     public CommonResult<Boolean> takeStoreOrder(@RequestParam("id") Long id) {
+        storeAccess.requireOrder(id);
         storeOrderService.takeStoreOrder(id);
         return success(true);
     }
@@ -92,6 +99,7 @@ public class StoreOrderController {
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('order:store-order:query')")
     public CommonResult<StoreOrderRespVO> getStoreOrder(@RequestParam("id") Long id) {
+        storeAccess.requireOrder(id);
         return success(storeOrderService.getStoreOrder(id));
     }
 
@@ -100,6 +108,7 @@ public class StoreOrderController {
     @Parameter(name = "ids", description = "编号列表", required = true, example = "1024,2048")
     @PreAuthorize("@ss.hasPermission('order:store-order:query')")
     public CommonResult<List<StoreOrderRespVO>> getStoreOrderList(@RequestParam("ids") Collection<Long> ids) {
+        ids.forEach(storeAccess::requireOrder);
         List<StoreOrderDO> list = storeOrderService.getStoreOrderList(ids);
         return success(StoreOrderConvert.INSTANCE.convertList(list));
     }
@@ -116,6 +125,7 @@ public class StoreOrderController {
     @Parameter(name = "id", description = "编号", required = true, example = "1024")
     @PreAuthorize("@ss.hasPermission('order:store-order:query')")
     public CommonResult<List<StoreOrderStatusDO>> getStoreOrderRecordList(@RequestParam("id") Long id) {
+        storeAccess.requireOrder(id);
         List<StoreOrderStatusDO> list = storeOrderStatusService.list(new LambdaQueryWrapper<StoreOrderStatusDO>()
                 .eq(StoreOrderStatusDO::getOid,id));
         return success(list);
@@ -136,7 +146,9 @@ public class StoreOrderController {
 
     @GetMapping("/count")
     @Operation(summary = "获得订单统计")
+    @PreAuthorize("@ss.hasPermission('order:store-order:query')")
     public CommonResult<OrderTimeDataDto> getStoreOrderCount() {
+        storeAccess.requireHeadquarters();
         asyncStoreOrderService.getOrderTimeData();
         return success(asyncCountRedisDAO.get());
     }
@@ -146,13 +158,16 @@ public class StoreOrderController {
     @PostMapping(value = "/refund")
     @PreAuthorize("@ss.hasPermission('order:store-order:update')")
     public CommonResult<Boolean> refund(@Validated @RequestBody StoreOrderRefundVO updateReqVO) {
+        storeAccess.requireOrder(updateReqVO.getId());
         storeOrderService.orderRefund(updateReqVO.getId(),updateReqVO.getPayPrice(), 0, null);
         return success(true);
     }
 
     @Operation(summary = "订单通知")
     @GetMapping(value = "/notice")
+    @PreAuthorize("@ss.hasPermission('order:store-order:query')")
     public CommonResult<Long> refund() {
+        storeAccess.requireHeadquarters();
         return success(storeOrderService.orderNotice());
     }
 

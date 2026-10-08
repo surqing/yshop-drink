@@ -35,7 +35,7 @@
 											<view class="iconfont-yshop icon-lamp"></view>
 										</view>
 										<view class="order-detail-steps__icon-item">
-											<view class="iconfont-yshop icon-daojishi" v-if="{active: order.paid == 1 && order.status == 0}"></view>
+											<view class="iconfont-yshop icon-daojishi" v-if="order.paid == 1 && order.status == 0"></view>
 											<view class="iconfont-yshop icon-daojishi order-detail-steps__icon--inactive" v-else></view>
 										</view>
 										<view class="order-detail-steps__icon-item" v-if="order.orderType == 'takeout'">
@@ -132,7 +132,7 @@
 								<view class="font-weight-bold">￥{{ order.couponPrice }}</view>
 							</view>
 							<view class="order-detail-pay-cell">
-								<view>实付金额</view>
+								<view>{{ order.paid == 1 ? '实付金额' : '待付金额' }}</view>
 								<view class="font-weight-bold">￥{{ order.payPrice }}</view>
 							</view>
 						</view>
@@ -153,7 +153,7 @@
 							</view>
 							<view class="order-detail-pay-cell">
 								<view>订单号</view>
-								<view class="font-weight-bold">{{ order.id }}</view>
+								<view class="font-weight-bold">{{ order.orderId }}</view>
 							</view>
 						</view>
 					</list-cell>
@@ -182,6 +182,11 @@
 				</list-cell>
 				<!-- order other info end -->
 			</view>
+            <view v-if="order.paid === 0 && !order.deleted" class="bg-white p-3">
+                <view>待支付 · 支付暂未开放，30 分钟后自动取消并恢复库存</view>
+                <uv-button class="order-cancel-button" text="取消订单" :loading="canceling" @click="cancelUnpaid" />
+            </view>
+            <view v-if="order.deleted" class="bg-white p-3">订单已取消</view>
 			<view class="fixed-bottom flex justify-end bg-white p-2" v-if="order.paid > 0 && order.refundStatus == 0">
 				<view class="mr-1"><uv-button type="success" v-if="order.status < 2" :plain="true" size="small" text="确认收到餐" @click="receive(order)"></uv-button></view>
 				<view><uv-button type="warning" :plain="true" size="small" text="申请退款" @click="refund(order)"></uv-button></view>
@@ -199,7 +204,18 @@ import { formatDateTime } from '@/utils/util'
 import {
   orderDetail,
   orderReceive,
+  orderCancel,
 } from '@/api/order'
+const canceling = ref(false)
+const cancelUnpaid = () => {
+  uni.showModal({title: '取消订单', content: '取消后会恢复库存和预占优惠券', success: async ({confirm}) => {
+    if (!confirm || canceling.value) return
+    canceling.value = true
+    try { const result = await orderCancel(order.value.orderId); if (result !== undefined) { uni.showToast({title: '已取消', icon: 'success'}); uni.switchTab({url: '/pages/order/order'}) } }
+    catch { uni.showToast({title: '取消失败，请重试', icon: 'none'}) }
+    finally { canceling.value = false }
+  }})
+}
 const title = ref('订单详情')
 const order = ref({
 	shop:{name:''},

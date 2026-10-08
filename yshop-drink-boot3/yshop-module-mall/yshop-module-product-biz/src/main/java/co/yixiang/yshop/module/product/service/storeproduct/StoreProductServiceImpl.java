@@ -58,6 +58,9 @@ import static co.yixiang.yshop.module.product.enums.ErrorCodeConstants.*;
 @Validated
 public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,StoreProductDO> implements StoreProductService {
 
+    @jakarta.annotation.Resource
+    private co.yixiang.yshop.module.store.service.storeshop.StoreAccessService storeAccess;
+
     @Resource
     private StoreProductMapper storeProductMapper;
     @Resource
@@ -75,6 +78,7 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
 
     @Override
     public Long createStoreProduct(StoreProductCreateReqVO createReqVO) {
+        storeAccess.requireShop(createReqVO.getShopId().longValue());
         // 插入
         StoreProductDO storeProduct = StoreProductConvert.INSTANCE.convert(createReqVO);
         storeProductMapper.insert(storeProduct);
@@ -83,8 +87,13 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class, isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void updateStoreProduct(StoreProductUpdateReqVO updateReqVO) {
         // 校验存在
+        storeAccess.requireProduct(updateReqVO.getId());
+        storeAccess.requireShop(updateReqVO.getShopId().longValue());
+        storeAccess.requireProductEditable(updateReqVO.getId());
+        if(!java.util.Objects.equals(storeProductMapper.selectById(updateReqVO.getId()).getShopId(),updateReqVO.getShopId())) throw new org.springframework.security.access.AccessDeniedException("PRODUCT_STORE_IMMUTABLE");
         validateStoreProductExists(updateReqVO.getId());
         // 更新
         StoreProductDO updateObj = StoreProductConvert.INSTANCE.convert(updateReqVO);
@@ -92,8 +101,11 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class, isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void deleteStoreProduct(Long id) {
         // 校验存在
+        storeAccess.requireProduct(id);
+        storeAccess.requireProductEditable(id);
         validateStoreProductExists(id);
         // 删除
         storeProductMapper.deleteById(id);
@@ -107,11 +119,13 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
 
     @Override
     public StoreProductDO getStoreProduct(Long id) {
+        storeAccess.requireProduct(id);
         return storeProductMapper.selectById(id);
     }
 
     @Override
     public List<StoreProductDO> getStoreProductList(Collection<Long> ids) {
+        ids.forEach(storeAccess::requireProduct);
         return storeProductMapper.selectBatchIds(ids);
     }
 
@@ -131,12 +145,12 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
 //                pageReqVO.setCatIds(catIds);
 //            }
       //  }
-        return storeProductMapper.selectPage(pageReqVO);
+        return storeProductMapper.selectPage(pageReqVO,storeAccess.allowedShopIds());
     }
 
     @Override
     public List<StoreProductDO> getStoreProductList(StoreProductExportReqVO exportReqVO) {
-        return storeProductMapper.selectList(exportReqVO);
+        return storeProductMapper.selectList(exportReqVO,storeAccess.allowedShopIds());
     }
 
     /**
@@ -453,8 +467,16 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
      * @param storeProductDto 商品
      */
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(rollbackFor = Exception.class, isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void insertAndEditYxStoreProduct(StoreProductDto storeProductDto) {
+        storeAccess.requireShop(storeProductDto.getShopId().longValue());
+        if(storeProductDto.getId()!=null && storeProductDto.getId()>0) {
+            storeAccess.requireProduct(storeProductDto.getId());
+            storeAccess.requireProductEditable(storeProductDto.getId());
+            if(!java.util.Objects.equals(storeProductMapper.selectById(storeProductDto.getId()).getShopId(),storeProductDto.getShopId()))
+                throw new org.springframework.security.access.AccessDeniedException("PRODUCT_STORE_IMMUTABLE");
+        }
+
         //storeProductDto.setDescription(RegexUtil.converProductDescription(storeProductDto.getDescription()));
         ProductResultDto resultDTO = this.computedProduct(storeProductDto.getAttrs());
 

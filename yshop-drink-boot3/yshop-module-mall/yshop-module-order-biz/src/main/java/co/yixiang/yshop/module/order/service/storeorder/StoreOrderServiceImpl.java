@@ -69,6 +69,9 @@ public class StoreOrderServiceImpl implements StoreOrderService {
 
     @Resource
     private co.yixiang.yshop.module.member.service.wallet.WalletService walletService;
+    @jakarta.annotation.Resource
+    private co.yixiang.yshop.module.store.service.storeshop.StoreAccessService storeAccess;
+
     @Resource
     private StoreOrderMapper storeOrderMapper;
     @Resource
@@ -113,11 +116,15 @@ public class StoreOrderServiceImpl implements StoreOrderService {
     public void updateStoreOrder(StoreOrderUpdateReqVO updateReqVO) {
         // 校验存在
         // 更新
-        StoreOrderDO updateObj = StoreOrderConvert.INSTANCE.convert(updateReqVO);
         StoreOrderDO updateObj2 = storeOrderMapper.selectById(updateReqVO.getId());
-        if (updateObj2 == null) {
-            throw exception(STORE_ORDER_NOT_EXISTS);
-        }
+        if (updateObj2 == null) throw exception(STORE_ORDER_NOT_EXISTS);
+        StoreOrderDO updateObj = StoreOrderDO.builder().id(updateObj2.getId()).uid(updateObj2.getUid())
+                .orderId(updateObj2.getOrderId()).orderType(updateObj2.getOrderType()).deliveryName(updateReqVO.getDeliveryName())
+                .deliveryId(updateReqVO.getDeliveryId()).deliveryType(updateReqVO.getDeliveryType())
+                .remark(updateReqVO.getRemark()).build();
+        if (UpdateOrderEnum.ORDER_SEND.getValue().equals(updateReqVO.getUpdateType())
+                && (!Integer.valueOf(1).equals(updateObj2.getPaid()) || !Integer.valueOf(0).equals(updateObj2.getRefundStatus())))
+            throw exception(ORDER_STATUS_ERROR);
 
         //发货自取模式 直接收货
         if(UpdateOrderEnum.ORDER_SEND.getValue().equals(updateReqVO.getUpdateType())
@@ -241,7 +248,7 @@ public class StoreOrderServiceImpl implements StoreOrderService {
      */
     @Override
     public PageResult<StoreOrderRespVO> getStoreOrderPage(StoreOrderPageReqVO pageReqVO) {
-        PageResult<StoreOrderDO> pageResult =  storeOrderMapper.selectPage(pageReqVO);
+        PageResult<StoreOrderDO> pageResult =  storeOrderMapper.selectPage(pageReqVO,storeAccess.allowedShopIds());
         PageResult<StoreOrderRespVO> storeOrderRespVO =  StoreOrderConvert.INSTANCE.convertPage(pageResult);
         for (StoreOrderRespVO storeOrderRespVO1 : storeOrderRespVO.getList()) {
             LambdaQueryWrapper<StoreOrderCartInfoDO> wrapper = new LambdaQueryWrapper<>();
@@ -259,7 +266,7 @@ public class StoreOrderServiceImpl implements StoreOrderService {
 
     @Override
     public List<StoreOrderDO> getStoreOrderList(StoreOrderExportReqVO exportReqVO) {
-        return storeOrderMapper.selectList(exportReqVO);
+        return storeOrderMapper.selectList(exportReqVO,storeAccess.allowedShopIds());
     }
 
     /**

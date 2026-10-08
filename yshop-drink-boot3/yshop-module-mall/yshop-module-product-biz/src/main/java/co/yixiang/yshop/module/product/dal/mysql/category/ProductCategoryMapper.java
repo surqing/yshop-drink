@@ -17,14 +17,9 @@ import java.util.List;
 @Mapper
 public interface ProductCategoryMapper extends BaseMapperX<ProductCategoryDO> {
 
-    default List<ProductCategoryDO> selectList(ProductCategoryListReqVO listReqVO) {
-        Long shopId = SecurityFrameworkUtils.getLoginUser().getShopId();
-        if(shopId == 0) {
-            listReqVO.setShopId(null);
-        }else {
-            listReqVO.setShopId(shopId.intValue());
-        }
+    default List<ProductCategoryDO> selectList(ProductCategoryListReqVO listReqVO, java.util.Collection<Long> allowedShops) {
         return selectList(new LambdaQueryWrapperX<ProductCategoryDO>()
+                .inIfPresent(ProductCategoryDO::getShopId,allowedShops)
                 .likeIfPresent(ProductCategoryDO::getName, listReqVO.getName())
                 .likeIfPresent(ProductCategoryDO::getShopName, listReqVO.getShopName())
                 .eqIfPresent(ProductCategoryDO::getShopId,listReqVO.getShopId())

@@ -22,7 +22,7 @@
     <blank size="10"></blank>
 	<view class="container index-page">
 			<view class="index-banner">
-				<uv-swiper class="index-banner__swiper" height="300" imgMode="aspectFill" keyName="image" :list="listAds" indicatorMode="dot" indicatorStyle="bottom"></uv-swiper>
+				<uv-swiper v-if="listAds.length" class="index-banner__swiper" height="300" imgMode="aspectFill" keyName="image" :list="listAds" indicatorMode="dot" indicatorStyle="bottom"></uv-swiper>
 				<view class="index-banner__intro">
 					<view class="index-banner__greet">您好，{{ isLogin ? member.nickname : '游客' }}</view>
 					<view class="index-banner__note">java-springboot-意向点餐外卖系统</view>
@@ -65,7 +65,7 @@
 						</view>
 					</view>
 					<view class="index-card__action index-card__action--with-icon" @tap="goScore">
-						<image src="/static/images/jifen.png" class="index-card__action-icon"></image>
+						<view class="iconfont iconjifen index-card__action-icon"></view>
 						<text>逛一逛</text>
 					</view>
 				</view>

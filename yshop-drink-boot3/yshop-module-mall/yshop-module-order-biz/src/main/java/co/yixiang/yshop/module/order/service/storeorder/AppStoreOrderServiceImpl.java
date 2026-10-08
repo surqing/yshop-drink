@@ -138,6 +138,9 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
     @Resource
     private co.yixiang.yshop.module.member.service.wallet.WalletService walletService;
 
+    @Resource
+    private co.yixiang.yshop.module.order.service.ordering.OrderPlacementService orderPlacementService;
+
     private static final String LOCK_KEY = "cart:check:stock:lock";
     private static final String STOCK_LOCK_KEY = "cart:do:stock:lock";
 
@@ -176,180 +179,9 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
     @Override
     @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public Map<String, Object> createOrder(Long uid,  AppOrderParam param) {
-        if(OrderLogEnum.ORDER_TAKE_DESK.getValue().equals(param.getOrderType())
-                && StrUtil.isBlank(param.getDeskNumber())){
-            throw exception(STORE_ORDER_DESK_NOT);
-        }
-        //转换参数
-        List<String> productIds = param.getProductId();
-        List<String> numbers = param.getNumber();
-        List<String> specs = param.getSpec();
-
-
-        Integer totalNum = 0;
-        List<String> cartIds = new ArrayList<>();
-
-        StoreShopDO storeShopDO = appStoreShopService.getById(param.getShopId());
-
-        BigDecimal sumPrice = BigDecimal.ZERO;
-        BigDecimal couponPrice = BigDecimal.ZERO;
-        BigDecimal postagePrice = storeShopDO.getDeliveryPrice();
-        BigDecimal deductionPrice = BigDecimal.ZERO;
-
-        //对库存检查加锁
-        RLock lock = redissonClient.getLock(LOCK_KEY);
-        if (lock.tryLock()){
-            try {
-                for (int i = 0;i < productIds.size();i++){
-                    String newSku = StrUtil.replace(specs.get(i),"|",",");
-                    appStoreProductService.checkProductStock(uid, Long.valueOf(productIds.get(i)),
-                            Integer.valueOf(numbers.get(i)), newSku);
-                    totalNum += Integer.valueOf(numbers.get(i));
-
-                    StoreProductAttrValueDO storeProductAttrValue = storeProductAttrValueService
-                            .getOne(Wrappers.<StoreProductAttrValueDO>lambdaQuery()
-                                    .eq(StoreProductAttrValueDO::getSku, newSku)
-                                    .eq(StoreProductAttrValueDO::getProductId, productIds.get(i)));
-
-                    sumPrice = NumberUtil.add(sumPrice, NumberUtil.mul(numbers.get(i),
-                            storeProductAttrValue.getPrice().toString()));
-                }
-
-            }catch (Exception ex) {
-                log.error("[checkProductStock][执行异常]", ex);
-                throw exception(new ErrorCode(999999,ex.getMessage()));
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        //计算优惠券价格
-        if(StrUtil.isNotBlank(param.getCouponId())){
-            CouponUserDO couponUserDO = appCouponUserService.getById(param.getCouponId());
-            if(couponUserDO != null){
-                if(couponUserDO.getLeast().compareTo(sumPrice) > 0) {
-                    throw exception(COUPON_NOT_CONDITION);
-                }
-                couponPrice = couponUserDO.getValue();
-
-                //使用了优惠券扣优惠券
-                couponUserDO.setStatus(ShopCommonEnum.IS_STATUS_1.getValue());
-                appCouponUserService.updateById(couponUserDO);
-
-            }
-        }
-
-
-        BigDecimal payPrice = BigDecimal.ZERO;
-        //计算最终支付价格
-        if(OrderLogEnum.ORDER_TAKE_OUT.getValue().equals(param.getOrderType())){
-            payPrice = NumberUtil.sub(NumberUtil.add(sumPrice,postagePrice),couponPrice,deductionPrice);
-        }else{
-            payPrice = NumberUtil.sub(sumPrice,couponPrice,deductionPrice);
-        }
-
-
-
-        //计算奖励积分
-        BigDecimal gainIntegral = this.getGainIntegral(productIds);
-
-        StoreOrderDO storeOrder = new StoreOrderDO();
-        String orderSn = "";
-        //todo 桌面点餐功能 商业版本才有 官网地址：https://www.yixiang.co
-        if(OrderLogEnum.ORDER_TAKE_DESK.getValue().equals(param.getOrderType())
-                && StrUtil.isNotBlank(param.getOrderId())){
-
-        }else{
-            //生成分布式唯一值
-            orderSn = IdUtil.getSnowflake(0, 0).nextIdStr();
-
-            //添加取餐表
-            OrderNumberDO orderNumberDO = OrderNumberDO.builder().orderId(orderSn).build();
-            orderNumberMapper.insert(orderNumberDO);
-
-            //组合数据
-            LocalDateTime localDateTime = LocalDateTime.now();
-            storeOrder.setGetTime(localDateTime.plusMinutes(param.getGettime()));
-            storeOrder.setNumberId(orderNumberDO.getId());
-            storeOrder.setShopId(storeShopDO.getId());
-            storeOrder.setShopName(storeShopDO.getName());
-            storeOrder.setUid(uid);
-            storeOrder.setOrderId(orderSn);
-            //处理如果是外卖 地址
-            if(OrderLogEnum.ORDER_TAKE_OUT.getValue().equals(param.getOrderType())){
-                if (StrUtil.isEmpty(param.getAddressId())) {
-                    throw exception(SELECT_ADDRESS);
-                }
-                UserAddressDO userAddress = appUserAddressService.getById(param.getAddressId());
-                if (ObjectUtil.isNull(userAddress)) {
-                    throw exception(USER_ADDRESS_NOT_EXISTS);
-                }
-                storeOrder.setRealName(userAddress.getRealName());
-                storeOrder.setUserPhone(userAddress.getPhone());
-                storeOrder.setUserAddress(userAddress.getAddress() + " " + userAddress.getDetail());
-            }
-            storeOrder.setCartId(StrUtil.join(",", cartIds));
-            storeOrder.setTotalNum(totalNum);
-            storeOrder.setTotalPrice(sumPrice);
-            storeOrder.setTotalPostage(storeShopDO.getDeliveryPrice());
-
-            storeOrder.setCouponId(StrUtil.isBlank(param.getCouponId()) ? 0 : Integer.valueOf(param.getCouponId()));
-            storeOrder.setCouponPrice(couponPrice);
-            storeOrder.setPayPrice(payPrice);
-            storeOrder.setPayPostage(storeShopDO.getDeliveryPrice());
-            storeOrder.setDeductionPrice(deductionPrice);
-            storeOrder.setPaid(OrderInfoEnum.PAY_STATUS_0.getValue());
-            storeOrder.setPayType(param.getPayType());
-            storeOrder.setUseIntegral(BigDecimal.ZERO);
-            storeOrder.setBackIntegral(BigDecimal.ZERO);
-            storeOrder.setGainIntegral(gainIntegral);
-            storeOrder.setMark(param.getRemark());
-            storeOrder.setCost(BigDecimal.ZERO);
-            //storeOrder.setUnique(key);
-            storeOrder.setShippingType(OrderInfoEnum.SHIPPIING_TYPE_1.getValue());
-            storeOrder.setOrderType(param.getOrderType());
-
-
-            boolean res = this.save(storeOrder);
-            if (!res) {
-                throw exception(ORDER_GEN_FAIL);
-            }
-        }
-
-
-        // 减库存加销量
-        this.deStockIncSale(productIds,numbers,specs);
-
-
-        //保存购物车商品信息，异步执行
-        storeOrderCartInfoService.saveCartInfo(storeOrder.getId(), storeOrder.getOrderId(),productIds,numbers,specs);
-
-        ////todo 桌面点餐功能 商业版本才有 官网地址：https://www.yixiang.co异步更新桌面信息
-
-
-
-        //增加状态
-        storeOrderStatusService.create(uid,storeOrder.getId(), OrderLogEnum.CREATE_ORDER.getValue(),
-                OrderLogEnum.CREATE_ORDER.getDesc());
-
-        //堂食点餐不需要
-        if(!OrderLogEnum.ORDER_TAKE_DESK.getValue().equals(param.getOrderType())) {
-            //加入延时队列，30分钟自动取消
-            try {
-                RBlockingDeque<Object> blockingDeque = redissonClient.getBlockingDeque(ShopConstants.REDIS_ORDER_OUTTIME_UNPAY_QUEUE );
-                RDelayedQueue<Object> delayedQueue = redissonClient.getDelayedQueue(blockingDeque);
-                delayedQueue.offer(OrderMsg.builder().orderId(orderSn).build(), ShopConstants.ORDER_OUTTIME_UNPAY, TimeUnit.MINUTES);
-                String s = TimeUnit.SECONDS.toSeconds(ShopConstants.ORDER_OUTTIME_UNPAY) + "分钟";
-                log.info("添加延时队列成功 ，延迟时间：" + s + "订单编号：" + orderSn);
-            } catch (Exception e) {
-                log.error("添加延时队列失败：{}",e.getMessage());
-            }
-        }
-
-        Map<String,Object> map = new HashMap<>();
-        map.put("orderId",orderSn);
-        return map;
+        return orderPlacementService.place(uid, param);
     }
+
 
     /**
      * 第三方支付
@@ -492,23 +324,13 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
     public void deStockIncSale(List<String> productIds,List<String> numbers,List<String> specs) {
 
 
-        log.info("========减库存增加销量start=========");
-        //对库存加锁
-        RLock lock = redissonClient.getLock(STOCK_LOCK_KEY);
-        if (lock.tryLock()) {
-            try {
-                for (int i = 0;i < productIds.size();i++){
-                    String newSku = StrUtil.replace(specs.get(i),"|",",");
-                    appStoreProductService.decProductStock(Integer.valueOf(numbers.get(i)),
-                            Long.valueOf(productIds.get(i)),
-                            newSku, 0L, "");
-                }
-            }catch (Exception ex) {
-                log.error("[deStockIncSale][执行异常]", ex);
-                throw exception(new ErrorCode(999999,ex.getMessage()));
-            } finally {
-                lock.unlock();
-            }
+        if (productIds == null || numbers == null || specs == null || productIds.size()!=numbers.size()
+                || productIds.size()!=specs.size()) throw exception(PARAM_ERROR);
+        for (int i=0;i<productIds.size();i++) {
+            int quantity=Integer.parseInt(numbers.get(i));
+            if(quantity<=0) throw exception(PARAM_ERROR);
+            appStoreProductService.decProductStock(quantity,Long.parseLong(productIds.get(i)),
+                    specs.get(i).replace('|',','),0L,"");
         }
     }
 
@@ -803,6 +625,10 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
     @Override
     @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public void cancelOrder(String orderId, Long uid) {
+        if (orderPlacementService.ownsVersion(orderId)) {
+            orderPlacementService.cancel(orderId,uid,uid==null);
+            return;
+        }
         log.info("订单取消：({})",orderId);
         AppStoreOrderQueryVo order = this.getOrderInfo(orderId, uid);
         if (ObjectUtil.isNull(order)) {

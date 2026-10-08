@@ -1,4 +1,5 @@
 import api from './api'
+import { submissionKey, PAYMENT_FROZEN } from '@/utils/ordering-context'
 
 /**
  * 订单列表  
@@ -11,7 +12,8 @@ export function orderTakeFoods(data) {
  * 订单创建  
  */
 export function orderSubmit(data) {
-  return api.post(`/order/create`, data, { login: true })
+  const idempotencyKey = data.idempotencyKey || submissionKey(uni, data)
+  return api.post(`/order/create`, { ...data, idempotencyKey }, { login: true })
 }
 
 
@@ -52,6 +54,7 @@ export function orderRefund(data) {
  * 订单支付 
  */
 export function payUnify(data) {
+  if (PAYMENT_FROZEN) return Promise.reject(new Error('支付暂未开放，订单保持待支付'))
   return api.post(`/order/pay`, data, { login: true })
 }
 
@@ -60,4 +63,9 @@ export function payUnify(data) {
  */
 export function getWechatConfig() {
   return api.get(`/member/wx-mp/create-jsapi-signature`, { url: location.href }, { login: true })
+}
+
+/** Cancel only an authenticated customer's own unpaid order. */
+export function orderCancel(id) {
+  return api.post('/order/cancel', { id }, { login: true })
 }

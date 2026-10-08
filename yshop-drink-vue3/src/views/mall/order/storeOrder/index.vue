@@ -172,7 +172,7 @@
             v-if = "scope.row.statusStr == '未支付'"
             link
             type="primary"
-            @click="openForm('updateOrder', scope.row.id)"
+            @click="openForm('remark', scope.row.id)"
             v-hasPermi="['order:store-order:update']"
           >
             编辑

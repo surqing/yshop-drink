@@ -61,4 +61,7 @@ public class AppOrderParam implements Serializable {
     @Schema(description = "订单号", required = true)
     private String orderId;
 
+    @Schema(description = "同一会员下的订单提交幂等标识")
+    private String idempotencyKey;
+
 }

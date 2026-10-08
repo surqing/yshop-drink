@@ -14,10 +14,10 @@
         <el-input disabled v-model="formData.totalPrice" placeholder="请输入订单总价" />
       </el-form-item>
       <el-form-item label="实际支付金额" prop="payPrice">
-        <el-input v-model="formData.payPrice" placeholder="请输入实际支付金额" />
+        <el-input disabled v-model="formData.payPrice" placeholder="请输入实际支付金额" />
       </el-form-item>
       <el-form-item label="赠送积分" prop="gainIntegral">
-        <el-input v-model="formData.gainIntegral" placeholder="请输入赠送积分" />
+        <el-input disabled v-model="formData.gainIntegral" placeholder="请输入赠送积分" />
       </el-form-item>
      
     </el-form>

@@ -58,11 +58,11 @@ const cart = ref([])
 const uToast = ref()
 
 // onLoad(() => {
-// 	cart.value = uni.getStorageSync('cart')
+// 	cart.value = (uni.getStorageSync('cart') || []).filter(item => String(item.shopId) === String(store.value.id))
 // })
 onShow(() => {
 	//cart.value = []
-	cart.value = uni.getStorageSync('cart')
+	cart.value = (uni.getStorageSync('cart') || []).filter(item => String(item.shopId) === String(store.value.id))
 })
 const getCartGoodsNumber = computed(() => { //计算购物车总数
 	if(cart.value.length == 0) {
@@ -84,6 +84,9 @@ const customStyle = computed(() =>{
 		}
 })
 const handleCartItemAdd = (index) => {
+    if (!Number.isInteger(cart.value[index].maxQuantity) || cart.value[index].number >= cart.value[index].maxQuantity) {
+        uni.showToast({title: '库存不足，请刷新商品', icon: 'none'}); return
+    }
 	cart.value[index].number += 1
 	uni.setStorageSync('cart', JSON.parse(JSON.stringify(cart.value)))
 }
@@ -94,7 +97,7 @@ const handleCartItemReduce = (index) => {
 		cart.value[index].number -= 1
 	}
 	if (!cart.value.length) {
-		cartPopupVisible.value = false
+		// Empty cart remains on this page.
 	}
 	uni.setStorageSync('cart', JSON.parse(JSON.stringify(cart.value)))
 }
