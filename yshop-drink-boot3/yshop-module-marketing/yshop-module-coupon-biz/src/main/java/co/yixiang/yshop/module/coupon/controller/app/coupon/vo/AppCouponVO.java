@@ -97,4 +97,13 @@ public class AppCouponVO {
      */
     private Integer isReceive;
 
+
+    /** Claim window; legacy NULL falls back to the original usage window. */
+    private LocalDateTime claimStartTime;
+    private LocalDateTime claimEndTime;
+    private Long templateVersion;
+    private String couponKind;
+    private String claimMode;
+    private String claimReason;
+    private Long claimedCount;
 }

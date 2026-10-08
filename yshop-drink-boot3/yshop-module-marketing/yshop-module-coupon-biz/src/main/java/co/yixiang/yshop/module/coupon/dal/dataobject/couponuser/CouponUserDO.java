@@ -48,6 +48,7 @@ public class CouponUserDO extends BaseDO {
     /**
      * 优惠券金额
      */
+    @TableField("`value`")
     private BigDecimal value;
     /**
      * 开始时间
@@ -93,4 +94,10 @@ public class CouponUserDO extends BaseDO {
      */
     private String exchangeCode;
 
+    private Long templateVersion;
+    private String redeemedOrderId;
+    private LocalDateTime redeemedAt;
+    private String invalidReason;
+    @TableField(exist=false)
+    private String reservationState;
 }

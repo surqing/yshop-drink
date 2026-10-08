@@ -23,4 +23,5 @@ public class AppReceVO {
     private String code;
 
 
+    private String requestKey;
 }

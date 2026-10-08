@@ -53,6 +53,7 @@ public class CouponDO extends BaseDO {
     /**
      * 优惠券金额
      */
+    @TableField("`value`")
     private BigDecimal value;
     /**
      * 开始时间
@@ -100,4 +101,14 @@ public class CouponDO extends BaseDO {
     @TableField(value = "`limit`")
     private Integer limit;
 
+
+    /** Claim window; legacy NULL falls back to the original usage window. */
+    private LocalDateTime claimStartTime;
+    private LocalDateTime claimEndTime;
+    private Long templateVersion;
+    private String couponKind;
+    private String claimMode;
+
+    @ToString.Exclude
+    private String redemptionCodeHash;
 }

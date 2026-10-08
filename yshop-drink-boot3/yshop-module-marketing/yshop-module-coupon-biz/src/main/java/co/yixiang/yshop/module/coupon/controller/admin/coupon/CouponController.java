@@ -33,6 +33,10 @@ public class CouponController {
 
     @Resource
     private CouponService Service;
+    @Resource
+    private co.yixiang.yshop.module.coupon.service.marketing.CouponMarketingService marketing;
+    @Resource
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @PostMapping("/create")
     @Operation(summary = "创建优惠券")
@@ -95,4 +99,16 @@ public class CouponController {
         ExcelUtils.write(response, "优惠券.xls", "数据", CouponExcelVO.class, datas);
     }
 
+    @GetMapping("/legacy-audit")
+    @PreAuthorize("@ss.hasPermission('coupon::query')")
+    public CommonResult<Map<String,Long>> legacyAudit() {return success(marketing.legacyAudit());}
+    @GetMapping("/statistics")
+    @PreAuthorize("@ss.hasPermission('coupon::query')")
+    public CommonResult<Map<String,Long>> statistics(@RequestParam Long id) {return success(marketing.statistics(id));}
+    @GetMapping("/operations")
+    @PreAuthorize("@ss.hasPermission('coupon::query')")
+    public CommonResult<List<Map<String,Object>>> operations(@RequestParam Long id) {
+        marketing.requireTemplate(id,false);
+        return success(jdbc.queryForList("SELECT kind,actor_id,actor_type,reason,create_time,coupon_user_id FROM yshop_coupon_operation WHERE coupon_id=? ORDER BY create_time DESC LIMIT 100",id));
+    }
 }

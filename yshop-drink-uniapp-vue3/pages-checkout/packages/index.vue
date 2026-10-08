@@ -41,17 +41,18 @@
 							</view>
 							<view class="packages-ticket__right" @click.stop="" v-if="activeTabIndex == 0">
 								<view
-									v-if="item.id != coupon_id"
+									v-if="item.id != coupon_id && isEligible(item)"
 									class="packages-ticket__btn packages-ticket__btn--use immediate-use"
 									:round="true"
 									@tap="useCouponWith(item)"
 								>立即使用</view>
 								<view
-									v-else
+									v-else-if="item.id == coupon_id"
 									class="packages-ticket__btn packages-ticket__btn--use immediate-use"
 									:round="true"
 									@tap="cancelCoupon(item)"
 								>取消使用</view>
+                                <view v-else class="packages-ticket__btn packages-ticket__btn--used">{{ unavailable(item) }}</view>
 							</view>
 						</view>
 					</view>
@@ -84,6 +85,7 @@ import {
   watch,
   toRaw
 } from 'vue'
+import { couponLabels, couponContextMatches } from '@/utils/coupon-context'
 import { eligibleCoupons } from '@/utils/ordering-context'
 import { useMainStore } from '@/store/store'
 import { storeToRefs } from 'pinia'
@@ -140,13 +142,19 @@ const typeInfo = (type) => {
 		return '外卖';
 	}
 }
+let generation=0
+const isEligible=item=>eligibleCoupons([item],store.value.id,orderType.value,amount.value).length>0
+const unavailable=item=>item.reservationState!=='AVAILABLE' ? (couponLabels[item.reservationState] || '需审核') : Number(item.least)>Number(amount.value) ? `商品满${item.least}可用` : '门店或消费方式不适用'
 const getCoupons = async() => {
-	let data = await couponMine({shopId: shop_id.value, type: 0, page:1, pagesize:100});
-	uni.stopPullDownRefresh();
-	if (data) {
-		coupons.value = eligibleCoupons(data, shop_id.value, Number(type.value) === 2 ? 'takeout' : 'takein', amount.value);
-	}
+    const current=++generation,shop=store.value.id,kind=orderType.value
+    try {
+        const data=await couponMine({shopId:shop,type:3,page:1,pagesize:100})
+        if(current!==generation || !couponContextMatches(shop,store.value.id,kind,orderType.value) || String(shop)!==String(shop_id.value))return
+        coupons.value=data
+    }catch {uni.showToast({title:'网络失败，请下拉重试',icon:'none'})}
+    finally{uni.stopPullDownRefresh()}
 }
+watch(()=>store.value.id,()=>{generation++;coupons.value=[];main.DEL_COUPON()})
 const openDetailModal = (mycoupon, index) => {
 	couponIndex.value = index;
 	coupon.value = mycoupon;

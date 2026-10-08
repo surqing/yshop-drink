@@ -1,277 +1,81 @@
 <template>
-	<uv-navbar
-	  :fixed="false"
-	  :title="title"
-	  left-arrow
-	  @leftClick="$onClickLeft"
-	/>
-	<view class="container coupons-page position-relative w-100 h-100 overflow-hidden">
-		<view class="coupons-exchange">
-			<view class="coupons-exchange__input">
-				<uv-search placeholder="请输入兑换码" v-model="exchange_code" @click="exchange"></uv-search>
-			</view>
-		</view>
-		<view class="coupons-tabbar">
-			<view
-				class="coupons-tab"
-				:class="{ 'coupons-tab--active': activeTabIndex == index }"
-				v-for="(item, index) in tabs"
-				:key="index"
-				@tap="handleTab(index)"
-			>
-				<view class="coupons-tab__title">{{ item.title }}</view>
-			</view>
-		</view>
-		<view class="flex-fill">
-			<scroll-view scroll-y class="coupons-list" @scrolltolower="getCoupons(activeTabIndex)">
-				<view class="coupons-list__wrapper" v-if="0 === activeTabIndex">
-					<uv-empty v-if="myCoupons.length == 0" mode="list"></uv-empty>
-					<view class="coupons-item" v-for="(item, index) in myCoupons" :key="index" @tap="openDetailModal(item,index)">
-						<view class="coupons-ticket">
-							<view class="coupons-ticket__body">
-								<view class="coupons-ticket__left">
-									<image
-										class="coupons-ticket__picture"
-										:src="item.image"
-										mode="aspectFill"
-									></image>
-									<view class="coupons-ticket__intro">
-										<view class="coupons-ticket__value">
-											￥
-											<text class="coupons-ticket__amount">{{item.value}}</text>
-											<view>
-												满{{item.least}}减{{item.value}}
-											</view>
-										</view>
-										<view class="coupons-ticket__type">{{ item.title }}</view>
-										<view class="coupons-ticket__date u-line-1">{{formatDateTime(item.startTime, 'yyyy-MM-dd')}}-{{formatDateTime(item.endTime, 'yyyy-MM-dd')}}</view>
-									</view>
-								</view>
-								<view class="coupons-ticket__right" @click.stop="" v-if="activeTabIndex == 1">
-									<view class="coupons-ticket__btn coupons-ticket__btn--use immediate-use" :round="true" @tap="receive(item, index)">立即领取</view>
-								</view>
-								<view class="coupons-ticket__right" @click.stop="" v-if="activeTabIndex == 0">
-									<view v-if="item.reservationState === 'AVAILABLE'" class="coupons-ticket__btn coupons-ticket__btn--use immediate-use" :round="true" @tap="useCouponWith(item)">立即使用</view>
-									<view v-else class="coupons-ticket__btn coupons-ticket__btn--used">{{ item.reservationState === 'RESERVED' ? '待付款预占' : item.reservationState === 'EXPIRED' ? '已过期' : '已使用' }}</view>
-								</view>
-							</view>
-						</view>
-					</view>
-				</view>
-				<view class="coupons-list__wrapper" v-if="1 === activeTabIndex">
-					<uv-empty v-if="notCoupons.length == 0" mode="list"></uv-empty>
-					<view class="coupons-item" v-for="(item, index) in notCoupons" :key="index" @tap="openDetailModal(item,index)">
-						<view class="coupons-ticket">
-							<view class="coupons-ticket__body">
-								<view class="coupons-ticket__left">
-									<image
-										class="coupons-ticket__picture"
-										:src="item.image"
-										mode="aspectFill"
-									></image>
-									<view class="coupons-ticket__intro">
-										<view class="coupons-ticket__value">
-											￥
-											<text class="coupons-ticket__amount">{{item.value}}</text>
-											<view>
-												满{{item.least}}减{{item.value}}
-											</view>
-										</view>
-										<view class="coupons-ticket__type">{{ item.title }}</view>
-										<view class="coupons-ticket__date u-line-1">{{formatDateTime(item.startTime, 'yyyy-MM-dd')}}-{{formatDateTime(item.endTime, 'yyyy-MM-dd')}}</view>
-									</view>
-								</view>
-								<view class="coupons-ticket__right" @click.stop="" v-if="activeTabIndex == 1">
-									<view class="coupons-ticket__btn coupons-ticket__btn--use immediate-use" :round="true" v-if="item.isReceive == 0" @tap="receive(item, index)">立即领取</view>
-									<view v-else class="coupons-ticket__btn coupons-ticket__btn--used immediate-use">已领取</view>
-								</view>
-								<view class="coupons-ticket__right" @click.stop="" v-if="activeTabIndex == 0">
-									<view v-if="item.reservationState === 'AVAILABLE'" class="coupons-ticket__btn coupons-ticket__btn--use immediate-use" :round="true" @tap="useCouponWith(item)">立即使用</view>
-									<view v-else class="coupons-ticket__btn coupons-ticket__btn--used">{{ item.reservationState === 'RESERVED' ? '待付款预占' : item.reservationState === 'EXPIRED' ? '已过期' : '已使用' }}</view>
-								</view>
-							</view>
-						</view>
-					</view>
-				</view>
-			</scroll-view>
-		</view>
-		<modal custom :show="detailModalVisible" @cancel="closeDetailModal" width="90%" title="优惠券详情">
-			<view class="modal-content">
-				<view class="d-flex font-size-extra-lg text-color-base just-content-center mb-20">{{ coupon.title }}</view>
-				<view class="d-flex font-size-sm text-color-base mb-20">
-					有效期：{{formatDateTime(coupon.startTime, 'yyyy-MM-dd')}}-{{formatDateTime(coupon.endTime, 'yyyy-MM-dd')}}
-				</view>
-				<view class="d-flex font-size-sm text-color-base mb-20">
-					领取时间：{{formatDateTime(coupon.createTime)}}
-				</view>
-				<view class="d-flex font-size-sm text-color-base mb-20">
-					券价值：满{{ coupon.least }}减{{ coupon.value }}
-				</view>
-				<view class="d-flex font-size-sm text-color-base mb-20" v-if="activeTabIndex == 1">
-					每人限领：{{ coupon.limit }} 张
-				</view>
-				<view class="d-flex font-size-sm text-color-base mb-20">
-					适用范围：{{typeInfo(coupon.type)}}
-				</view>
-				<view class="d-flex font-size-sm text-color-base mb-20">
-					适用店铺：{{coupon.shopName}}
-				</view>
-			</view>
-		</modal>
-		
-		<!--轻提示-->
-		<uv-toast ref="uToast"></uv-toast>
-	</view>
+  <uv-navbar :fixed="false" title="优惠券" left-arrow @leftClick="$onClickLeft" />
+  <view class="container coupons-page">
+    <view class="coupons-exchange"><input v-model="exchange_code" placeholder="公共兑换码" maxlength="32" /><button size="mini" :disabled="!!claiming" @tap="exchange">兑换</button></view>
+    <view class="coupons-tabbar"><view class="coupons-tab" v-for="(tab,index) in tabs" :key="index" :class="{'coupons-tab--active':activeTabIndex===index}" @tap="handleTab(index)"><view class="coupons-tab__title">{{tab}}</view></view></view>
+    <view class="px-20 text-color-assist font-size-sm">当前门店：{{store.name || '未选择'}}；已领券权益不随活动编辑改变。</view>
+    <scroll-view scroll-y class="coupons-list" @scrolltolower="load(false)">
+      <uv-empty v-if="!items.length && !loading" mode="coupon" />
+      <view class="coupons-list__wrapper">
+        <view class="coupons-item" v-for="item in items" :key="item.id" @tap="openDetailModal(item)">
+          <view class="coupons-ticket__body">
+            <view class="coupons-ticket__left"><image v-if="item.image" class="coupons-ticket__picture" :src="item.image" mode="aspectFill" /><view class="coupons-ticket__intro"><view class="coupons-ticket__value">￥<text class="coupons-ticket__amount">{{item.value}}</text><view>商品满{{item.least}}减{{item.value}}</view></view><view class="coupons-ticket__type">{{item.title}}</view><view class="coupons-ticket__date">{{formatDateTime(item.startTime,'yyyy-MM-dd')}}—{{formatDateTime(item.endTime,'yyyy-MM-dd')}}</view><view>{{item.shopName || '范围待审核'}}</view><view>{{typeInfo(item.type)}}</view></view></view>
+            <view class="coupons-ticket__right" @tap.stop="">
+              <view v-if="activeTabIndex===1 && item.claimReason==='AVAILABLE'" class="coupons-ticket__btn coupons-ticket__btn--use immediate-use" @tap="receive(item)">{{claiming===String(item.id)?'领取中':'立即领取'}}</view>
+              <view v-else-if="activeTabIndex===0 && item.reservationState==='AVAILABLE'" class="coupons-ticket__btn coupons-ticket__btn--use immediate-use" @tap="useCoupon">立即使用</view>
+              <view v-else class="coupons-ticket__btn coupons-ticket__btn--used">{{label(item)}}</view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+    <modal custom :show="detailModalVisible" @cancel="detailModalVisible=false" width="90%" title="优惠券规则">
+      <view class="modal-content"><view>{{coupon.title}}</view><view>商品满{{coupon.least}}减{{coupon.value}}；不抵配送费</view><view>使用：{{formatDateTime(coupon.startTime)}}—{{formatDateTime(coupon.endTime)}}</view><view v-if="activeTabIndex===1">领取：{{formatDateTime(coupon.claimStartTime || coupon.startTime)}}—{{formatDateTime(coupon.claimEndTime || coupon.endTime)}}</view><view>适用：{{coupon.shopName}}，{{typeInfo(coupon.type)}}</view><view v-if="activeTabIndex===1">每人限领{{coupon.limit}}张，已领{{coupon.claimedCount || 0}}张</view><view>{{coupon.couponKind==='NEW_USER'?'服务端注册资格，全商家一次新人权益；不是首次消费。':''}}</view><view>{{coupon.instructions}}</view><view>{{label(coupon)}}</view></view>
+    </modal>
+  </view>
 </template>
-
 <script setup>
-import {
-  ref,
-  watch
-} from 'vue'
-import { useMainStore } from '@/store/store'
-import { storeToRefs } from 'pinia'
-import { onLoad,onShow ,onPullDownRefresh,onHide} from '@dcloudio/uni-app'
-import { formatDateTime,kmUnit } from '@/utils/util'
-import {
-  couponReceive,
-  couponMine,
-  couponIndexApi
-} from '@/api/coupon'
-const main = useMainStore()
-const { isLogin } = storeToRefs(main)
-const title = ref('优惠券')
-
-const tabs = ref([
-	{title: '我的优惠券', page:1, pagesize:10,
-		coupons: []
-	},
-	{title: '未领优惠券', page:1, pagesize:10,
-		coupons: []
-	}
-])
-const activeTabIndex = ref(0)
-const detailModalVisible = ref(false)
-const coupon = ref({})
-const couponIndex = ref(0)
-const exchange_code = ref('')
-const uToast = ref()
-const myCoupons = ref([])
-const notCoupons = ref([])
-
-onShow(() => {
-	getCoupons(0)
-})
-onPullDownRefresh(() => {
-	if(activeTabIndex.value == 0) {
-		myCoupons.value = []
-	}
-	if(activeTabIndex.value == 1) {
-		notCoupons.value = []
-	}
-	tabs.value[activeTabIndex.value].page = 1;
-	getCoupons(activeTabIndex.value)
-})
-watch(activeTabIndex, () => {
-   getCoupons(activeTabIndex.value)
-})
-
-// 兑换
-const exchange = async() => {
-	let data = await couponReceive({code:exchange_code.value});
-	if (data) {
-		uToast.value.show({
-			message: '兑换成功',
-			type: 'success'
-		});
-		tabs.value[0].coupons = [];
-		tabs.value[0].page = 1;
-		getCoupons(0)
-		tabs.value[1].coupons = [];
-		tabs.value[1].page = 1;
-		getCoupons(1)
-	}
+import {ref,computed,watch} from 'vue'
+import {onShow,onPullDownRefresh} from '@dcloudio/uni-app'
+import {storeToRefs} from 'pinia'
+import {useMainStore} from '@/store/store'
+import {formatDateTime} from '@/utils/util'
+import {couponReceive,couponMine,couponIndexApi} from '@/api/coupon'
+import {couponLabels,claimRequestKey,claimSucceeded} from '@/utils/coupon-context'
+const main=useMainStore()
+const {store,isLogin,member}=storeToRefs(main)
+const tabs=['我的优惠券','可领取活动']
+const activeTabIndex=ref(0), myCoupons=ref([]), notCoupons=ref([]), loading=ref(false), claiming=ref('')
+const items=computed(()=>activeTabIndex.value===0?myCoupons.value:notCoupons.value)
+const exchange_code=ref(''), coupon=ref({}), detailModalVisible=ref(false)
+let generation=0,page=1,finished=false
+const label=item=>couponLabels[activeTabIndex.value===0?item.reservationState:item.claimReason] || '需审核'
+const typeInfo=type=>Number(type)===1?'自取':Number(type)===2?'外卖':'自取及外卖'
+const load=async(reset=true)=>{
+  if(!isLogin.value)return
+  if(reset){generation++;page=1;finished=false;myCoupons.value=[];notCoupons.value=[]}
+  else if(loading.value || finished)return
+  const current=generation, shop=store.value.id, tab=activeTabIndex.value, requestedPage=page
+  loading.value=true
+  try {
+    const data=tab===0?await couponMine({shopId:shop,type:3,page:requestedPage,pagesize:20}):await couponIndexApi({id:shop,page:requestedPage,pagesize:20})
+    if(current!==generation || String(shop)!==String(store.value.id) || tab!==activeTabIndex.value)return
+    const target=tab===0?myCoupons:notCoupons
+    target.value=[...target.value,...data.filter(c=>!target.value.some(old=>old.id===c.id))]
+    page=requestedPage+1;finished=data.length<20
+  }catch{uni.showToast({title:'网络失败，可下拉重试',icon:'none'})}
+  finally{if(current===generation)loading.value=false;uni.stopPullDownRefresh()}
 }
-// 使用范围
-const typeInfo = (type) => {
-	if (type == 0) {
-		return '通用'
-	}
-	if (type == 1) {
-		return '自取'
-	}
-	if (type == 2) {
-		return '外卖'
-	}
+const handleTab=index=>{if(activeTabIndex.value!==index){activeTabIndex.value=index;load(true)}}
+onShow(()=>load(true));onPullDownRefresh(()=>load(true));watch(()=>store.value.id,()=>load(true))
+const openDetailModal=item=>{coupon.value=item;detailModalVisible.value=true}
+const useCoupon=()=>uni.switchTab({url:'/pages/menu/menu'})
+const issue=async(id,code)=>{
+  if(claiming.value)return
+  const identity=id?`activity:${id}`:`code:${code}`,uid=member.value.id
+  if(!uid){uni.showToast({title:'请先登录',icon:'none'});return}
+  const key=claimRequestKey(uni,uid,identity)
+  claiming.value=String(id || 'code')
+  try {
+    await couponReceive({...(id?{id}:{code}),requestKey:key})
+    claimSucceeded(uni,uid,identity);detailModalVisible.value=false
+    uni.showToast({title:id?'领取成功':'兑换成功',icon:'success'});await load(true)
+  }catch{ /* Preserve request key on network/business failure. Backend supplies explicit reason. */ }
+  finally{claiming.value=''}
 }
-const handleTab = (index) => {
-	console.log('activeTabIndex2:',index)
-	activeTabIndex.value = index
-}
-const getCoupons = async(type) => {
-	let page = tabs.value[type].page;
-	let pagesize = tabs.value[type].pagesize;
-	// 我的优惠券
-	let data = [];
-	if (type == 0) {
-		myCoupons.value = await couponMine({page:page,pagesize:pagesize});
-	}
-	// 未领优惠券
-	if (type == 1) {
-		notCoupons.value = await couponIndexApi({page:page,pagesize:pagesize});
-	}
-	//console.log('data:',data)
-	uni.stopPullDownRefresh();
-	
-	console.log('tabs.value:',tabs.value[type].title)
-	//tabs.value[type].page++;
-}
-const openDetailModal = (couponData,index) => {
-	couponIndex.value = index;
-	coupon.value = couponData
-	detailModalVisible.value = true
-}
-const useCouponWith = (coupon) => {
-	//coupon.value = coupon
-	useCoupon();
-}
-const closeDetailModal = () => {
-	detailModalVisible.value = false
-	coupon.value = {}
-}
-const useCoupon = () => {
-	uni.switchTab({
-		url: '/pages/menu/menu'
-	})
-}
-const showTip1 = () => {
-	uni.showToast({
-		title: '您暂时还没有赠送中卡券哦~',
-		icon: 'none'
-	})
-}
-const showTip2 = () => {
-	uni.showToast({
-		title: '您暂时还没有券码哦~',
-		icon: 'none'
-	})
-}
-// 领取优惠券
-const receive = async(coupon,index) => {
-	let data = await couponReceive({id:coupon.id});
-	if (data) {
-		uToast.value.show({
-			message: '领取成功',
-			type: 'success'
-		});
-		detailModalVisible.value = false
-		getCoupons(1)
-	}
-}
-
-
+const receive=item=>issue(item.id,null)
+const exchange=()=>{const code=exchange_code.value.trim();if(!code){uni.showToast({title:'请输入公共兑换码',icon:'none'});return}return issue(null,code)}
 </script>
-
 <style lang="scss" scoped>
 // 优惠券页局部 token（与 uni.scss 全局变量配合）
 $coupons-exchange-height: 100rpx;

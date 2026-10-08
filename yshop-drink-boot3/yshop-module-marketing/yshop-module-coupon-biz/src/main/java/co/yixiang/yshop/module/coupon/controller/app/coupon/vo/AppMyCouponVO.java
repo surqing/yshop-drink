@@ -91,4 +91,6 @@ public class AppMyCouponVO {
 
     private LocalDateTime createTime;
 
+    private String unavailableReason;
+    private Long templateVersion;
 }

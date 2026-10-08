@@ -82,4 +82,12 @@ public class CouponBaseVO {
     @NotNull(message = "限领数量不能为空")
     private Integer limit;
 
+
+    /** Claim window; legacy NULL falls back to the original usage window. */
+    private LocalDateTime claimStartTime;
+    private LocalDateTime claimEndTime;
+    private Long templateVersion;
+    private String couponKind;
+    private String claimMode;
+
 }

@@ -66,7 +66,10 @@ public class AppCouponController {
                 .gt(CouponUserDO::getEndTime,nowTime)
                 .and(i->i.eq(CouponUserDO::getType,type).or().eq(CouponUserDO::getType,0))
                 .eq(CouponUserDO::getStatus,ShopCommonEnum.IS_STATUS_0.getValue())
-                .isNull(CouponUserDO::getReservedOrderId);
+                .isNull(CouponUserDO::getReservedOrderId)
+                .isNull(CouponUserDO::getInvalidReason).isNull(CouponUserDO::getRedeemedAt)
+                .isNull(CouponUserDO::getRedeemedOrderId)
+                .gt(CouponUserDO::getValue,java.math.BigDecimal.ZERO).ge(CouponUserDO::getLeast,java.math.BigDecimal.ZERO);
         if(shopId>0) wrapper.and(i->i.eq(CouponUserDO::getShopId,"0").or()
                 .apply("CONCAT(',',shop_id,',') LIKE {0}","%,"+shopId+",%"));
         else wrapper.eq(CouponUserDO::getShopId,"0");
@@ -134,7 +137,8 @@ public class AppCouponController {
     @Operation(summary = "获取未被领取优惠券")
     public CommonResult<Boolean> receive(@RequestBody AppReceVO appReceVO){
         Long uid = getLoginUserId();
-        appCouponService.receive(uid,appReceVO.getId(),appReceVO.getCode());
+        if (appReceVO.getRequestKey() == null) appCouponService.receive(uid,appReceVO.getId(),appReceVO.getCode());
+        else appCouponService.receive(uid,appReceVO.getId(),appReceVO.getCode(),appReceVO.getRequestKey());
         return success(true);
     }
 

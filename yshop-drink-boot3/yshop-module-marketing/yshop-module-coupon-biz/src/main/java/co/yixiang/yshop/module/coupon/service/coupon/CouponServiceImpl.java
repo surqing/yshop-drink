@@ -1,95 +1,49 @@
 package co.yixiang.yshop.module.coupon.service.coupon;
 
 import co.yixiang.yshop.framework.common.pojo.PageResult;
-import co.yixiang.yshop.module.coupon.controller.admin.coupon.vo.CouponCreateReqVO;
-import co.yixiang.yshop.module.coupon.controller.admin.coupon.vo.CouponExportReqVO;
-import co.yixiang.yshop.module.coupon.controller.admin.coupon.vo.CouponPageReqVO;
-import co.yixiang.yshop.module.coupon.controller.admin.coupon.vo.CouponUpdateReqVO;
+import co.yixiang.yshop.framework.mybatis.core.query.LambdaQueryWrapperX;
+import co.yixiang.yshop.module.coupon.controller.admin.coupon.vo.*;
 import co.yixiang.yshop.module.coupon.convert.coupon.CouponConvert;
 import co.yixiang.yshop.module.coupon.dal.dataobject.coupon.CouponDO;
 import co.yixiang.yshop.module.coupon.dal.mysql.coupon.CouponMapper;
-import co.yixiang.yshop.module.store.dal.dataobject.storeshop.StoreShopDO;
-import co.yixiang.yshop.module.store.dal.mysql.storeshop.StoreShopMapper;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
-import org.springframework.stereotype.Service;
-import org.springframework.validation.annotation.Validated;
-
+import co.yixiang.yshop.module.coupon.service.marketing.CouponMarketingService;
+import co.yixiang.yshop.module.coupon.service.marketing.CouponPolicy;
 import jakarta.annotation.Resource;
-import java.util.Collection;
-import java.util.List;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.*;
+import java.util.*;
 
-import static co.yixiang.yshop.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static co.yixiang.yshop.module.coupon.enums.ErrorCodeConstants.COUPON_NOT_EXISTS;
-
-/**
- * 优惠券 Service 实现类
- *
- * @author yshop
- */
 @Service
-@Validated
 public class CouponServiceImpl implements CouponService {
-
-    @Resource
-    private CouponMapper Mapper;
-    @Resource
-    private StoreShopMapper storeShopMapper;
-
-    @Override
-    public Long create(CouponCreateReqVO createReqVO) {
-        // 插入
-        CouponDO  couponDO = CouponConvert.INSTANCE.convert(createReqVO);
-        StoreShopDO storeShopDO = storeShopMapper.selectById(createReqVO.getShopId());
-        couponDO.setShopName(storeShopDO.getName());
-        Mapper.insert(couponDO);
-        // 返回
-        return couponDO.getId();
+    @Resource private CouponMapper mapper;
+    @Resource private CouponMarketingService marketing;
+    private LambdaQueryWrapperX<CouponDO> scoped() {
+        var w=new LambdaQueryWrapperX<CouponDO>();String scope=marketing.adminScopeRegex();
+        if(scope!=null)w.apply("shop_id REGEXP {0}",scope);
+        return w;
     }
-
-    @Override
-    public void update(CouponUpdateReqVO updateReqVO) {
-        // 校验存在
-        validateExists(updateReqVO.getId());
-        // 更新
-        CouponDO updateObj = CouponConvert.INSTANCE.convert(updateReqVO);
-        StoreShopDO storeShopDO = storeShopMapper.selectById(updateReqVO.getShopId());
-        updateObj.setShopName(storeShopDO.getName());
-        Mapper.updateById(updateObj);
+    private CouponDO safe(CouponDO c) {if(c!=null){c.setExchangeCode(null);c.setRedemptionCodeHash(null);}return c;}
+    @Override @Transactional(isolation=Isolation.READ_COMMITTED,rollbackFor=Exception.class)
+    public Long create(CouponCreateReqVO request) {
+        var c=CouponConvert.INSTANCE.convert(request);c.setId(null);marketing.validate(c,null);mapper.insert(c);marketing.auditTemplate(c.getId(),"CREATE","创建活动，不发行到会员");return c.getId();
     }
-
-    @Override
+    @Override @Transactional(isolation=Isolation.READ_COMMITTED,rollbackFor=Exception.class)
+    public void update(CouponUpdateReqVO request) {
+        var old=marketing.requireTemplate(request.getId(),true);var c=CouponConvert.INSTANCE.convert(request);marketing.validate(c,old);mapper.updateById(c);marketing.auditTemplate(c.getId(),"UPDATE","模板变更仅影响未来领取，已领权益不变");
+    }
+    @Override @Transactional(isolation=Isolation.READ_COMMITTED,rollbackFor=Exception.class)
     public void delete(Long id) {
-        // 校验存在
-        validateExists(id);
-        // 删除
-        Mapper.deleteById(id);
+        var old=marketing.requireTemplate(id,true);
+        if(CouponPolicy.number(old,"receive")!=0 || marketing.statistics(id).get("CLAIMED")!=0)throw CouponPolicy.reject("COUPON_HAS_ISSUED_RIGHTS_DISABLE_INSTEAD");
+        mapper.deleteById(id);marketing.auditTemplate(id,"DELETE","删除尚未发行活动，保留操作证据");
     }
-
-    private void validateExists(Long id) {
-        if (Mapper.selectById(id) == null) {
-            throw exception(COUPON_NOT_EXISTS);
-        }
+    @Override public CouponDO get(Long id){marketing.requireTemplate(id,false);return safe(mapper.selectById(id));}
+    @Override public List<CouponDO> getList(){var result=mapper.selectList(scoped().orderByDesc(CouponDO::getId));result.forEach(this::safe);return result;}
+    @Override public PageResult<CouponDO> getPage(CouponPageReqVO request){
+        var w=scoped().eqIfPresent(CouponDO::getShopId,request.getShopId()).likeIfPresent(CouponDO::getShopName,request.getShopName()).likeIfPresent(CouponDO::getTitle,request.getTitle()).orderByDesc(CouponDO::getId);
+        var result=mapper.selectPage(request,w);result.getList().forEach(this::safe);return result;
     }
-
-    @Override
-    public CouponDO get(Long id) {
-        return Mapper.selectById(id);
+    @Override public List<CouponDO> getList(CouponExportReqVO request){
+        var result=mapper.selectList(scoped().eqIfPresent(CouponDO::getShopId,request.getShopId()).likeIfPresent(CouponDO::getTitle,request.getTitle()).orderByDesc(CouponDO::getId));result.forEach(this::safe);return result;
     }
-
-    @Override
-    public List<CouponDO> getList() {
-        return Mapper.selectList(new LambdaQueryWrapper<CouponDO>().eq(CouponDO::getShopId,0));
-    }
-
-    @Override
-    public PageResult<CouponDO> getPage(CouponPageReqVO pageReqVO) {
-        return Mapper.selectPage(pageReqVO);
-    }
-
-    @Override
-    public List<CouponDO> getList(CouponExportReqVO exportReqVO) {
-        return Mapper.selectList(exportReqVO);
-    }
-
 }

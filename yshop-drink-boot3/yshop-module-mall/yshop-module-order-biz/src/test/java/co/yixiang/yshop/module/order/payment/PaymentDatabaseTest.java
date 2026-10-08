@@ -367,6 +367,7 @@ class PaymentDatabaseTest {
                             co.yixiang.yshop.module.order.dal.dataobject.storeorderstatus
                                     .StoreOrderStatusDO.class)) createEntityTable(entity);
         }
+        jdbc.execute("ALTER TABLE yshop_store_order ADD COLUMN ordering_version INT NOT NULL DEFAULT 0");
         jdbc.execute(
                 "CREATE TABLE merchant_details(details_id VARCHAR(64) PRIMARY KEY,pay_type"
                     + " VARCHAR(16),appid VARCHAR(64),mch_id VARCHAR(64),seller VARCHAR(64),deleted"
