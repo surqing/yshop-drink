@@ -28,7 +28,8 @@ class PaymentCancellationDatabaseTest {
                     "yshop_store_product",
                     "yshop_store_product_attr_value",
                     "yshop_coupon_user",
-                    "yshop_order_inventory_reservation");
+                    "yshop_order_inventory_reservation",
+                    "yshop_coupon_operation");
     static final List<String> SNAPSHOT =
             List.of(
                     "yshop_store_order",
@@ -37,6 +38,7 @@ class PaymentCancellationDatabaseTest {
                     "yshop_coupon_user",
                     "yshop_order_inventory_reservation",
                     "yshop_store_order_status",
+                    "yshop_coupon_operation",
                     "yshop_order_payment_attempt",
                     "yshop_order_payment",
                     "yshop_order_payment_conflict",
@@ -57,8 +59,6 @@ class PaymentCancellationDatabaseTest {
         attempts = f.ctx.getBean(PaymentAttemptService.class);
         ordering = new OrderPlacementService(f.jdbc, tm, new PaymentCancellationGuard(f.jdbc));
         for (String t : EXTRA) f.jdbc.execute("DROP TABLE IF EXISTS " + t);
-        f.jdbc.execute(
-                "ALTER TABLE yshop_store_order ADD COLUMN ordering_version INT NOT NULL DEFAULT 0");
         f.jdbc.execute(
                 "CREATE TABLE yshop_store_product(id BIGINT PRIMARY KEY,shop_id BIGINT,stock"
                         + " INT,sales INT)");
@@ -86,7 +86,11 @@ class PaymentCancellationDatabaseTest {
         }
         f.jdbc.update("INSERT INTO yshop_store_product VALUES(1,1,9,1)");
         f.jdbc.update("INSERT INTO yshop_store_product_attr_value VALUES(1,1,9,1)");
-        f.jdbc.update("INSERT INTO yshop_coupon_user VALUES(1,1,1,'order-A')");
+        for(String column:List.of("coupon_id BIGINT DEFAULT 1","shop_id VARCHAR(50) DEFAULT '1'","deleted INT DEFAULT 0","invalid_reason VARCHAR(200)","redeemed_at TIMESTAMP","redeemed_order_id VARCHAR(32)","`value` DECIMAL(10,2) DEFAULT 0.01","least DECIMAL(10,2) DEFAULT 0","type INT DEFAULT 0","start_time TIMESTAMP DEFAULT '2020-01-01 00:00:00'","end_time TIMESTAMP DEFAULT '2030-01-01 00:00:00'")) f.jdbc.execute("ALTER TABLE yshop_coupon_user ADD COLUMN "+column);
+        f.jdbc.execute("CREATE TABLE IF NOT EXISTS yshop_coupon_operation(event_key VARCHAR(96) PRIMARY KEY,coupon_id BIGINT,coupon_user_id BIGINT,order_id VARCHAR(32),actor_id BIGINT,actor_type VARCHAR(16),kind VARCHAR(24),reason VARCHAR(200),create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+        f.jdbc.update("DELETE FROM yshop_coupon_operation");
+        f.jdbc.update("INSERT INTO yshop_coupon_user(id,user_id,status,reserved_order_id) VALUES(1,1,1,'order-A')");
+        f.jdbc.update("UPDATE yshop_store_order SET total_price=0.03,coupon_price=0.01 WHERE order_id='order-A'");
         f.jdbc.update(
                 "INSERT INTO yshop_order_inventory_reservation VALUES('order-A',0,1,1,1,NULL)");
     }

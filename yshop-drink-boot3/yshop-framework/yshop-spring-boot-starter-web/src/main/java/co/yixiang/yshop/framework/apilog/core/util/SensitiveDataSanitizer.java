@@ -26,7 +26,7 @@ public final class SensitiveDataSanitizer {
             "address", "userAddress", "customerAddress", "keyPrivate", "privateKey", "apiV3Key", "apiKey",
             "keyCertPwd", "certificatePassword", "mchKey", "payKey", "keyPassword", "keyCert", "keyPublic",
             "keystore", "keystorePwd", "keyPrivateCertPwd", "paymentCredentialMasterKey",
-            "YSHOP_PAYMENT_CREDENTIAL_MASTER_KEY", "masterKey"
+            "YSHOP_PAYMENT_CREDENTIAL_MASTER_KEY", "masterKey", "exchangeCode", "redemptionCodeHash"
     }).map(SensitiveDataSanitizer::normalize).collect(Collectors.toSet());
 
     private SensitiveDataSanitizer() { }

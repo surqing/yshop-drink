@@ -7,6 +7,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SensitiveDataSanitizerTest {
     @Test
+    void couponGuessAndOneTimeCreationResponseAreRedacted() {
+        String request=SensitiveDataSanitizer.sanitizeRequest("/app-api/coupon/receive",Map.of(),
+                "{\"code\":\"synthetic-coupon-value\",\"requestKey\":\"retry-key\"}",null);
+        String response=SensitiveDataSanitizer.sanitizeJson("{\"data\":{\"id\":1,\"exchangeCode\":\"synthetic-coupon-value\",\"redemptionCodeHash\":\"synthetic-digest\"}}",null);
+        assertFalse(request.contains("synthetic-coupon-value"));
+        assertFalse(response.contains("synthetic-coupon-value"));assertFalse(response.contains("synthetic-digest"));
+        assertTrue(response.contains("\"id\":1"));
+    }
+    @Test
     void stripsPaymentAndIdentitySecretsInMixedCaseNestedArrays() {
         String[] keys = {"keyPrivate", "privateKey", "APIv3Key", "apiKey", "keyCertPwd", "certificatePassword",
                 "appSecret", "secret", "sessionKey", "accessToken", "refreshToken", "Authorization",

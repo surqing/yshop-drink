@@ -1,210 +1,76 @@
 <template>
-  <Dialog :title="dialogTitle" v-model="dialogVisible">
-    <el-form
-      ref="formRef"
-      :model="formData"
-      :rules="formRules"
-      label-width="120px"
-      v-loading="formLoading"
-    >
-      <el-form-item label="展示店铺" prop="shopId">
-        <el-select
-          v-model="formData.shopId"
-          placeholder="选择店铺"
-        >
-          <el-option
-            v-for="item in shopList"
-            :key="item.id"
-            :label="item.name"
-            :value="item.id"
-          />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="可用类型" prop="type">
-        <el-radio-group v-model="formData.type">
-          <el-radio :label="0">通用</el-radio>
-          <el-radio :label="1">自取</el-radio>
-          <el-radio :label="2">外卖</el-radio>
-        </el-radio-group>
-      </el-form-item>
-      <el-form-item label="兑换码" prop="exchangeCode">
-        <el-input v-model="formData.exchangeCode" placeholder="请输入兑换码" />
-      </el-form-item>
-      <el-form-item label="图片" prop="image">
-          <Materials v-model="formData.image" :num="1" type="image" />
-      </el-form-item>
-      <el-form-item label="优惠券名称" prop="title">
-        <el-input v-model="formData.title" placeholder="请输入优惠券名称" />
-      </el-form-item>
-      <el-form-item label="消费多少可用" prop="least">
-        <el-input v-model="formData.least" placeholder="请输入消费多少可用" />
-      </el-form-item>
-      <el-form-item label="优惠券金额" prop="value">
-        <el-input v-model="formData.value" placeholder="请输入优惠券金额" />
-      </el-form-item>
-      <el-form-item label="开始时间" prop="startTime">
-        <el-date-picker
-          v-model="formData.startTime"
-          type="date"
-          value-format="x"
-          placeholder="选择开始时间"
-        />
-      </el-form-item>
-      <el-form-item label="结束时间" prop="endTime">
-        <el-date-picker
-          v-model="formData.endTime"
-          type="date"
-          value-format="x"
-          placeholder="选择结束时间"
-        />
-      </el-form-item>
-      <el-form-item label="发行数量" prop="distribute">
-        <el-input v-model="formData.distribute" placeholder="请输入发行数量" />
-      </el-form-item>
-      <el-form-item label="所需积分" prop="score">
-        <el-input v-model="formData.score" placeholder="请输入所需积分" />
-      </el-form-item>
-      <el-form-item label="限领数量" prop="limit">
-        <el-input v-model="formData.limit" placeholder="请输入限领数量" />
-      </el-form-item>
-      <el-form-item label="使用说明" prop="instructions">
-        <el-input type="textarea" rows="5"  v-model="formData.instructions" placeholder="请输入使用说明" />
-      </el-form-item>
-      <el-form-item label="是否上架" prop="isSwitch">
-        <el-radio-group v-model="formData.isSwitch">
-          <el-radio :label="1">是</el-radio>
-          <el-radio :label="0">否</el-radio>
-        </el-radio-group>
-      </el-form-item>
+  <Dialog :title="formType === 'create' ? '创建优惠活动' : '编辑优惠活动'" v-model="visible" width="min(760px,95vw)">
+    <el-alert title="编辑仅影响未来领取；停用活动不作废已领取权益。优惠仅抵商品小计，积分兑换暂未开放。" type="info" :closable="false" class="mb-15px" />
+    <el-form ref="formRef" :model="data" :rules="rules" label-width="130px" v-loading="loading">
+      <el-form-item label="优惠券名称" prop="title"><el-input v-model="data.title" maxlength="50" /></el-form-item>
+      <el-form-item label="活动类型"><el-radio-group v-model="data.couponKind"><el-radio label="REGULAR">普通满减券</el-radio><el-radio label="NEW_USER">新注册会员券</el-radio></el-radio-group><div class="text-xs">新人按服务端注册时间判断，全商家只享一次；不代表首次消费。</div></el-form-item>
+      <el-form-item label="适用门店" prop="shopId"><el-select v-model="selectedShops" multiple placeholder="明确选择适用门店" style="width:100%"><el-option label="全部门店（仅总部）" value="0" /><el-option v-for="shop in shops" :key="shop.id" :label="shop.name" :value="String(shop.id)" /></el-select></el-form-item>
+      <el-form-item label="消费方式"><el-radio-group v-model="data.type"><el-radio :label="0">通用</el-radio><el-radio :label="1">自取</el-radio><el-radio :label="2">外卖</el-radio></el-radio-group></el-form-item>
+      <el-form-item label="商品满额" prop="least"><el-input-number v-model="data.least" :min="0" :max="999999.99" :precision="2" /> 元</el-form-item>
+      <el-form-item label="优惠金额" prop="value"><el-input-number v-model="data.value" :min="0.01" :max="999999.99" :precision="2" /> 元</el-form-item>
+      <el-form-item label="领取开始" prop="claimStartTime"><el-date-picker v-model="data.claimStartTime" type="datetime" value-format="x" /></el-form-item>
+      <el-form-item label="领取截止" prop="claimEndTime"><el-date-picker v-model="data.claimEndTime" type="datetime" value-format="x" /></el-form-item>
+      <el-form-item label="使用开始" prop="startTime"><el-date-picker v-model="data.startTime" type="datetime" value-format="x" /></el-form-item>
+      <el-form-item label="使用截止" prop="endTime"><el-date-picker v-model="data.endTime" type="datetime" value-format="x" /></el-form-item>
+      <el-form-item label="发行总量" prop="distribute"><el-input-number v-model="data.distribute" :min="0" :max="1000000" :precision="0" /><span class="ml-10px">已领 {{ data.receive || 0 }} 张</span></el-form-item>
+      <el-form-item label="每人限领" prop="limit"><el-input-number v-model="data.limit" :min="1" :max="1000" :precision="0" /> 张，已用/过期券仍计入限额</el-form-item>
+      <el-form-item label="领取方式"><el-radio-group v-model="data.claimMode"><el-radio label="PUBLIC">公开领取</el-radio><el-radio label="CODE">公共兑换码</el-radio></el-radio-group></el-form-item>
+      <el-form-item v-if="data.claimMode === 'CODE'" label="公共兑换码"><div>{{ data.id ? '保留原码，不回显或重置。历史短码建议停止新领取并另建随机码活动。' : '保存时由服务端安全随机生成，只显示一次，请妥善保存。' }} 公共码仍受总量及每人限领约束。</div></el-form-item>
+      <el-form-item label="图片"><Materials v-model="data.image" :num="1" type="image" /></el-form-item>
+      <el-form-item label="使用说明"><el-input v-model="data.instructions" type="textarea" :rows="3" maxlength="1000" /></el-form-item>
+      <el-form-item label="活动启用"><el-switch v-model="enabled" /></el-form-item>
     </el-form>
-    <template #footer>
-      <el-button @click="submitForm" type="primary" :disabled="formLoading">确 定</el-button>
-      <el-button @click="dialogVisible = false">取 消</el-button>
-    </template>
+    <template #footer><el-button type="primary" :loading="loading" @click="save">保存</el-button><el-button @click="close">取消</el-button></template>
+  </Dialog>
+  <Dialog title="公共兑换码已生成" v-model="codeVisible" width="min(560px,95vw)">
+    <el-alert title="只显示本次，请复制保存后再关闭。系统仅保存摘要，不提供再次读取。不要将兑换码写入日志。" type="warning" :closable="false" />
+    <el-input :model-value="generatedCode" readonly class="mt-15px" />
+    <template #footer><el-button @click="generatedCode='';codeVisible=false">已保存，关闭</el-button></template>
   </Dialog>
 </template>
 <script setup lang="ts">
-import * as Api from '@/api/mall/coupon/'
+import * as Api from '@/api/mall/coupon'
 import * as ShopApi from '@/api/mall/store/shop'
-
-const { t } = useI18n() // 国际化
-const message = useMessage() // 消息弹窗
-
-const dialogVisible = ref(false) // 弹窗的是否展示
-const dialogTitle = ref('') // 弹窗的标题
-const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
-const formType = ref('') // 表单的类型：create - 新增；update - 修改
-const formData = ref<Partial<Api.VO>>({
-  id: undefined as number | undefined,
-  shopId: undefined,
-  shopName: undefined,
-  title: undefined,
-  isSwitch: undefined,
-  least: undefined,
-  value: undefined,
-  startTime: undefined,
-  endTime: undefined,
-  weigh: undefined,
-  type: undefined,
-  exchangeCode: undefined,
-  receive: undefined,
-  distribute: undefined,
-  score: undefined,
-  instructions: undefined,
-  image: undefined,
-  limit: undefined
-})
-const shopList = ref<ShopApi.ShopVO[]>([])
-const formRules = reactive({
-  shopId: [{ required: true, message: '店铺id,0表示通用不能为空', trigger: 'blur' }],
-  title: [{ required: true, message: '优惠券名称不能为空', trigger: 'blur' }],
-  least: [{ required: true, message: '消费多少可用不能为空', trigger: 'blur' }],
-  value: [{ required: true, message: '优惠券金额不能为空', trigger: 'blur' }],
-  startTime: [{ required: true, message: '开始时间不能为空', trigger: 'blur' }],
-  endTime: [{ required: true, message: '结束时间不能为空', trigger: 'blur' }],
-  type: [{ required: true, message: '可用类型不能为空', trigger: 'blur' }],
-  distribute: [{ required: true, message: '发行数量不能为空', trigger: 'blur' }],
-  limit: [{ required: true, message: '限领数量不能为空', trigger: 'blur' }],
-  instructions: [{ required: true, message: '使用说明不能为空', trigger: 'blur' }]
-})
-const formRef = ref() // 表单 Ref
-
-/** 打开弹窗 */
+const message = useMessage()
+const visible = ref(false), loading = ref(false), formType = ref('create'), formRef = ref()
+const data = ref<Partial<Api.VO>>({})
+const generatedCode = ref(''), codeVisible = ref(false)
+watch(codeVisible, value => { if(!value) generatedCode.value='' })
+const shops = ref<ShopApi.ShopVO[]>([])
+const selectedShops = ref<string[]>([])
+const enabled = computed({get: () => data.value.isSwitch === 1, set: value => {data.value.isSwitch = value ? 1 : 0}})
+watch(selectedShops, value => { data.value.shopId = value.join(',') }, {deep: true})
+const rules = Object.fromEntries(['title','shopId','least','value','claimStartTime','claimEndTime','startTime','endTime','distribute','limit'].map(key => [key,[{required:true,message:'请填写此项',trigger:'change'}]]))
+const emit = defineEmits(['success'])
 const open = async (type: string, id?: number) => {
-  dialogVisible.value = true
-  dialogTitle.value = t('action.' + type)
-  formType.value = type
-  resetForm()
-  getList()
-  // 修改时，设置数据
-  if (id) {
-    formLoading.value = true
-    try {
-      formData.value = await Api.getCoupon(id)
-      formData.value.shopId = Number(formData.value.shopId)
-    } finally {
-      formLoading.value = false
-    }
-  }
-}
-defineExpose({ open }) // 提供 open 方法，用于打开弹窗
-
-/** 提交表单 */
-const emit = defineEmits(['success']) // 定义 success 事件，用于操作成功后的回调
-const submitForm = async () => {
-  // 校验表单
-  if (!formRef) return
-  const valid = await formRef.value.validate()
-  if (!valid) return
-  // 提交请求
-  formLoading.value = true
+  visible.value = true; formType.value = type; loading.value = true
   try {
-    const data = formData.value as unknown as Api.VO
-    if (formType.value === 'create') {
-      await Api.createCoupon(data)
-      message.success(t('common.createSuccess'))
-    } else {
-      await Api.updateCoupon(data)
-      message.success(t('common.updateSuccess'))
-    }
-    dialogVisible.value = false
-    // 发送操作成功的事件
-    emit('success')
-  } finally {
-    formLoading.value = false
-  }
+    shops.value = await ShopApi.getShopList()
+    const today = Date.now(), end = today + 30 * 86400000
+    data.value = id ? await Api.getCoupon(id) : {title:'',shopId:'',couponKind:'REGULAR',claimMode:'PUBLIC',type:0,least:30,value:5,distribute:100,limit:1,score:0,isSwitch:1,instructions:'',image:'',startTime:today as unknown as Date,endTime:end as unknown as Date,claimStartTime:today,claimEndTime:end}
+    data.value.claimStartTime ||= data.value.startTime
+    data.value.claimEndTime ||= data.value.endTime
+    data.value.couponKind ||= 'REGULAR';data.value.claimMode ||= 'PUBLIC'
+    data.value.exchangeCode = ''
+    selectedShops.value = data.value.shopId ? String(data.value.shopId).split(',') : []
+    formRef.value?.clearValidate()
+  } finally {loading.value=false}
 }
-const getList = async () => {
+const close = async () => {try {await message.confirm('放弃本次未保存的活动修改？');visible.value=false}catch {}}
+const save = async () => {
+  if(!await formRef.value.validate())return
+  if(selectedShops.value.includes('0') && selectedShops.value.length!==1){message.error('全店通用不能与具体门店混选');return}
+  const begin=Number(data.value.claimStartTime), claimEnd=Number(data.value.claimEndTime), start=Number(data.value.startTime), end=Number(data.value.endTime)
+  if(begin>=claimEnd || start>=end || claimEnd>end){message.error('请检查领取/使用时间，领取截止不能晚于使用截止');return}
+  loading.value=true
   try {
-    const data = await ShopApi.getShopList()
-    shopList.value = data
-
-  } finally {
-    
-  }
+    const payload = {...data.value,shopId:selectedShops.value.join(','),score:0,startTime:start,endTime:end,claimStartTime:begin,claimEndTime:claimEnd} as unknown as Api.VO
+    if(formType.value==='create' && payload.claimMode==='CODE') {
+      const result = await Api.createCodeCoupon(payload)
+      generatedCode.value=result.exchangeCode;codeVisible.value=true
+    } else if(formType.value==='create')await Api.createCoupon(payload);else await Api.updateCoupon(payload)
+    message.success('活动已保存，已领取权益保持不变');visible.value=false;emit('success')
+  } finally {loading.value=false}
 }
-/** 重置表单 */
-const resetForm = () => {
-  formData.value = {
-    id: undefined as number | undefined,
-    shopId: undefined,
-    shopName: undefined,
-    title: undefined,
-    isSwitch: 1,
-    least: undefined,
-    value: undefined,
-    startTime: undefined,
-    endTime: undefined,
-    weigh: undefined,
-    type: 0,
-    exchangeCode: undefined,
-    receive: undefined,
-    distribute: undefined,
-    score: undefined,
-    instructions: undefined,
-    image: undefined,
-    limit: undefined
-  }
-  formRef.value?.resetFields()
-}
+defineExpose({open})
 </script>

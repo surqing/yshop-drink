@@ -37,5 +37,6 @@ public interface AppCouponService extends IService<CouponDO> {
      * @param code 兑换码
      */
     void receive(Long uid,Long id,String code);
+    void receive(Long uid,Long id,String code,String requestKey);
 
 }

@@ -12,4 +12,5 @@ public class CouponUserRespVO extends CouponUserBaseVO {
     @Schema(description = "id", required = true, example = "5159")
     private Integer id;
 
+    private String reservationState;
 }

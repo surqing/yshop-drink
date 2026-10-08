@@ -297,32 +297,9 @@ public class OrderPlacementService {
         long coupon = 0;
         if (p.getCouponId() != null && !p.getCouponId().isBlank() && !"0".equals(p.getCouponId())) {
             coupon = positive(p.getCouponId());
-            var c =
-                    one(
-                            "SELECT *, (type+0) AS coupon_type FROM yshop_coupon_user WHERE id=?"
-                                    + " AND user_id=? AND deleted=0 FOR UPDATE",
-                            coupon,
-                            uid);
-            Set<String> shops =
-                    new HashSet<>(Arrays.asList(Objects.toString(c.get("shop_id"), "").split(",")));
-            if (number(c, "status") != 0
-                    || c.get("reserved_order_id") != null
-                    || (!shops.contains("0") && !shops.contains(Long.toString(shopId)))
-                    || dateTime(c.get("start_time")).isAfter(now)
-                    || !dateTime(c.get("end_time")).isAfter(now)
-                    || total.compareTo(money(c.get("least"))) < 0
-                    || (number(c, "coupon_type") != 0
-                            && number(c, "coupon_type")
-                                    != ("takein".equals(p.getOrderType()) ? 1 : 2)))
-                throw reject("COUPON_NOT_AVAILABLE");
-            discount = money(c.get("value")).min(total);
-            if (jdbc.update(
-                            "UPDATE yshop_coupon_user SET status=1,reserved_order_id=? WHERE id=?"
-                                    + " AND user_id=? AND status=0 AND reserved_order_id IS NULL",
-                            orderId,
-                            coupon,
-                            uid)
-                    != 1) throw reject("COUPON_NOT_AVAILABLE");
+            discount = new co.yixiang.yshop.module.coupon.service.marketing.CouponLifecycle(jdbc)
+                    .reserve(coupon, uid, shopId, "takein".equals(p.getOrderType()) ? 1 : 2,
+                            total, now, orderId);
         }
         BigDecimal pay = total.add(postage).subtract(discount);
         // Free checkout is not implicitly a wallet payment. Leave it unpaid for a later explicit
@@ -467,16 +444,9 @@ public class OrderPlacementService {
                                             + " released_at=CURRENT_TIMESTAMP WHERE order_id=? AND"
                                             + " released_at IS NULL",
                                     orderId);
-                            if (number(order, "coupon_id") > 0
-                                    && jdbc.update(
-                                                    "UPDATE yshop_coupon_user SET"
-                                                        + " status=0,reserved_order_id=NULL WHERE"
-                                                        + " id=? AND user_id=? AND"
-                                                        + " reserved_order_id=? AND status=1",
-                                                    order.get("coupon_id"),
-                                                    order.get("uid"),
-                                                    orderId)
-                                            != 1) throw reject("ORDER_COUPON_RESTORE_FAILED");
+                            if (number(order, "coupon_id") > 0)
+                                new co.yixiang.yshop.module.coupon.service.marketing.CouponLifecycle(jdbc)
+                                    .release(number(order,"coupon_id"),number(order,"uid"),orderId);
                             if (jdbc.update(
                                             "UPDATE yshop_store_order SET"
                                                 + " deleted=1,update_time=CURRENT_TIMESTAMP WHERE"

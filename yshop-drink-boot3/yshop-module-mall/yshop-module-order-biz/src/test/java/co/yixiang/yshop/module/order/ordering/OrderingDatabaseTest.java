@@ -126,6 +126,9 @@ class OrderingDatabaseTest {
                     + " VARCHAR(16),remote_confirmed_at TIMESTAMP)");
         db.execute("CREATE TABLE yshop_order_payment(order_id VARCHAR(64))");
         db.execute("CREATE TABLE yshop_order_payment_conflict(claimed_order_id VARCHAR(64))");
+        for(String column:List.of("template_version BIGINT DEFAULT 0","redeemed_order_id VARCHAR(32)","redeemed_at TIMESTAMP","invalid_reason VARCHAR(200)")) db.execute("ALTER TABLE yshop_coupon_user ADD COLUMN "+column);
+        db.execute("DROP TABLE IF EXISTS yshop_coupon_operation");
+        db.execute("CREATE TABLE yshop_coupon_operation(event_key VARCHAR(96) PRIMARY KEY,coupon_id BIGINT,coupon_user_id BIGINT,order_id VARCHAR(32),actor_id BIGINT,actor_type VARCHAR(16),kind VARCHAR(24),reason VARCHAR(200),create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
         fixtures();
     }
 
@@ -1056,7 +1059,8 @@ class OrderingDatabaseTest {
         var controller =
                 new co.yixiang.yshop.module.coupon.controller.app.coupon.AppCouponController(
                         users,
-                        mock(co.yixiang.yshop.module.coupon.service.coupon.AppCouponService.class));
+                        mock(co.yixiang.yshop.module.coupon.service.coupon.AppCouponService.class),
+                        mock(co.yixiang.yshop.module.coupon.service.marketing.CouponCodeGuard.class));
         access(1, false);
         var now = LocalDateTime.now(ZoneId.of("Asia/Shanghai"));
         db.update(

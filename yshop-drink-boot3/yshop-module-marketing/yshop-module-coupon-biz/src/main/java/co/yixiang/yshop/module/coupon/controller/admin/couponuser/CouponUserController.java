@@ -33,6 +33,8 @@ public class CouponUserController {
 
     @Resource
     private CouponUserService userService;
+    @Resource
+    private co.yixiang.yshop.module.coupon.service.marketing.CouponMarketingService marketing;
 
     @PostMapping("/create")
     @Operation(summary = "创建用户领的优惠券")
@@ -70,7 +72,7 @@ public class CouponUserController {
     @GetMapping("/list")
     @Operation(summary = "获得用户领的优惠券列表")
     @Parameter(name = "id", description = "编号列表", required = true, example = "1024")
-   // @PreAuthorize("@ss.hasPermission('coupon:user:query')")
+   @PreAuthorize("@ss.hasPermission('coupon:user:query')")
     public CommonResult<List<CouponUserRespVO>> getUserList(@RequestParam("couponId") Integer couponId) {
         List<CouponUserDO> list = userService.getUserList(couponId);
         return success(CouponUserConvert.INSTANCE.convertList(list));
@@ -78,7 +80,7 @@ public class CouponUserController {
 
     @GetMapping("/page")
     @Operation(summary = "获得用户领的优惠券分页")
-    //@PreAuthorize("@ss.hasPermission('coupon:user:query')")
+    @PreAuthorize("@ss.hasPermission('coupon:user:query')")
     public CommonResult<PageResult<CouponUserRespVO>> getUserPage(@Valid CouponUserPageReqVO pageVO) {
         PageResult<CouponUserDO> pageResult = userService.getUserPage(pageVO);
         return success(CouponUserConvert.INSTANCE.convertPage(pageResult));
@@ -95,4 +97,11 @@ public class CouponUserController {
         ExcelUtils.write(response, "用户领的优惠券.xls", "数据", CouponUserExcelVO.class, datas);
     }
 
+    public record Invalidation(Integer id,String reason) {}
+    @PostMapping("/invalidate")
+    @PreAuthorize("@ss.hasPermission('coupon:user:delete')")
+    public CommonResult<Boolean> invalidate(@RequestBody Invalidation request) {
+        if(request.id()==null)throw new IllegalArgumentException("COUPON_ID_REQUIRED");
+        marketing.invalidate(request.id(),request.reason());return success(true);
+    }
 }

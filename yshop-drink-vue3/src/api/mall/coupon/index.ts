@@ -2,7 +2,7 @@ import request from '@/config/axios'
 
 export interface VO {
   id: number
-  shopId: number
+  shopId: string
   shopName: string
   title: string
   isSwitch: number
@@ -19,6 +19,11 @@ export interface VO {
   instructions: string
   image: string
   limit: number
+  templateVersion: number
+  couponKind: string
+  claimMode: string
+  claimStartTime: Date | number | string
+  claimEndTime: Date | number | string
 }
 // 查询优惠券列表
 export const getCouponList = async () => {
@@ -39,6 +44,9 @@ export const createCoupon = async (data: VO) => {
   return await request.post({ url: `/coupon/create`, data })
 }
 
+export const createCodeCoupon = (data: VO): Promise<{id: number; exchangeCode: string}> =>
+  request.post({url: '/coupon/create-code', data})
+
 // 修改优惠券
 export const updateCoupon = async (data: VO) => {
   return await request.put({ url: `/coupon/update`, data })
@@ -53,3 +61,7 @@ export const deleteCoupon = async (id: number) => {
 export const exportCoupon = async (params) => {
   return await request.download({ url: `/coupon/export-excel`, params })
 }
+
+export const getStatistics = (id: number) => request.get({url: `/coupon/statistics`, params: {id}})
+export const getOperations = (id: number) => request.get({url: `/coupon/operations`, params: {id}})
+export const getLegacyAudit = () => request.get({url: `/coupon/legacy-audit`})
