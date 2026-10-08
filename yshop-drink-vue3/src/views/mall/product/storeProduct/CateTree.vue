@@ -27,12 +27,13 @@ import * as ProductCategoryApi from '@/api/mall/product/category'
 import { defaultProps, handleTree } from '@/utils/tree'
 
 const deptName = ref('')
+const props = defineProps<{ shopId?: number }>()
 const deptList = ref<Tree[]>([]) // 树形结构
 const treeRef = ref<InstanceType<typeof ElTree>>()
 
 /** 获得分类树 */
 const getTree = async () => {
-  const res = await ProductCategoryApi.getCategoryList('')
+  const res = props.shopId ? await ProductCategoryApi.getCategoryList({ shopId: props.shopId }) : []
   deptList.value = []
   deptList.value.push(...handleTree(res))
 }
@@ -53,4 +54,5 @@ const emits = defineEmits(['node-click'])
 onMounted(async () => {
   await getTree()
 })
+watch(() => props.shopId, getTree)
 </script>

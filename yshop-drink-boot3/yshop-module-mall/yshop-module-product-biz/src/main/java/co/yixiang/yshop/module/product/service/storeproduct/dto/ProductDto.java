@@ -24,6 +24,7 @@ public class ProductDto
 
     /** 商品id */
     private Long id;
+    private Long catalogVersion;
 
 
     /** 商品图片 */

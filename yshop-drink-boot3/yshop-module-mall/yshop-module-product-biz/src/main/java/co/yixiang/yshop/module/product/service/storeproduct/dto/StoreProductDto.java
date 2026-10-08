@@ -24,10 +24,13 @@ public class StoreProductDto
 
     /** 商品id */
     private Long id;
+    private Long catalogVersion;
 
     /**
      * 店铺id
      */
+    @NotNull(message = "Store is required")
+    @jakarta.validation.constraints.Min(1)
     private Integer shopId;
 
     /**
@@ -152,6 +155,9 @@ public class StoreProductDto
     private List<FromatDetailDto> items;
 
     //sku结果集
+    @NotNull
+    @jakarta.validation.Valid
+    @jakarta.validation.constraints.Size(min=1,max=100)
     private List<ProductFormatDto> attrs;
 
 

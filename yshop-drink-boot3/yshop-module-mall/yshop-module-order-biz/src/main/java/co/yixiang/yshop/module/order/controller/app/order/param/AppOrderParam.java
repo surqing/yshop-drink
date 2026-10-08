@@ -64,4 +64,7 @@ public class AppOrderParam implements Serializable {
     @Schema(description = "同一会员下的订单提交幂等标识")
     private String idempotencyKey;
 
+    @Schema(description = "Aligned per-line catalog version and option IDs; never client prices")
+    private List<co.yixiang.yshop.module.product.service.catalog.CatalogOptions.Choice> choices;
+
 }

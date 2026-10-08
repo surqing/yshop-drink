@@ -4,6 +4,7 @@ import static co.yixiang.yshop.framework.common.exception.util.ServiceExceptionU
 
 import co.yixiang.yshop.framework.common.exception.ErrorCode;
 import co.yixiang.yshop.module.order.controller.app.order.param.AppOrderParam;
+import co.yixiang.yshop.module.product.service.catalog.CatalogOptions;
 
 import lombok.RequiredArgsConstructor;
 
@@ -30,9 +31,9 @@ public class OrderPlacementService {
             cancellationGuard;
     private Clock clock = Clock.system(ZoneId.of("Asia/Shanghai"));
 
-    record Line(long productId, String sku, int quantity) {}
+    record Line(long productId, String sku, int quantity, CatalogOptions.Choice choice) {}
 
-    record PricedLine(Line line, long skuId, BigDecimal price, String title, String image) {}
+    record PricedLine(Line line, long skuId, BigDecimal price, String title, String image, String snapshot) {}
 
     private static RuntimeException reject(String code) {
         return exception(new ErrorCode(1008003090, code));
@@ -114,14 +115,21 @@ public class OrderPlacementService {
                 || (p.getRemark() != null && p.getRemark().length() > 200))
             throw reject("INVALID_ORDER_INPUT");
         List<Line> lines = new ArrayList<>();
+        if (p.getChoices()!=null && p.getChoices().size()!=p.getProductId().size())
+            throw reject("INVALID_ORDER_CHOICES");
         Set<String> seen = new HashSet<>();
         for (int i = 0; i < p.getProductId().size(); i++) {
             long product = positive(p.getProductId().get(i)), qty = positive(p.getNumber().get(i));
             String sku = p.getSpec().get(i);
             if (qty > 999 || sku == null || sku.length() > 256) throw reject("INVALID_ORDER_LINES");
             sku = sku.replace('|', ',');
-            if (!seen.add(product + ":" + sku)) throw reject("DUPLICATE_ORDER_LINE");
-            lines.add(new Line(product, sku, (int) qty));
+            var choice=p.getChoices()==null?null:p.getChoices().get(i);
+            if(choice!=null) {
+                if(choice.selections()==null || choice.selections().size()>100 || choice.selections().stream().anyMatch(Objects::isNull)) throw reject("INVALID_ORDER_CHOICES");
+                choice=new CatalogOptions.Choice(choice.version(),choice.selections().stream().sorted(Comparator.comparing(CatalogOptions.Selection::groupId,Comparator.nullsFirst(String::compareTo)).thenComparing(CatalogOptions.Selection::optionId,Comparator.nullsFirst(String::compareTo))).toList());
+            }
+            if (!seen.add(product + ":" + sku+":"+Objects.toString(choice,""))) throw reject("DUPLICATE_ORDER_LINE");
+            lines.add(new Line(product, sku, (int) qty,choice));
         }
         lines.sort(Comparator.comparingLong(Line::productId).thenComparing(Line::sku));
         String canonical =
@@ -136,10 +144,10 @@ public class OrderPlacementService {
                                 lines.stream()
                                         .map(
                                                 line ->
-                                                        List.of(
+                                                        line.choice()==null?List.of(line.productId(),line.sku(),line.quantity()):List.of(
                                                                 line.productId(),
                                                                 line.sku(),
-                                                                line.quantity()))
+                                                                line.quantity(),Objects.toString(line.choice(),"")))
                                         .toList()));
         String hash;
         try {
@@ -217,12 +225,15 @@ public class OrderPlacementService {
             }
             var sku =
                     one(
-                            "SELECT id,stock,price FROM yshop_store_product_attr_value WHERE"
+                            "SELECT * FROM yshop_store_product_attr_value WHERE"
                                     + " product_id=? AND sku=? FOR UPDATE",
                             line.productId(),
                             line.sku());
-            BigDecimal price = money(sku.get("price"));
-            if (price.signum() <= 0 || number(sku, "stock") < line.quantity())
+            if(sku.containsKey("is_show") && number(sku,"is_show")!=1) throw reject("SKU_NOT_AVAILABLE");
+            var quote=CatalogOptions.quote(product,line.choice());
+            BigDecimal basePrice=money(sku.get("price"));
+            BigDecimal price = basePrice.add(quote.extra());
+            if (basePrice.signum() <= 0 || price.signum() <= 0 || number(sku, "stock") < line.quantity())
                 throw reject("PRODUCT_STOCK_OR_PRICE_INVALID");
             if (jdbc.update(
                                     "UPDATE yshop_store_product SET stock=stock-?,sales=sales+?"
@@ -250,7 +261,13 @@ public class OrderPlacementService {
                             number(sku, "id"),
                             price,
                             product.get("store_name").toString(),
-                            Objects.toString(product.get("image"), "")));
+                            Objects.toString(product.get("image"), ""),
+                            co.yixiang.yshop.framework.common.util.json.JsonUtils.toJsonString(Map.ofEntries(
+                                Map.entry("version",1),Map.entry("productId",line.productId()),Map.entry("shopId",shopId),
+                                Map.entry("title",product.get("store_name")),Map.entry("skuId",number(sku,"id")),Map.entry("sku",line.sku()),
+                                Map.entry("catalogVersion",product.getOrDefault("catalog_version",0L)),Map.entry("basePrice",basePrice),
+                                Map.entry("options",quote.selected()),Map.entry("optionExtra",quote.extra()),Map.entry("unitPrice",price),
+                                Map.entry("quantity",line.quantity()),Map.entry("lineTotal",price.multiply(BigDecimal.valueOf(line.quantity())))))));
             total = total.add(price.multiply(BigDecimal.valueOf(line.quantity())));
             integral =
                     integral.add(
@@ -344,10 +361,11 @@ public class OrderPlacementService {
             jdbc.update(
                     "INSERT INTO"
                         + " yshop_store_order_cart_info(oid,order_id,product_id,cart_info,`unique`,is_after_sales,title,image,number,price,spec)"
-                        + " VALUES(?,?,?,'',?,1,?,?,?,?,?)",
+                        + " VALUES(?,?,?,?,?,1,?,?,?,?,?)",
                     id,
                     orderId,
                     l.line().productId(),
+                    l.snapshot(),
                     UUID.randomUUID().toString().replace("-", ""),
                     l.title(),
                     l.image(),

@@ -13,10 +13,10 @@
 		 <scroll-view class="cart-page__list" scroll-y>
 		  <view class="cart-page__list-inner">
 		   <uv-empty mode="car" v-if="cart.length == 0"></uv-empty>
-		   <view class="cart-item" v-for="(item, index) in cart" :key="`${item.id}-${item.valueStr || index}`">
+		   <view class="cart-item" v-for="(item, index) in cart" :key="`${item.id}-${item.valueStr || index}-${item.optionsKey || ''}`">
 			<view class="cart-item__info">
 			 <view class="cart-item__name">{{ item.name }}</view>
-			 <view class="cart-item__props">{{ item.valueStr }}</view>
+			 <view class="cart-item__props">{{ item.valueStr }} {{ item.optionLabel || '' }}</view>
 			</view>
 			<view class="cart-item__price">
 			 <text>￥{{ item.price }}</text>
@@ -84,6 +84,9 @@ const customStyle = computed(() =>{
 		}
 })
 const handleCartItemAdd = (index) => {
+    const current = cart.value[index]
+    const sameSku = cart.value.filter(item => item.id === current.id && item.valueStr === current.valueStr).reduce((sum, item) => sum + item.number, 0)
+    if (sameSku >= current.maxQuantity) { uni.showToast({title: '库存不足，请刷新商品', icon: 'none'}); return }
     if (!Number.isInteger(cart.value[index].maxQuantity) || cart.value[index].number >= cart.value[index].maxQuantity) {
         uni.showToast({title: '库存不足，请刷新商品', icon: 'none'}); return
     }

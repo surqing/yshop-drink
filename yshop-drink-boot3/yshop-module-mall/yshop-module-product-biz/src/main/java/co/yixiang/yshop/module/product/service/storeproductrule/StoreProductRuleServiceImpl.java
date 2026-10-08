@@ -27,9 +27,12 @@ public class StoreProductRuleServiceImpl implements StoreProductRuleService {
 
     @Resource
     private StoreProductRuleMapper storeProductRuleMapper;
+    @Resource
+    private co.yixiang.yshop.module.store.service.storeshop.StoreAccessService storeAccess;
 
     @Override
     public Integer createStoreProductRule(StoreProductRuleCreateReqVO createReqVO) {
+        storeAccess.requireHeadquarters();
         // 插入
         StoreProductRuleDO storeProductRule = StoreProductRuleConvert.INSTANCE.convert(createReqVO);
         storeProductRuleMapper.insert(storeProductRule);
@@ -39,6 +42,7 @@ public class StoreProductRuleServiceImpl implements StoreProductRuleService {
 
     @Override
     public void updateStoreProductRule(StoreProductRuleUpdateReqVO updateReqVO) {
+        storeAccess.requireHeadquarters();
         // 校验存在
         validateStoreProductRuleExists(updateReqVO.getId());
         // 更新
@@ -48,6 +52,7 @@ public class StoreProductRuleServiceImpl implements StoreProductRuleService {
 
     @Override
     public void deleteStoreProductRule(Integer id) {
+        storeAccess.requireHeadquarters();
         // 校验存在
         validateStoreProductRuleExists(id);
         // 删除

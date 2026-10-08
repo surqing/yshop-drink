@@ -75,6 +75,10 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
     private ProductCategoryService productCategoryService;
     @Resource
     private StoreShopMapper storeShopMapper;
+    @Resource
+    private co.yixiang.yshop.module.product.service.catalog.CatalogOperationsService catalog;
+    @Resource
+    private org.springframework.jdbc.core.JdbcTemplate catalogJdbc;
 
     @Override
     public Long createStoreProduct(StoreProductCreateReqVO createReqVO) {
@@ -92,12 +96,18 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
         // 校验存在
         storeAccess.requireProduct(updateReqVO.getId());
         storeAccess.requireShop(updateReqVO.getShopId().longValue());
-        storeAccess.requireProductEditable(updateReqVO.getId());
+        catalog.lockShop(updateReqVO.getShopId());
+        catalog.lockedProduct(updateReqVO.getId());
+        catalog.category(Long.parseLong(updateReqVO.getCateId()),updateReqVO.getShopId());
         if(!java.util.Objects.equals(storeProductMapper.selectById(updateReqVO.getId()).getShopId(),updateReqVO.getShopId())) throw new org.springframework.security.access.AccessDeniedException("PRODUCT_STORE_IMMUTABLE");
         validateStoreProductExists(updateReqVO.getId());
         // 更新
         StoreProductDO updateObj = StoreProductConvert.INSTANCE.convert(updateReqVO);
+        updateObj.setStock(null); updateObj.setSales(null); updateObj.setPrice(null);
+        updateObj.setCatalogVersion(null); updateObj.setCatalogConfig(null);
+        updateObj.setSpecType(null);
         storeProductMapper.updateById(updateObj);
+        catalogJdbc.update("UPDATE yshop_store_product SET catalog_version=catalog_version+1 WHERE id=?",updateReqVO.getId());
     }
 
     @Override
@@ -470,19 +480,28 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
     @Transactional(rollbackFor = Exception.class, isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void insertAndEditYxStoreProduct(StoreProductDto storeProductDto) {
         storeAccess.requireShop(storeProductDto.getShopId().longValue());
+        catalog.lockShop(storeProductDto.getShopId());
         if(storeProductDto.getId()!=null && storeProductDto.getId()>0) {
             storeAccess.requireProduct(storeProductDto.getId());
-            storeAccess.requireProductEditable(storeProductDto.getId());
+            catalog.lockedProduct(storeProductDto.getId());
+            if(storeProductDto.getCatalogVersion()==null || !java.util.Objects.equals(storeProductMapper.selectById(storeProductDto.getId()).getCatalogVersion(),storeProductDto.getCatalogVersion()))
+                throw co.yixiang.yshop.module.product.service.catalog.CatalogOptions.reject("CATALOG_CHANGED_REFRESH_REQUIRED");
             if(!java.util.Objects.equals(storeProductMapper.selectById(storeProductDto.getId()).getShopId(),storeProductDto.getShopId()))
                 throw new org.springframework.security.access.AccessDeniedException("PRODUCT_STORE_IMMUTABLE");
         }
 
-        //storeProductDto.setDescription(RegexUtil.converProductDescription(storeProductDto.getDescription()));
+        catalog.category(Long.parseLong(storeProductDto.getCateId()),storeProductDto.getShopId());
+        validateCatalogSkus(storeProductDto);
         ProductResultDto resultDTO = this.computedProduct(storeProductDto.getAttrs());
 
         //添加商品
         StoreProductDO yxStoreProduct = new StoreProductDO();
         BeanUtil.copyProperties(storeProductDto, yxStoreProduct, "sliderImage");
+        boolean editing=storeProductDto.getId()!=null && storeProductDto.getId()>0;
+        if(!editing) yxStoreProduct.setId(null);
+        yxStoreProduct.setSales(null);
+        yxStoreProduct.setCatalogVersion(editing?storeProductDto.getCatalogVersion()+1:1L);
+        yxStoreProduct.setCatalogConfig(null);
         if (storeProductDto.getSliderImage().isEmpty()) {
             throw exception(STORE_PRODUCT_SLIDER_ERROR);
         }
@@ -492,7 +511,7 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
         yxStoreProduct.setOtPrice(BigDecimal.valueOf(resultDTO.getMinOtPrice()));
         yxStoreProduct.setCost(BigDecimal.valueOf(resultDTO.getMinCost()));
         yxStoreProduct.setIntegral(resultDTO.getMinIntegral());
-        yxStoreProduct.setStock(resultDTO.getStock());
+        yxStoreProduct.setStock(editing?null:resultDTO.getStock());
         yxStoreProduct.setSliderImage(String.join(",", storeProductDto.getSliderImage()));
 
 
@@ -551,10 +570,20 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
                         .eq(StoreProductAttrResultDO::getProductId,id).last("limit 1"));
         JSONObject result = JSON.parseObject(storeProductAttrResult.getResult());
         List<StoreProductAttrValueDO> attrValues = storeProductAttrValueService.list(new LambdaQueryWrapper<StoreProductAttrValueDO>().eq(StoreProductAttrValueDO::getProductId, id));
+        var currentDetails=JSON.parseArray(result.get("value").toString(),ProductFormatDto.class);
+        var currentKeys=currentDetails.stream().filter(v->v.getDetail()!=null).map(v->String.join(",",StrUtils.compareTo(new ArrayList<>(v.getDetail().values())))).collect(java.util.stream.Collectors.toSet());
+        attrValues.removeIf(v->!currentKeys.contains(v.getSku()));
         List<ProductFormatDto> productFormatDtos =attrValues.stream().map(i ->{
             ProductFormatDto productFormatDto = new ProductFormatDto();
             BeanUtils.copyProperties(i,productFormatDto);
+            // Spring BeanUtils does not convert BigDecimal to DTO Double fields.
+            productFormatDto.setPrice(i.getPrice().doubleValue());
+            productFormatDto.setCost(i.getCost().doubleValue());
+            productFormatDto.setOtPrice(i.getOtPrice().doubleValue());
             productFormatDto.setPic(i.getImage());
+            var saved=JSON.parseArray(result.get("value").toString(),ProductFormatDto.class).stream()
+                .filter(v->v.getDetail()!=null && String.join(",",StrUtils.compareTo(new ArrayList<>(v.getDetail().values()))).equals(i.getSku())).findFirst();
+            productFormatDto.setDetail(saved.map(ProductFormatDto::getDetail).orElse(java.util.Map.of("规格",i.getSku())));
             return productFormatDto;
         }).collect(Collectors.toList());
         if(SpecTypeEnum.TYPE_1.getValue().equals(storeProduct.getSpecType())){
@@ -687,7 +716,7 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
                 .reduce(Integer::sum)
                 .orElse(0);
 
-        if (stock <= 0) {
+        if (stock < 0) {
             throw exception(STORE_PRODUCT_STOCK_ERROR);
         }
 
@@ -698,6 +727,31 @@ public class StoreProductServiceImpl extends ServiceImpl<StoreProductMapper,Stor
                 .stock(stock)
                 .minIntegral(minIntegral)
                 .build();
+    }
+
+    private void validateCatalogSkus(StoreProductDto p) {
+        if(p.getAttrs()==null || p.getAttrs().isEmpty() || p.getAttrs().size()>100 || !Set.of(0,1).contains(p.getSpecType()))
+            throw co.yixiang.yshop.module.product.service.catalog.CatalogOptions.reject("CATALOG_SKUS_REQUIRED");
+        Set<String> names=new HashSet<>(); long sum=0;
+        for(var sku:p.getAttrs()) {
+            var price=co.yixiang.yshop.module.product.service.catalog.CatalogOptions.money(sku.getPrice()==null?null:BigDecimal.valueOf(sku.getPrice()));
+            if(price.signum()<=0 || sku.getStock()==null || sku.getStock()<0 || sku.getStock()>1000000)
+                throw co.yixiang.yshop.module.product.service.catalog.CatalogOptions.reject("CATALOG_SKU_PRICE_STOCK_INVALID");
+            sum+=sku.getStock();
+            if(p.getSpecType()==1) {
+                if(sku.getDetail()==null || sku.getDetail().isEmpty() || p.getItems()==null || p.getItems().isEmpty() || p.getItems().size()>5)
+                    throw co.yixiang.yshop.module.product.service.catalog.CatalogOptions.reject("CATALOG_SKU_DETAIL_REQUIRED");
+                if(sku.getDetail().size()!=p.getItems().size()) throw co.yixiang.yshop.module.product.service.catalog.CatalogOptions.reject("CATALOG_SKU_DETAIL_INVALID");
+                Set<String> groupNames=new HashSet<>();
+                for(var group:p.getItems()) {
+                    if(group.getValue()==null || !groupNames.add(group.getValue()) || group.getDetail()==null || group.getDetail().size()>20 || !group.getDetail().contains(sku.getDetail().get(group.getValue())))
+                        throw co.yixiang.yshop.module.product.service.catalog.CatalogOptions.reject("CATALOG_SKU_DETAIL_INVALID");
+                }
+                for(String v:sku.getDetail().values()) if(v==null || v.isBlank() || v.length()>40 || v.matches(".*[,|_-].*")) throw co.yixiang.yshop.module.product.service.catalog.CatalogOptions.reject("CATALOG_SKU_LABEL_INVALID");
+                if(!names.add(String.join(",",StrUtils.compareTo(new ArrayList<>(sku.getDetail().values()))))) throw co.yixiang.yshop.module.product.service.catalog.CatalogOptions.reject("CATALOG_DUPLICATE_SKU");
+            }
+        }
+        if(sum>10000000 || (p.getSpecType()==0 && p.getAttrs().size()!=1)) throw co.yixiang.yshop.module.product.service.catalog.CatalogOptions.reject("CATALOG_SKUS_INVALID");
     }
 
 

@@ -16,6 +16,8 @@ public class ProductCategoryBaseVO {
     /**
      * 店铺id
      */
+    @NotNull(message = "请选择门店")
+    @jakarta.validation.constraints.Min(1)
     private Integer shopId;
 
     /**
@@ -24,7 +26,8 @@ public class ProductCategoryBaseVO {
     private String shopName;
 
     @Schema(description = "父分类编号", required = true, example = "1")
-    //@NotNull(message = "父分类编号不能为空")
+    @NotNull(message = "请选择上级分类，顶级使用0")
+    @jakarta.validation.constraints.Min(0)
     private Long parentId;
 
     @Schema(description = "分类名称", required = true, example = "办公文具")
@@ -43,6 +46,8 @@ public class ProductCategoryBaseVO {
 
     @Schema(description = "开启状态", required = true, example = "0")
     @NotNull(message = "开启状态不能为空")
+    @jakarta.validation.constraints.Min(0)
+    @jakarta.validation.constraints.Max(1)
     private Integer status;
 
 }

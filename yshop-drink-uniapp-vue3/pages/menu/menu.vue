@@ -143,21 +143,28 @@
 					<view class="wrapper">
 						<view class="basic">
 							<view class="name">{{ good.storeName }}</view>
-							<view class="tips flex justify-between">{{ good.storeInfo }} <text style="color: red;">可获积分:10</text></view>
+							<view class="tips flex justify-between">{{ good.storeInfo }}</view>
 						</view>
 						<view class="properties">
-							<view class="property" v-for="(item, index) in good.productAttr" :key="index">
+							<view class="property">
 								<view class="title">
-									<text class="name">{{ item.attrName }}</text>
+									<text class="name">库存规格</text>
 								</view>
 								<view class="values">
-									<view class="value" v-for="(value, key) in item.attrValueArr" :key="key"
-										:class="{'default': value == newValue[index]}"
-										@tap="changePropertyDefault(index, key,false)">
-										{{ value }}
-									</view>
+									<template v-for="(value, sku) in good.productValue" :key="sku"><view v-if="value.isShow !== 0" class="value" :class="{'default': sku === good.valueStr}" @tap="selectInventorySku(sku)">{{ sku }} · ¥{{ value.price }} {{ value.stock <= 0 ? '售罄' : '' }}</view></template>
 								</view>
 							</view>
+						</view>
+					</view>
+				</scroll-view>
+				<scroll-view scroll-y style="max-height: 300rpx; padding: 16rpx">
+					<view v-for="group in customizationGroups" :key="group.id" class="property customization-group" :data-group-id="group.id">
+						<view>{{ group.name }}（{{ group.min > 0 ? '必选' : '可选' }}，最多 {{ group.max }} 份）</view>
+						<view v-for="option in group.options.filter(o => o.enabled)" :key="option.id" style="display:inline-flex;align-items:center;margin:8rpx">
+							<button class="customization-option" :data-option-id="option.id" size="mini" :type="selectedQuantity(group.id, option.id) ? 'primary' : 'default'" @tap="chooseCustomization(group, option)">
+								{{ option.name }} +¥{{ option.surcharge }} {{ selectedQuantity(group.id, option.id) || '' }}
+							</button>
+							<button v-if="group.maxPerOption > 1 && selectedQuantity(group.id, option.id)" size="mini" @tap="reduceCustomization(group, option)">−</button>
 						</view>
 					</view>
 				</scroll-view>
@@ -194,10 +201,10 @@
 					 </view>
 					 <scroll-view class="cart-list" scroll-y>
 					  <view class="wrapper">
-					   <view class="item" v-for="(item, index) in cart" :key="`${item.id}-${item.valueStr || index}`">
+					   <view class="item" v-for="(item, index) in cart" :key="`${item.id}-${item.valueStr || index}-${item.optionsKey || ''}`">
 						<view class="left">
 						 <view class="name">{{ item.name }}</view>
-						 <view class="props">{{ item.valueStr }}</view>
+						 <view class="props">{{ item.valueStr }} {{ item.optionLabel || '' }}</view>
 						</view>
 						<view class="center">
 						 <text>￥{{ item.price }}</text>
@@ -241,6 +248,7 @@ import {
 } from 'vue'
 import { useMainStore } from '@/store/store'
 import { reconcileCart } from '@/utils/ordering-context'
+import { activeGroups, defaults, preview, pruneSelections, selectionKey } from '@/utils/catalog-options'
 import { storeToRefs } from 'pinia'
 import { onLoad,onShow ,onPullDownRefresh,onHide,onUnload} from '@dcloudio/uni-app'
 import { formatDateTime,kmUnit,throttle } from '@/utils/util'
@@ -265,6 +273,33 @@ const menuScrollIntoView = ref('')
 const cart = ref([])
 const goodDetailModalVisible = ref(false)
 const good= ref({})
+const selections = ref([])
+const customizationGroups = computed(() => activeGroups(good.value.catalogConfiguration, selections.value))
+const selectedQuantity = (groupId, optionId) => selections.value.find(s => s.groupId === groupId && s.optionId === optionId)?.quantity || 0
+const updateCustomizationPrice = () => {
+    try { good.value.price = preview(good.value.catalogConfiguration, selections.value, good.value.basePrice).price.toFixed(2) }
+    catch { // Show partial selection price while the customer is still choosing required groups.
+        let extra = 0
+        for (const g of customizationGroups.value) for (const o of g.options) extra += Math.round(Number(o.surcharge) * 100) * selectedQuantity(g.id, o.id)
+        good.value.price = ((Math.round(Number(good.value.basePrice || 0) * 100) + extra) / 100).toFixed(2)
+    }
+}
+const chooseCustomization = (group, option) => {
+    let next = [...selections.value]
+    const old = next.find(s => s.groupId === group.id && s.optionId === option.id)
+    if (!group.multiple) next = next.filter(s => s.groupId !== group.id)
+    if (old && group.maxPerOption === 1) next = next.filter(s => !(s.groupId === group.id && s.optionId === option.id))
+    else if ((old?.quantity || 0) < group.maxPerOption && next.filter(s => s.groupId === group.id).reduce((a, s) => a + s.quantity, 0) < group.max) {
+        next = next.filter(s => !(s.groupId === group.id && s.optionId === option.id))
+        next.push({ groupId: group.id, optionId: option.id, quantity: (old?.quantity || 0) + 1 })
+    }
+    selections.value = pruneSelections(good.value.catalogConfiguration, next)
+    updateCustomizationPrice()
+}
+const reduceCustomization = (group, option) => {
+    selections.value = pruneSelections(good.value.catalogConfiguration, selections.value.map(s => s.groupId === group.id && s.optionId === option.id ? { ...s, quantity: s.quantity - 1 } : s).filter(s => s.quantity > 0))
+    updateCustomizationPrice()
+}
 const category = ref({})
 const cartPopupVisible = ref(false)
 const sizeCalcState = ref(false)
@@ -455,7 +490,9 @@ const getShopList = async(res) => {
     }
 }
 const refreshCart = () => {
-    cart.value = reconcileCart(uni.getStorageSync('cart'), goods.value, store.value.id)
+    const previous = uni.getStorageSync('cart') || []
+    cart.value = reconcileCart(previous, goods.value, store.value.id)
+    if (previous.length !== cart.value.length) uni.showToast({ title: '商品配置或库存已更新，请重新确认', icon: 'none' })
     uni.setStorageSync('cart', JSON.parse(JSON.stringify(cart.value)))
     main.SET_CART(cart.value)
     cartPopupVisible.value = false
@@ -538,18 +575,23 @@ const calcSize = () => {
 	sizeCalcState.value = true
 }
 const handleAddToCart = (cate, newGood, num) =>{ //添加到购物车
+    let quote
+    try { quote = preview(newGood.catalogConfiguration, selections.value, newGood.basePrice) }
+    catch (e) { uni.showToast({ title: e.message, icon: 'none' }); return false }
+    const optionsKey = selectionKey(selections.value)
     const sku = String(good.value.valueStr || '').replace(/\|/g, ',')
     const value = newGood?.productValue?.[sku]
-    const existing = cart.value.find(item => item.id === newGood.id && String(item.valueStr).replace(/\|/g, ',') === sku)
+    const existing = cart.value.find(item => item.id === newGood.id && String(item.valueStr).replace(/\|/g, ',') === sku && (item.optionsKey || '[]') === optionsKey)
+    const aggregate = cart.value.filter(item => item.id === newGood.id && String(item.valueStr).replace(/\|/g, ',') === sku).reduce((sum, item) => sum + item.number, 0)
     const available = Math.min(Number(newGood?.stock), Number(value?.stock))
     if (String(newGood?.shopId) !== String(store.value.id) || !value || !Number.isInteger(num)
-        || num <= 0 || (existing?.number || 0) + num > available || store.value.status !== 1) {
+        || value.isShow === 0 || num <= 0 || aggregate + num > available || store.value.status !== 1) {
         uni.showToast({ title: '商品暂不可售或库存不足', icon: 'none' })
         return
     }
 	const index = cart.value.findIndex(item => {
 		if (newGood) {
-			return (item.id === newGood.id) && (String(item.valueStr).replace(/\|/g, ',') === sku)
+			return (item.id === newGood.id) && (String(item.valueStr).replace(/\|/g, ',') === sku) && (item.optionsKey || '[]') === optionsKey
 		} else {
 			return item.id === newGood.id
 		}
@@ -561,7 +603,9 @@ const handleAddToCart = (cate, newGood, num) =>{ //添加到购物车
 			id: newGood.id,
 			cate_id: cate.id,
 			name: newGood.storeName,
-			price: Number(value.price),
+			price: quote.price,
+            selections: JSON.parse(JSON.stringify(selections.value)), optionsKey, optionLabel: quote.label,
+            catalogVersion: Number(newGood.catalogVersion || 0),
             shopId: store.value.id,
             maxQuantity: available,
 			number: num,
@@ -570,6 +614,7 @@ const handleAddToCart = (cate, newGood, num) =>{ //添加到购物车
 		})
 	}
 	uni.setStorageSync('cart', JSON.parse(JSON.stringify(cart.value)))
+    return true
 }
 const handleReduceFromCart = (item, good) => {
 	const index = cart.value.findIndex(item => item.id === good.id)
@@ -586,6 +631,7 @@ const showGoodDetailModal = (item, newGood) => {
 		number: 1
 	}))
 	category.value = JSON.parse(JSON.stringify(item))
+    selections.value = defaults(newGood.catalogConfiguration)
 	goodDetailModalVisible.value = true;
 	console.log('goodDetailModalVisible:',goodDetailModalVisible.value)
 	changePropertyDefault(0, 0,true);
@@ -596,6 +642,12 @@ const closeGoodDetailModal = () => { //关闭饮品详情模态框
 	good.value = {}
 }
 const changePropertyDefault = (index, key, isDefault) => { //改变默认属性值
+	if (isDefault) {
+        const entries = Object.entries(good.value.productValue || {}).filter(([, value]) => value.isShow !== 0)
+        const first = entries.find(([, value]) => value.stock > 0) || entries[0]
+        if (first) selectInventorySku(first[0]); else { good.value.stock = 0; good.value.price = '0.00' }
+        return
+    }
 	let valueStr = ''
 	console.debug('[menu] product ID:', good.value.id)
 	if(isDefault){
@@ -624,11 +676,22 @@ const changePropertyDefault = (index, key, isDefault) => { //改变默认属性�
 	
 	//let productValue = good.value.productValue[valueStr]
 	good.value.number = 1;
-	good.value.price = parseFloat(productValue.price).toFixed(2);
-	good.value.stock = productValue.stock;
+	if (!productValue) { good.value.stock = 0; good.value.price = '0.00'; return }
+	good.value.basePrice = Number(productValue.price)
+	updateCustomizationPrice()
+	good.value.stock = productValue.isShow === 0 ? 0 : productValue.stock;
 	good.value.image = productValue.image ? productValue.image : good.value.image;
 	good.value.valueStr = valueStr
 
+}
+const selectInventorySku = (sku) => {
+    const value = good.value.productValue?.[sku]
+    if (!value || value.isShow === 0) return
+    good.value.valueStr = sku
+    good.value.number = 1
+    good.value.stock = value.stock
+    good.value.basePrice = Number(value.price)
+    updateCustomizationPrice()
 }
 const handlePropertyAdd = () => {
 	good.value.number += 1
@@ -642,8 +705,7 @@ const handleAddToCartInModal = () => {
 		uToast.value.show({message:'商品库存不足',type: 'error'});
 		return;
 	}
-	handleAddToCart(category.value, good.value, good.value.number)
-	closeGoodDetailModal()
+	if (handleAddToCart(category.value, good.value, good.value.number)) closeGoodDetailModal()
 }
 const openCartPopup = () => { //打开/关闭购物车列表popup
 	popup.value.open()
@@ -664,6 +726,9 @@ const handleCartClear = () => { //清空购物车
 	})
 }
 const handleCartItemAdd = (index) => {
+    const current = cart.value[index]
+    const sameSku = cart.value.filter(item => item.id === current.id && item.valueStr === current.valueStr).reduce((sum, item) => sum + item.number, 0)
+    if (sameSku >= current.maxQuantity) { uni.showToast({title: '库存不足，请刷新商品', icon: 'none'}); return }
     if (!Number.isInteger(cart.value[index].maxQuantity) || cart.value[index].number >= cart.value[index].maxQuantity) {
         uni.showToast({title: '库存不足，请刷新商品', icon: 'none'}); return
     }

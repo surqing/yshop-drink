@@ -107,7 +107,7 @@
 									<view>￥{{ item.price }}</view>
 								</view>
 							</view>
-							<view class="text-truncate font-size-base text-color-assist">{{ item.valueStr }}</view>
+							<view class="text-truncate font-size-base text-color-assist">{{ item.valueStr }} {{ item.optionLabel || '' }}</view>
 						</view>
 					</list-cell>
 				</view>
@@ -513,6 +513,7 @@ const pay = async() => {
             productId: cart.value.map(item => item.id),
             spec: cart.value.map(item => item.valueStr.replace(/,/g, '|')),
             number: cart.value.map(item => item.number),
+            choices: cart.value.map(item => ({ version: Number(item.catalogVersion || 0), selections: item.selections || [] })),
             couponId: coupon.value.id || 0
         }
         const order = await orderSubmit(data)
@@ -524,7 +525,7 @@ const pay = async() => {
         await uni.redirectTo({ url: '/pages-order/orders/detail?id=' + order.orderId })
     } catch (error) {
         // Preserve the cart and submission key: a failed response can follow a committed order.
-        uni.showToast({ title: '提交未确认，请重试；不会重复创建订单', icon: 'none' })
+        uni.showToast({ title: String(error?.msg || error?.message || '').includes('CATALOG_CHANGED') ? '商品配置已更新，请返回点餐页刷新并确认' : '提交未确认，请重试；不会重复创建订单', icon: 'none' })
     } finally {
         submitting.value = false
         uni.hideLoading()

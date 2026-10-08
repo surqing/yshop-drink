@@ -44,8 +44,10 @@ public class ProductCategoryServiceImpl extends ServiceImpl<ProductCategoryMappe
     private StoreShopMapper storeShopMapper;
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor=Exception.class,isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public Long createCategory(ProductCategoryCreateReqVO createReqVO) {
         storeAccess.requireShop(createReqVO.getShopId().longValue());
+        lockShop(createReqVO.getShopId().longValue());
         validateParentProductCategory(createReqVO.getParentId());
         if(createReqVO.getParentId()!=null && createReqVO.getParentId()>0 && !java.util.Objects.equals(productCategoryMapper.selectById(createReqVO.getParentId()).getShopId(),createReqVO.getShopId())) throw new org.springframework.security.access.AccessDeniedException("CATEGORY_STORE_MISMATCH");
 
@@ -59,12 +61,16 @@ public class ProductCategoryServiceImpl extends ServiceImpl<ProductCategoryMappe
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor=Exception.class,isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void updateCategory(ProductCategoryUpdateReqVO updateReqVO) {
         // 校验分类是否存在
         storeAccess.requireCategory(updateReqVO.getId());
         storeAccess.requireShop(updateReqVO.getShopId().longValue());
+        lockShop(updateReqVO.getShopId().longValue());
         if(!java.util.Objects.equals(productCategoryMapper.selectById(updateReqVO.getId()).getShopId(),updateReqVO.getShopId())) throw new org.springframework.security.access.AccessDeniedException("CATEGORY_STORE_IMMUTABLE");
         if(java.util.Objects.equals(updateReqVO.getParentId(),updateReqVO.getId())) throw new IllegalArgumentException("INVALID_CATEGORY_HIERARCHY");
+        if(updateReqVO.getParentId()!=null && updateReqVO.getParentId()>0 && productCategoryMapper.selectCountByParentId(updateReqVO.getId())>0)
+            throw new IllegalArgumentException("CATEGORY_WITH_CHILDREN_MUST_REMAIN_ROOT");
         validateParentProductCategory(updateReqVO.getParentId());
         if(updateReqVO.getParentId()!=null && updateReqVO.getParentId()>0 && !java.util.Objects.equals(productCategoryMapper.selectById(updateReqVO.getParentId()).getShopId(),updateReqVO.getShopId())) throw new org.springframework.security.access.AccessDeniedException("CATEGORY_STORE_MISMATCH");
         validateProductCategoryExists(updateReqVO.getId());
@@ -79,9 +85,11 @@ public class ProductCategoryServiceImpl extends ServiceImpl<ProductCategoryMappe
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor=Exception.class,isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     public void deleteCategory(Long id) {
         // 校验分类是否存在
         storeAccess.requireCategory(id);
+        lockShop(productCategoryMapper.selectById(id).getShopId().longValue());
         validateProductCategoryExists(id);
         // 校验是否还有子分类
         if (productCategoryMapper.selectCountByParentId(id) > 0) {
@@ -111,6 +119,9 @@ public class ProductCategoryServiceImpl extends ServiceImpl<ProductCategoryMappe
         if (!Objects.equals(storeCategory.getParentId(), ProductCategoryDO.PARENT_ID_NULL)) {
             throw exception(CATEGORY_PARENT_NOT_FIRST_LEVEL);
         }
+    }
+    private void lockShop(long shopId) {
+        orderingJdbc.queryForObject("SELECT id FROM yshop_store_shop WHERE id=? AND deleted=0 FOR UPDATE",Long.class,shopId);
     }
 
     private void validateProductCategoryExists(Long id) {

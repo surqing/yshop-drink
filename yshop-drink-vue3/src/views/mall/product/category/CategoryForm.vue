@@ -11,6 +11,8 @@
         <el-select
           v-model="(formData.shopId as number | undefined)"
           placeholder="选择店铺"
+          :disabled="formType === 'update'"
+          @change="loadParents"
         >
           <el-option
             v-for="item in shopList"
@@ -23,6 +25,7 @@
       <el-form-item label="分类名称" prop="name">
         <el-input v-model="formData.name" placeholder="请输入分类名称" />
       </el-form-item>
+      <el-form-item label="上级分类" prop="parentId"><el-select v-model="formData.parentId"><el-option label="顶级分类" :value="0" /><el-option v-for="parent in parents" :key="parent.id" :label="parent.name" :value="parent.id || 0" /></el-select></el-form-item>
       <el-form-item label="分类图片" prop="picUrl">
         <Materials v-model="formData.picUrl" :num="1" type="image" />
       </el-form-item>
@@ -66,6 +69,7 @@ const formType = ref('') // 表单的类型：create - 新增；update - 修改
 const formData = ref<Partial<ProductCategoryApi.CategoryVO> & { shopId?: number | null }>({
   id: undefined as number | undefined,
   shopId: null as number | null,
+  parentId: 0, sort: 0,
   name: '',
   picUrl: '',
   status: CommonStatusEnum.ENABLE,
@@ -82,6 +86,9 @@ const formRules = reactive({
 const formRef = ref() // 表单 Ref
 // const categoryTree = ref<any[]>([]) // 分类树
 const shopList = ref<ShopApi.ShopVO[]>([])
+const parents = ref<ProductCategoryApi.CategoryVO[]>([])
+const loadParents = async () => { formData.value.parentId = 0; await getParents() }
+const getParents = async () => { parents.value = formData.value.shopId ? (await ProductCategoryApi.getCategoryList({ shopId: formData.value.shopId })).filter((c: ProductCategoryApi.CategoryVO) => c.parentId === 0 && c.id !== formData.value.id) : [] }
 
 /** 打开弹窗 */
 const open = async (type: string, id?: number) => {
@@ -95,6 +102,7 @@ const open = async (type: string, id?: number) => {
     formLoading.value = true
     try {
       formData.value = await ProductCategoryApi.getCategory(id)
+      await getParents()
     } finally {
       formLoading.value = false
     }
@@ -141,6 +149,7 @@ const submitForm = async () => {
 /** 重置表单 */
 const resetForm = () => {
   formData.value = {
+    shopId: null, parentId: 0, sort: 0,
     id: undefined as number | undefined,
     name: '',
     picUrl: '',
