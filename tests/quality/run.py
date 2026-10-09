@@ -43,6 +43,7 @@ class Runner:
         self.root=Path(parent).resolve()/self.id
         self.root.mkdir(parents=True,mode=0o700,exist_ok=False)
         self.steps=[];self.digest=source_digest();self.started=time.time()
+        self.source_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO).decode().strip()
         self.env=os.environ.copy()
         self.env['YSHOP_TEST_WORKSPACE']=str(workspace(REPO))
         # Real payment flags are never enabled by this dispatcher.
@@ -50,7 +51,7 @@ class Runner:
         self.env['YSHOP_PAY_WECHAT_V3_RECONCILIATION_ENABLED']='false'
         self.maven=os.environ.get('YSHOP_MAVEN',shutil.which('mvn') or str(workspace(REPO)/'.dev-tools/maven/bin/mvn'))
 
-    def step(self, name, command, cwd=REPO, timeout=1800, validator=None):
+    def step(self, name, command, cwd=REPO, timeout=1800, validator=None, diagnostic=None):
         folder=self.root/name;folder.mkdir(mode=0o700)
         entry={'name':name,'result':'FAIL','timeoutSeconds':timeout}
         start=time.time()
@@ -62,6 +63,9 @@ class Runner:
             entry['result']='PASS'
         except Exception as exc:
             entry['reason']=str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__
+        if diagnostic:
+            try: entry['diagnostics']=diagnostic()
+            except Exception: entry['diagnosticError']='DIAGNOSTICS_UNAVAILABLE';entry['result']='FAIL'
         entry['seconds']=round(time.time()-start,3)
         self.steps.append(entry);self.save()
         print(name+': '+entry['result'],flush=True)
@@ -87,7 +91,7 @@ class Runner:
             cmd=[self.maven,'-Pquality-coverage','test','-Dtest='+','.join(k.rsplit('.',1)[-1] for k in expected),'-Dsurefire.failIfNoSpecifiedTests=true']
             if self.env.get('YSHOP_MAVEN_REPOSITORY'):cmd+=['-Dmaven.repo.local='+self.env['YSHOP_MAVEN_REPOSITORY']]
             cmd+=ev.arguments(expected)+['-Djacoco.destFile='+str(ev.root/'coverage.exec')]
-            self.step('java-'+mod.name,cmd,mod,validator=lambda log,ev=ev:ev.validate())
+            self.step('java-'+mod.name,cmd,mod,validator=lambda log,ev=ev:ev.validate(),diagnostic=ev.diagnostics)
 
     def quick(self):
         files=sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])
@@ -131,7 +135,7 @@ class Runner:
         self.step(name,argv,timeout=600)
 
     def save(self):
-        report={'runId':self.id,'sourceSha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO).decode().strip(),
+        report={'runId':self.id,'sourceSha':self.source_sha,
                 'sourceDigest':self.digest,'result':'PASS' if self.steps and all(s['result']=='PASS' for s in self.steps) else 'NOT_READY','steps':self.steps,
                 'paymentRequests':{'value':None,'evidence':'NOT_MEASURED_BY_DISPATCHER'},'realFinancialOperations':{'value':0,'evidence':'DECLARED_SYNTHETIC_ONLY'}}
         (self.root/'report.json').write_text(json.dumps(report,indent=2))

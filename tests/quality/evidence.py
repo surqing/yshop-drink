@@ -103,6 +103,36 @@ class Evidence:
         (self.root / 'evidence.json').write_text(json.dumps(self.summary, indent=2))
         return self.summary
 
+    def diagnostics(self):
+        """Public-safe structural evidence. Never publish XML messages, output or values."""
+        result = {'runId': self.id, 'reports': [], 'failures': [], 'missingSuites': []}
+        seen = set()
+        for file in sorted(self.directory.rglob('TEST-*.xml')):
+            try:
+                root = ET.parse(file).getroot()
+                props = {x.get('name'): x.get('value') for x in root.findall('properties/property')}
+                name = root.get('name')
+                if file.stat().st_mtime < self.started or props.get('quality.runId') != self.id or name not in (self.expected or {}):
+                    result['reports'].append({'result': 'UNTRUSTED_REPORT'}); continue
+                seen.add(name)
+                result['reports'].append({'suite': name, **{k: int(root.get(k, -1)) for k in ('tests','failures','errors','skipped')}})
+                known = {re.match(r'\w+', k).group() for k in (self.expected[name] or {}) if re.match(r'\w+', k)}
+                for case in root.findall('testcase'):
+                    node = next((case.find(k) for k in ('failure','error','skipped') if case.find(k) is not None), None)
+                    if node is None: continue
+                    match = re.match(r'\w+', case.get('name', ''))
+                    method = match.group() if match and match.group() in known else 'UNKNOWN_CASE'
+                    types = [node.get('type','')] + re.findall(r'Caused by: ([\w.$]+)', node.text or '')
+                    types = [t for t in types if re.fullmatch(r'(?:java|javax|jakarta|org|com|co)\.[\w.$]{1,180}', t)]
+                    frames = re.findall(r'\bat (co\.yixiang[\w.$]+)\(([A-Za-z_$][\w$]*\.java:\d+)\)', node.text or '')[:8]
+                    result['failures'].append({'suite': name, 'method': method, 'kind': node.tag,
+                                               'exceptionTypes': types[:8], 'locations': [f'{c}({l})' for c,l in frames]})
+            except (ET.ParseError, ValueError):
+                result['reports'].append({'result': 'MALFORMED_REPORT'})
+        result['missingSuites'] = sorted(set(self.expected or {}) - seen)
+        (self.root / 'diagnostics.json').write_text(json.dumps(result, indent=2))
+        return result
+
 
 def manifest(repo):
     return json.loads((repo / 'tests/quality/java-manifest.json').read_text())

@@ -75,6 +75,31 @@ class EvidenceFaultInjection(unittest.TestCase):
         self.file.write_text('<broken>')
         with self.assertRaises(ET.ParseError):self.e.validate()
 
+    def test_failure_diagnostics_have_locations_not_payloads(self):
+        root=self.report(failures='1')
+        case=root.find('testcase');case.set('name','checksInvariant(secret-token-private)')
+        failure=ET.SubElement(case,'failure',type='org.opentest4j.AssertionFailedError',message='private-request secret-token-private')
+        failure.text='private-request secret-token-private\n at co.yixiang.synthetic.Suite.checksInvariant(Suite.java:42)\nCaused by: java.lang.IllegalStateException: database-password-private'
+        ET.SubElement(root,'system-out').text='private-request secret-token-private'
+        ET.ElementTree(root).write(self.file)
+        d=self.e.diagnostics();text=json.dumps(d)
+        self.assertEqual('checksInvariant',d['failures'][0]['method'])
+        self.assertIn('Suite.java:42',text);self.assertIn('java.lang.IllegalStateException',text)
+        for value in ['secret-token-private','private-request','database-password-private']:self.assertNotIn(value,text)
+
+    def test_failed_child_still_collects_diagnostics_and_next_step(self):
+        from run import Runner
+        r=Runner(Path(self.temp.name)/'dispatch')
+        self.assertFalse(r.step('failed',[sys.executable,'-c','raise SystemExit(7)'],diagnostic=self.e.diagnostics))
+        self.assertIn('synthetic.Suite',r.steps[0]['diagnostics']['missingSuites'])
+        self.assertTrue(r.step('remaining',[sys.executable,'-c','pass']))
+        self.assertEqual('NOT_READY',r.save()['result'])
+
+    def test_untrusted_reports_cannot_be_failure_evidence(self):
+        self.report();os.utime(self.file,(1,1))
+        d=self.e.diagnostics();self.assertEqual(['synthetic.Suite'],d['missingSuites'])
+        self.assertEqual([],d['failures']);self.assertEqual('UNTRUSTED_REPORT',d['reports'][0]['result'])
+
     def test_subprocess_exit_propagates(self):
         self.assertEqual(7,execute([sys.executable,'-c','raise SystemExit(7)'],self.temp.name,os.environ.copy(),Path(self.temp.name)/'process.log'))
 

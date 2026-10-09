@@ -52,12 +52,15 @@ jobs:
           sys.exit(0 if r.save()['result']=='PASS' else 1)
           PY
       - name: Vue dependencies
+        if: ${{ !cancelled() }}
         working-directory: yshop-drink-vue3
         run: pnpm install --frozen-lockfile
       - name: Vue build (generates auto-import declarations from this checkout)
+        if: ${{ !cancelled() }}
         working-directory: yshop-drink-vue3
         run: pnpm build:local
       - name: Vue type check
+        if: ${{ !cancelled() }}
         working-directory: yshop-drink-vue3
         run: pnpm ts:check
       # No pull_request_target, repository secrets, payment endpoints or privileged runners.
@@ -70,5 +73,6 @@ jobs:
           path: |
             ${{ runner.temp }}/quality/**/report.json
             ${{ runner.temp }}/quality/**/evidence.json
+            ${{ runner.temp }}/quality/**/diagnostics.json
           retention-days: 7
           if-no-files-found: error
