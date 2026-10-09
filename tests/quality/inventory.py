@@ -53,7 +53,7 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
             parts=step['name'].split('-')
             if len(parts)==2 and parts[0] in {'node','python'} and parts[1].isdigit():
                 files=node_files if parts[0]=='node' else python_files
-                executed[str(files[int(parts[1])].relative_to(REPO))]=step
+                executed[str(files[int(parts[1])].relative_to(REPO))]={**step,'executionIdentity':{k:r[k] for k in ['runId','sourceSha','sourceDigest']}}
     if mini:
         r=json.loads(Path(mini).read_text());executed['tests/quality/mini-readonly.cjs']={'result':r['result'],'evidence':{'checks':len(r['checks']),'scope':r['scope']}}
     covered_classes=set()
@@ -73,7 +73,7 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
         shell=p.suffix=='.sh'
         if not (is_test or config or script or shell):continue
         text=p.read_text(errors='replace');function=p.stem;category='build configuration' if config else 'operational helper' if script or shell else 'test resource'
-        command='consumed by owning tests';state='UNVERIFIED';result='NOT_EXECUTED';environment='none';assertions='not applicable';skip='none';realdb=False;wechat=False;synthetic=False
+        command='consumed by owning tests';state='UNVERIFIED';result='NOT_EXECUTED';environment='none';assertions='not applicable';skip='none';realdb=False;wechat=False;synthetic=False;execution_identity=None
         if '/src/test/java/' in name and re.search(r'@(Test\b|RepeatedTest\b|ParameterizedTest\b)',text):
             category='JUnit';suite=name.split('/src/test/java/')[1][:-5].replace('/','.')
             module=name.split('/src/test/')[0]
@@ -87,6 +87,7 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
             function='; '.join(registry.get(suite,{}))
             r=reports.get(suite)
             if r:
+                execution_identity={k:r[k] for k in ['runId','sourceSha','sourceDigest']}
                 result=f"tests={r['tests']}; failures={r['failures']}; errors={r['errors']}; skips={r['skipped']}"
                 state='BROKEN' if r['failures']+r['errors'] else 'SKIPPED' if r['skipped'] else 'ACTIVE'
             else:state='SKIPPED' if skip!='none' else 'UNVERIFIED'
@@ -110,9 +111,10 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
             state='ACTIVE';result=tools[name]['result'];environment=tools[name].get('environment',environment);realdb=tools[name].get('realDatabase',realdb);synthetic=tools[name].get('syntheticPayment',synthetic)
         if name in executed:
             step=executed[name];state='ACTIVE' if step['result']=='PASS' else 'BROKEN';result=step['result']+' '+json.dumps(step.get('evidence',{}))
+            execution_identity=step.get('executionIdentity')
         if p.name=='MailSendServiceImplTest.java':function+='; live SMTP demo retired, 9 mocked cases retained'
         called='quality dispatcher'  if category in ['JUnit','Node assertion suite'] else 'see runner audit'
-        assets.append(dict(path=name,category=category,function=function,command=command,caller=called,environment=environment,realDatabase=realdb,wechat=wechat,syntheticPayment=synthetic,recentExecution=result,skip=skip,assertions=assertions,duplicateCoverage='shared fixtures/repeated cases are not unique scenarios',status=state))
+        assets.append(dict(path=name,category=category,function=function,command=command,caller=called,environment=environment,realDatabase=realdb,wechat=wechat,syntheticPayment=synthetic,recentExecution=result,executionIdentity=execution_identity,skip=skip,assertions=assertions,duplicateCoverage='shared fixtures/repeated cases are not unique scenarios',status=state))
     return assets
 
 

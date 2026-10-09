@@ -1,46 +1,47 @@
-# Controlled mutation testing — Phase 6Q
+# Dangerous behavior mutations — Phase 6Q-R1
 
-We selected explicit mutations rather than an unbounded PIT run: database transaction and state invariants cross several Maven modules, and H2/SDK/fixture startup dominates individual test runtime. Every batch compiles a disposable source copy and first requires the original selected suite to pass with fresh exact-name reports. No mutation is applied to this checkout. Temporary copies are removed on completion; private evidence is retained. PIT was evaluated as an alternative but is not installed or claimed as executed.
+**27 operators:21 KILLED /3 SURVIVED /3 INCONCLUSIVE.** No unconditional green score. Raw MUTATION exits nonzero when any operator survives or is inconclusive. [Full hashes and actual receipts](mutation-results.json).
 
-**20 distinct Java operators: 17 KILLED, 3 SURVIVED (redundant defenses), zero final inapplicable/inconclusive operators.** Four batches contain 22 selection attempts: one initial incorrect textual selector was inapplicable, one cancellation mutation initially used the wrong suite and survived. Both were corrected and rerun; these initial outcomes remain in [raw sanitized history](mutation-results.json). There were 21 applied Java executions, including the repeated cancellation selector; do not count these as 21 unique scenarios.
+Each operator changes real production source only in a disposable copy; the original selected suite must pass immediately before mutation. Exact suites/methods/invocation counts and fresh runId are required. A compile,SQL,transport,initialization or cleanup error is NOT a kill, even when other cases assert. Only valid assertion failures with zero errors/skips qualify.
 
-One additional security mutation injected a synthetic Secret into a disposable log and ran the actual exact-value scanner CLI: nonzero exit, FAIL, no canary echoed. Thus 21 distinct controlled mutations including the log canary, 18 detected and 3 redundant survivors. No merchant credential is used.
-
-| Mutation | Final outcome | Assertion failures | Interpretation |
+| Operator | Actual classification | Assertion failures | Suite |
 |---|---|---:|---|
-| inventory-sku-check | SURVIVED | 0 | Database conditional stock updates still reject the request; no oversell. Composite wrong/conditional debit operators are killed. |
-| inventory-conditional-update | KILLED | 1 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| cross-store-product | SURVIVED | 0 | Category ownership and shop-bound conditional update independently reject. Removing all three defenses is killed. |
-| employee-store-scope | KILLED | 3 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| cancel-payment-guard | KILLED | 26 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| cancel-uncertain-safe | KILLED | 12 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| cancel-remote-proof | KILLED | 4 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| coupon-member-limit | KILLED | 46 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| coupon-total-limit | SURVIVED | 0 | Conditional receive<distribute UPDATE is the authoritative cap. Removing both guards is killed. |
-| coupon-expiration | KILLED | 1 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| coupon-claim-rate | KILLED | 1 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| coupon-redis-fail-open | KILLED | 1 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| payment-amount | KILLED | 2 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| inventory-wrong-debit | KILLED | 33 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| cross-store-all-defences | KILLED | 4 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| coupon-total-all-defences | KILLED | 40 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| coupon-reuse-state | KILLED | 3 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| coupon-use-expired | KILLED | 22 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| late-success-terminal | KILLED | 4 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
-| duplicate-event-result | KILLED | 10 | Actual JUnit assertion failure in the selected suite; compilation/environment errors excluded. |
+| inventory-repeat-release | KILLED | 3 | OrderingDatabaseTest |
+| cross-store-price | KILLED | 1 | OrderingDatabaseTest |
+| coupon-double-reservation | KILLED | 21 | CouponDatabaseTest |
+| duplicate-fulfillment-complete | KILLED | 12 | PaymentDatabaseTest |
+| auth-refresh-disable-bypass | KILLED | 2 | OAuth2LifecycleDatabaseTest |
+| auth-cache-revocation-bypass | KILLED | 22 | OAuth2LifecycleDatabaseTest |
+| payment-freeze-bypass | KILLED | 1 | PaymentCredentialDatabaseTest |
+| late-success-terminal | KILLED | 4 | PaymentAttemptDatabaseTest |
+| duplicate-event-result | KILLED | 10 | PaymentDatabaseTest |
+| inventory-wrong-debit | KILLED | 33 | OrderingDatabaseTest |
+| cross-store-all-defences | KILLED | 4 | OrderingDatabaseTest |
+| coupon-total-all-defences | KILLED | 39 | CouponDatabaseTest |
+| coupon-reuse-state | KILLED | 3 | CouponDatabaseTest |
+| coupon-use-expired | KILLED | 22 | CouponDatabaseTest |
+| inventory-sku-check | SURVIVED | 0 | OrderingDatabaseTest |
+| inventory-conditional-update | INCONCLUSIVE | 1 | OrderingDatabaseTest |
+| cross-store-product | SURVIVED | 0 | OrderingDatabaseTest |
+| employee-store-scope | KILLED | 3 | OrderingDatabaseTest |
+| cancel-payment-guard | INCONCLUSIVE | 20 | PaymentCancellationDatabaseTest |
+| cancel-uncertain-safe | INCONCLUSIVE | 18 | PaymentCancellationDatabaseTest |
+| cancel-remote-proof | KILLED | 4 | PaymentCancellationDatabaseTest |
+| coupon-member-limit | KILLED | 42 | CouponDatabaseTest |
+| coupon-total-limit | SURVIVED | 0 | CouponDatabaseTest |
+| coupon-expiration | KILLED | 1 | CouponDatabaseTest |
+| coupon-claim-rate | KILLED | 1 | CouponCodeSecurityTest |
+| coupon-redis-fail-open | KILLED | 1 | CouponCodeSecurityTest |
+| payment-amount | KILLED | 2 | PaymentDatabaseTest |
 
-The three survivors are not hidden or declared killed. Each removes only an early check while an independently executed database/ownership defense remains. Composite mutations remove the entire effective boundary and are killed. If a future refactor removes those remaining defenses, these classifications must be revisited. The mutation dispatcher conservatively exits nonzero on any survivor, including these three; raw MUTATION is therefore not unconditionally green. A reviewer must accept equivalence evidence, not change the denominator.
+## Review corrections and new boundaries
 
-`cancel-payment-guard` initially selected OrderingDatabaseTest, whose fixtures did not contain PaymentAttempt evidence. That was a real selector/coverage gap, not equivalence. Selecting PaymentCancellationDatabaseTest kills the same mutation; its concurrency and unchanged cross-table snapshots establish the intended boundary. The original `payment-amount` text did not match current code; zero matches were reported INAPPLICABLE, then the exact current guard was mutated and killed.
+The seven new composite boundaries are inventory-repeat-release,cross-store-price,coupon-double-reservation,duplicate-fulfillment-complete,auth-refresh-disable-bypass,auth-cache-revocation-bypass,payment-freeze-bypass. Each was actually killed by effective assertions, not compilation. Their failure counts are3,1,21,12,2,22,1 respectively.
 
-The duplicate-event operator detects incorrect idempotent return semantics; it is **not proof of a compound mutation bypassing every database uniqueness/paid guard**. Duplicate fulfillment is separately asserted by payment/wallet database regressions. Release-twice, wrong-store-price, coupon double-reservation, full token revocation, and synthetic live-provider transport escape have not each received a dedicated controlled operator in this audit. These are explicit remaining mutation gaps; do not infer universal mutation coverage from 17 kills.
+The first price operator used an invalid SKU column and produced mixed errors; it was excluded, not called KILLED. The corrected valid operator initially SURVIVED because both test-store prices were1.23. A new independent oracle explicitly sets B9.87 while A stays1.23 and requires the A order amount1.23, B stock/price unchanged and paid0. Both original and mutant execute82 cases; original PASS, mutant one assertion failure,zero errors/skips. Fixture weakness was repaired without production price changes.
 
-Reproduce:
+Three earlier broad operators previously overclaimed as kills were rerun and correctly reclassified INCONCLUSIVE: inventory-conditional-update,cancel-payment-guard,cancel-uncertain-safe. Their selected full-suite mutations cause runtime errors as well as assertions; valid originals pass but this does not establish a kill. This uncertainty remains visible.
 
-```sh
-python3 tests/quality/run.py MUTATION --output "$PRIVATE_QUALITY_DIR"
-# Or an explicitly selected, attributed subset:
-python3 tests/quality/mutate.py --output "$NEW_PRIVATE_MUTATION_DIR" --only cancel-payment-guard,payment-amount
-```
+Three SURVIVED operators have independent remaining defenses: inventory-sku-check is rejected by DB conditional update; cross-store-product by category/conditional-shop admission; coupon-total-limit by SQL capacity update. Composite removal of those boundaries is independently detected. Defenses were retained rather than removed to force a score.
 
-Timeouts/compile errors/fixture initialization errors are INCONCLUSIVE, never kills. Only a fresh JUnit assertion failure in the selected suite is a kill. Reactor upstream modules need `failIfNoSpecifiedTests=false`; final exact target-suite/name validation makes a missing target suite fail. This narrow exception is documented rather than removing it blindly and breaking upstream reactors.
+Secret canary tests are separate from Java mutation percentages. A synthetic secret deliberately placed in a private log causes a real scan failure without echoing it. No real provider transport,merchant key or funds were involved.

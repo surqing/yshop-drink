@@ -2,7 +2,7 @@
 """Actual isolated HTTP writes; no seed INSERTs, no shared data, no provider routes."""
 import argparse,json,os,secrets,subprocess,sys,time,uuid,re,signal
 from evidence import source_identity
-from owned_resources import remove_owned,assert_backend_owner
+from owned_resources import remove_owned,assert_backend_owner,failed_report
 from pathlib import Path
 import yaml
 repo=Path(__file__).resolve().parents[2]
@@ -78,7 +78,7 @@ try:
   deadline=time.time()+args.hold_for_gui
   while time.time()<deadline and not (root/'gui-finished').exists():time.sleep(1)
  if source_identity()!={k:report[k] for k in ['sourceSha','sourceDigest']}:raise RuntimeError('SOURCE_CHANGED_DURING_TEST')
-except Exception as e:report['reasonType']=type(e).__name__;report['failedStage']=report.get('stage','PROVISION')
+except Exception as e:failed_report(report,e,report.get('stage','PROVISION'))
 finally:
  try:
   if process and process.poll() is None:

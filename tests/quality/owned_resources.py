@@ -20,3 +20,11 @@ def remove_owned(docker,names,owner):
 
 def assert_backend_owner(info, owner):
     if not isinstance(info,dict) or info.get('qualityOwner')!=owner:raise RuntimeError('BACKEND_OWNERSHIP_MISMATCH')
+
+def failed_report(report, error, stage):
+    """A later failure overrides successful assertions; exception messages stay private."""
+    report['result']='FAIL'
+    report['reasonType']=type(error).__name__
+    report['failedStage']=stage
+    if isinstance(error,RuntimeError) and str(error)=='SOURCE_CHANGED_DURING_TEST':
+        report['reasonCode']='SOURCE_CHANGED_DURING_TEST'

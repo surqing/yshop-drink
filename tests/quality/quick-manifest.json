@@ -8,5 +8,5 @@
   "tests/quality/test_secret_guard.py": 3,
   "tests/smoke/test_secret_scan.py": 4,
   "tests/payment/prepayment-tools-test.py": 26,
-  "tests/quality/test_owned_resources.py": 9
+  "tests/quality/test_owned_resources.py": 12
 }

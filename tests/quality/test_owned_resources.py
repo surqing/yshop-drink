@@ -1,6 +1,6 @@
 import json,unittest
 from unittest.mock import Mock
-from owned_resources import remove_owned,assert_backend_owner
+from owned_resources import remove_owned,assert_backend_owner,failed_report
 class OwnedCleanupFaults(unittest.TestCase):
     def info(self,label='owner',volume=None):
         return json.dumps([{'Config':{'Labels':{'yshop.quality.owner':label}},'Mounts':[] if volume is None else [{'Type':'volume','Name':volume}]}])
@@ -31,4 +31,19 @@ class OwnedCleanupFaults(unittest.TestCase):
     def test_unowned_health_response_cannot_admit_writes(self):
         for value in [None,{}, {'status':'UP'}]:
             with self.assertRaisesRegex(RuntimeError,'OWNERSHIP'):assert_backend_owner(value,'owner')
+    def test_late_exception_overrides_successful_business_checks(self):
+        report={'result':'PASS','checks':[{'result':'PASS'}]}
+        failed_report(report,RuntimeError('late failure'),'AFTER_HTTP')
+        self.assertEqual('FAIL',report['result'])
+        self.assertEqual([{'result':'PASS'}],report['checks'])
+    def test_source_change_cannot_retain_pass(self):
+        report={'result':'PASS'}
+        failed_report(report,RuntimeError('SOURCE_CHANGED_DURING_TEST'),'AFTER_HTTP')
+        self.assertEqual('FAIL',report['result'])
+        self.assertEqual('SOURCE_CHANGED_DURING_TEST',report['reasonCode'])
+    def test_failure_result_does_not_publish_exception_message(self):
+        report={'result':'PASS'}
+        failed_report(report,RuntimeError('sensitive-token-request-body'),'AFTER_HTTP')
+        self.assertNotIn('sensitive-token-request-body',json.dumps(report))
+        self.assertEqual('RuntimeError',report['reasonType'])
 if __name__=='__main__':unittest.main()
