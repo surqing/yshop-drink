@@ -106,34 +106,33 @@ public class MaterialServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
-    @Disabled  // TODO 请修改 null 为需要的值，然后删除 @Disabled 注解
     public void testGetMaterialPage() {
        // mock 数据
        MaterialDO dbMaterial = randomPojo(MaterialDO.class, o -> { // 等会查询到
-           o.setCreateTime(null);
-           o.setType(null);
-           o.setGroupId(null);
-           o.setName(null);
-           o.setUrl(null);
+           o.setCreateTime(co.yixiang.yshop.framework.common.util.date.LocalDateTimeUtils.buildTime(2023, 2, 15));
+           o.setType("1");
+           o.setGroupId("group-A");
+           o.setName("Synthetic material");
+           o.setUrl("/synthetic.png");
        });
        materialMapper.insert(dbMaterial);
        // 测试 createTime 不匹配
-       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setCreateTime(null)));
+       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setCreateTime(co.yixiang.yshop.framework.common.util.date.LocalDateTimeUtils.buildTime(2023, 3, 1))));
        // 测试 type 不匹配
-       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setType(null)));
+       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setType("2")));
        // 测试 groupId 不匹配
-       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setGroupId(null)));
+       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setGroupId("group-B")));
        // 测试 name 不匹配
-       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setName(null)));
+       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setName("Other")));
        // 测试 url 不匹配
-       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setUrl(null)));
+       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setUrl("/other.png")));
        // 准备参数
        MaterialPageReqVO reqVO = new MaterialPageReqVO();
        reqVO.setCreateTime(buildBetweenTime(2023, 2, 1, 2023, 2, 28));
-       reqVO.setType(null);
-       reqVO.setGroupId(null);
-       reqVO.setName(null);
-       reqVO.setUrl(null);
+       reqVO.setType("1");
+       reqVO.setGroupId("group-A");
+       reqVO.setName("Synthetic");
+       reqVO.setUrl("/synthetic.png");
 
        // 调用
        PageResult<MaterialDO> pageResult = materialService.getMaterialPage(reqVO);
@@ -144,34 +143,33 @@ public class MaterialServiceImplTest extends BaseDbUnitTest {
     }
 
     @Test
-    @Disabled  // TODO 请修改 null 为需要的值，然后删除 @Disabled 注解
     public void testGetMaterialList() {
        // mock 数据
        MaterialDO dbMaterial = randomPojo(MaterialDO.class, o -> { // 等会查询到
-           o.setCreateTime(null);
-           o.setType(null);
-           o.setGroupId(null);
-           o.setName(null);
-           o.setUrl(null);
+           o.setCreateTime(co.yixiang.yshop.framework.common.util.date.LocalDateTimeUtils.buildTime(2023, 2, 15));
+           o.setType("1");
+           o.setGroupId("group-A");
+           o.setName("Synthetic material");
+           o.setUrl("/synthetic.png");
        });
        materialMapper.insert(dbMaterial);
        // 测试 createTime 不匹配
-       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setCreateTime(null)));
+       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setCreateTime(co.yixiang.yshop.framework.common.util.date.LocalDateTimeUtils.buildTime(2023, 3, 1))));
        // 测试 type 不匹配
-       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setType(null)));
+       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setType("2")));
        // 测试 groupId 不匹配
-       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setGroupId(null)));
+       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setGroupId("group-B")));
        // 测试 name 不匹配
-       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setName(null)));
+       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setName("Other")));
        // 测试 url 不匹配
-       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setUrl(null)));
+       materialMapper.insert(cloneIgnoreId(dbMaterial, o -> o.setUrl("/other.png")));
        // 准备参数
        MaterialExportReqVO reqVO = new MaterialExportReqVO();
        reqVO.setCreateTime(buildBetweenTime(2023, 2, 1, 2023, 2, 28));
-       reqVO.setType(null);
-       reqVO.setGroupId(null);
-       reqVO.setName(null);
-       reqVO.setUrl(null);
+       reqVO.setType("1");
+       reqVO.setGroupId("group-A");
+       reqVO.setName("Synthetic");
+       reqVO.setUrl("/synthetic.png");
 
        // 调用
        List<MaterialDO> list = materialService.getMaterialList(reqVO);

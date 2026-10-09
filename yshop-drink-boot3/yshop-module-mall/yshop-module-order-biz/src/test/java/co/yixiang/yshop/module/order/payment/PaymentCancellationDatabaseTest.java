@@ -174,6 +174,7 @@ class PaymentCancellationDatabaseTest {
     <T> List<T> concurrent(int n, java.util.function.IntFunction<T> action) throws Exception {
         var pool = Executors.newFixedThreadPool(n);
         var gate = new CountDownLatch(1);
+        var ready = new CountDownLatch(n);
         try {
             List<Future<T>> futures = new ArrayList<>();
             for (int i = 0; i < n; i++) {
@@ -181,10 +182,12 @@ class PaymentCancellationDatabaseTest {
                 futures.add(
                         pool.submit(
                                 () -> {
-                                    gate.await();
+                                    ready.countDown();
+                                    assertTrue(gate.await(30, TimeUnit.SECONDS));
                                     return action.apply(index);
                                 }));
             }
+            assertTrue(ready.await(30, TimeUnit.SECONDS), "All workers must be ready before release");
             gate.countDown();
             List<T> results = new ArrayList<>();
             for (var future : futures) results.add(future.get(45, TimeUnit.SECONDS));

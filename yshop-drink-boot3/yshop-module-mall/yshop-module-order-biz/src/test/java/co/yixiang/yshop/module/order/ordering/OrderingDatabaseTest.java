@@ -221,15 +221,18 @@ class OrderingDatabaseTest {
             throws Exception {
         var pool = Executors.newFixedThreadPool(size);
         var start = new CountDownLatch(1);
+        var ready = new CountDownLatch(size);
         List<Future<Boolean>> futures = new ArrayList<>();
         try {
             for (int i = 0; i < size; i++)
                 futures.add(
                         pool.submit(
                                 () -> {
-                                    start.await();
+                                    ready.countDown();
+                                    assertTrue(start.await(30, TimeUnit.SECONDS));
                                     return action.call();
                                 }));
+            assertTrue(ready.await(30, TimeUnit.SECONDS), "All workers must be ready before release");
             start.countDown();
             List<Boolean> result = new ArrayList<>();
             for (var f : futures) result.add(f.get(45, TimeUnit.SECONDS));
@@ -238,6 +241,26 @@ class OrderingDatabaseTest {
             pool.shutdownNow();
             assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS));
         }
+    }
+
+    @Test
+    void workersHoldTwentyIndependentTransactionsAndConnections() throws Exception {
+        var connections = java.util.concurrent.ConcurrentHashMap.<Long>newKeySet();
+        var inTransactions = new CountDownLatch(20);
+        var results = parallel(20, () -> new org.springframework.transaction.support.TransactionTemplate(tm)
+                .execute(status -> {
+                    String sql = mysql ? "SELECT CONNECTION_ID()" : "SELECT SESSION_ID()";
+                    Long id = db.queryForObject(sql, Long.class);
+                    assertTrue(connections.add(id), "Workers must not share a connection");
+                    inTransactions.countDown();
+                    try { assertTrue(inTransactions.await(30, TimeUnit.SECONDS)); }
+                    catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new IllegalStateException(error); }
+                    assertEquals(id, db.queryForObject(sql, Long.class), "Connection must stay bound to this transaction");
+                    assertTrue(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+                    return true;
+                }));
+        assertEquals(20, connections.size());
+        assertEquals(20, Collections.frequency(results, true));
     }
 
     @AfterEach

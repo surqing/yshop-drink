@@ -1,0 +1,444 @@
+{
+  "result": "MEASURED",
+  "runId": "68129e3da33e4d7ea871c8f3289ef86c",
+  "runResult": "PASS",
+  "scope": "all compiled src/main classes including test infrastructure; high-risk business classes separately, no DTO threshold",
+  "counters": {
+    "INSTRUCTION": {
+      "missed": 260881,
+      "covered": 51723,
+      "percent": 16.55
+    },
+    "BRANCH": {
+      "missed": 41828,
+      "covered": 3036,
+      "percent": 6.77
+    },
+    "LINE": {
+      "missed": 18056,
+      "covered": 7943,
+      "percent": 30.55
+    },
+    "COMPLEXITY": {
+      "missed": 35768,
+      "covered": 4936,
+      "percent": 12.13
+    },
+    "METHOD": {
+      "missed": 14144,
+      "covered": 4081,
+      "percent": 22.39
+    },
+    "CLASS": {
+      "missed": 1111,
+      "covered": 496,
+      "percent": 30.86
+    }
+  },
+  "highRisk": {
+    "co/yixiang/yshop/module/product/service/catalog/CatalogOptions": {
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 30,
+          "covered": 548,
+          "percent": 94.81
+        },
+        "BRANCH": {
+          "missed": 42,
+          "covered": 96,
+          "percent": 69.57
+        },
+        "LINE": {
+          "missed": 1,
+          "covered": 66,
+          "percent": 98.51
+        },
+        "COMPLEXITY": {
+          "missed": 41,
+          "covered": 37,
+          "percent": 47.44
+        },
+        "METHOD": {
+          "missed": 0,
+          "covered": 9,
+          "percent": 100.0
+        },
+        "CLASS": {
+          "missed": 0,
+          "covered": 1,
+          "percent": 100.0
+        }
+      },
+      "unexecutedMethods": []
+    },
+    "co/yixiang/yshop/module/order/service/payment/attempt/PaymentAttemptService": {
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 41,
+          "covered": 773,
+          "percent": 94.96
+        },
+        "BRANCH": {
+          "missed": 38,
+          "covered": 128,
+          "percent": 77.11
+        },
+        "LINE": {
+          "missed": 5,
+          "covered": 156,
+          "percent": 96.89
+        },
+        "COMPLEXITY": {
+          "missed": 39,
+          "covered": 65,
+          "percent": 62.5
+        },
+        "METHOD": {
+          "missed": 1,
+          "covered": 20,
+          "percent": 95.24
+        },
+        "CLASS": {
+          "missed": 0,
+          "covered": 1,
+          "percent": 100.0
+        }
+      },
+      "unexecutedMethods": [
+        "reconciliationCandidates"
+      ]
+    },
+    "co/yixiang/yshop/module/order/service/payment/attempt/PaymentCancellationGuard": {
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 3,
+          "covered": 206,
+          "percent": 98.56
+        },
+        "BRANCH": {
+          "missed": 14,
+          "covered": 38,
+          "percent": 73.08
+        },
+        "LINE": {
+          "missed": 1,
+          "covered": 38,
+          "percent": 97.44
+        },
+        "COMPLEXITY": {
+          "missed": 14,
+          "covered": 16,
+          "percent": 53.33
+        },
+        "METHOD": {
+          "missed": 0,
+          "covered": 4,
+          "percent": 100.0
+        },
+        "CLASS": {
+          "missed": 0,
+          "covered": 1,
+          "percent": 100.0
+        }
+      },
+      "unexecutedMethods": []
+    },
+    "co/yixiang/yshop/module/store/service/storeshop/StoreAccessService": {
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 25,
+          "covered": 169,
+          "percent": 87.11
+        },
+        "BRANCH": {
+          "missed": 4,
+          "covered": 20,
+          "percent": 83.33
+        },
+        "LINE": {
+          "missed": 6,
+          "covered": 29,
+          "percent": 82.86
+        },
+        "COMPLEXITY": {
+          "missed": 6,
+          "covered": 16,
+          "percent": 72.73
+        },
+        "METHOD": {
+          "missed": 2,
+          "covered": 8,
+          "percent": 80.0
+        },
+        "CLASS": {
+          "missed": 0,
+          "covered": 1,
+          "percent": 100.0
+        }
+      },
+      "unexecutedMethods": [
+        "requireOrder",
+        "requireCategory"
+      ]
+    },
+    "co/yixiang/yshop/module/system/service/permission/PermissionServiceImpl": {
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 28,
+          "covered": 424,
+          "percent": 93.81
+        },
+        "BRANCH": {
+          "missed": 14,
+          "covered": 34,
+          "percent": 70.83
+        },
+        "LINE": {
+          "missed": 12,
+          "covered": 94,
+          "percent": 88.68
+        },
+        "COMPLEXITY": {
+          "missed": 14,
+          "covered": 33,
+          "percent": 70.21
+        },
+        "METHOD": {
+          "missed": 0,
+          "covered": 23,
+          "percent": 100.0
+        },
+        "CLASS": {
+          "missed": 0,
+          "covered": 1,
+          "percent": 100.0
+        }
+      },
+      "unexecutedMethods": []
+    },
+    "co/yixiang/yshop/module/order/service/ordering/OrderPlacementService": {
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 167,
+          "covered": 1633,
+          "percent": 90.72
+        },
+        "BRANCH": {
+          "missed": 60,
+          "covered": 140,
+          "percent": 70.0
+        },
+        "LINE": {
+          "missed": 25,
+          "covered": 270,
+          "percent": 91.53
+        },
+        "COMPLEXITY": {
+          "missed": 55,
+          "covered": 63,
+          "percent": 53.39
+        },
+        "METHOD": {
+          "missed": 1,
+          "covered": 17,
+          "percent": 94.44
+        },
+        "CLASS": {
+          "missed": 0,
+          "covered": 1,
+          "percent": 100.0
+        }
+      },
+      "unexecutedMethods": [
+        "ownsVersion"
+      ]
+    },
+    "co/yixiang/yshop/module/order/service/payment/PaymentEffects": {
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 14,
+          "covered": 172,
+          "percent": 92.47
+        },
+        "BRANCH": {
+          "missed": 6,
+          "covered": 6,
+          "percent": 50.0
+        },
+        "LINE": {
+          "missed": 2,
+          "covered": 52,
+          "percent": 96.3
+        },
+        "COMPLEXITY": {
+          "missed": 6,
+          "covered": 4,
+          "percent": 40.0
+        },
+        "METHOD": {
+          "missed": 0,
+          "covered": 4,
+          "percent": 100.0
+        },
+        "CLASS": {
+          "missed": 0,
+          "covered": 1,
+          "percent": 100.0
+        }
+      },
+      "unexecutedMethods": []
+    },
+    "co/yixiang/yshop/module/order/service/payment/PaymentProcessor": {
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 71,
+          "covered": 376,
+          "percent": 84.12
+        },
+        "BRANCH": {
+          "missed": 19,
+          "covered": 78,
+          "percent": 80.41
+        },
+        "LINE": {
+          "missed": 13,
+          "covered": 77,
+          "percent": 85.56
+        },
+        "COMPLEXITY": {
+          "missed": 15,
+          "covered": 39,
+          "percent": 72.22
+        },
+        "METHOD": {
+          "missed": 0,
+          "covered": 4,
+          "percent": 100.0
+        },
+        "CLASS": {
+          "missed": 0,
+          "covered": 1,
+          "percent": 100.0
+        }
+      },
+      "unexecutedMethods": []
+    },
+    "co/yixiang/yshop/module/member/service/auth/MemberAuthServiceImpl": {
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 560,
+          "covered": 226,
+          "percent": 28.75
+        },
+        "BRANCH": {
+          "missed": 40,
+          "covered": 12,
+          "percent": 23.08
+        },
+        "LINE": {
+          "missed": 120,
+          "covered": 50,
+          "percent": 29.41
+        },
+        "COMPLEXITY": {
+          "missed": 33,
+          "covered": 13,
+          "percent": 28.26
+        },
+        "METHOD": {
+          "missed": 10,
+          "covered": 10,
+          "percent": 50.0
+        },
+        "CLASS": {
+          "missed": 0,
+          "covered": 1,
+          "percent": 100.0
+        }
+      },
+      "unexecutedMethods": [
+        "login",
+        "smsLogin",
+        "weixinMiniAppLogin",
+        "wechatAuth",
+        "login0",
+        "sendSmsCode",
+        "refreshToken",
+        "checkUserIfExists",
+        "createLogoutLog",
+        "getMobile"
+      ]
+    },
+    "co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService": {
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 160,
+          "covered": 1834,
+          "percent": 91.98
+        },
+        "BRANCH": {
+          "missed": 88,
+          "covered": 200,
+          "percent": 69.44
+        },
+        "LINE": {
+          "missed": 3,
+          "covered": 154,
+          "percent": 98.09
+        },
+        "COMPLEXITY": {
+          "missed": 85,
+          "covered": 77,
+          "percent": 47.53
+        },
+        "METHOD": {
+          "missed": 0,
+          "covered": 18,
+          "percent": 100.0
+        },
+        "CLASS": {
+          "missed": 0,
+          "covered": 1,
+          "percent": 100.0
+        }
+      },
+      "unexecutedMethods": []
+    },
+    "co/yixiang/yshop/module/coupon/service/marketing/CouponLifecycle": {
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 24,
+          "covered": 434,
+          "percent": 94.76
+        },
+        "BRANCH": {
+          "missed": 17,
+          "covered": 31,
+          "percent": 64.58
+        },
+        "LINE": {
+          "missed": 5,
+          "covered": 46,
+          "percent": 90.2
+        },
+        "COMPLEXITY": {
+          "missed": 17,
+          "covered": 15,
+          "percent": 46.88
+        },
+        "METHOD": {
+          "missed": 0,
+          "covered": 8,
+          "percent": 100.0
+        },
+        "CLASS": {
+          "missed": 0,
+          "covered": 1,
+          "percent": 100.0
+        }
+      },
+      "unexecutedMethods": []
+    }
+  },
+  "rawReport": "jacoco.xml"
+}

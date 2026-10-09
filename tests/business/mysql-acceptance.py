@@ -11,14 +11,17 @@ import sys
 import xml.etree.ElementTree as ET
 
 REPO = Path(__file__).resolve().parents[2]
-WORKSPACE = REPO.parent
+sys.path.insert(0, str(REPO / 'tests/quality'))
+from evidence import Evidence, execute, manifest, workspace
+WORKSPACE = workspace(REPO)
 PRIVATE = WORKSPACE / '.local-dev/acceptance'
 
 
 def main():
     coupon = '--coupon' in sys.argv
     catalog = '--catalog' in sys.argv or coupon
-    PRIVATE.mkdir(parents=True, exist_ok=True)
+    PRIVATE.mkdir(parents=True, exist_ok=True, mode=0o700)
+    PRIVATE.chmod(0o700)
     spec = importlib.util.spec_from_file_location('local_database', WORKSPACE / '.local-dev/database.py')
     db = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(db)
@@ -30,11 +33,17 @@ def main():
     password = secrets.token_hex(24)
     jdbc = PRIVATE / ('ordering-jdbc-' + suffix + '.properties')
     log = PRIVATE / ('ordering-mysql-' + suffix + '.log')
-    created = False
+    schema_created = account_created = False
+    receipt = PRIVATE / ("resources-" + suffix + ".json")
     try:
-        db.mysql(f"CREATE DATABASE `{schema}` CHARACTER SET utf8mb4; CREATE USER '{account}'@'%' IDENTIFIED BY '{password}'; GRANT ALL PRIVILEGES ON `{schema}`.* TO '{account}'@'%';")
-        created = True
-        jdbc.write_text(f'url=jdbc:mysql://127.0.0.1:3306/{schema}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&sessionVariables=innodb_lock_wait_timeout=2\nusername={account}\npassword={password}\n')
+        db.mysql(f"CREATE DATABASE `{schema}` CHARACTER SET utf8mb4;")
+        schema_created = True
+        receipt.write_text(json.dumps({'schema': schema, 'account': account, 'credentialsIncluded': False}))
+        receipt.chmod(0o600)
+        db.mysql(f"CREATE USER '{account}'@'%' IDENTIFIED BY '{password}';")
+        account_created = True
+        db.mysql(f"GRANT ALL PRIVILEGES ON `{schema}`.* TO '{account}'@'%';")
+        jdbc.write_text(f'url=jdbc:mysql://127.0.0.1:3306/{schema}?useSSL=false&connectTimeout=5000&socketTimeout=30000&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&sessionVariables=innodb_lock_wait_timeout=2\nusername={account}\npassword={password}\n')
         jdbc.chmod(0o600)
         env = os.environ.copy()
         env['JAVA_HOME'] = str(WORKSPACE / '.dev-tools/java-home')
@@ -43,11 +52,16 @@ def main():
         command = [str(WORKSPACE / '.dev-tools/maven/bin/mvn'),
                    '-Dmaven.repo.local=' + str(WORKSPACE / '.local-dev/cache/maven'),
                    '-pl', 'yshop-module-mall/yshop-module-order-biz', '-Pmysql-acceptance', 'test',
-                   '-Dtest=' + ('OrderingDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance,CouponDatabaseTest' if coupon else 'OrderingDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance' if catalog else 'OrderingDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=false']
-        with log.open('w') as output:
-            log.chmod(0o600)
-            result = subprocess.run(command, cwd=REPO / 'yshop-drink-boot3', env=env, stdout=output, stderr=subprocess.STDOUT)
-        if result.returncode:
+                   '-Dtest=' + ('OrderingDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance,CouponDatabaseTest' if coupon else 'OrderingDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance' if catalog else 'OrderingDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=true']
+        evidence = Evidence(PRIVATE / 'quality')
+        selected = next(x.split('=', 1)[1].split(',') for x in command if x.startswith('-Dtest='))
+        registered = manifest(REPO)
+        expected = {k: v for k, v in registered.items() if k.rsplit('.', 1)[-1] in selected}
+        if len(expected) != len(selected):
+            raise RuntimeError('UNREGISTERED_TEST_SUITE')
+        command += evidence.arguments(expected)
+        returncode = execute(command, REPO / 'yshop-drink-boot3', env, log)
+        if returncode:
             raise RuntimeError('ORDERING_ACCEPTANCE_FAILED_PRIVATE_LOG_SAVED')
         engines = db.mysql(f"SELECT COUNT(*),SUM(ENGINE='InnoDB') FROM information_schema.TABLES WHERE TABLE_SCHEMA='{schema}';").strip()
         table_count, innodb_count = map(int, engines.split('\t'))
@@ -58,41 +72,35 @@ def main():
             present = db.mysql(f"SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='{schema}';").splitlines()
             if not set(required).issubset(present):
                 raise RuntimeError('COUPON_SCHEMA_INCOMPLETE')
-        xml = REPO / 'yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/target/surefire-reports/TEST-co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest.xml'
-        suite = ET.parse(xml).getroot()
-        if any(suite.attrib.get(k, '0') != '0' for k in ('errors', 'failures', 'skipped')) or int(suite.attrib['tests']) < 80:
-            raise RuntimeError('ACCEPTANCE_REPORT_INCOMPLETE')
-        test_count = int(suite.attrib['tests'])
-        if catalog:
-            extra = ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest.xml')).getroot()
-            if any(extra.attrib.get(k,'0') != '0' for k in ('errors','failures','skipped')) or int(extra.attrib['tests']) < 88:
-                raise RuntimeError('CATALOG_ACCEPTANCE_REPORT_INCOMPLETE')
-            test_count += int(extra.attrib['tests'])
-            editing = ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.ordering.CatalogEditingMysqlAcceptance.xml')).getroot()
-            if any(editing.attrib.get(k,'0') != '0' for k in ('errors','failures','skipped')) or int(editing.attrib['tests']) < 24:
-                raise RuntimeError('CATALOG_EDITING_ACCEPTANCE_INCOMPLETE')
-            test_count += int(editing.attrib['tests'])
-        if coupon:
-            coupon_suite = ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.ordering.CouponDatabaseTest.xml')).getroot()
-            if any(coupon_suite.attrib.get(k,'0') != '0' for k in ('errors','failures','skipped')) or int(coupon_suite.attrib['tests']) < 281:
-                raise RuntimeError('COUPON_ACCEPTANCE_INCOMPLETE')
-            test_count += int(coupon_suite.attrib['tests'])
-        summary = dict(coupon=coupon, tables=table_count, innodbTables=innodb_count, result='PASS', mysql=version, engine='InnoDB', tests=test_count, catalog=catalog, failures=0, errors=0, developmentDatabaseUsed=False, paymentRequests=0, log=str(log))
+        verified = evidence.validate()
+        test_count = tests = verified['tests']
+        summary = dict(coupon=coupon, tables=table_count, innodbTables=innodb_count, result='PASS', mysql=version, engine='InnoDB', tests=test_count, catalog=catalog, failures=0, errors=0, developmentDatabaseUsed=False, paymentRequests={'value':0,'evidence':'DECLARED_NO_PROVIDER_PATH'}, runId=evidence.id, exactNamesChecked=True, log=str(log))
         report = log.with_suffix('.json')
-        report.write_text(json.dumps(summary, indent=2) + '\n')
-        report.chmod(0o600)
-        print(json.dumps(summary))
+
     finally:
-        if created:
-            assert re.fullmatch(r'yshop_acceptance_phase6a_[a-f0-9]{8}', schema)
-            assert re.fullmatch(r'accept6a_[a-f0-9]{8}', account)
-            db.mysql(f"DROP DATABASE `{schema}`; DROP USER '{account}'@'%';")
-        jdbc.unlink(missing_ok=True)
+        try:
+            if schema_created or account_created:
+                assert re.fullmatch(r'yshop_acceptance_phase6a_[a-f0-9]{8}', schema)
+                assert re.fullmatch(r'accept6a_[a-f0-9]{8}', account)
+                try:
+                    if schema_created: db.mysql(f"DROP DATABASE `{schema}`;")
+                finally:
+                    if account_created: db.mysql(f"DROP USER '{account}'@'%';")
+            receipt.unlink(missing_ok=True)
+        finally:
+            jdbc.unlink(missing_ok=True)
+    summary['cleanup'] = 'PASS'
+    report.write_text(json.dumps(summary, indent=2) + '\n')
+    report.chmod(0o600)
+    print(json.dumps(summary))
+    return 0
 
 
 if __name__ == '__main__':
     try:
         main()
-    except Exception:
+    except Exception as failure:
+        import traceback
+        print(json.dumps({'result':'FAIL','errorType':type(failure).__name__,'sites':[(f.name,f.lineno) for f in traceback.extract_tb(failure.__traceback__)]}))
         print('Ordering MySQL acceptance failed; inspect private local acceptance logs.', file=sys.stderr)
         sys.exit(1)

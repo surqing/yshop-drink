@@ -273,7 +273,7 @@ public class SocialUserServiceImplTest extends BaseDbUnitTest {
         // 准备参数
         SocialUserPageReqVO reqVO = new SocialUserPageReqVO();
         reqVO.setType(SocialTypeEnum.GITEE.getType());
-        reqVO.setNickname("芋");
+        reqVO.setNickname("ysh");
         reqVO.setOpenid("yshop");
         reqVO.setCreateTime(buildBetweenTime(2020, 1, 10, 2020, 1, 20));
 

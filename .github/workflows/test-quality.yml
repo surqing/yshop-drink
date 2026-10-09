@@ -1,0 +1,74 @@
+name: Test quality gate
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      YSHOP_PAY_WECHAT_V3_ENABLED: 'false'
+      YSHOP_PAY_WECHAT_V3_RECONCILIATION_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '8.15.9'
+      - name: Compile all 55 modules (tests run separately with report integrity checks)
+        run: mvn -B -f yshop-drink-boot3/pom.xml install package -Dmaven.test.skip=true
+      - name: Offline credential diff guard
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || 'HEAD^' }}
+        run: python3 tests/quality/secret_guard.py --base "$BASE_REF"
+      - name: Quick tests and deliberate runner failures
+        run: python3 tests/quality/run.py QUICK --output "$RUNNER_TEMP/quality"
+      - name: All Java suites, fresh exact-name reports, coverage (including historical failures)
+        run: |
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'tests/quality')
+          from run import Runner
+          import os
+          r=Runner(os.environ['RUNNER_TEMP']+'/quality')
+          r.java()
+          sys.exit(0 if r.save()['result']=='PASS' else 1)
+          PY
+      - name: Vue dependencies
+        working-directory: yshop-drink-vue3
+        run: pnpm install --frozen-lockfile
+      - name: Vue build (generates auto-import declarations from this checkout)
+        working-directory: yshop-drink-vue3
+        run: pnpm build:local
+      - name: Vue type check
+        working-directory: yshop-drink-vue3
+        run: pnpm ts:check
+      # No pull_request_target, repository secrets, payment endpoints or privileged runners.
+      # Database acceptance and macOS device automation are separate controlled local gates.
+      - name: Upload only machine summaries (raw test output can contain synthetic identities)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-summary
+          path: |
+            ${{ runner.temp }}/quality/**/report.json
+            ${{ runner.temp }}/quality/**/evidence.json
+          retention-days: 7
+          if-no-files-found: error

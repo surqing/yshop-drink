@@ -36,7 +36,7 @@ import java.util.*;
 import javax.net.ssl.*;
 
 /** Actual HTTPS -> Nginx -> Tomcat -> production security/MVC -> official SDK -> database. */
-@EnabledIfEnvironmentVariable(named = "YSHOP_INGRESS_BASE_URL", matches = "https://localhost:48443")
+@EnabledIfEnvironmentVariable(named = "YSHOP_INGRESS_BASE_URL", matches = "https://localhost:4844[34]")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CallbackIngressEndToEndTest {
@@ -235,7 +235,7 @@ class CallbackIngressEndToEndTest {
         var b =
                 HttpRequest.newBuilder(
                                 URI.create(
-                                        "https://localhost:48443/app-api/order/notify/wechat-v3/"
+                                        System.getenv("YSHOP_INGRESS_BASE_URL") + "/app-api/order/notify/wechat-v3/"
                                                 + id))
                         .timeout(Duration.ofSeconds(15))
                         .header("Content-Type", "application/json")
@@ -262,7 +262,7 @@ class CallbackIngressEndToEndTest {
     void verifyReadOnlyHarness() throws Exception {
         Path root = Path.of("../../../").toAbsolutePath().normalize();
         Path evidence =
-                root.getParent()
+                Path.of(System.getenv().getOrDefault("YSHOP_TEST_WORKSPACE", root.getParent().toString()))
                         .resolve(".local-dev/private/synthetic-evidence-" + UUID.randomUUID());
         Files.createDirectories(evidence);
         Files.setPosixFilePermissions(
@@ -415,7 +415,7 @@ class CallbackIngressEndToEndTest {
                 "Full real schema required for helper offline configurationReady proof");
         Path root = Path.of("../../../").toAbsolutePath().normalize();
         Path staging =
-                root.getParent()
+                Path.of(System.getenv().getOrDefault("YSHOP_TEST_WORKSPACE", root.getParent().toString()))
                         .resolve(".local-dev/private/synthetic-provision-" + UUID.randomUUID());
         Files.createDirectories(staging);
         var directoryPermissions =
@@ -459,7 +459,7 @@ class CallbackIngressEndToEndTest {
                     json.writeValueAsString(
                             Map.of(
                                     "adminOrigin",
-                                    "https://localhost:48443",
+                                    System.getenv("YSHOP_INGRESS_BASE_URL"),
                                     "caFile",
                                     System.getenv("YSHOP_INGRESS_CA"),
                                     "tokenFile",

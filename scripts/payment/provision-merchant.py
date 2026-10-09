@@ -14,7 +14,7 @@ import sys
 import time
 import urllib.parse
 import urllib.request
-from private_support import PRIVATE, guarded_main, private_json
+from private_support import PRIVATE, guarded_main, private_json, isolated_schema, report_path
 
 STAGE = 'INPUT_VALIDATION'
 
@@ -96,6 +96,14 @@ def api(origin, path, token, context, data=None, method='GET'):
     return reply.get('data')
 
 
+def allowed_admin_origin(origin, synthetic=False):
+    u = urllib.parse.urlsplit(origin)
+    return (u.scheme == 'https' and u.hostname in ('localhost','127.0.0.1')
+            and u.port in ((48443,48444) if synthetic else (48443,))
+            and not (u.username or u.password or u.query or u.fragment)
+            and u.path in ('','/'))
+
+
 def run():
     global STAGE
     p = argparse.ArgumentParser()
@@ -125,8 +133,7 @@ def run():
             raise ValueError()
         c = json.loads(cf.read_text())
         origin = c['adminOrigin']
-        u = urllib.parse.urlsplit(origin)
-        if u.scheme != 'https' or u.hostname not in ('localhost', '127.0.0.1') or u.port != 48443 or u.username or u.password or u.query or u.fragment or u.path not in ('', '/'):
+        if not allowed_admin_origin(origin, synthetic=isolated_schema() is not None):
             raise ValueError()
         token_file = Path(c['tokenFile'])
         if PRIVATE.resolve() not in token_file.resolve().parents:
@@ -159,7 +166,7 @@ def run():
         if result.get('configurationReady') is not True:
             raise ValueError()
         report.update(result='SERVER_OFFLINE_PREFLIGHT_PASS', merchantWritten=True)
-    private_json(PRIVATE / 'merchant-provisioning-report.json', report)
+    private_json(report_path(folder, 'merchant-provisioning-report.json'), report)
     print(json.dumps(report))
     return 0
 

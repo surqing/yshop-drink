@@ -232,7 +232,7 @@ public class SmsTemplateServiceImplTest extends BaseDbUnitTest {
         reqVO.setStatus(CommonStatusEnum.ENABLE.getStatus());
         reqVO.setCode("tu");
         reqVO.setContent("yshop");
-        reqVO.setApiTemplateId("yu");
+        reqVO.setApiTemplateId("ysh");
         reqVO.setChannelId(1L);
         reqVO.setCreateTime(buildBetweenTime(2021, 11, 1, 2021, 12, 1));
 

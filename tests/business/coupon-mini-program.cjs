@@ -1,6 +1,6 @@
 /* Page-level local unpaid ordering smoke. No payment, identity output, or source patching. */
 const fs = require('node:fs'), path = require('node:path'), {spawnSync} = require('node:child_process');
-const workspace = path.resolve(__dirname, '../../..');
+const workspace = path.resolve(process.env.YSHOP_TEST_WORKSPACE || path.resolve(__dirname, '../../..'));
 const automator = require(path.join(workspace, '.uniapp-dev/automation/node_modules/miniprogram-automator'));
 const reportPath = path.join(workspace, '.uniapp-dev/logs/phase6c-coupon-smoke.json');
 const port = Number(process.env.YSHOP_API_PORT || 48083);
@@ -18,7 +18,7 @@ async function check(name,fn) {report.stage=name;save();const result=await Promi
 async function element(page, selector) {const deadline=Date.now()+20000;while(Date.now()<deadline){const e=await page.$(selector);if(e)return e;await pause(200);}report.missingSelector=selector;throw new Error('Expected element missing');}
 async function run() {
   let mini;const deadline=Date.now()+20000;
-  while(!mini){try{mini=await automator.connect({wsEndpoint:'ws://127.0.0.1:9420'});}catch{if(Date.now()>deadline)throw new Error('Tool unavailable');await pause(300);}}
+  while(!mini){try{mini=await automator.connect({wsEndpoint:`ws://127.0.0.1:${process.env.YSHOP_AUTOMATION_PORT||9420}`});}catch{if(Date.now()>deadline)throw new Error('Tool unavailable');await pause(300);}}
   mini.on('exception',()=>{report.uncaughtExceptions++;save();});
   mini.on('console',e=>{if(/\[api\].*POST.*\/order\/pay/.test(JSON.stringify(e)))report.paymentRequests++;});
   const marker=database({action:'marker'}).marker;

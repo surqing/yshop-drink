@@ -1,0 +1,86 @@
+{
+  "tests/quality/run.py": {
+    "result": "QUICK and attributed all-Java subsets PASS; aggregate FULL not run/claimed",
+    "environment": "Python+Node+Java; mode-specific dependencies",
+    "realDatabase": false,
+    "syntheticPayment": false
+  },
+  "tests/quality/evidence.py": {
+    "result": "24 runner self-tests PASS; exact Java/MySQL evidence validated",
+    "environment": "Python3; child processes",
+    "realDatabase": false,
+    "syntheticPayment": false
+  },
+  "tests/quality/inventory.py": {
+    "result": "Inventory generated from explicit current evidence; not an independent test PASS",
+    "environment": "Python3; Git; supplied reports",
+    "realDatabase": false,
+    "syntheticPayment": false
+  },
+  "tests/quality/coverage.py": {
+    "result": "MEASURED: final Java run cross-module JaCoCo aggregation",
+    "environment": "JDK17; explicit JaCoCo CLI+run exec data",
+    "realDatabase": false,
+    "syntheticPayment": false
+  },
+  "tests/quality/mutate.py": {
+    "result": "20 operators:17 KILLED /3 redundant SURVIVED; raw MUTATION nonzero",
+    "environment": "JDK17+Maven; disposable source copy/H2",
+    "realDatabase": false,
+    "syntheticPayment": true
+  },
+  "tests/quality/uniapp.py": {
+    "result": "Actual fresh compile PASS;380 source hashes",
+    "environment": "macOS HBuilderX; private preparation helper and own AppID",
+    "realDatabase": false,
+    "syntheticPayment": false
+  },
+  "tests/quality/ingress.py": {
+    "result": "10 actual synthetic TLS cases PASS;owned resources cleaned",
+    "environment": "Docker; synthetic CA; MySQL isolated schema",
+    "realDatabase": true,
+    "syntheticPayment": true
+  },
+  "tests/business/mysql-acceptance.py": {
+    "result": "487 exact fresh cases PASS;23 InnoDB;cleanup PASS; provisioning failure paths additionally fault-injected",
+    "environment": "Docker MySQL8.0.46; explicit local adapter",
+    "realDatabase": true,
+    "syntheticPayment": false
+  },
+  "tests/payment/mysql-acceptance.py": {
+    "result": "497 financial +10 TLS cases PASS in different fresh runs;12 InnoDB;cleanup PASS",
+    "environment": "Docker MySQL8.0.46; explicit local adapter",
+    "realDatabase": true,
+    "syntheticPayment": true
+  },
+  "tests/quality/secret_guard.py": {
+    "result": "Actual offline PR diff scan PASS + three canary/input tests PASS",
+    "environment": "Python3; Git",
+    "realDatabase": false,
+    "syntheticPayment": false
+  },
+  "tests/smoke/secret-scan.py": {
+    "result": "Actual strict private-value/runtime scan PASS;4 existing tests and injected-log CLI failure verified",
+    "environment": "Git; explicit private inputs; final JAR/fresh Mini artifact",
+    "realDatabase": false,
+    "syntheticPayment": false
+  },
+  "scripts/payment/private_support.py": {
+    "result": "26 pure/helper tests and10 actual synthetic TLS tests where called; no live CLI authorization",
+    "environment": "Python; explicit workspace adapter",
+    "realDatabase": true,
+    "syntheticPayment": true
+  },
+  "scripts/payment/acceptance-harness.py": {
+    "result": "Synthetic read-only harness executed by TLS replay case PASS; owned report preservation verified",
+    "environment": "Isolated MySQL5h schema; synthetic evidence",
+    "realDatabase": true,
+    "syntheticPayment": true
+  },
+  "scripts/payment/provision-merchant.py": {
+    "result": "Synthetic HTTPS admin provisioning case PASS;scope checked;no real merchant/provider",
+    "environment": "Isolated MySQL5h schema; own loopback48444 TLS",
+    "realDatabase": true,
+    "syntheticPayment": true
+  }
+}

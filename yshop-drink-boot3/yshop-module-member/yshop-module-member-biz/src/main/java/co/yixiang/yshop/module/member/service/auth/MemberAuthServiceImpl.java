@@ -315,6 +315,11 @@ public class MemberAuthServiceImpl implements MemberAuthService {
     }
 
     private AppAuthLoginRespVO createTokenAfterLoginSuccess(MemberUserDO user, String mobile, LoginLogTypeEnum logType) {
+        // All login mechanisms must enforce current server-side member status before issuing
+        // tokens or recording a successful login. Password login also checks this earlier.
+        if (user == null || !Objects.equals(user.getStatus(), CommonStatusEnum.ENABLE.getStatus())) {
+            throw exception(AUTH_LOGIN_USER_DISABLED);
+        }
         // 插入登陆日志
         createLoginLog(user.getId(), mobile, logType, LoginResultEnum.SUCCESS);
         // 创建 Token 令牌

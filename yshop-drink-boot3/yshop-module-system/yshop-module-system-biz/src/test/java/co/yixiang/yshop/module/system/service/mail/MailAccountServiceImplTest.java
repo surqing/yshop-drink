@@ -135,7 +135,7 @@ public class MailAccountServiceImplTest extends BaseDbUnitTest {
         // 准备参数
         MailAccountPageReqVO reqVO = new MailAccountPageReqVO();
         reqVO.setMail("768");
-        reqVO.setUsername("yu");
+        reqVO.setUsername("ysh");
 
         // 调用
         PageResult<MailAccountDO> pageResult = mailAccountService.getMailAccountPage(reqVO);

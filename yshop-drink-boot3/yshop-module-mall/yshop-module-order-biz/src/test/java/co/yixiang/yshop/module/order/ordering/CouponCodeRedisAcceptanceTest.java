@@ -101,10 +101,26 @@ class CouponCodeRedisAcceptanceTest {
         // New random-code input does not consume the additional legacy-short budget.
         gb.admit(40L,"198.51.100.20",false);
     }
+    @Test void actualClientShutdownFailsClosedWithoutClaim() {
+        RedissonClient lost=Redisson.create(new Config(first.getConfig()));
+        try {
+            var dao=namespaced(lost);
+            var controller=new AppCouponController(mock(AppCouponUserService.class),service,new CouponCodeGuard(dao));
+            lost.shutdown();
+            CouponCodeSecurityTest.login(1L);
+            assertEquals(503,assertThrows(ServiceException.class,()->controller.receive(
+                    CouponCodeSecurityTest.body("synthetic-client-outage-code",UUID.randomUUID().toString()),request())).getCode());
+            verifyNoInteractions(service);
+        } finally { if(!lost.isShutdown())lost.shutdown(); }
+    }
     @Test void naturalWindowExpiryAllowsBoundedRetryAndRejectedCallsDoNotExtendTtl() throws Exception {
         assertTrue(a.tryAcquireFixedWindow("expiry",1,1));long ttl=first.getBucket("rate_limiter:"+namespace+"expiry").remainTimeToLive();
         for(int i=0;i<20;i++)assertFalse(b.tryAcquireFixedWindow("expiry",1,1));
         assertTrue(first.getBucket("rate_limiter:"+namespace+"expiry").remainTimeToLive()<=ttl);
-        Thread.sleep(1200);assertTrue(b.tryAcquireFixedWindow("expiry",1,1));
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
+        while(first.getBucket("rate_limiter:"+namespace+"expiry").isExists() && System.nanoTime()<deadline)
+            Thread.sleep(20); // Real Redis server TTL cannot be advanced with the application Clock.
+        assertFalse(first.getBucket("rate_limiter:"+namespace+"expiry").isExists());
+        assertTrue(b.tryAcquireFixedWindow("expiry",1,1));
     }
 }

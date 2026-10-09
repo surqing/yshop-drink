@@ -15,12 +15,15 @@ import sys
 import xml.etree.ElementTree as ET
 
 REPO = Path(__file__).resolve().parents[2]
-WORKSPACE = REPO.parent
+sys.path.insert(0, str(REPO / 'tests/quality'))
+from evidence import Evidence, execute, manifest, workspace
+WORKSPACE = workspace(REPO)
 PRIVATE = WORKSPACE / '.local-dev/acceptance'
 
 
 def main():
-    PRIVATE.mkdir(parents=True, exist_ok=True)
+    PRIVATE.mkdir(parents=True, exist_ok=True, mode=0o700)
+    PRIVATE.chmod(0o700)
     helper = WORKSPACE / '.local-dev/database.py'
     spec = importlib.util.spec_from_file_location('local_database', helper)
     database = importlib.util.module_from_spec(spec)
@@ -69,13 +72,17 @@ def main():
     jdbc = PRIVATE / ('jdbc-' + suffix + '.properties')
     log = PRIVATE / ('mysql-' + suffix + '.log')
     report = PRIVATE / ('mysql-' + suffix + '.json')
-    created = False
+    schema_created = account_created = False
+    receipt = PRIVATE / ("resources-" + suffix + ".json")
     try:
-        database.mysql(f"CREATE DATABASE `{schema}` CHARACTER SET utf8mb4; "
-                       f"CREATE USER '{account}'@'%' IDENTIFIED BY '{password}'; "
-                       f"GRANT ALL PRIVILEGES ON `{schema}`.* TO '{account}'@'%';")
-        created = True
-        jdbc.write_text(f'url=jdbc:mysql://127.0.0.1:3306/{schema}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai\n'
+        database.mysql(f"CREATE DATABASE `{schema}` CHARACTER SET utf8mb4;")
+        schema_created = True
+        receipt.write_text(json.dumps({'schema': schema, 'account': account, 'credentialsIncluded': False}))
+        receipt.chmod(0o600)
+        database.mysql(f"CREATE USER '{account}'@'%' IDENTIFIED BY '{password}';")
+        account_created = True
+        database.mysql(f"GRANT ALL PRIVILEGES ON `{schema}`.* TO '{account}'@'%';")
+        jdbc.write_text(f'url=jdbc:mysql://127.0.0.1:3306/{schema}?useSSL=false&connectTimeout=5000&socketTimeout=30000&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai\n'
                         f'username={account}\npassword={password}\n')
         jdbc.chmod(0o600)
         env = os.environ.copy()
@@ -86,78 +93,63 @@ def main():
         command = [str(WORKSPACE / '.dev-tools/maven/bin/mvn'),
                    '-Dmaven.repo.local=' + str(WORKSPACE / '.local-dev/cache/maven'),
                    '-pl', 'yshop-module-mall/yshop-module-order-biz', '-Pmysql-acceptance',
-                   'test', '-Dtest=' + ('PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest,PaymentLiveReadinessDatabaseTest,LiveMerchantPreflightDatabaseTest' if preflight_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest,PaymentLiveReadinessDatabaseTest' if readiness_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest' if v3_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest' if attempt_mode else 'PaymentDatabaseTest,WalletDatabaseTest' if wallet_mode else 'PaymentDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=false']
+                   'test', '-Dtest=' + ('PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest,PaymentLiveReadinessDatabaseTest,LiveMerchantPreflightDatabaseTest' if preflight_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest,PaymentLiveReadinessDatabaseTest' if readiness_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest' if v3_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest' if attempt_mode else 'PaymentDatabaseTest,WalletDatabaseTest' if wallet_mode else 'PaymentDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=true']
         if cancellation_mode:
             command[-2] += ',PaymentCancellationDatabaseTest'
         if coupon_mode:
             command[-2] += ',CouponPaymentDatabaseTest'
         if prepayment_mode:
-            if env.get('YSHOP_INGRESS_BASE_URL') != 'https://localhost:48443' or not env.get('YSHOP_INGRESS_CA'):
+            if env.get('YSHOP_INGRESS_BASE_URL') not in {'https://localhost:48443','https://localhost:48444'} or not env.get('YSHOP_INGRESS_CA'):
                 raise RuntimeError('SYNTHETIC_LOOPBACK_INGRESS_REQUIRED')
             command[-2] += ',CallbackIngressEndToEndTest'
             if ingress_only:
                 command[-2] = '-Dtest=CallbackIngressEndToEndTest'
-        with log.open('w') as output:
-            log.chmod(0o600)
-            result = subprocess.run(command, cwd=REPO / 'yshop-drink-boot3', env=env,
-                                    stdout=output, stderr=subprocess.STDOUT)
-        if result.returncode:
+        evidence = Evidence(PRIVATE / 'quality')
+        selected = next(x.split('=', 1)[1].split(',') for x in command if x.startswith('-Dtest='))
+        registered = manifest(REPO)
+        expected = {k: v for k, v in registered.items() if k.rsplit('.', 1)[-1] in selected}
+        if len(expected) != len(selected):
+            raise RuntimeError('UNREGISTERED_TEST_SUITE')
+        command += evidence.arguments(expected)
+        returncode = execute(command, REPO / 'yshop-drink-boot3', env, log)
+        if returncode:
             raise RuntimeError('MYSQL_ACCEPTANCE_FAILED_PRIVATE_LOG_SAVED')
         table_engines = database.mysql(f"SELECT COUNT(*),COALESCE(SUM(ENGINE='InnoDB'),0) FROM information_schema.TABLES "
                                        f"WHERE TABLE_SCHEMA='{schema}';").strip()
         if table_engines != '12\t12':
             raise RuntimeError('INNODB_REQUIRED')
-        xml = REPO / 'yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/target/surefire-reports/TEST-co.yixiang.yshop.module.order.payment.PaymentDatabaseTest.xml'
-        if ingress_only:
-            suites = [ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.CallbackIngressEndToEndTest.xml')).getroot()]
-            if int(suites[0].attrib['tests']) != 10 or suites[0].attrib.get('skipped') != '0':
-                raise RuntimeError('REAL_INGRESS_TESTS_REQUIRED')
-        else:
-            suites = [ET.parse(xml).getroot()]
-            if wallet_mode:
-                suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.WalletDatabaseTest.xml')).getroot())
-            if attempt_mode:
-                suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest.xml')).getroot())
-            if v3_mode:
-                suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.WechatV3DatabaseTest.xml')).getroot())
-            if readiness_mode:
-                suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.PaymentLiveReadinessDatabaseTest.xml')).getroot())
-            if preflight_mode:
-                suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.LiveMerchantPreflightDatabaseTest.xml')).getroot())
-            if cancellation_mode:
-                suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest.xml')).getroot())
-                if int(suites[-1].attrib['tests']) < 60:
-                    raise RuntimeError('CANCELLATION_RACES_REQUIRED')
-            if coupon_mode:
-                suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.CouponPaymentDatabaseTest.xml')).getroot())
-            if prepayment_mode:
-                suites.append(ET.parse(xml.with_name('TEST-co.yixiang.yshop.module.order.payment.CallbackIngressEndToEndTest.xml')).getroot())
-                if int(suites[-1].attrib['tests']) != 10 or suites[-1].attrib.get('skipped') != '0':
-                    raise RuntimeError('REAL_INGRESS_TESTS_REQUIRED')
-        if any(suite.attrib['failures'] != '0' or suite.attrib['errors'] != '0' or suite.attrib.get('skipped', '0') != '0' for suite in suites) or (not ingress_only and int(suites[0].attrib['tests']) < 55):
-            raise RuntimeError('ACCEPTANCE_REPORT_INCOMPLETE')
-        tests = sum(int(suite.attrib['tests']) for suite in suites)
+        verified = evidence.validate()
+        test_count = tests = verified['tests']
         summary = {'result': 'PASS', 'mysql': version, 'engine': 'InnoDB', 'tests': tests, 'walletMode': wallet_mode, 'attemptMode': attempt_mode, 'v3Mode': v3_mode, 'readinessMode': readiness_mode, 'preflightMode': preflight_mode, 'cancellationMode': cancellation_mode, 'couponMode': coupon_mode,
                    'failures': 0, 'errors': 0, 'developmentDatabaseUsed': False, 'ingressOnly': ingress_only,
-                   'realPaymentRequests': 0, 'log': str(log)}
-        report.write_text(json.dumps(summary, indent=2) + '\n')
-        report.chmod(0o600)
-        print(json.dumps(summary))
-        return 0
+                   'realPaymentRequests': {'value':0,'evidence':'DECLARED_NO_PROVIDER_PATH'}, 'runId':evidence.id, 'exactNamesChecked':True, 'log': str(log)}
+
     finally:
-        if created:
-            # Names originate only from random fixed-length hexadecimal identifiers in this run.
-            assert re.fullmatch(r'yshop_acceptance_phase5[bcdefgh]_[a-f0-9]{8}', schema)
-            assert re.fullmatch(r'accept5[bcdefgh]_[a-f0-9]{8}', account)
-            database.mysql(f"DROP DATABASE `{schema}`; DROP USER '{account}'@'%';")
-        if jdbc.exists():
-            jdbc.unlink()
+        try:
+            if schema_created or account_created:
+                # Names originate only from random fixed-length hexadecimal identifiers in this run.
+                assert re.fullmatch(r'yshop_acceptance_phase5[bcdefgh]_[a-f0-9]{8}', schema)
+                assert re.fullmatch(r'accept5[bcdefgh]_[a-f0-9]{8}', account)
+                try:
+                    if schema_created: database.mysql(f"DROP DATABASE `{schema}`;")
+                finally:
+                    if account_created: database.mysql(f"DROP USER '{account}'@'%';")
+            receipt.unlink(missing_ok=True)
+        finally:
+            jdbc.unlink(missing_ok=True)
+    summary['cleanup'] = 'PASS'
+    report.write_text(json.dumps(summary, indent=2) + '\n')
+    report.chmod(0o600)
+    print(json.dumps(summary))
+    return 0
 
 
 if __name__ == '__main__':
     try:
         sys.exit(main())
-    except Exception:
+    except Exception as failure:
         # JDBC errors/configuration must not expose private credentials to terminal/chat.
+        import traceback
+        print(json.dumps({'result':'FAIL','errorType':type(failure).__name__,'sites':[(f.name,f.lineno) for f in traceback.extract_tb(failure.__traceback__)]}))
         print('MySQL acceptance failed; inspect the private local acceptance log.', file=sys.stderr)
         sys.exit(1)

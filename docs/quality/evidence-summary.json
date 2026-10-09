@@ -1,0 +1,115 @@
+{
+  "phase": "6Q",
+  "baseSha": "f96c70a10978939f66392788fa3f0fb863d8aca2",
+  "branch": "audit/phase6q-test-quality-gate",
+  "date": "2026-10-09",
+  "gate": "NOT_READY",
+  "java": {
+    "result": "PASS",
+    "tests": 1617,
+    "suites": 75,
+    "distinctDisplayNames": 1142,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "runId": "68129e3da33e4d7ea871c8f3289ef86c"
+  },
+  "quick": {
+    "result": "PASS",
+    "nodeTests": 47,
+    "pythonTests": 57,
+    "runId": "13738d9eaded414aa4ecc469ac0de84e"
+  },
+  "mysqlBusiness": {
+    "result": "PASS",
+    "tests": 487,
+    "innodbTables": 23,
+    "runId": "02091fc7a7d4469ab2a2e3926935b921"
+  },
+  "mysqlFinancial": {
+    "result": "PASS",
+    "tests": 497,
+    "innodbTables": 12,
+    "runId": "358fbec228ed4c44928b1fae7a3dda6c"
+  },
+  "mysqlSyntheticTls": {
+    "result": "PASS",
+    "tests": 10,
+    "innodbTables": 12,
+    "runId": "edc9f0ee82e74d009d172373b24a261f"
+  },
+  "redis": {
+    "result": "PASS",
+    "tests": 66,
+    "runId": "ea74e355bd00402594d5376272f22c2b"
+  },
+  "backend": {
+    "result": "PASS",
+    "modules": 55
+  },
+  "vue": {
+    "build": "PASS",
+    "typeCheck": "PASS"
+  },
+  "uniapp": {
+    "compile": "PASS",
+    "copiedSourceFiles": 380,
+    "runId": "8b8fa8d642ac49c6b7ebc427cb67bf01"
+  },
+  "mini": {
+    "result": "PASS",
+    "checks": 7,
+    "localApiSuccess": 5,
+    "paymentRequests": 0,
+    "measurement": "MEASURED during installed hooks only",
+    "writeFlow": "BLOCKED_NO_DISPOSABLE_BACKEND"
+  },
+  "secret": {
+    "exactPrivateValueScan": "PASS",
+    "newDiffLiteralGuard": "PASS",
+    "scope": "changed/committed/untracked files + compiled backend JAR + fresh Mini artifact; synthetic secret-in-log failure proved"
+  },
+  "financialFingerprint": {
+    "unchanged": true,
+    "measurement": "MEASURED read-only development baseline comparison"
+  },
+  "realFinancialOperations": {
+    "value": 0,
+    "evidence": "DECLARED_SYNTHETIC_ISOLATION; reinforced by unchanged measured development financial fingerprint"
+  },
+  "ci": {
+    "configuration": "implemented and YAML locally validated",
+    "remoteRun": "not yet observed at documentation freeze"
+  },
+  "blockers": [
+    "authentication refresh/revocation/controller concurrency coverage gaps",
+    "missing dangerous composite mutation operators for duplicate effects/release/double reservation",
+    "no isolated-backend current-branch admin and Mini write workflow acceptance",
+    "fresh-machine heavy-integration bootstrap still relies on explicit private local helper",
+    "new GitHub quality job not yet observed passing"
+  ],
+  "initialFailures": [
+    "historical Desensitize and system/member/material fixture defects reproduced before repair",
+    "initial MySQL network EOF failures retained, fresh serial full reruns passed; exact infrastructure root cause unconfirmed",
+    "first dedicated TLS run rejected implicit workspace/port assumptions; repaired and rerun",
+    "first successful synthetic TLS run overwrote two fixed-name private summary reports; scoped report output fixed and rerun; prior summaries cannot be claimed preserved"
+  ],
+  "embeddedRedisRepair": {
+    "before": "occupied configured port assertion fails",
+    "afterTests": 3,
+    "scope": "shared test infrastructure, not runtime configuration"
+  },
+  "inventory": {
+    "assets": 241,
+    "states": {
+      "ACTIVE": 205,
+      "UNVERIFIED": 35,
+      "OBSOLETE": 1
+    },
+    "suiteFiles": 93,
+    "executedSuiteFiles": 88,
+    "defaultConditionalJavaSuites": 3,
+    "repeatedCounts": "not distinct scenarios; same H2/MySQL tests overlap",
+    "deadScripts": "none proven dead;1 obsolete source-rewriting utility; remaining unverified are not mislabeled dead"
+  }
+}

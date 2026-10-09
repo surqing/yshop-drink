@@ -1,0 +1,326 @@
+{
+  "latest": {
+    "inventory-sku-check": {
+      "mutation": "inventory-sku-check",
+      "result": "SURVIVED",
+      "assertionFailures": 0,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java"
+    },
+    "inventory-conditional-update": {
+      "mutation": "inventory-conditional-update",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java"
+    },
+    "cross-store-product": {
+      "mutation": "cross-store-product",
+      "result": "SURVIVED",
+      "assertionFailures": 0,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java"
+    },
+    "employee-store-scope": {
+      "mutation": "employee-store-scope",
+      "result": "KILLED",
+      "assertionFailures": 3,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-store-biz/src/main/java/co/yixiang/yshop/module/store/service/storeshop/StoreAccessService.java"
+    },
+    "cancel-payment-guard": {
+      "mutation": "cancel-payment-guard",
+      "result": "KILLED",
+      "assertionFailures": 26,
+      "suite": "PaymentCancellationDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java"
+    },
+    "cancel-uncertain-safe": {
+      "mutation": "cancel-uncertain-safe",
+      "result": "KILLED",
+      "assertionFailures": 12,
+      "suite": "PaymentCancellationDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/attempt/PaymentCancellationGuard.java"
+    },
+    "cancel-remote-proof": {
+      "mutation": "cancel-remote-proof",
+      "result": "KILLED",
+      "assertionFailures": 4,
+      "suite": "PaymentCancellationDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/attempt/PaymentCancellationGuard.java"
+    },
+    "coupon-member-limit": {
+      "mutation": "coupon-member-limit",
+      "result": "KILLED",
+      "assertionFailures": 46,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService.java"
+    },
+    "coupon-total-limit": {
+      "mutation": "coupon-total-limit",
+      "result": "SURVIVED",
+      "assertionFailures": 0,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService.java"
+    },
+    "coupon-expiration": {
+      "mutation": "coupon-expiration",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService.java"
+    },
+    "coupon-claim-rate": {
+      "mutation": "coupon-claim-rate",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "CouponCodeSecurityTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponCodeGuard.java"
+    },
+    "coupon-redis-fail-open": {
+      "mutation": "coupon-redis-fail-open",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "CouponCodeSecurityTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponCodeGuard.java"
+    },
+    "payment-amount": {
+      "mutation": "payment-amount",
+      "result": "KILLED",
+      "assertionFailures": 2,
+      "suite": "PaymentDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/PaymentProcessor.java"
+    },
+    "inventory-wrong-debit": {
+      "mutation": "inventory-wrong-debit",
+      "result": "KILLED",
+      "assertionFailures": 33,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java"
+    },
+    "cross-store-all-defences": {
+      "mutation": "cross-store-all-defences",
+      "result": "KILLED",
+      "assertionFailures": 4,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java"
+    },
+    "coupon-total-all-defences": {
+      "mutation": "coupon-total-all-defences",
+      "result": "KILLED",
+      "assertionFailures": 40,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService.java"
+    },
+    "coupon-reuse-state": {
+      "mutation": "coupon-reuse-state",
+      "result": "KILLED",
+      "assertionFailures": 3,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponPolicy.java"
+    },
+    "coupon-use-expired": {
+      "mutation": "coupon-use-expired",
+      "result": "KILLED",
+      "assertionFailures": 22,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponPolicy.java"
+    },
+    "late-success-terminal": {
+      "mutation": "late-success-terminal",
+      "result": "KILLED",
+      "assertionFailures": 4,
+      "suite": "PaymentAttemptDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/PaymentProcessor.java"
+    },
+    "duplicate-event-result": {
+      "mutation": "duplicate-event-result",
+      "result": "KILLED",
+      "assertionFailures": 10,
+      "suite": "PaymentDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/PaymentProcessor.java"
+    }
+  },
+  "history": [
+    {
+      "batch": 1,
+      "mutation": "inventory-sku-check",
+      "result": "SURVIVED",
+      "assertionFailures": 0,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java"
+    },
+    {
+      "batch": 1,
+      "mutation": "inventory-conditional-update",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java"
+    },
+    {
+      "batch": 1,
+      "mutation": "cross-store-product",
+      "result": "SURVIVED",
+      "assertionFailures": 0,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java"
+    },
+    {
+      "batch": 1,
+      "mutation": "employee-store-scope",
+      "result": "KILLED",
+      "assertionFailures": 3,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-store-biz/src/main/java/co/yixiang/yshop/module/store/service/storeshop/StoreAccessService.java"
+    },
+    {
+      "batch": 1,
+      "mutation": "cancel-payment-guard",
+      "result": "SURVIVED",
+      "assertionFailures": 0,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java"
+    },
+    {
+      "batch": 1,
+      "mutation": "cancel-uncertain-safe",
+      "result": "KILLED",
+      "assertionFailures": 12,
+      "suite": "PaymentCancellationDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/attempt/PaymentCancellationGuard.java"
+    },
+    {
+      "batch": 1,
+      "mutation": "cancel-remote-proof",
+      "result": "KILLED",
+      "assertionFailures": 4,
+      "suite": "PaymentCancellationDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/attempt/PaymentCancellationGuard.java"
+    },
+    {
+      "batch": 1,
+      "mutation": "coupon-member-limit",
+      "result": "KILLED",
+      "assertionFailures": 46,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService.java"
+    },
+    {
+      "batch": 1,
+      "mutation": "coupon-total-limit",
+      "result": "SURVIVED",
+      "assertionFailures": 0,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService.java"
+    },
+    {
+      "batch": 1,
+      "mutation": "coupon-expiration",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService.java"
+    },
+    {
+      "batch": 1,
+      "mutation": "coupon-claim-rate",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "CouponCodeSecurityTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponCodeGuard.java"
+    },
+    {
+      "batch": 1,
+      "mutation": "coupon-redis-fail-open",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "CouponCodeSecurityTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponCodeGuard.java"
+    },
+    {
+      "batch": 1,
+      "mutation": "payment-amount",
+      "result": "INAPPLICABLE",
+      "reason": "EXACT_OPERATOR_NOT_FOUND",
+      "matches": 0
+    },
+    {
+      "batch": 2,
+      "mutation": "cancel-payment-guard",
+      "result": "KILLED",
+      "assertionFailures": 26,
+      "suite": "PaymentCancellationDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java"
+    },
+    {
+      "batch": 2,
+      "mutation": "payment-amount",
+      "result": "KILLED",
+      "assertionFailures": 2,
+      "suite": "PaymentDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/PaymentProcessor.java"
+    },
+    {
+      "batch": 3,
+      "mutation": "inventory-wrong-debit",
+      "result": "KILLED",
+      "assertionFailures": 33,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java"
+    },
+    {
+      "batch": 3,
+      "mutation": "cross-store-all-defences",
+      "result": "KILLED",
+      "assertionFailures": 4,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java"
+    },
+    {
+      "batch": 3,
+      "mutation": "coupon-total-all-defences",
+      "result": "KILLED",
+      "assertionFailures": 40,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService.java"
+    },
+    {
+      "batch": 3,
+      "mutation": "coupon-reuse-state",
+      "result": "KILLED",
+      "assertionFailures": 3,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponPolicy.java"
+    },
+    {
+      "batch": 3,
+      "mutation": "coupon-use-expired",
+      "result": "KILLED",
+      "assertionFailures": 22,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponPolicy.java"
+    },
+    {
+      "batch": 4,
+      "mutation": "late-success-terminal",
+      "result": "KILLED",
+      "assertionFailures": 4,
+      "suite": "PaymentAttemptDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/PaymentProcessor.java"
+    },
+    {
+      "batch": 4,
+      "mutation": "duplicate-event-result",
+      "result": "KILLED",
+      "assertionFailures": 10,
+      "suite": "PaymentDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/PaymentProcessor.java"
+    }
+  ],
+  "logSecretCanary": {
+    "result": "KILLED",
+    "evidence": "test_actual_exact_value_cli_detects_injected_log_without_echo; actual scanner returns 1"
+  },
+  "intentionalMutationResidue": false
+}

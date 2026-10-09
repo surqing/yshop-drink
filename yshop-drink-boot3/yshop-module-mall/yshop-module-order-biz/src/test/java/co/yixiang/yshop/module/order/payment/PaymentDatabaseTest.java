@@ -583,15 +583,18 @@ class PaymentDatabaseTest {
     void twentyConcurrentTransactions() throws Exception {
         ExecutorService pool = Executors.newFixedThreadPool(20);
         var start = new CountDownLatch(1);
+        var ready = new CountDownLatch(20);
         try {
             List<Future<PaymentResult>> results = new ArrayList<>();
             for (int i = 0; i < 20; i++)
                 results.add(
                         pool.submit(
                                 () -> {
-                                    start.await();
+                                    ready.countDown();
+                                    assertTrue(start.await(30, TimeUnit.SECONDS));
                                     return pay();
                                 }));
+            assertTrue(ready.await(30, TimeUnit.SECONDS), "All workers must be ready before release");
             start.countDown();
             Map<PaymentResult, Integer> totals = new EnumMap<>(PaymentResult.class);
             for (var result : results)

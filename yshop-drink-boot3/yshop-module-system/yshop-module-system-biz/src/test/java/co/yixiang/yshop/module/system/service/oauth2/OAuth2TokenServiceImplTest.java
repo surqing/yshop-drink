@@ -40,6 +40,8 @@ import static org.mockito.Mockito.when;
  */
 @Import({OAuth2TokenServiceImpl.class, OAuth2AccessTokenRedisDAO.class})
 public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
+    @MockBean
+    private co.yixiang.yshop.module.store.dal.mysql.storeshop.StoreShopMapper storeShopMapper;
 
     @Resource
     private OAuth2TokenServiceImpl oauth2TokenService;
