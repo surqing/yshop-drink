@@ -141,4 +141,17 @@
 
     </dependencies>
 
+    <profiles>
+        <profile>
+            <id>mysql-acceptance</id>
+            <dependencies>
+                <dependency>
+                    <groupId>com.mysql</groupId>
+                    <artifactId>mysql-connector-j</artifactId>
+                    <version>8.3.0</version>
+                    <scope>test</scope>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
 </project>

@@ -123,7 +123,10 @@
     "missingTokenLogoutIsIdempotentWithoutIdentityLookup": 1,
     "disabledWechatMemberCannotReceiveToken": 1,
     "enabledWechatMemberReceivesOnlyItsOwnIdentity": 1,
-    "expiredWechatSessionNeverDecryptsOrCreatesToken": 1
+    "expiredWechatSessionNeverDecryptsOrCreatesToken": 1,
+    "refreshIsMemberTypedAndNeverLogsSuccessfulLogin": 1,
+    "rejectedRefreshNeverRecordsSuccessfulLoginOrUserUpdate": 1,
+    "statusChangedBeforeTokenGrantCannotWriteSuccessLog": 1
   },
   "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest": {
     "priceAuditFailureRollsBackPriceAndVersion": 1,
@@ -1073,7 +1076,12 @@
     "testGetAccessToken": 1,
     "testCreateAccessToken": 1,
     "testRemoveAccessToken_null": 1,
-    "testRemoveAccessToken_success": 1
+    "testRemoveAccessToken_success": 1,
+    "revokedFamilyCannotBeAuthorizedFromStaleRedis": 1,
+    "logoutRevokesEveryAccessTokenInTheRefreshFamily": 1,
+    "disabledMemberCannotRefreshAnExistingSession": 1,
+    "deletedMemberCannotRefreshAnExistingSession": 1,
+    "nanosecondClockHasExactDatabaseRepresentableExpiry": 1
   },
   "co.yixiang.yshop.module.system.service.permission.MenuServiceImplTest": {
     "testValidateParentMenu_success": 1,
@@ -1321,5 +1329,19 @@
     "occupiedConfiguredPortCannotBecomeAnUnstartedSharedServer": 1,
     "independentServersHaveIndependentPortsAndKeyspaces": 1,
     "clientInitializationDependsOnOwnedServerAndContextClosesIt": 1
+  },
+  "co.yixiang.yshop.module.system.service.oauth2.OAuth2LifecycleDatabaseTest": {
+    "disabledAndDeletedMemberCannotRefreshOrUseOldTokens": 1,
+    "actualApiRefreshChecksCurrentMemberAndCanonicalIdentity": 1,
+    "issuanceAndCacheDoNotEscapeDatabaseRollback": 1,
+    "logoutRevokesStaleRemoteCacheAndBothCredentials": 1,
+    "disabledPrincipalCannotCreateNewAccessOrRefresh": 1,
+    "directStatusOrDeletionEvidenceFailsClosedWithoutCacheInvalidation": 1,
+    "invalidExpiredClientAndUserTypeCannotAlterFamily": 1,
+    "oldRotatedTokenLogoutRevokesTheCurrentFamily": 1,
+    "twentyRefreshesHaveOnlyOneCurrentAccessAcrossInstances": 20,
+    "realRequestFilterRejectsWrongUserTypeAndRevokedIdentity": 1,
+    "logoutAndRefreshRaceEndsWithNoUsableCredentials": 20,
+    "disableAndRefreshRaceEndsWithNoUsableCredentials": 20
   }
 }

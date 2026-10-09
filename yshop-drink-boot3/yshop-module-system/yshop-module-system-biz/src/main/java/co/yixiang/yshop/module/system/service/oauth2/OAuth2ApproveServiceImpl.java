@@ -45,7 +45,7 @@ public class OAuth2ApproveServiceImpl implements OAuth2ApproveService {
         Assert.notNull(clientDO, "客户端不能为空"); // 防御性编程
         if (CollUtil.containsAll(clientDO.getAutoApproveScopes(), requestedScopes)) {
             // gh-877 - if all scopes are auto approved, approvals still need to be added to the approval store.
-            LocalDateTime expireTime = LocalDateTime.now().plusSeconds(TIMEOUT);
+            LocalDateTime expireTime = LocalDateTime.now().withNano(0).plusSeconds(TIMEOUT);
             for (String scope : requestedScopes) {
                 saveApprove(userId, userType, clientId, scope, true, expireTime);
             }
@@ -69,7 +69,7 @@ public class OAuth2ApproveServiceImpl implements OAuth2ApproveService {
 
         // 更新批准的信息
         boolean success = false; // 需要至少有一个同意
-        LocalDateTime expireTime = LocalDateTime.now().plusSeconds(TIMEOUT);
+        LocalDateTime expireTime = LocalDateTime.now().withNano(0).plusSeconds(TIMEOUT);
         for (Map.Entry<String, Boolean> entry : requestedScopes.entrySet()) {
             if (entry.getValue()) {
                 success = true;

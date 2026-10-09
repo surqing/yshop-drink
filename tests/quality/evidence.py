@@ -3,6 +3,7 @@ from collections import Counter
 from pathlib import Path
 import contextlib
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -11,6 +12,17 @@ import subprocess
 import time
 import uuid
 import xml.etree.ElementTree as ET
+
+
+def source_identity(repo=None):
+    repo = Path(repo or Path(__file__).resolve().parents[2])
+    sha = subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip()
+    files = subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','-z'],cwd=repo).decode().split('\0')
+    digest = hashlib.sha256()
+    for name in sorted(filter(None,files)):
+        p = repo/name
+        if p.is_file(): digest.update(name.encode()+b'\0'+p.read_bytes())
+    return {'sourceSha':sha,'sourceDigest':digest.hexdigest()}
 
 
 def workspace(repo):
@@ -64,10 +76,11 @@ class Evidence:
         self.directory = self.root / 'surefire'
         self.expected = None
         self.summary = None
+        self.source = source_identity()
 
     def arguments(self, expected):
         self.expected = expected
-        (self.root / 'run.json').write_text(json.dumps({'runId': self.id, 'expected': expected}))
+        (self.root / 'run.json').write_text(json.dumps({'runId': self.id, **self.source, 'expected': expected}))
         return ['-Dquality.runId=' + self.id, '-Dsurefire.reportsDirectory=' + str(self.directory)]
 
     def validate(self, expected=None):
@@ -75,6 +88,8 @@ class Evidence:
         None validates discovery only and is explicitly unsuitable for final suite certification.
         """
         expected = expected if expected is not None else self.expected
+        if source_identity() != self.source:
+            raise RuntimeError('SOURCE_CHANGED_DURING_TEST')
         found = {}
         for file in self.directory.rglob('TEST-*.xml'):
             if file.stat().st_mtime < self.started:
@@ -97,7 +112,7 @@ class Evidence:
             found[name] = names
         if set(found) != set(expected):
             raise RuntimeError('MISSING_OR_UNEXPECTED_TEST_SUITE')
-        self.summary = {'runId': self.id, 'result': 'PASS', 'suites': len(found),
+        self.summary = {'runId': self.id, **self.source, 'result': 'PASS', 'suites': len(found),
                         'tests': sum(sum(x.values()) for x in found.values()), 'cases': found,
                         'exactNamesChecked': all(x is not None for x in expected.values())}
         (self.root / 'evidence.json').write_text(json.dumps(self.summary, indent=2))
@@ -105,7 +120,7 @@ class Evidence:
 
     def diagnostics(self):
         """Public-safe structural evidence. Never publish XML messages, output or values."""
-        result = {'runId': self.id, 'reports': [], 'failures': [], 'missingSuites': []}
+        result = {'runId': self.id, **self.source, 'reports': [], 'failures': [], 'missingSuites': []}
         seen = set()
         for file in sorted(self.directory.rglob('TEST-*.xml')):
             try:

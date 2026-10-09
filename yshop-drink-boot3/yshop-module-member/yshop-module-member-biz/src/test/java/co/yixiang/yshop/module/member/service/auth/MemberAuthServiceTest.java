@@ -63,7 +63,7 @@ public class MemberAuthServiceTest extends BaseMockitoUnitTest {
     }
     @Test void missingTokenLogoutIsIdempotentWithoutIdentityLookup() {
         authService.logout("synthetic-expired-token");
-        verify(oauth2TokenApi).removeAccessToken("synthetic-expired-token");
+        verify(oauth2TokenApi).removeAccessToken("synthetic-expired-token",1);
         verifyNoInteractions(userMapper,loginLogApi);
     }
     void syntheticWechatMember(int status) throws Exception {
@@ -104,6 +104,27 @@ public class MemberAuthServiceTest extends BaseMockitoUnitTest {
         when(miniRedisDAO.get("synthetic-openid")).thenReturn(null);
         assertThrows(ServiceException.class,()->authService.weixinMiniAppLogin3("synthetic-data","synthetic-iv","synthetic-openid"));
         verifyNoInteractions(wxMaService,oauth2TokenApi,userMapper);
+    }
+
+    @Test void refreshIsMemberTypedAndNeverLogsSuccessfulLogin() {
+        when(oauth2TokenApi.refreshAccessToken("synthetic-refresh","default",1)).thenReturn(
+                new co.yixiang.yshop.module.system.api.oauth2.dto.OAuth2AccessTokenRespDTO().setUserId(7L).setAccessToken("synthetic-next"));
+        assertEquals("synthetic-next",authService.refreshToken("synthetic-refresh").getAccessToken());
+        verify(oauth2TokenApi).refreshAccessToken("synthetic-refresh","default",1);
+        verifyNoInteractions(loginLogApi,userMapper,userService);
+    }
+    @Test void rejectedRefreshNeverRecordsSuccessfulLoginOrUserUpdate() {
+        when(oauth2TokenApi.refreshAccessToken("synthetic-revoked","default",1))
+                .thenThrow(new ServiceException(401,"账户不可用"));
+        assertThrows(ServiceException.class,()->authService.refreshToken("synthetic-revoked"));
+        verifyNoInteractions(loginLogApi,userMapper,userService);
+    }
+    @Test void statusChangedBeforeTokenGrantCannotWriteSuccessLog() throws Exception {
+        syntheticWechatMember(0);
+        when(oauth2TokenApi.createAccessToken(any())).thenThrow(new ServiceException(401,"账户不可用"));
+        assertThrows(ServiceException.class,()->authService.weixinMiniAppLogin2(
+                co.yixiang.yshop.module.member.controller.app.auth.vo.AppWeixinMiniLoginVO.builder().code("synthetic-login-code").build()));
+        verifyNoInteractions(loginLogApi);verify(userService,never()).updateUserLogin(anyLong(),any());
     }
 
 }

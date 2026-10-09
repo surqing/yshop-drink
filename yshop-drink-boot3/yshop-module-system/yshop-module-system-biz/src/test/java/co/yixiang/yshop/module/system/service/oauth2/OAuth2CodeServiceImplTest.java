@@ -73,7 +73,7 @@ class OAuth2CodeServiceImplTest extends BaseDbUnitTest {
         String code = "test_code";
         // mock 数据
         OAuth2CodeDO codeDO = randomPojo(OAuth2CodeDO.class).setCode(code)
-                .setExpiresTime(LocalDateTime.now().minusDays(1));
+                .setExpiresTime(LocalDateTime.now().withNano(0).minusDays(1));
         oauth2CodeMapper.insert(codeDO);
 
         // 调用，并断言
@@ -87,7 +87,7 @@ class OAuth2CodeServiceImplTest extends BaseDbUnitTest {
         String code = "test_code";
         // mock 数据
         OAuth2CodeDO codeDO = randomPojo(OAuth2CodeDO.class).setCode(code)
-                .setExpiresTime(LocalDateTime.now().plusDays(1));
+                .setExpiresTime(LocalDateTime.now().withNano(0).plusDays(1));
         oauth2CodeMapper.insert(codeDO);
 
         // 调用

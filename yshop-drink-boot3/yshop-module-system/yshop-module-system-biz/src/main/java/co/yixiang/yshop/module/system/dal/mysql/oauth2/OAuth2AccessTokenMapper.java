@@ -13,6 +13,13 @@ import java.util.List;
 
 @Mapper
 public interface OAuth2AccessTokenMapper extends BaseMapperX<OAuth2AccessTokenDO> {
+    @TenantIgnore
+    @org.apache.ibatis.annotations.Select("SELECT * FROM system_oauth2_access_token WHERE access_token=#{token}")
+    @org.apache.ibatis.annotations.Results({
+        @org.apache.ibatis.annotations.Result(column="user_info",property="userInfo",typeHandler=com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler.class),
+        @org.apache.ibatis.annotations.Result(column="scopes",property="scopes",typeHandler=com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler.class)
+    })
+    OAuth2AccessTokenDO selectIncludingRevoked(String token);
 
     @TenantIgnore // 获取 token 的时候，需要忽略租户编号。原因是：一些场景下，可能不会传递 tenant-id 请求头，例如说文件上传、积木报表等等
     default OAuth2AccessTokenDO selectByAccessToken(String accessToken) {

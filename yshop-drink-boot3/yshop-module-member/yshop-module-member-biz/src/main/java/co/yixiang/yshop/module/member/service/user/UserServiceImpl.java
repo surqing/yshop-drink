@@ -32,6 +32,7 @@ public class UserServiceImpl implements UserService {
 
     @Resource
     private MemberUserMapper userMapper;
+    @Resource private co.yixiang.yshop.module.system.api.oauth2.OAuth2TokenApi oauth2Tokens;
     @Resource
     private UserBillService userBillService;
     @Resource
@@ -47,12 +48,16 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED,rollbackFor=Exception.class)
     public void updateUser(UserUpdateReqVO updateReqVO) {
         // 校验存在
         validateUserExists(updateReqVO.getId());
         // 更新
         MemberUserDO updateObj = UserConvert.INSTANCE.convert(updateReqVO);
+        // The member UPDATE owns the principal row before refresh-family locks.
         userMapper.updateById(updateObj);
+        if(updateObj.getStatus()!=null && !Integer.valueOf(0).equals(updateObj.getStatus()))
+            oauth2Tokens.revokeUserTokens(updateObj.getId(),1);
     }
 
     /**
@@ -102,11 +107,13 @@ public class UserServiceImpl implements UserService {
 
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED,rollbackFor=Exception.class)
     public void deleteUser(Long id) {
         // 校验存在
         validateUserExists(id);
         // 删除
         userMapper.deleteById(id);
+        oauth2Tokens.revokeUserTokens(id,1);
     }
 
     private void validateUserExists(Long id) {

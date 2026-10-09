@@ -37,6 +37,18 @@ class EvidenceFaultInjection(unittest.TestCase):
     def test_missing_report(self):
         with self.assertRaisesRegex(RuntimeError,'MISSING'):self.e.validate()
 
+    def test_source_change_cannot_relabel_old_execution(self):
+        self.report()
+        with patch('evidence.source_identity',return_value={'sourceSha':'changed','sourceDigest':'changed'}):
+            with self.assertRaisesRegex(RuntimeError,'SOURCE_CHANGED'):self.e.validate()
+        self.assertEqual(self.e.source['sourceSha'],self.e.diagnostics()['sourceSha'])
+
+    def test_changed_invocation_count_cannot_pass(self):
+        root=self.report(tests='2')
+        ET.SubElement(root,'testcase',name='checksInvariant',classname='synthetic.Suite')
+        ET.ElementTree(root).write(self.file)
+        with self.assertRaisesRegex(RuntimeError,'INVOCATIONS_CHANGED'):self.e.validate()
+
     def test_stale_report(self):
         self.report();os.utime(self.file,(1,1))
         with self.assertRaisesRegex(RuntimeError,'STALE'):self.e.validate()
