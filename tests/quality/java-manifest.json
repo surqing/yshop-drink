@@ -126,7 +126,17 @@
     "expiredWechatSessionNeverDecryptsOrCreatesToken": 1,
     "refreshIsMemberTypedAndNeverLogsSuccessfulLogin": 1,
     "rejectedRefreshNeverRecordsSuccessfulLoginOrUserUpdate": 1,
-    "statusChangedBeforeTokenGrantCannotWriteSuccessLog": 1
+    "statusChangedBeforeTokenGrantCannotWriteSuccessLog": 1,
+    "passwordLoginChecksIdentityAndWritesOnlySuccessAfterGrant": 1,
+    "missingPasswordAccountNeverGrantsOrRecordsSuccess": 1,
+    "wrongPasswordNeverGrantsOrRecordsSuccess": 1,
+    "disabledPasswordMemberNeverGrantsOrRecordsSuccess": 1,
+    "passwordGrantRejectionDoesNotRecordSuccessfulLogin": 1,
+    "successfulLogoutLogsLogoutNotLoginAndDoesNotUpdateLoginTime": 1,
+    "wrongIdentityLogoutNeverRecordsAnyLog": 1,
+    "invalidSmsNeverCreatesIdentityTokenOrSuccessLog": 1,
+    "disabledSmsMemberNeverGrantsOrWritesSuccess": 1,
+    "enabledSmsUsesVerifiedIdentityAndRecordsSuccessAfterGrant": 1
   },
   "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest": {
     "priceAuditFailureRollsBackPriceAndVersion": 1,
@@ -329,7 +339,8 @@
     "duplicateKeyConflict": 1,
     "databaseLockFailureRollsBackSubmissionAndInventory": 1,
     "globalAndExplicitMultiStoreCouponAllowed": 1,
-    "workersHoldTwentyIndependentTransactionsAndConnections": 1
+    "workersHoldTwentyIndependentTransactionsAndConnections": 1,
+    "differentStoreSkuPriceCannotBecomeThisOrdersPrice": 1
   },
   "co.yixiang.yshop.module.order.payment.CallbackIngressEndToEndTest": {
     "validSyntheticAnonymousNotification": 1,

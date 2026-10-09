@@ -35,12 +35,15 @@ jobs:
       - name: Compile all 55 modules (tests run separately with report integrity checks)
         run: mvn -B -f yshop-drink-boot3/pom.xml install package -Dmaven.test.skip=true
       - name: Offline credential diff guard
+        if: ${{ !cancelled() }}
         env:
           BASE_REF: ${{ github.event.pull_request.base.sha || 'HEAD^' }}
         run: python3 tests/quality/secret_guard.py --base "$BASE_REF"
       - name: Quick tests and deliberate runner failures
+        if: ${{ !cancelled() }}
         run: python3 tests/quality/run.py QUICK --output "$RUNNER_TEMP/quality"
       - name: All Java suites, fresh exact-name reports, coverage (including historical failures)
+        if: ${{ !cancelled() }}
         run: |
           python3 - <<'PY'
           import sys

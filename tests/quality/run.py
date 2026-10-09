@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed test dispatcher. Reports are private, fresh and tied to source/run IDs."""
 import argparse
+import ast
 from collections import defaultdict
 import hashlib
 import json
@@ -13,11 +14,28 @@ import sys
 import tempfile
 import time
 import uuid
-from evidence import Evidence, execute, manifest, workspace
+from evidence import Evidence, execute, manifest, workspace, source_identity
 
 REPO = Path(__file__).resolve().parents[2]
 BOOT = REPO / 'yshop-drink-boot3'
 MODES = ['QUICK','BUSINESS','INTEGRATION','PAYMENT-SAFETY','MINIPROGRAM','FULL','MUTATION']
+def require_count(actual, expected):
+    if actual != expected: raise RuntimeError('TEST_INVOCATIONS_CHANGED')
+
+
+def require_suites(planned, registered, discovered):
+    if set(planned)!=set(registered) or set(planned)!=set(discovered):raise RuntimeError('QUICK_SUITE_INVENTORY_CHANGED')
+
+def discover_quick_suites():
+    paths=[]
+    for file in (REPO/'tests').rglob('*.py'):
+        tree=ast.parse(file.read_text())
+        if any(isinstance(n,ast.ClassDef) and any((isinstance(b,ast.Attribute) and b.attr=='TestCase') or (isinstance(b,ast.Name) and b.id=='TestCase') for b in n.bases) for n in ast.walk(tree)):
+            paths.append(str(file.relative_to(REPO)))
+    paths += [str(f.relative_to(REPO)) for f in (REPO/'tests').rglob('*.mjs') if f.name.endswith(('.test.mjs','-test.mjs'))]
+    return paths
+
+
 CONDITIONAL = {'CouponCodeRedisAcceptanceTest','CallbackIngressEndToEndTest','CatalogEditingMysqlAcceptance'}
 
 
@@ -94,17 +112,23 @@ class Runner:
             self.step('java-'+mod.name,cmd,mod,validator=lambda log,ev=ev:ev.validate(),diagnostic=ev.diagnostics)
 
     def quick(self):
+        expected=json.loads((REPO/'tests/quality/quick-manifest.json').read_text())
         files=sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])
+        planned=[str(f.relative_to(REPO)) for f in sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])]
+        planned+=['tests/quality/test_evidence.py','tests/quality/test_secret_guard.py','tests/quality/test_owned_resources.py','tests/smoke/test_secret_scan.py','tests/payment/prepayment-tools-test.py']
+        require_suites(planned,expected,discover_quick_suites())
         for index,file in enumerate(files):
             def node_evidence(log):
                 text=log.read_text();counts={k:int(v) for k,v in re.findall(r'^# (tests|pass|fail|skipped|cancelled|todo) (\d+)$',text,re.M)}
                 if counts.get('tests',0)<=0 or counts.get('tests')!=counts.get('pass') or any(counts.get(k,0) for k in ['fail','skipped','cancelled','todo']):raise RuntimeError('NODE_REPORT_INCOMPLETE')
+                require_count(counts['tests'],expected[str(file.relative_to(REPO))])
                 return counts
             self.step('node-'+str(index),[shutil.which('node') or 'node','--test','--test-reporter=tap',str(file)],timeout=180,validator=node_evidence)
-        for index,file in enumerate([REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']):
+        for index,file in enumerate([REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/quality/test_owned_resources.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']):
             def python_evidence(log):
                 text=log.read_text();match=re.search(r'Ran (\d+) tests? in',text)
                 if not match or int(match[1])==0 or not re.search(r'^OK$',text,re.M):raise RuntimeError('PYTHON_REPORT_INCOMPLETE_OR_SKIPPED')
+                require_count(int(match[1]),expected[str(file.relative_to(REPO))])
                 return {'tests':int(match[1])}
             self.step('python-'+str(index),[sys.executable,str(file)],timeout=180,validator=python_evidence)
 
@@ -135,8 +159,9 @@ class Runner:
         self.step(name,argv,timeout=600)
 
     def save(self):
-        report={'runId':self.id,'sourceSha':self.source_sha,
-                'sourceDigest':self.digest,'result':'PASS' if self.steps and all(s['result']=='PASS' for s in self.steps) else 'NOT_READY','steps':self.steps,
+        unchanged=source_identity()=={'sourceSha':self.source_sha,'sourceDigest':self.digest}
+        report={'runId':self.id,'sourceUnchanged':unchanged,'sourceSha':self.source_sha,
+                'sourceDigest':self.digest,'result':'PASS' if unchanged and self.steps and all(s['result']=='PASS' for s in self.steps) else 'NOT_READY','steps':self.steps,
                 'paymentRequests':{'value':None,'evidence':'NOT_MEASURED_BY_DISPATCHER'},'realFinancialOperations':{'value':0,'evidence':'DECLARED_SYNTHETIC_ONLY'}}
         (self.root/'report.json').write_text(json.dumps(report,indent=2))
         return report

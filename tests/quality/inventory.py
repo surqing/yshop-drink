@@ -10,17 +10,43 @@ import subprocess
 import xml.etree.ElementTree as ET
 REPO=Path(__file__).resolve().parents[2]
 
+def certified_suites(folder, registry):
+    """Inventory consumes certificates, never adopts arbitrary/old XML as a fresh PASS."""
+    result={}
+    for certificate in Path(folder).rglob('evidence.json'):
+        try:
+            summary=json.loads(certificate.read_text());run=json.loads((certificate.parent/'run.json').read_text())
+            if summary.get('result')!='PASS' or not summary.get('exactNamesChecked'):continue
+            if any(summary.get(k)!=run.get(k) for k in ['runId','sourceSha','sourceDigest']):continue
+            expected=run['expected']
+            if any(registry.get(k)!=v for k,v in expected.items()):continue
+            found={};valid=True
+            for file in (certificate.parent/'surefire').rglob('TEST-*.xml'):
+                root=ET.parse(file).getroot();name=root.get('name')
+                props={v.get('name'):v.get('value') for v in root.findall('properties/property')}
+                cases=root.findall('testcase');counts=dict(Counter(c.get('name') for c in cases))
+                if (name in found or file.stat().st_mtime < (certificate.parent/'run.json').stat().st_mtime or props.get('quality.runId')!=run['runId'] or not cases
+                    or counts!=expected.get(name) or len(cases)!=int(root.get('tests',-1))
+                    or any(int(root.get(k,-1))!=0 for k in ['failures','errors','skipped'])
+                    or any(c.find(k) is not None for c in cases for k in ['failure','error','skipped'])):
+                    valid=False;break
+                found[name]={'tests':len(cases),'failures':0,'errors':0,'skipped':0,
+                             'sourceSha':summary['sourceSha'],'sourceDigest':summary['sourceDigest'],'runId':run['runId']}
+            if valid and set(found)==set(expected) and sum(x['tests'] for x in found.values())==summary['tests']:
+                result.update(found)
+        except (OSError,ValueError,KeyError,ET.ParseError):continue
+    return result
+
+
 def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
     names=set(filter(None,subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','-z'],cwd=REPO).decode().split('\0')))
     reports={}
+    registry=json.loads((REPO/'tests/quality/java-manifest.json').read_text())
     if evidence:
-        for file in sorted([f for root in evidence for f in Path(root).rglob('TEST-*.xml')],key=lambda f:f.stat().st_mtime):
-            try:r=ET.parse(file).getroot()
-            except ET.ParseError:continue
-            reports[r.get('name')]={k:int(r.get(k,0)) for k in ['tests','failures','errors','skipped']}
+        for folder in evidence:reports.update(certified_suites(folder,registry))
     executed={}
     node_files=sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])
-    python_files=[REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']
+    python_files=[REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/quality/test_owned_resources.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']
     for run in runs:
         r=json.loads(Path(run).read_text())
         for step in r['steps']:

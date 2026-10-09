@@ -34,6 +34,34 @@ class EvidenceFaultInjection(unittest.TestCase):
         self.assertEqual(1,self.e.validate()['tests'])
         self.assertTrue(self.e.summary['exactNamesChecked'])
 
+    def test_mutant_runtime_errors_are_not_assertion_kills(self):
+        from mutate import classify_mutation
+        self.assertEqual('ASSERTION_FAILURE',classify_mutation(2,0))
+        for failures,errors in [(0,0),(0,1),(21,22)]:
+            self.assertEqual('INCONCLUSIVE',classify_mutation(failures,errors))
+
+    def test_runner_freezes_sha_even_when_called_directly(self):
+        from run import Runner
+        runner=Runner(Path(self.temp.name)/'dispatch')
+        runner.steps=[{'name':'synthetic','result':'PASS'}]
+        with patch('run.source_identity',return_value={'sourceSha':'different','sourceDigest':runner.digest}):
+            self.assertEqual('NOT_READY',runner.save()['result'])
+
+    def test_inventory_requires_matching_certificate_not_old_xml(self):
+        from inventory import certified_suites
+        registry={'synthetic.Suite':{'checksInvariant':1}}
+        self.report();self.assertEqual({},certified_suites(self.e.root,registry))
+        self.e.validate();self.assertEqual(1,certified_suites(self.e.root,registry)['synthetic.Suite']['tests'])
+        self.assertEqual({},certified_suites(self.e.root,{'synthetic.Suite':{'changed':1}}))
+        root=self.report();root.find('properties/property').set('value','old');ET.ElementTree(root).write(self.file)
+        self.assertEqual({},certified_suites(self.e.root,registry))
+
+    def test_missing_or_unregistered_quick_suite_cannot_pass(self):
+        from run import require_suites
+        require_suites(['a','b'],['a','b'],['a','b'])
+        for planned,registered,discovered in [(['a'],['a','b'],['a','b']),(['a'],['a'],['a','new']),(['a','b'],['a'],['a','b'])]:
+            with self.assertRaisesRegex(RuntimeError,'INVENTORY_CHANGED'):require_suites(planned,registered,discovered)
+
     def test_missing_report(self):
         with self.assertRaisesRegex(RuntimeError,'MISSING'):self.e.validate()
 
@@ -42,6 +70,12 @@ class EvidenceFaultInjection(unittest.TestCase):
         with patch('evidence.source_identity',return_value={'sourceSha':'changed','sourceDigest':'changed'}):
             with self.assertRaisesRegex(RuntimeError,'SOURCE_CHANGED'):self.e.validate()
         self.assertEqual(self.e.source['sourceSha'],self.e.diagnostics()['sourceSha'])
+
+    def test_quick_count_change_is_not_implicitly_accepted(self):
+        from run import require_count
+        require_count(29,29)
+        for count in [0,28,30]:
+            with self.assertRaisesRegex(RuntimeError,'INVOCATIONS_CHANGED'):require_count(count,29)
 
     def test_changed_invocation_count_cannot_pass(self):
         root=self.report(tests='2')

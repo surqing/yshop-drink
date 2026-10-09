@@ -27,6 +27,7 @@ public class MemberAuthServiceTest extends BaseMockitoUnitTest {
     @Mock PasswordEncoder passwordEncoder;
     @Mock OAuth2TokenApi oauth2TokenApi;
     @Mock LoginLogApi loginLogApi;
+    @Mock co.yixiang.yshop.module.system.api.sms.SmsCodeApi smsCodeApi;
     AppAuthUpdatePasswordReqVO request() {
         return AppAuthUpdatePasswordReqVO.builder().oldPassword("synthetic-old-plain")
                 .password("synthetic-new-plain").build();
@@ -127,4 +128,84 @@ public class MemberAuthServiceTest extends BaseMockitoUnitTest {
         verifyNoInteractions(loginLogApi);verify(userService,never()).updateUserLogin(anyLong(),any());
     }
 
+
+    MemberUserDO activePasswordMember() {
+        return MemberUserDO.builder().id(7L).mobile("13800000001").status(0).password("synthetic-hash").build();
+    }
+    co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthLoginReqVO passwordLoginRequest() {
+        return co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthLoginReqVO.builder()
+                .mobile("13800000001").password("synthetic-password").build();
+    }
+    void grantResponse() {
+        when(oauth2TokenApi.createAccessToken(any())).thenReturn(new co.yixiang.yshop.module.system.api.oauth2.dto.OAuth2AccessTokenRespDTO()
+                .setUserId(7L).setAccessToken("synthetic-access"));
+    }
+    @Test void passwordLoginChecksIdentityAndWritesOnlySuccessAfterGrant() {
+        when(userService.getUserByMobile("13800000001")).thenReturn(activePasswordMember());
+        when(userService.isPasswordMatch("synthetic-password","synthetic-hash")).thenReturn(true);grantResponse();
+        assertEquals("synthetic-access",authService.login(passwordLoginRequest()).getAccessToken());
+        InOrder order=inOrder(oauth2TokenApi,loginLogApi,userService);
+        order.verify(oauth2TokenApi).createAccessToken(argThat(v->v.getUserId()==7L && v.getUserType()==1));
+        order.verify(loginLogApi).createLoginLog(argThat(v->v.getUserId()==7L && v.getResult()==0 && v.getUserType()==1));
+        order.verify(userService).updateUserLogin(eq(7L),any());
+    }
+    @Test void missingPasswordAccountNeverGrantsOrRecordsSuccess() {
+        assertThrows(ServiceException.class,()->authService.login(passwordLoginRequest()));
+        verifyNoInteractions(oauth2TokenApi);verify(loginLogApi).createLoginLog(argThat(v->v.getUserId()==null && v.getResult()!=0));
+        verify(userService,never()).updateUserLogin(anyLong(),any());
+    }
+    @Test void wrongPasswordNeverGrantsOrRecordsSuccess() {
+        when(userService.getUserByMobile("13800000001")).thenReturn(activePasswordMember());
+        assertThrows(ServiceException.class,()->authService.login(passwordLoginRequest()));
+        verifyNoInteractions(oauth2TokenApi);verify(loginLogApi).createLoginLog(argThat(v->v.getResult()!=0));
+        verify(userService,never()).updateUserLogin(anyLong(),any());
+    }
+    @Test void disabledPasswordMemberNeverGrantsOrRecordsSuccess() {
+        var user=activePasswordMember();user.setStatus(1);when(userService.getUserByMobile("13800000001")).thenReturn(user);
+        when(userService.isPasswordMatch("synthetic-password","synthetic-hash")).thenReturn(true);
+        assertThrows(ServiceException.class,()->authService.login(passwordLoginRequest()));
+        verifyNoInteractions(oauth2TokenApi);verify(loginLogApi).createLoginLog(argThat(v->v.getResult()!=0));
+        verify(userService,never()).updateUserLogin(anyLong(),any());
+    }
+    @Test void passwordGrantRejectionDoesNotRecordSuccessfulLogin() {
+        when(userService.getUserByMobile("13800000001")).thenReturn(activePasswordMember());
+        when(userService.isPasswordMatch("synthetic-password","synthetic-hash")).thenReturn(true);
+        when(oauth2TokenApi.createAccessToken(any())).thenThrow(new ServiceException(401,"synthetic revoked"));
+        assertThrows(ServiceException.class,()->authService.login(passwordLoginRequest()));
+        verifyNoInteractions(loginLogApi);verify(userService,never()).updateUserLogin(anyLong(),any());
+    }
+    @Test void successfulLogoutLogsLogoutNotLoginAndDoesNotUpdateLoginTime() {
+        when(oauth2TokenApi.removeAccessToken("synthetic-access",1)).thenReturn(new co.yixiang.yshop.module.system.api.oauth2.dto.OAuth2AccessTokenRespDTO().setUserId(7L));
+        when(userService.getUser(7L)).thenReturn(activePasswordMember());authService.logout("synthetic-access");
+        verify(loginLogApi).createLoginLog(argThat(v->v.getUserId()==7L && v.getUserType()==1
+                && v.getLogType().equals(co.yixiang.yshop.module.system.enums.logger.LoginLogTypeEnum.LOGOUT_SELF.getType())));
+        verify(userService,never()).updateUserLogin(anyLong(),any());
+    }
+    @Test void wrongIdentityLogoutNeverRecordsAnyLog() {
+        when(oauth2TokenApi.removeAccessToken("synthetic-admin-access",1)).thenThrow(new ServiceException(401,"synthetic identity mismatch"));
+        assertThrows(ServiceException.class,()->authService.logout("synthetic-admin-access"));
+        verifyNoInteractions(loginLogApi,userService);
+    }
+    co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthSmsLoginReqVO smsRequest() {
+        return co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthSmsLoginReqVO.builder()
+                .mobile("13800000001").code("123456").from("h5").build();
+    }
+    @Test void invalidSmsNeverCreatesIdentityTokenOrSuccessLog() {
+        doThrow(new ServiceException(401,"synthetic invalid code")).when(smsCodeApi).useSmsCode(any());
+        assertThrows(ServiceException.class,()->authService.smsLogin(smsRequest()));
+        verifyNoInteractions(oauth2TokenApi,userService,userMapper,loginLogApi);
+    }
+    @Test void disabledSmsMemberNeverGrantsOrWritesSuccess() {
+        var user=activePasswordMember();user.setStatus(1);
+        when(userService.createUserIfAbsent(eq("13800000001"),any(),eq("h5"))).thenReturn(user);
+        assertThrows(ServiceException.class,()->authService.smsLogin(smsRequest()));
+        verifyNoInteractions(oauth2TokenApi,loginLogApi);verify(userService,never()).updateUserLogin(anyLong(),any());
+    }
+    @Test void enabledSmsUsesVerifiedIdentityAndRecordsSuccessAfterGrant() {
+        when(userService.createUserIfAbsent(eq("13800000001"),any(),eq("h5"))).thenReturn(activePasswordMember());grantResponse();
+        assertEquals("synthetic-access",authService.smsLogin(smsRequest()).getAccessToken());
+        InOrder order=inOrder(smsCodeApi,oauth2TokenApi,loginLogApi);
+        order.verify(smsCodeApi).useSmsCode(any());order.verify(oauth2TokenApi).createAccessToken(argThat(v->v.getUserId()==7L && v.getUserType()==1));
+        order.verify(loginLogApi).createLoginLog(argThat(v->v.getResult()==0));
+    }
 }

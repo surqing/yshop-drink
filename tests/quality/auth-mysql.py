@@ -2,7 +2,8 @@
 """Own a disposable Docker MySQL; verify auth lifecycle with no private service dependency."""
 import argparse, json, os, secrets, shutil, subprocess, sys, time, uuid
 from pathlib import Path
-from evidence import Evidence, execute, manifest
+from evidence import Evidence, execute, manifest, source_identity
+from owned_resources import remove_owned
 
 REPO=Path(__file__).resolve().parents[2]
 
@@ -16,7 +17,7 @@ def main():
         path=root/name;path.write_text(contents);path.chmod(0o600);return path
     root_secret=private('root.secret',root_password)
     client=private('client.cnf','[client]\nuser=root\npassword='+root_password+'\n')
-    report={'owner':owner,'result':'FAIL','cleanup':'NOT_RUN','sourceSha':subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip()}
+    report={'owner':owner,'result':'FAIL','cleanup':'NOT_RUN',**source_identity()}
     def docker(*args,input=None):
         r=subprocess.run(['docker',*args],input=input,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=180)
         if r.returncode:raise RuntimeError('DOCKER_OPERATION_FAILED')
@@ -62,14 +63,7 @@ def main():
         report['reason']=str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__
     finally:
         try:
-            # Detect even partially successful run; only delete a resource bearing our exact lease.
-            found=subprocess.run(['docker','inspect',name],text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=30)
-            if found.returncode==0:
-                info=json.loads(found.stdout)[0]
-                if info['Config']['Labels'].get('yshop.quality.owner')!=owner:raise RuntimeError('OWNERSHIP_MISMATCH')
-                docker('rm','--force','--volumes',name)
-            elif created:raise RuntimeError('OWNED_RESOURCE_DISAPPEARED')
-            if subprocess.run(['docker','inspect',name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:raise RuntimeError('RESOURCE_NOT_DESTROYED')
+            report['resources']=remove_owned(docker,[name],owner)
             report['cleanup']='PASS'
         except Exception:
             report['cleanup']='FAIL';report['result']='FAIL';report['cleanupReason']='OWNED_RESOURCE_CLEANUP_FAILED'

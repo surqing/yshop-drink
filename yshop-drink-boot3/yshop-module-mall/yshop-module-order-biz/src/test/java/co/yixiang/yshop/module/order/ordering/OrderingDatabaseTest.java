@@ -286,6 +286,18 @@ class OrderingDatabaseTest {
     }
 
     @Test
+    void differentStoreSkuPriceCannotBecomeThisOrdersPrice() {
+        db.update("UPDATE yshop_store_product_attr_value SET price=9.87 WHERE id=2");
+        String id=place(request());
+        assertEquals(new java.math.BigDecimal("1.23"),db.queryForObject(
+                "SELECT pay_price FROM yshop_store_order WHERE order_id=?",java.math.BigDecimal.class,id));
+        assertEquals(new java.math.BigDecimal("9.87"),db.queryForObject(
+                "SELECT price FROM yshop_store_product_attr_value WHERE id=2",java.math.BigDecimal.class));
+        assertEquals(10,count("SELECT stock FROM yshop_store_product WHERE id=2"));
+        assertEquals(0,count("SELECT paid FROM yshop_store_order WHERE order_id=?",id));
+    }
+
+    @Test
     void crossStoreProductRejected() {
         var p = request();
         p.setShopId("2");

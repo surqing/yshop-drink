@@ -3,6 +3,7 @@
 A compile/environment failure is NOT a killed mutant. A passing original is required.
 """
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,12 +13,19 @@ import sys
 import tempfile
 import uuid
 import xml.etree.ElementTree as ET
-from evidence import Evidence, execute, workspace, manifest
+from evidence import Evidence, execute, workspace, manifest, source_identity
 
 REPO=Path(__file__).resolve().parents[2]
 # Every operator is explicit and must match exactly once. Redundant defence removal can survive;
 # this is reported rather than counted as a kill or hidden from the denominator.
 OPERATORS=[
+ ('inventory-repeat-release','OrderPlacementService.java','> 0) return;','> 0 && false) return;','OrderingDatabaseTest'),
+ ('cross-store-price','OrderPlacementService.java','BigDecimal basePrice=money(sku.get("price"));','BigDecimal basePrice=money(jdbc.queryForObject("SELECT v.price FROM yshop_store_product_attr_value v JOIN yshop_store_product p ON p.id=v.product_id WHERE p.shop_id<>? AND p.deleted=0 ORDER BY v.id LIMIT 1", Object.class, shopId));','OrderingDatabaseTest'),
+ ('coupon-double-reservation','CouponLifecycle.java','BigDecimal discount = discount(row, uid, shop, type, subtotal, now);','var eligibility=new HashMap<>(row); eligibility.put("status",0); eligibility.put("reserved_order_id",null); BigDecimal discount = discount(eligibility, uid, shop, type, subtotal, now);','CouponDatabaseTest'),
+ ('duplicate-fulfillment-complete','PaymentProcessor.java','if (state == PaymentState.SUCCESS) return PaymentResult.IDEMPOTENT_DUPLICATE;','if (state == PaymentState.SUCCESS) { var replay=orders.lockPaymentOrder(event.getOrderId()); effects.apply(replay, "WECHAT".equals(event.getProvider()) ? "weixin" : "alipay"); return PaymentResult.IDEMPOTENT_DUPLICATE; }','PaymentDatabaseTest'),
+ ('auth-refresh-disable-bypass','OAuth2TokenServiceImpl.java','if(!Objects.equals(lockPrincipal(id,type),CommonStatusEnum.ENABLE.getStatus()))','if(false)','OAuth2LifecycleDatabaseTest'),
+ ('auth-cache-revocation-bypass','OAuth2TokenServiceImpl.java','OAuth2AccessTokenDO hint=oauth2AccessTokenMapper.selectByAccessToken(token);','OAuth2AccessTokenDO hint=getAccessToken(token);','OAuth2LifecycleDatabaseTest'),
+ ('payment-freeze-bypass','EncryptedWechatV3ClientFactory.java','if (!enabled) throw new IllegalStateException("WECHAT_V3_DISABLED");','if (false) throw new IllegalStateException("WECHAT_V3_DISABLED");','PaymentCredentialDatabaseTest'),
  ('late-success-terminal','PaymentProcessor.java','if (!PaymentAttemptState.valueOf(attempt.getStatus()).active())','if (false)','PaymentAttemptDatabaseTest'),
  ('duplicate-event-result','PaymentProcessor.java','if (state == PaymentState.SUCCESS) return PaymentResult.IDEMPOTENT_DUPLICATE;','if (state == PaymentState.SUCCESS) return PaymentResult.FIRST_SUCCESS;','PaymentDatabaseTest'),
  ('inventory-wrong-debit','OrderPlacementService.java','stock=stock-?,sales=sales+?','stock=stock+?,sales=sales+?','OrderingDatabaseTest'),
@@ -42,6 +50,10 @@ OPERATORS=[
 ]
 
 
+def classify_mutation(failures, errors):
+    # Runtime initialization/SQL/transport errors invalidate attribution even if other tests assert.
+    return 'ASSERTION_FAILURE' if failures > 0 and errors == 0 else 'INCONCLUSIVE'
+
 def run(output, only=None):
     output.mkdir(parents=True,exist_ok=False,mode=0o700)
     env=os.environ.copy()
@@ -50,7 +62,7 @@ def run(output, only=None):
     operators=[x for x in OPERATORS if only is None or x[0] in only]
     if not operators:raise RuntimeError('NO_MUTATIONS_SELECTED')
     registry=manifest(REPO)
-    results=[]
+    results=[];identity=source_identity()
     with tempfile.TemporaryDirectory(prefix='yshop-mutation-') as temp:
         copy=Path(temp)/'source'
         shutil.copytree(REPO,copy,ignore=shutil.ignore_patterns('.git','target','node_modules','unpackage','__pycache__','dist'))
@@ -59,7 +71,9 @@ def run(output, only=None):
         def test(suites,folder):
             evidence=Evidence(folder)
             selected={k:v for k,v in registry.items() if k.rsplit('.',1)[-1] in suites}
-            command=[maven,'-pl','yshop-module-mall/yshop-module-order-biz','-am','test','-Dtest='+','.join(suites),'-Dsurefire.failIfNoSpecifiedTests=false']
+            owners={str(f.parents[len(Path('src/test/java/'+k.replace('.', '/')+'.java').parts)-1].relative_to(boot)) for k in selected for f in boot.glob('**/src/test/java/'+k.replace('.', '/')+'.java')}
+            if not owners:raise RuntimeError('NO_TEST_OWNERS')
+            command=[maven,'-pl',','.join(sorted(owners)),'-am','test','-Dtest='+','.join(suites),'-Dsurefire.failIfNoSpecifiedTests=false']
             if env.get('YSHOP_MAVEN_REPOSITORY'):command+=['-Dmaven.repo.local='+env['YSHOP_MAVEN_REPOSITORY']]
             # failIfNoSpecifiedTests=false applies ONLY to upstream reactor modules with no selected
             # tests. Complete exact suite/case validation below makes missing target tests fail.
@@ -68,16 +82,19 @@ def run(output, only=None):
             if code==0:
                 evidence.validate()
                 return 'PASS',0
-            failures=0
+            failures=0;errors=0;observed=set();valid=True
             for file in evidence.directory.rglob('TEST-*.xml'):
                 root=ET.parse(file).getroot()
-                if root.get('name') not in selected:continue
+                if root.get('name') not in selected:valid=False;continue
+                observed.add(root.get('name'))
                 props={p.get('name'):p.get('value') for p in root.findall('properties/property')}
-                if props.get('quality.runId')!=evidence.id:continue
+                if props.get('quality.runId')!=evidence.id:valid=False;continue
+                from collections import Counter
+                if dict(Counter(c.get('name') for c in root.findall('testcase')))!=selected[root.get('name')] or int(root.get('skipped','-1'))!=0:valid=False
                 # Assertion failures prove the test detected an incorrect outcome. Initialization,
                 # compiler and transport errors are inconclusive even if Maven exits nonzero.
-                failures+=len(root.findall('testcase/failure'))
-            return ('ASSERTION_FAILURE' if failures else 'INCONCLUSIVE'),failures
+                failures+=len(root.findall('testcase/failure'));errors+=len(root.findall('testcase/error'))
+            return classify_mutation(failures,errors) if valid and observed==set(selected) else 'INCONCLUSIVE',failures
         suites=sorted({x[4] for x in operators})
         baseline, failures=test(suites,output/'baseline')
         if baseline!='PASS':raise RuntimeError('ORIGINAL_TEST_BASELINE_FAILED')
@@ -91,19 +108,33 @@ def run(output, only=None):
             if count!=1 and name not in {'inventory-conditional-update','inventory-wrong-debit'}:
                 results.append({'mutation':name,'result':'INAPPLICABLE','reason':'EXACT_OPERATOR_NOT_FOUND','matches':count});continue
             try:
+                original_result,_=test([suite],output/(name+'-original'))
+                if original_result!='PASS':raise RuntimeError('ORIGINAL_TEST_BASELINE_FAILED')
                 mutated=original.replace(before,after)
                 if name=='cross-store-all-defences':
                     mutated=mutated.replace('number(category, "shop_id") != shopId','false').replace('WHERE id=? AND shop_id=? AND deleted=0 AND is_show=1','WHERE id=? AND ? IS NOT NULL AND deleted=0 AND is_show=1')
                 if name=='coupon-total-all-defences':
                     mutated=mutated.replace('receive<distribute','1=1')
+                if name=='inventory-repeat-release':
+                    mutated=mutated.replace('if (line.get("released_at") != null)','if (false)')
+                    mutated=mutated.replace('AND sales>=?', 'AND ? IS NOT NULL')
+                    mutated=mutated.replace('refund_status=0 AND deleted=0', 'refund_status=0')
+                if name=='coupon-double-reservation':
+                    mutated=mutated.replace('AND status=0 AND reserved_order_id IS NULL AND invalid_reason', 'AND invalid_reason')
+                if name=='auth-cache-revocation-bypass':
+                    start=mutated.index('        if(family==null || DateUtils.isExpired(family.getExpiresTime())')
+                    end=mutated.index('        OAuth2AccessTokenDO current=',start)
+                    mutated=mutated[:start]+mutated[end:]
+                    mutated=mutated.replace('OAuth2AccessTokenDO current=oauth2AccessTokenMapper.selectByAccessToken(token);','OAuth2AccessTokenDO current=getAccessToken(token);')
+
                 file.write_text(mutated)
                 outcome,assertions=test([suite],output/name)
-                results.append({'mutation':name,'result':'KILLED' if outcome=='ASSERTION_FAILURE' else 'SURVIVED' if outcome=='PASS' else 'INCONCLUSIVE','assertionFailures':assertions,'suite':suite,'source':str(file.relative_to(copy))})
+                results.append({'mutation':name,'result':'KILLED' if outcome=='ASSERTION_FAILURE' else 'SURVIVED' if outcome=='PASS' else 'INCONCLUSIVE','assertionFailures':assertions,'suite':suite,'source':str(file.relative_to(copy)),'originalBaseline':'PASS','originalHash':hashlib.sha256(original.encode()).hexdigest(),'mutatedHash':hashlib.sha256(mutated.encode()).hexdigest()})
             finally:file.write_text(original)
             (output/'report.json').write_text(json.dumps({'baseline':baseline,'mutations':results},indent=2))
             print(name,results[-1]['result'],flush=True)
         # Source tree remains untouched; temporary mutant copy is removed by context manager.
-    summary={'baseline':baseline,'mutations':results,'intentionalMutationResidue':False,'paymentRequests':{'value':0,'evidence':'DECLARED_H2_SYNTHETIC_ONLY'}}
+    summary={**identity,'baseline':baseline,'mutations':results,'intentionalMutationResidue':False,'paymentRequests':{'value':0,'evidence':'DECLARED_H2_SYNTHETIC_ONLY'}}
     (output/'report.json').write_text(json.dumps(summary,indent=2))
     return 0 if results and all(x['result']=='KILLED' for x in results) else 1
 
