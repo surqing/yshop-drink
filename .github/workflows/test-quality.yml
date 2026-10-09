@@ -33,7 +33,15 @@ jobs:
         with:
           version: '8.15.9'
       - name: Compile all 55 modules (tests run separately with report integrity checks)
-        run: mvn -B -f yshop-drink-boot3/pom.xml install package -Dmaven.test.skip=true
+        run: |
+          python3 - <<'PYTHON'
+          import os,sys
+          sys.path.insert(0,'tests/quality')
+          from run import Runner
+          r=Runner(os.environ['RUNNER_TEMP']+'/build')
+          r.backend()
+          sys.exit(0 if r.save()['result']=='PASS' else 1)
+          PYTHON
       - name: Offline credential diff guard
         if: ${{ !cancelled() }}
         env:
@@ -54,6 +62,19 @@ jobs:
           r.java()
           sys.exit(0 if r.save()['result']=='PASS' else 1)
           PY
+      - name: Attributed Java coverage for this checkout
+        if: ${{ !cancelled() }}
+        run: |
+          mvn -B dependency:get -Dartifact=org.jacoco:org.jacoco.cli:0.8.12:jar:nodeps -Dtransitive=false
+          python3 - <<'PYTHON'
+          import json,os,subprocess,sys
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'quality'
+          candidates=[p.parent for p in root.glob('*/report.json') if any(s['name'].startswith('java-') for s in json.loads(p.read_text())['steps'])]
+          if len(candidates)!=1:raise RuntimeError('JAVA_RUN_MISSING_OR_AMBIGUOUS')
+          cli=Path.home()/'.m2/repository/org/jacoco/org.jacoco.cli/0.8.12/org.jacoco.cli-0.8.12-nodeps.jar'
+          subprocess.run([sys.executable,'tests/quality/coverage.py','--run',str(candidates[0]),'--cli',str(cli),'--output',str(root/'coverage')],check=True)
+          PYTHON
       - name: Vue dependencies
         if: ${{ !cancelled() }}
         working-directory: yshop-drink-vue3
@@ -77,5 +98,56 @@ jobs:
             ${{ runner.temp }}/quality/**/report.json
             ${{ runner.temp }}/quality/**/evidence.json
             ${{ runner.temp }}/quality/**/diagnostics.json
+            ${{ runner.temp }}/quality/**/coverage.json
+            ${{ runner.temp }}/build/**/report.json
+          retention-days: 7
+          if-no-files-found: error
+  controlled-dependencies:
+    # Independent scope: a normal Java/Vue SUCCESS never substitutes for this result.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      YSHOP_PAY_WECHAT_V3_ENABLED: 'false'
+      YSHOP_PAY_WECHAT_V3_RECONCILIATION_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build dedicated Linux test artifacts
+        run: |
+          python3 - <<'PYTHON'
+          import os,sys
+          sys.path.insert(0,'tests/quality')
+          from run import Runner
+          r=Runner(os.environ['RUNNER_TEMP']+'/build')
+          r.backend()
+          sys.exit(0 if r.save()['result']=='PASS' else 1)
+          PYTHON
+      - name: Owned MySQL, Redis, authentication and synthetic TLS acceptance
+        run: python3 tests/quality/heavy.py --output "$RUNNER_TEMP/controlled"
+      - name: Owned business writes and two-process authentication
+        if: ${{ !cancelled() }}
+        run: |
+          python3 -m pip install -r tests/quality/requirements.txt
+          python3 tests/quality/business-backend.py --output "$RUNNER_TEMP/business" --port 48883 --instances 2
+      - name: Safe controlled-gate diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: controlled-summary
+          path: |
+            ${{ runner.temp }}/controlled/**/report.json
+            ${{ runner.temp }}/controlled/**/evidence.json
+            ${{ runner.temp }}/controlled/**/diagnostics.json
+            ${{ runner.temp }}/business/report.json
+            ${{ runner.temp }}/build/**/report.json
           retention-days: 7
           if-no-files-found: error

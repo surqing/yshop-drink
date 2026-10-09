@@ -14,17 +14,63 @@ import sys
 import tempfile
 import time
 import uuid
+import xml.etree.ElementTree as ET
 from evidence import Evidence, execute, manifest, workspace, source_identity
 
 REPO = Path(__file__).resolve().parents[2]
 BOOT = REPO / 'yshop-drink-boot3'
 MODES = ['QUICK','BUSINESS','INTEGRATION','PAYMENT-SAFETY','MINIPROGRAM','FULL','MUTATION']
+
+def controlled_receipt(path, started, identity, run_id, expected):
+    """An exit code is not evidence that controlled GUI/CLI assertions ran."""
+    path=Path(path)
+    if not path.is_file() or path.stat().st_mtime < started:
+        raise RuntimeError('CONTROLLED_REPORT_MISSING_OR_STALE')
+    receipt=json.loads(path.read_text())
+    if receipt.get('runId')!=run_id or any(receipt.get(k)!=v for k,v in identity.items()):
+        raise RuntimeError('CONTROLLED_REPORT_IDENTITY_MISMATCH')
+    if receipt.get('result')!='PASS' or receipt.get('cleanup')!='PASS' or receipt.get('sourceUnchanged') is not True:
+        raise RuntimeError('CONTROLLED_REPORT_FAILED_OR_INCOMPLETE')
+    checks=receipt.get('checks')
+    if not isinstance(checks,list) or not expected or len(checks)!=len(expected):
+        raise RuntimeError('CONTROLLED_ASSERTIONS_MISSING')
+    if len({c.get('name') for c in checks})!=len(checks) or {c.get('name') for c in checks}!=set(expected):
+        raise RuntimeError('CONTROLLED_ASSERTIONS_CHANGED')
+    if any(c.get('result')!='PASS' or c.get('executed') is not True for c in checks):
+        raise RuntimeError('CONTROLLED_ASSERTIONS_FAILED_OR_NOT_EXECUTED')
+    return {'tests':len(checks),'runId':run_id,'cleanup':'PASS','exactNamesChecked':True}
+def python_diagnostics(text, file):
+    tree=ast.parse(Path(file).read_text())
+    methods={n.name for n in ast.walk(tree) if isinstance(n,ast.FunctionDef) and n.name.startswith('test_')}
+    classes={n.name for n in ast.walk(tree) if isinstance(n,ast.ClassDef)}
+    failures=[]
+    for kind,method,cls in re.findall(r'^(FAIL|ERROR): (test_\w+) \(__main__\.(\w+)\)',text,re.M):
+        failures.append({'kind':kind,'method':method if method in methods else 'UNKNOWN_CASE','class':cls if cls in classes else 'UNKNOWN_CLASS'})
+    return {'asset':str(file),'failures':failures,'exceptionTypes':sorted(set(re.findall(r'^(AssertionError|AttributeError|ValueError|RuntimeError|TypeError|ImportError|ModuleNotFoundError|TimeoutError):',text,re.M)))}
+
 def require_count(actual, expected):
     if actual != expected: raise RuntimeError('TEST_INVOCATIONS_CHANGED')
 
 
 def require_suites(planned, registered, discovered):
     if set(planned)!=set(registered) or set(planned)!=set(discovered):raise RuntimeError('QUICK_SUITE_INVENTORY_CHANGED')
+
+def backend_modules():
+    ns={'m':'http://maven.apache.org/POM/4.0.0'}
+    names=[]
+    def visit(folder):
+        pom=ET.parse(folder/'pom.xml').getroot();names.append(pom.findtext('m:artifactId',namespaces=ns))
+        for node in pom.findall('m:modules/m:module',ns):visit(folder/node.text)
+    visit(BOOT)
+    if len(names)!=55 or len(set(names))!=55:raise RuntimeError('BACKEND_REACTOR_INVENTORY_CHANGED')
+    return names
+
+def backend_build_evidence(text,expected):
+    text=re.sub(r'\x1b\[[0-9;]*m','',text)
+    rows=re.findall(r'^\[INFO\] ([\w-]+) [.]+ (SUCCESS|FAILURE|SKIPPED)(?: |$)',text,re.M)
+    if not rows or len(rows)!=len(expected) or {n for n,s in rows}!=set(expected) or any(s!='SUCCESS' for n,s in rows) or '[INFO] BUILD SUCCESS' not in text:
+        raise RuntimeError('BACKEND_REACTOR_INCOMPLETE')
+    return {'modules':len(rows),'allSucceeded':True,'moduleNames':[n for n,s in rows]}
 
 def discover_quick_suites():
     paths=[]
@@ -80,7 +126,19 @@ class Runner:
             if validator:entry['evidence']=validator(folder/'output.log')
             entry['result']='PASS'
         except Exception as exc:
-            entry['reason']=str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__
+            # Exceptions can carry tokens, request bodies or connection strings. Publish only
+            # a closed structural code vocabulary; private logs retain debugging details.
+            code=str(exc)
+            public_codes={'SUBPROCESS_FAILED','TEST_PROCESS_TIMEOUT','BUILD_LOCK_TIMEOUT',
+                          'TEST_INVOCATIONS_CHANGED','NODE_REPORT_INCOMPLETE',
+                          'PYTHON_REPORT_INCOMPLETE_OR_SKIPPED','SOURCE_CHANGED_DURING_TEST',
+                          'CONTROLLED_REPORT_MISSING_OR_STALE','CONTROLLED_REPORT_IDENTITY_MISMATCH',
+                          'CONTROLLED_REPORT_FAILED_OR_INCOMPLETE','CONTROLLED_ASSERTIONS_MISSING',
+                          'CONTROLLED_ASSERTIONS_CHANGED','CONTROLLED_ASSERTIONS_FAILED_OR_NOT_EXECUTED',
+                          'FAILED_OR_SKIPPED_TESTS','MISSING_OR_UNEXPECTED_TEST_SUITE',
+                          'TEST_NAMES_OR_INVOCATIONS_CHANGED','BACKEND_REACTOR_INCOMPLETE'}
+            entry['reason']=code if isinstance(exc,RuntimeError) and code in public_codes else 'STEP_FAILED'
+            entry['reasonType']=type(exc).__name__
         if diagnostic:
             try: entry['diagnostics']=diagnostic()
             except Exception: entry['diagnosticError']='DIAGNOSTICS_UNAVAILABLE';entry['result']='FAIL'
@@ -130,25 +188,30 @@ class Runner:
                 if not match or int(match[1])==0 or not re.search(r'^OK$',text,re.M):raise RuntimeError('PYTHON_REPORT_INCOMPLETE_OR_SKIPPED')
                 require_count(int(match[1]),expected[str(file.relative_to(REPO))])
                 return {'tests':int(match[1])}
-            self.step('python-'+str(index),[sys.executable,str(file)],timeout=180,validator=python_evidence)
+            self.step('python-'+str(index),[sys.executable,str(file)],timeout=180,validator=python_evidence,diagnostic=lambda file=file,index=index:python_diagnostics((self.root/('python-'+str(index))/'output.log').read_text(),file))
 
     def integration(self):
-        helper=workspace(REPO)/'.local-dev/database.py'
-        if not helper.exists():self.blocked('mysql','LOCAL_ISOLATED_DATABASE_HELPER_REQUIRED');return
-        self.step('mysql-business',[sys.executable,'tests/business/mysql-acceptance.py','--coupon'],timeout=2400)
-        self.step('mysql-payment',[sys.executable,'tests/payment/mysql-acceptance.py','--coupon'],timeout=2400)
-        if self.env.get('YSHOP_SYNTHETIC_TLS_DIR'):
-            self.step('synthetic-https-ingress',[sys.executable,'tests/quality/ingress.py'],timeout=900)
-        else:self.blocked('synthetic-https-ingress','EXPLICIT_SYNTHETIC_TLS_FIXTURE_REQUIRED')
-        if not self.env.get('YSHOP_COUPON_REDIS_CONFIG'):self.blocked('redis','EXPLICIT_PRIVATE_LOOPBACK_REDIS_CONFIG_REQUIRED')
-        else:
-            self.env['YSHOP_COUPON_REDIS_ACCEPTANCE']='true'
-            self.java([k for k in manifest(REPO) if k.endswith('.CouponCodeRedisAcceptanceTest')])
+        output=self.root/'controlled'
+        identity={'sourceSha':self.source_sha,'sourceDigest':self.digest}
+        def verified(log):
+            report=json.loads((output/'report.json').read_text())
+            expected=['mysql-business','mysql-financial','mysql-auth','redis','synthetic-tls']
+            if (report.get('result')!='PASS' or report.get('cleanup')!='PASS' or not report.get('sourceUnchanged')
+                or any(report.get(k)!=v for k,v in identity.items())
+                or [s.get('name') for s in report.get('steps',[])]!=expected
+                or any(s.get('result')!='PASS' for s in report['steps'])):
+                raise RuntimeError('CONTROLLED_REPORT_FAILED_OR_INCOMPLETE')
+            return {'steps':expected,'cleanup':'PASS','runId':report['runId']}
+        self.step('owned-controlled-dependencies',[sys.executable,'tests/quality/heavy.py','--output',str(output)],timeout=7200,validator=verified)
 
-    def build(self):
+    def backend(self):
         cmd=[self.maven,'install','package','-Dmaven.test.skip=true']
         if self.env.get('YSHOP_MAVEN_REPOSITORY'):cmd+=['-Dmaven.repo.local='+self.env['YSHOP_MAVEN_REPOSITORY']]
-        self.step('backend-build',cmd,BOOT)
+        expected=backend_modules()
+        self.step('backend-build',cmd,BOOT,validator=lambda log:backend_build_evidence(log.read_text(),expected))
+
+    def build(self):
+        self.backend()
         self.step('vue-build',['pnpm','build:local'],REPO/'yshop-drink-vue3',timeout=600)
         self.step('vue-types',['pnpm','ts:check'],REPO/'yshop-drink-vue3',timeout=600)
 
@@ -156,7 +219,16 @@ class Runner:
         if not self.env.get(key):self.blocked(name,'EXPLICIT_CONTROLLED_COMMAND_REQUIRED');return
         argv=json.loads(self.env[key])
         if not isinstance(argv,list) or not argv or not all(isinstance(x,str) for x in argv):raise RuntimeError('INVALID_CONTROLLED_COMMAND')
-        self.step(name,argv,timeout=600)
+        report=self.env.get(key+'_REPORT')
+        expected=json.loads(self.env.get(key+'_CHECKS','[]'))
+        if not report or not isinstance(expected,list) or not expected or not all(isinstance(x,str) for x in expected) or len(set(expected))!=len(expected):
+            self.blocked(name,'CONTROLLED_REPORT_CONTRACT_REQUIRED');return
+        self.env['YSHOP_QUALITY_RUN_ID']=self.id
+        self.env['YSHOP_QUALITY_SOURCE_SHA']=self.source_sha
+        self.env['YSHOP_QUALITY_SOURCE_DIGEST']=self.digest
+        started=time.time()
+        self.step(name,argv,timeout=600,validator=lambda log:controlled_receipt(report,started,
+                  {'sourceSha':self.source_sha,'sourceDigest':self.digest},self.id,expected))
 
     def save(self):
         unchanged=source_identity()=={'sourceSha':self.source_sha,'sourceDigest':self.digest}

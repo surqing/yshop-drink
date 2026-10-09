@@ -17,24 +17,25 @@ import xml.etree.ElementTree as ET
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / 'tests/quality'))
 from evidence import Evidence, execute, manifest, workspace
+from acceptance_support import mysql_port, maven_command, database_helper, supported_mysql, assert_removed
 WORKSPACE = workspace(REPO)
-PRIVATE = WORKSPACE / '.local-dev/acceptance'
+PRIVATE = Path(os.environ.get('YSHOP_ACCEPTANCE_OUTPUT',str(WORKSPACE / '.local-dev/acceptance')))
 
 
 def main():
     PRIVATE.mkdir(parents=True, exist_ok=True, mode=0o700)
     PRIVATE.chmod(0o700)
-    helper = WORKSPACE / '.local-dev/database.py'
+    helper = database_helper(WORKSPACE)
     spec = importlib.util.spec_from_file_location('local_database', helper)
     database = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(database)
     version = database.mysql('SELECT VERSION();').strip()
-    if not version.startswith('8.0.'):
+    if not supported_mysql(version):
         raise RuntimeError('MYSQL_8_0_REQUIRED')
     if '--install-recovery-migration' in sys.argv[1:] or '--install-triggers' in sys.argv[1:] or '--install-attempt-migration' in sys.argv[1:] or '--install-v3-migration' in sys.argv[1:]:
         # Privileged DDL only, scoped to the schema in this run's private JDBC configuration.
         settings = dict(line.split('=',1) for line in Path(os.environ['YSHOP_ACCEPTANCE_CONFIG']).read_text().splitlines() if '=' in line)
-        match = re.fullmatch(r'jdbc:mysql://127[.]0[.]0[.]1:3306/(yshop_acceptance_phase5[bcdefgh]_[a-f0-9]{8})[?].*',settings.get('url',''))
+        match = re.fullmatch(r'jdbc:mysql://127[.]0[.]0[.]1:[0-9]{2,5}/(yshop_acceptance_phase5[bcdefgh]_[a-f0-9]{8})[?].*',settings.get('url',''))
         if not match or not re.fullmatch(r'accept5[bcdefgh]_[a-f0-9]{8}',settings.get('username','')):
             raise RuntimeError('ISOLATED_DATABASE_REQUIRED')
         if '--install-recovery-migration' in sys.argv[1:]:
@@ -73,6 +74,7 @@ def main():
     log = PRIVATE / ('mysql-' + suffix + '.log')
     report = PRIVATE / ('mysql-' + suffix + '.json')
     schema_created = account_created = False
+    evidence = None
     receipt = PRIVATE / ("resources-" + suffix + ".json")
     try:
         database.mysql(f"CREATE DATABASE `{schema}` CHARACTER SET utf8mb4;")
@@ -82,16 +84,13 @@ def main():
         database.mysql(f"CREATE USER '{account}'@'%' IDENTIFIED BY '{password}';")
         account_created = True
         database.mysql(f"GRANT ALL PRIVILEGES ON `{schema}`.* TO '{account}'@'%';")
-        jdbc.write_text(f'url=jdbc:mysql://127.0.0.1:3306/{schema}?useSSL=false&connectTimeout=5000&socketTimeout=30000&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai\n'
+        jdbc.write_text(f'url=jdbc:mysql://127.0.0.1:{mysql_port()}/{schema}?useSSL=false&connectTimeout=5000&socketTimeout=30000&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai\n'
                         f'username={account}\npassword={password}\n')
         jdbc.chmod(0o600)
         env = os.environ.copy()
-        env['JAVA_HOME'] = str(WORKSPACE / '.dev-tools/java-home')
-        env['PATH'] = str(WORKSPACE / '.dev-tools/java-home/bin') + os.pathsep + env['PATH']
         env['YSHOP_ACCEPTANCE_CONFIG'] = str(jdbc)
         env['MAVEN_OPTS'] = '-Xmx2g'
-        command = [str(WORKSPACE / '.dev-tools/maven/bin/mvn'),
-                   '-Dmaven.repo.local=' + str(WORKSPACE / '.local-dev/cache/maven'),
+        command = maven_command(WORKSPACE) + [
                    '-pl', 'yshop-module-mall/yshop-module-order-biz', '-Pmysql-acceptance',
                    'test', '-Dtest=' + ('PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest,PaymentLiveReadinessDatabaseTest,LiveMerchantPreflightDatabaseTest' if preflight_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest,PaymentLiveReadinessDatabaseTest' if readiness_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest,WechatV3DatabaseTest' if v3_mode else 'PaymentDatabaseTest,WalletDatabaseTest,PaymentAttemptDatabaseTest' if attempt_mode else 'PaymentDatabaseTest,WalletDatabaseTest' if wallet_mode else 'PaymentDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=true']
         if cancellation_mode:
@@ -125,6 +124,7 @@ def main():
                    'realPaymentRequests': {'value':0,'evidence':'DECLARED_NO_PROVIDER_PATH'}, 'runId':evidence.id, 'exactNamesChecked':True, 'log': str(log)}
 
     finally:
+        if evidence is not None: evidence.diagnostics()
         try:
             if schema_created or account_created:
                 # Names originate only from random fixed-length hexadecimal identifiers in this run.
@@ -134,9 +134,11 @@ def main():
                     if schema_created: database.mysql(f"DROP DATABASE `{schema}`;")
                 finally:
                     if account_created: database.mysql(f"DROP USER '{account}'@'%';")
+            if schema_created or account_created: assert_removed(database,schema,account)
             receipt.unlink(missing_ok=True)
         finally:
             jdbc.unlink(missing_ok=True)
+    summary.update({k:verified[k] for k in ['sourceSha','sourceDigest']})
     summary['cleanup'] = 'PASS'
     report.write_text(json.dumps(summary, indent=2) + '\n')
     report.chmod(0o600)

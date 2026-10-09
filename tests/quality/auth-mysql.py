@@ -32,7 +32,7 @@ def main():
         created=True
         for _ in range(120):
             try:
-                docker('exec',name,'mysql','--defaults-extra-file=/run/secrets/client.cnf','-N','-e','SELECT 1');break
+                docker('exec',name,'mysql','--defaults-extra-file=/run/secrets/client.cnf','--protocol=TCP','-h','127.0.0.1','-N','-e','SELECT 1');break
             except RuntimeError:
                 if json.loads(docker('inspect',name))[0]['State']['Status']=='exited':raise RuntimeError('MYSQL_CONTAINER_EXITED')
                 time.sleep(1)
@@ -60,7 +60,7 @@ def main():
         report['mysqlVersion']=docker('exec',name,'mysql','--defaults-extra-file=/run/secrets/client.cnf','-N','-e','SELECT VERSION()')
         report['innodbTables']=len(rows);report['result']='PASS'
     except Exception as exc:
-        report['reason']=str(exc) if isinstance(exc,RuntimeError) else type(exc).__name__
+        report['reasonType']=type(exc).__name__;report['reason']='AUTH_CONTROLLED_STEP_FAILED'
     finally:
         try:
             report['resources']=remove_owned(docker,[name],owner)

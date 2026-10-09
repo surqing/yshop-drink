@@ -27,7 +27,7 @@ def isolated_schema():
     if not isolated:return None
     if isolated:
         settings = dict(line.split('=', 1) for line in Path(isolated).read_text().splitlines() if '=' in line)
-        match = re.fullmatch(r'jdbc:mysql://127[.]0[.]0[.]1:3306/(yshop_acceptance_phase5h_[a-f0-9]{8})[?].*', settings.get('url', ''))
+        match = re.fullmatch(r'jdbc:mysql://127[.]0[.]0[.]1:[0-9]{2,5}/(yshop_acceptance_phase5h_[a-f0-9]{8})[?].*', settings.get('url', ''))
         if not match or not re.fullmatch(r'accept5h_[a-f0-9]{8}', settings.get('username', '')):
             raise ValueError()
         return match[1]
@@ -42,7 +42,7 @@ def local_rows(select):
     if not select.lstrip().upper().startswith('SELECT ') or ';' in select:
         raise ValueError()
     # The explicitly configured project helper owns Docker authentication. No credential search.
-    spec = importlib.util.spec_from_file_location('local_database', WORKSPACE / '.local-dev/database.py')
+    spec = importlib.util.spec_from_file_location('local_database', Path(os.environ.get('YSHOP_DATABASE_HELPER',str(WORKSPACE / '.local-dev/database.py'))))
     helper = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(helper)
     schema = isolated_schema()

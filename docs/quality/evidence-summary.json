@@ -1,463 +1,3945 @@
 {
-  "phase": "6Q-R1",
-  "date": "2026-10-09",
-  "gate": "NOT_READY",
-  "branch": "audit/phase6q-test-quality-gate",
-  "baseSha": "f96c70a10978939f66392788fa3f0fb863d8aca2",
-  "reviewBaseline": "d8eb4485c286d6cb85c43835685fa71b4e1add47",
-  "ci": {
-    "result": "SUCCESS",
-    "headSha": "9274a5b8f2bf31a501bc735b0a8d3d449c5aebfd",
-    "checkoutMergeSha": "66c72de5de12e0ee6709614374ba5304d2b09297",
-    "sourceDigest": "c3b5269c548bbadd71b6c824752714688afde30357085963790280b3f5d1ea34",
-    "url": "https://github.com/surqing/yshop-drink/actions/runs/37922370065",
-    "note": "Verified implementation snapshot; later runner/doc commit must also pass real CI. Final head/run receipt is in the delivery report."
-  },
-  "java": {
-    "result": "PASS",
-    "tests": 1705,
-    "suites": 76,
-    "distinctDisplayNames": 1173,
-    "modules": 12,
-    "failures": 0,
-    "errors": 0,
-    "skipped": 0,
-    "runId": "9c3b2415ede44208ae5a3452dc6e6794",
-    "sourceSha": "66c72de5de12e0ee6709614374ba5304d2b09297",
-    "sourceDigest": "c3b5269c548bbadd71b6c824752714688afde30357085963790280b3f5d1ea34"
-  },
-  "quick": {
-    "result": "PASS",
-    "nodeTests": 47,
-    "pythonTests": 79,
-    "tests": 126,
-    "runId": "4456072a300a429384c834175b8c898d",
-    "sourceSha": "9274a5b8f2bf31a501bc735b0a8d3d449c5aebfd",
-    "sourceDigest": "2a92df12bbfe2284b5f4ae93dcfed9dd0da1ec3588f7e80bcc951af01bb98ee0"
-  },
-  "backend": {
-    "result": "PASS",
-    "modules": 55
-  },
-  "vue": {
-    "build": "PASS",
-    "typeCheck": "PASS"
-  },
-  "mysqlBusiness": {
-    "result": "PASS",
-    "tests": 488,
-    "innodbTables": 23,
-    "runId": "f3ed7781d61a4a919d2ba97008cfde23",
-    "cleanup": "PASS"
-  },
-  "mysqlFinancial": {
-    "result": "PASS",
-    "tests": 497,
-    "innodbTables": 12,
-    "runId": "e3e92c347dfa48f1a96574c974d7ce30",
-    "cleanup": "PASS"
-  },
-  "mysqlAuth": {
-    "result": "PASS",
-    "tests": 69,
-    "innodbTables": 4,
-    "runId": "c33f035e7d28454fa8251e8faa349e03",
-    "mysqlVersion": "8.0.46",
-    "cleanup": "PASS",
-    "ownedContainersRemoved": 1,
-    "ownedVolumesRemoved": 1
-  },
-  "redis": {
-    "result": "PASS",
-    "tests": 66,
-    "runId": "7ee7fed00ea64c5b90a3cd5e9ec8a734",
-    "scope": "two independent real clients, bounded owned key prefix; separate shutdown failure test"
-  },
-  "syntheticHttps": {
-    "result": "PASS",
-    "tests": 10,
-    "runId": "16c593402af444d085d5268750cc687d",
-    "cleanup": "PASS"
-  },
-  "uniapp": {
-    "result": "PASS",
-    "runId": "c824a8ed32af4415b6f06cace9382059",
-    "sourceFiles": 380,
-    "compiledApiPortVerified": 48083,
-    "paymentRequests": {
-      "value": null,
-      "evidence": "COMPILE_ONLY_NOT_MEASURED"
-    }
-  },
-  "businessHttp": {
-    "owner": "207624599a124a5c8e6d621e5bacd9ec",
-    "result": "PASS",
-    "cleanup": "PASS",
-    "sourceSha": "9274a5b8f2bf31a501bc735b0a8d3d449c5aebfd",
-    "sourceDigest": "2a92df12bbfe2284b5f4ae93dcfed9dd0da1ec3588f7e80bcc951af01bb98ee0",
-    "scope": "owned disposable MySQL/Redis/backend HTTP writes",
-    "gui": "NOT_EXECUTED",
-    "mini": "NOT_EXECUTED",
-    "seedInsertRowsCopied": 0,
-    "stage": "ISOLATED_BACKEND_HEALTH",
-    "port": 48886,
-    "backendOwnershipVerified": true,
-    "checks": [
-      {
-        "name": "actual admin/member password login",
-        "result": "PASS"
+  "phase": "6Q-R2",
+  "gate": "NOT READY",
+  "criteria": [
+    "exact-suite ordinary Java and QUICK",
+    "owned MySQL Redis TLS and cleanup",
+    "clean Linux controlled job",
+    "scoped mutation assertion evidence",
+    "production authentication review",
+    "two-process HTTP auth and isolated business writes",
+    "attributed coverage",
+    "eight actual admin GUI checks",
+    "strict secret scan",
+    "clean pushed PR13"
+  ],
+  "measurements": {
+    "ordinaryJava": {
+      "runId": "1846c118a11d4aefbad84068e14df7ef",
+      "sourceUnchanged": true,
+      "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+      "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+      "result": "PASS",
+      "steps": [
+        {
+          "name": "java-yshop-common",
+          "result": "PASS",
+          "timeoutSeconds": 1800,
+          "exitCode": 0,
+          "evidence": {
+            "runId": "509bf4bde5724cbc93af8987dbedd7d8",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "result": "PASS",
+            "suites": 1,
+            "tests": 1,
+            "cases": {
+              "co.yixiang.yshop.framework.common.util.collection.CollectionUtilsTest": {
+                "testDiffList": 1
+              }
+            },
+            "exactNamesChecked": true
+          },
+          "diagnostics": {
+            "runId": "509bf4bde5724cbc93af8987dbedd7d8",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "reports": [
+              {
+                "suite": "co.yixiang.yshop.framework.common.util.collection.CollectionUtilsTest",
+                "tests": 1,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              }
+            ],
+            "failures": [],
+            "missingSuites": []
+          },
+          "seconds": 3.116
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-biz-data-permission",
+          "result": "PASS",
+          "timeoutSeconds": 1800,
+          "exitCode": 0,
+          "evidence": {
+            "runId": "06439caaa0c34a4aa8825c55119ba64a",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "result": "PASS",
+            "suites": 7,
+            "tests": 48,
+            "cases": {
+              "co.yixiang.yshop.framework.datapermission.core.util.DataPermissionUtilsTest": {
+                "testExecuteIgnore": 1
+              },
+              "co.yixiang.yshop.framework.datapermission.core.aop.DataPermissionAnnotationInterceptorTest": {
+                "testInvoke_none": 1,
+                "testInvoke_class": 1,
+                "testInvoke_method": 1
+              },
+              "co.yixiang.yshop.framework.datapermission.core.rule.DataPermissionRuleFactoryImplTest": {
+                "testGetDataPermissionRule_02": 1,
+                "testGetDataPermissionRule_03": 1,
+                "testGetDataPermissionRule_04": 1,
+                "testGetDataPermissionRule_05": 1,
+                "testGetDataPermissionRule_06": 1
+              },
+              "co.yixiang.yshop.framework.datapermission.core.db.DataPermissionDatabaseInterceptorTest": {
+                "testBeforeQuery_withMatchRule": 1,
+                "testAddNoRewritable": 1,
+                "testBeforeQuery_withoutRule": 1,
+                "testBeforeQuery_withoutMatchRule": 1,
+                "testNoRewritable": 1
+              },
+              "co.yixiang.yshop.framework.datapermission.core.aop.DataPermissionContextHolderTest": {
+                "testGet": 1,
+                "testPush": 1,
+                "testRemove": 1
+              },
+              "co.yixiang.yshop.framework.datapermission.core.rule.dept.DeptDataPermissionRuleTest": {
+                "testGetExpression_noDept_noSelf": 1,
+                "testGetExpression_noDeptDataPermission": 1,
+                "testGetExpression_yesDeptColumn_noSelfColumn": 1,
+                "testGetExpression_allDeptDataPermission": 1,
+                "testGetExpression_noDeptColumn_noSelfColumn": 1,
+                "testGetExpression_noDeptColumn_yesSelfColumn": 1,
+                "testGetExpression_noLoginUser": 1,
+                "testGetExpression_yesDeptColumn_yesSelfColumn": 1
+              },
+              "co.yixiang.yshop.framework.datapermission.core.db.DataPermissionDatabaseInterceptorTest2": {
+                "selectRightJoin": 1,
+                "selectFromSelect": 1,
+                "selectLeftJoin": 1,
+                "delete": 1,
+                "testSelectInnerJoin": 1,
+                "testSelectSingle": 1,
+                "selectIgnoreTable": 1,
+                "selectSubJoin": 1,
+                "selectInnerJoin": 1,
+                "selectJoinSubSelect": 1,
+                "selectSubSelect": 1,
+                "update": 1,
+                "selectSubSelectExists": 1,
+                "selectBodySubSelect": 1,
+                "selectSubSelectEq": 1,
+                "selectSubSelectIn": 1,
+                "testSelectLeftJoin": 1,
+                "selectLeftJoinMultipleTrailingOn": 1,
+                "selectMixJoin": 1,
+                "testSelectRightJoin": 1,
+                "selectSingle": 1,
+                "selectSubSelectInnerNotEq": 1,
+                "selectWithAs": 1
+              }
+            },
+            "exactNamesChecked": true
+          },
+          "diagnostics": {
+            "runId": "06439caaa0c34a4aa8825c55119ba64a",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "reports": [
+              {
+                "suite": "co.yixiang.yshop.framework.datapermission.core.aop.DataPermissionAnnotationInterceptorTest",
+                "tests": 3,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.framework.datapermission.core.aop.DataPermissionContextHolderTest",
+                "tests": 3,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.framework.datapermission.core.db.DataPermissionDatabaseInterceptorTest",
+                "tests": 5,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.framework.datapermission.core.db.DataPermissionDatabaseInterceptorTest2",
+                "tests": 23,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.framework.datapermission.core.rule.DataPermissionRuleFactoryImplTest",
+                "tests": 5,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.framework.datapermission.core.rule.dept.DeptDataPermissionRuleTest",
+                "tests": 8,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.framework.datapermission.core.util.DataPermissionUtilsTest",
+                "tests": 1,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              }
+            ],
+            "failures": [],
+            "missingSuites": []
+          },
+          "seconds": 5.457
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-biz-ip",
+          "result": "PASS",
+          "timeoutSeconds": 1800,
+          "exitCode": 0,
+          "evidence": {
+            "runId": "f2b78da5c1204ef2834faf4550b6e0de",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "result": "PASS",
+            "suites": 2,
+            "tests": 6,
+            "cases": {
+              "co.yixiang.yshop.framework.ip.core.utils.AreaUtilsTest": {
+                "testGetArea": 1,
+                "testFormat": 1
+              },
+              "co.yixiang.yshop.framework.ip.core.utils.IPUtilsTest": {
+                "testGetAreaId_string": 1,
+                "testGetArea_string": 1,
+                "testGetArea_long": 1,
+                "testGetAreaId_long": 1
+              }
+            },
+            "exactNamesChecked": true
+          },
+          "diagnostics": {
+            "runId": "f2b78da5c1204ef2834faf4550b6e0de",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "reports": [
+              {
+                "suite": "co.yixiang.yshop.framework.ip.core.utils.AreaUtilsTest",
+                "tests": 2,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.framework.ip.core.utils.IPUtilsTest",
+                "tests": 4,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              }
+            ],
+            "failures": [],
+            "missingSuites": []
+          },
+          "seconds": 1.998
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-excel",
+          "result": "PASS",
+          "timeoutSeconds": 1800,
+          "exitCode": 0,
+          "evidence": {
+            "runId": "fb7f51075c9e497ebec47a93c12de421",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "result": "PASS",
+            "suites": 1,
+            "tests": 2,
+            "cases": {
+              "co.yixiang.yshop.framework.dict.core.util.DictFrameworkUtilsTest": {
+                "testParseDictDataValue": 1,
+                "testGetDictDataLabel": 1
+              }
+            },
+            "exactNamesChecked": true
+          },
+          "diagnostics": {
+            "runId": "fb7f51075c9e497ebec47a93c12de421",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "reports": [
+              {
+                "suite": "co.yixiang.yshop.framework.dict.core.util.DictFrameworkUtilsTest",
+                "tests": 2,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              }
+            ],
+            "failures": [],
+            "missingSuites": []
+          },
+          "seconds": 2.605
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-mybatis",
+          "result": "PASS",
+          "timeoutSeconds": 1800,
+          "exitCode": 0,
+          "evidence": {
+            "runId": "5ffda39aba554afe998c1e2525b5c02b",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "result": "PASS",
+            "suites": 1,
+            "tests": 3,
+            "cases": {
+              "co.yixiang.yshop.framework.mybatis.core.log.SafeSqlLogTest": {
+                "doesNotForwardSqlLiteralsParametersRowsOrExceptionDetails": 1,
+                "retainsStaticStatementIdentityWithoutSqlOrValues": 1,
+                "retainsOnlyNumericResultCounts": 1
+              }
+            },
+            "exactNamesChecked": true
+          },
+          "diagnostics": {
+            "runId": "5ffda39aba554afe998c1e2525b5c02b",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "reports": [
+              {
+                "suite": "co.yixiang.yshop.framework.mybatis.core.log.SafeSqlLogTest",
+                "tests": 3,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              }
+            ],
+            "failures": [],
+            "missingSuites": []
+          },
+          "seconds": 1.852
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-test",
+          "result": "PASS",
+          "timeoutSeconds": 1800,
+          "exitCode": 0,
+          "evidence": {
+            "runId": "841e500227ce4a8ab234cd6f12be8a66",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "result": "PASS",
+            "suites": 1,
+            "tests": 3,
+            "cases": {
+              "co.yixiang.yshop.framework.test.config.RedisTestConfigurationTest": {
+                "independentServersHaveIndependentPortsAndKeyspaces": 1,
+                "clientInitializationDependsOnOwnedServerAndContextClosesIt": 1,
+                "occupiedConfiguredPortCannotBecomeAnUnstartedSharedServer": 1
+              }
+            },
+            "exactNamesChecked": true
+          },
+          "diagnostics": {
+            "runId": "841e500227ce4a8ab234cd6f12be8a66",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "reports": [
+              {
+                "suite": "co.yixiang.yshop.framework.test.config.RedisTestConfigurationTest",
+                "tests": 3,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              }
+            ],
+            "failures": [],
+            "missingSuites": []
+          },
+          "seconds": 2.225
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-web",
+          "result": "PASS",
+          "timeoutSeconds": 1800,
+          "exitCode": 0,
+          "evidence": {
+            "runId": "bf5d594de14b4d2c8d0d005a9be05160",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "result": "PASS",
+            "suites": 4,
+            "tests": 20,
+            "cases": {
+              "co.yixiang.yshop.framework.apilog.core.util.SensitiveDataSanitizerTest": {
+                "couponGuessAndOneTimeCreationResponseAreRedacted": 1,
+                "preservesBusinessQueryWithoutMutatingInput": 1,
+                "identityPayloadOmissionRemainsInEffect": 1,
+                "malformedScalarAndFormPayloadsFailClosed": 1,
+                "stackTraceRetainsCauseLocationsWithoutExceptionMessages": 1,
+                "stripsPaymentAndIdentitySecretsInMixedCaseNestedArrays": 1,
+                "malformedPayloadCannotLeakThroughTheGeneralJsonParserLogger": 1
+              },
+              "co.yixiang.yshop.framework.apilog.core.filter.ApiAccessLogFilterTest": {
+                "paymentCreateAndUpdateAuditsUseSharedSanitizer": 1,
+                "callbackNeverAuditsRawBodyQueryOrSignature": 1,
+                "explicitlyEnabledResponseAuditStillRemovesPaymentSecrets": 1,
+                "recognizesIdentityEndpointsWithoutDroppingOrderAudit": 1,
+                "localAccessLogSwitchControlsRegistration": 1
+              },
+              "co.yixiang.yshop.framework.desensitize.core.DesensitizeTest": {
+                "absentNicknameRemainsNull": 1,
+                "test": 1,
+                "nicknamePreservesOnlyContractualPrefix(String, String)[1]": 1,
+                "nicknamePreservesOnlyContractualPrefix(String, String)[2]": 1,
+                "nicknamePreservesOnlyContractualPrefix(String, String)[3]": 1,
+                "nicknamePreservesOnlyContractualPrefix(String, String)[4]": 1,
+                "nicknamePreservesOnlyContractualPrefix(String, String)[5]": 1
+              },
+              "co.yixiang.yshop.framework.web.core.handler.GlobalExceptionHandlerTest": {
+                "paymentExceptionAuditSanitizesBodyQueryAndCauseMessages": 1
+              }
+            },
+            "exactNamesChecked": true
+          },
+          "diagnostics": {
+            "runId": "bf5d594de14b4d2c8d0d005a9be05160",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "reports": [
+              {
+                "suite": "co.yixiang.yshop.framework.apilog.core.filter.ApiAccessLogFilterTest",
+                "tests": 5,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.framework.apilog.core.util.SensitiveDataSanitizerTest",
+                "tests": 7,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.framework.desensitize.core.DesensitizeTest",
+                "tests": 7,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.framework.web.core.handler.GlobalExceptionHandlerTest",
+                "tests": 1,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              }
+            ],
+            "failures": [],
+            "missingSuites": []
+          },
+          "seconds": 3.369
+        },
+        {
+          "name": "java-yshop-module-order-biz",
+          "result": "PASS",
+          "timeoutSeconds": 1800,
+          "exitCode": 0,
+          "evidence": {
+            "runId": "f9e12481cf5649d3a40c3661eb969ebd",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "result": "PASS",
+            "suites": 13,
+            "tests": 1004,
+            "cases": {
+              "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest": {
+                "couponOtherOwner": 1,
+                "couponOtherStore": 1,
+                "couponExpired": 1,
+                "couponReserveAndRestore": 1,
+                "snapshotFailureRollsBackEverything": 1,
+                "anonymousStaffScopeDenied": 1,
+                "cancellationOwnerCheckedBeforeIdempotentResult": 1,
+                "workersHoldTwentyIndependentTransactionsAndConnections": 1,
+                "lastItemTwentyBuyers": 20,
+                "otherStoreParentCategoryRejected": 1,
+                "customerReadUsesOwnedGroupedReferences": 1,
+                "outsideHours": 1,
+                "staffEndpointsRejectCrossStoreBeforeBusinessCalls": 1,
+                "redisFailureCannotSkipInventory": 1,
+                "categoryAndOrderAuthorizationUsesDatabaseShopNotTokenHint": 1,
+                "crossStoreProductRejected": 1,
+                "timeoutAndCustomerRaceExactlyOnce": 1,
+                "catalogRequiresSelectedStoreAndPublishedOwnership": 1,
+                "crossProductSkuRejected": 1,
+                "missingStore": 1,
+                "unassignedAccountIsNotImplicitHeadquarters": 1,
+                "fractionalQuantity": 1,
+                "duplicateKeySameRequest": 1,
+                "malformedLines": 1,
+                "wrongCategoryStore": 1,
+                "disabledCategory": 1,
+                "multiShopManagerAndFreshRevocation": 1,
+                "timeoutCannotCancelFreshOrder": 1,
+                "excessiveQuantity": 1,
+                "cancellationTwentyExactlyOnce": 1,
+                "missingSku": 1,
+                "negativeQuantity": 1,
+                "retryAfterCanceledReturnsSameOrder": 1,
+                "disabledParentCategoryRejected": 1,
+                "memberCannotUseStaffScope": 1,
+                "couponMinimum": 1,
+                "cyclicCategoryRejected": 1,
+                "overnightHours": 1,
+                "hiddenProduct": 1,
+                "skuSoldOut": 1,
+                "productEditCannotDestroyUnpaidSkuReservations": 1,
+                "couponCountScopesGlobalSharedOwnerAndReservation": 1,
+                "usedCouponCannotBeReservedAgain": 1,
+                "ordinaryAdminEditCannotOverwriteOrderFinancialOrOwnershipFields": 1,
+                "zeroQuantity": 1,
+                "forgedPriceIgnored": 1,
+                "differentStoreSkuPriceCannotBecomeThisOrdersPrice": 1,
+                "unavailableStore": 1,
+                "couponWrongOrderType": 1,
+                "duplicateKeyTwentyConcurrent": 1,
+                "migrationRerunPreservesUnpaidOrder": 1,
+                "notYetValidCouponRejected": 1,
+                "aggregateSoldOut": 1,
+                "staffCannotReadOrWriteOtherStore": 1,
+                "cancelCouponFailureRollsBackStockAndMarker": 1,
+                "correctStoreServerPriceAndSynchronousSnapshot": 1,
+                "availableStockConditionalDebitMustSucceed": 1,
+                "missingSubmissionKey": 1,
+                "headquartersMustHaveExplicitRole": 1,
+                "databaseRecoveryWithoutRedis": 1,
+                "mixedStoresRejectedAtomically": 1,
+                "couponTwentyConcurrentOnlyOneReservation": 1,
+                "duplicateKeyConflict": 1,
+                "databaseLockFailureRollsBackSubmissionAndInventory": 1,
+                "globalAndExplicitMultiStoreCouponAllowed": 1
+              },
+              "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest": {
+                "currencyRejected": 1,
+                "alipayUsesActualSdkSignatureAndMerchantBinding": 1,
+                "alteredAmountRejected": 1,
+                "actualSdkHmacSignatureAccepted": 1,
+                "noSandboxKeyHttpRequest": 1,
+                "invalidSignatureRejected": 1,
+                "actualSdkValidSignatureAndSafeEvent": 1,
+                "nonSuccessRejected(String)[1]": 1,
+                "nonSuccessRejected(String)[2]": 1,
+                "exactMoneyNoRoundingOrOverflow": 1,
+                "invalidCents(String)[1]": 1,
+                "invalidCents(String)[2]": 1,
+                "invalidCents(String)[3]": 1,
+                "invalidCents(String)[4]": 1,
+                "invalidCents(String)[5]": 1,
+                "legacySdkHandlerFailsClosed": 1,
+                "duplicateAcknowledged": 1,
+                "unsignedRejected": 1,
+                "xmlCannotLoadEntitiesOrDuplicateFields": 1,
+                "wrongMerchantOrApp(String)[1]": 1,
+                "wrongMerchantOrApp(String)[2]": 1,
+                "actualSdkReqInfoBypassIsBlocked": 1,
+                "gatewayNeverLogsRawInvalidCallbackEvenAtDebug": 1,
+                "retryRequiresProviderFail": 1
+              },
+              "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest": {
+                "cancellationAndTimeoutReleaseOnce": 20,
+                "sameMemberTwentyKeysLimitThree": 20,
+                "historicalPlaintextCodeSurvivesUnrelatedTemplateEdit": 1,
+                "rawIssuedCrudCannotGrantOrReactivate": 1,
+                "claimCopiesRightsAndSameRequestReturnsOneInstance": 1,
+                "sameClaimRequestTwentyRetries": 20,
+                "claimVersusActivityDisable": 20,
+                "expiredReservationReleaseDoesNotRenewEligibility": 1,
+                "receiptWithoutSuccessfulPaymentCannotProveRedemption": 1,
+                "newUserRequiresRegistrationEvidenceAndOnceAcrossStores": 1,
+                "twentyMembersClaimLastCoupon": 20,
+                "invalidUseLeavesStockAndCouponUntouched(String)[1]": 1,
+                "invalidUseLeavesStockAndCouponUntouched(String)[2]": 1,
+                "invalidUseLeavesStockAndCouponUntouched(String)[3]": 1,
+                "invalidUseLeavesStockAndCouponUntouched(String)[4]": 1,
+                "invalidUseLeavesStockAndCouponUntouched(String)[5]": 1,
+                "invalidUseLeavesStockAndCouponUntouched(String)[6]": 1,
+                "invalidUseLeavesStockAndCouponUntouched(String)[7]": 1,
+                "invalidUseLeavesStockAndCouponUntouched(String)[8]": 1,
+                "invalidUseLeavesStockAndCouponUntouched(String)[9]": 1,
+                "oneNewcomerAcrossConcurrentCampaigns": 20,
+                "publicCodeCannotBeBypassedWithIdAndIsNeverReturned": 1,
+                "eligibilityFailClosed(String)[1]": 1,
+                "eligibilityFailClosed(String)[2]": 1,
+                "eligibilityFailClosed(String)[3]": 1,
+                "eligibilityFailClosed(String)[4]": 1,
+                "eligibilityFailClosed(String)[5]": 1,
+                "eligibilityFailClosed(String)[6]": 1,
+                "eligibilityFailClosed(String)[7]": 1,
+                "eligibilityFailClosed(String)[8]": 1,
+                "eligibilityFailClosed(String)[9]": 1,
+                "historicalShortDigestCodeAndRequestRetryRemainCompatibleWithoutReset": 1,
+                "manualWeakOrLongPredictableCodesCannotBeCreatedOrRotated": 1,
+                "everyHistoricalInstanceCountsTowardLimit": 1,
+                "claimVersusQuotaChange": 20,
+                "headquartersCanReadGlobalAndAllAuthorizedStores": 1,
+                "permissionAnnotationsProtectAllUserReads": 1,
+                "sameNewcomerTwentyConcurrentClaims": 20,
+                "explicitInvalidationNeedsReasonAndCannotTouchReserved": 1,
+                "sameCouponTwentyOrdersOnlyOneReservation": 20,
+                "pendingAttemptCancellationDoesNotReleaseOrAudit": 1,
+                "reusedKeyForDifferentTemplateRejected": 1,
+                "sameMemberTwentyKeysLimitOne": 20,
+                "limitNThenRejectDifferentKeys": 1,
+                "zeroOrderRejectedAndReservationRollsBack": 1,
+                "publicCodeTwentySameRetries": 20,
+                "issuedTemplateCannotDeleteOrLowerQuotaBelowEvidence": 1,
+                "newCodeCreationIsServerRandomAndDigestOnly": 1,
+                "reservationAuditFailureRollsBackInventoryAndSubmission": 1,
+                "claimAuditFailureRollsBackCountersInstanceAndNewUser": 1,
+                "adminScopeCannotBeForged": 1,
+                "historicalAmbiguousStatusIsReviewNotUsed": 1,
+                "historicalMemberDoesNotBecomeNewByChangingShop": 1,
+                "expiryAndOrderReservationRace": 20,
+                "releaseAuditFailureRollsBackBusinessState": 1,
+                "legacyAuditIsReadOnlyAndReportsUnknownCounterAndMissingEvidence": 1,
+                "issuedSnapshotDoesNotFollowTemplateEditsOrDisable": 1
+              },
+              "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest": {
+                "expiryUsesSameAdmissionAndCanRetryAfterProof": 1,
+                "repeatableReadCallerIsRejectedBeforeAnyWrites": 1,
+                "cancellationAndAttemptCreationRace": 20,
+                "noAttemptCancelsAndRetryReleasesExactlyOnce": 1,
+                "expiryAndAttemptCreationRace": 20,
+                "lateSuccessAfterProofRacesCancelWithoutFulfillment": 20,
+                "trustedRemoteTerminalAllowsCancel(String)[1]": 1,
+                "trustedRemoteTerminalAllowsCancel(String)[2]": 1,
+                "trustedRemoteTerminalAllowsCancel(String)[3]": 1,
+                "currentReadSeesReceiptCommittedAfterEarlierCallerRead": 1,
+                "paidOrderCannotCancelOrExpire": 1,
+                "legacyConflictBlocksEvenRemoteClosedAttempt": 1,
+                "localTerminalCannotProveRequestedPaymentSafe(String)[1]": 1,
+                "localTerminalCannotProveRequestedPaymentSafe(String)[2]": 1,
+                "localTerminalCannotProveRequestedPaymentSafe(String)[3]": 1,
+                "receiptLockIsNeverAcquiredAfterOrderLock": 1,
+                "independentConflictEvidenceBlocksWithoutActiveAttempt": 1,
+                "missingFinancialSchemaFailsClosed": 1,
+                "activeOrUncertainBlocksCustomerAndExpiry(String)[1]": 1,
+                "activeOrUncertainBlocksCustomerAndExpiry(String)[2]": 1,
+                "activeOrUncertainBlocksCustomerAndExpiry(String)[3]": 1,
+                "lateSuccessAfterRemoteCloseBlocksCancellation": 1,
+                "legacyCancellationAlsoBlocksActiveAttempt": 1,
+                "prepayClaimAndCancelRaceNeverReleasesInventory": 1,
+                "blockedThenRemoteConfirmedRetryWorks": 1,
+                "callbackAndCancelRaceDoesNotDeadlock": 20,
+                "explicitlyTerminatedNeverRequestedAttemptAllowsCancel(String)[1]": 1,
+                "explicitlyTerminatedNeverRequestedAttemptAllowsCancel(String)[2]": 1,
+                "explicitlyTerminatedNeverRequestedAttemptAllowsCancel(String)[3]": 1,
+                "receivedSuccessIsNotCanceledBeforeProcessing": 1,
+                "remoteProofAndCancelRaceReleasesOnlyAfterConfirmation": 1,
+                "oldUnsafeAttemptNotHiddenByNewerSafeHistory": 1
+              },
+              "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest": {
+                "priceAuditFailureRollsBackPriceAndVersion": 1,
+                "negativeStockCannotCreateAudit": 1,
+                "syntheticConfigCreatesAuthoritativeSnapshotAndCoupon": 1,
+                "inventoryAuditFailureRollsBackSkuAndProduct": 1,
+                "sameSkuDifferentCustomizationsCanCoexist": 1,
+                "migrationRerunPreservesUnpaidSnapshot": 1,
+                "coldNeedsIce": 1,
+                "skuAndAdminCrossStoreAttacksRejected": 1,
+                "twoStoreSameNamedDrinksUseIndependentPrices": 1,
+                "requiredCannotBeOmitted": 1,
+                "retryDoesNotRepriceCommittedOrder": 1,
+                "priceDoesNotChangeInventoryOrOldSnapshot": 1,
+                "hotCannotChooseIce": 1,
+                "stockAdjustmentAuditAndReplay": 1,
+                "adjustmentKeepsReservation": 1,
+                "priceChangeVersusTwentyOrders": 20,
+                "toppingsCannotMakeAnInvalidBasePriceOrderable": 1,
+                "invalidMoney(String)[1]": 1,
+                "invalidMoney(String)[2]": 1,
+                "invalidMoney(String)[3]": 1,
+                "twentyBuyersLastUnit": 20,
+                "futureDependencyRejected": 1,
+                "malformedConfigurationRollsBack": 1,
+                "rejectsInvalidSelections(String)[1]": 1,
+                "rejectsInvalidSelections(String)[2]": 1,
+                "rejectsInvalidSelections(String)[3]": 1,
+                "rejectsInvalidSelections(String)[4]": 1,
+                "rejectsInvalidSelections(String)[5]": 1,
+                "rejectsInvalidSelections(String)[6]": 1,
+                "rejectsInvalidSelections(String)[7]": 1,
+                "rejectsInvalidSelections(String)[8]": 1,
+                "inventoryAdjustmentVersusTwentyOrders": 20,
+                "stoppedSkuCannotOrder": 1,
+                "productCopyIndependentAndIdempotent": 1,
+                "jsonQuantityCannotBeCoerced(String)[1]": 1,
+                "jsonQuantityCannotBeCoerced(String)[2]": 1,
+                "jsonQuantityCannotBeCoerced(String)[3]": 1,
+                "batchAllOrNothingOnCrossStore": 1,
+                "batchWrongCategoryRollsBack": 1
+              },
+              "co.yixiang.yshop.module.order.payment.CouponPaymentDatabaseTest": {
+                "conflictDoesNotRedeemSecondCoupon": 1,
+                "syntheticPaymentAndCancellationNoDuplicateRelease": 20,
+                "redemptionFailureRollsBackFinancialEffectsThenRecoverySucceeds": 1,
+                "inboxReceiptAloneDoesNotRedeem": 1,
+                "wrongAmountEventDoesNotRedeem": 1,
+                "paidOrderCannotReturnCoupon": 1,
+                "terminalLateSuccessDoesNotRedeemOrRestoreAgain": 20,
+                "wrongCouponReservationMakesFinalizationRollback": 1,
+                "uncertainAttemptCannotReleaseEvenIfCouponExpired": 1,
+                "twentySyntheticSuccessEventsRedeemExactlyOnce": 20,
+                "trustedSyntheticCompletionRedeemsOnlyTheOrderCoupon": 1
+              },
+              "co.yixiang.yshop.module.order.payment.PaymentLiveReadinessDatabaseTest": {
+                "callbackQuerySuccessTwentyConcurrent": 1,
+                "staleLeaseCannotTerminateOrReleaseNewOwner": 1,
+                "uncertainBlocksLegacyAlipay": 1,
+                "migrationRerunPreservesProof": 1,
+                "liveRejectsPreexistingBoundAlipay": 1,
+                "uncertainPrepayNeverResent": 1,
+                "unrequestedAttemptNotClaimed": 1,
+                "walletPaidOrderWithWechatSuccessRequiresReviewNotSecondFulfillment": 1,
+                "activeWechatBlocksOtherAttempt": 1,
+                "livePreservesBalanceFinalization": 1,
+                "liveRejectsAllLegacyExternalCompletion": 1,
+                "callbackDuringCloseNeverDowngradesPaid": 1,
+                "disabledRecoveryNoReadsOrCalls": 1,
+                "confirmedCloseAllowsNewServerReference": 1,
+                "notpayNoCloseRetainsSlot": 1,
+                "fulfillmentBillIsBoundToOrderAndReplayCannotDuplicateIt": 1,
+                "liveRejectsAlipayAttempt": 1,
+                "recoveryTwentyConcurrentSingleTransition": 1,
+                "closeThenLateSuccessRequiresReconciliation": 1,
+                "liveRejectsLegacyAlipayOrderCreation": 1,
+                "officialSdkQueryCloseSignedFakeHttp(String)[1]": 1,
+                "officialSdkQueryCloseSignedFakeHttp(String)[2]": 1,
+                "officialSdkQueryCloseSignedFakeHttp(String)[3]": 1,
+                "officialSdkQueryCloseSignedFakeHttp(String)[4]": 1,
+                "successQueryExactlyOnce": 1,
+                "balanceAdmissionRacesExternalAttemptWithoutSecondFunding": 20,
+                "queryNetworkFailureLeavesFundsAndSlot": 1,
+                "otherStatesRemainActive(String)[1]": 1,
+                "otherStatesRemainActive(String)[2]": 1,
+                "otherStatesRemainActive(String)[3]": 1,
+                "activeOrUncertainAttemptRejectsCashWithoutReceipt(boolean)[1]": 1,
+                "activeOrUncertainAttemptRejectsCashWithoutReceipt(boolean)[2]": 1,
+                "callbackBeforeCloseSuppressesClose": 1,
+                "disabledLiveWithoutActiveAttemptPreservesLegacyAlipay": 1,
+                "successfulQueryRollbackAndRecovery": 1,
+                "disabledLiveActiveWechatRejectsAlipayBeforeProvider": 1,
+                "closeFailureRetainsActive(String)[1]": 1,
+                "closeFailureRetainsActive(String)[2]": 1,
+                "activeOrUncertainAttemptRejectsBalanceBeforeDebit(boolean)[1]": 1,
+                "activeOrUncertainAttemptRejectsBalanceBeforeDebit(boolean)[2]": 1,
+                "callbackCloseOnSeparateThreads(String)[1]": 1,
+                "callbackCloseOnSeparateThreads(String)[2]": 1,
+                "mismatchCannotCloseOrFinalize(String)[1]": 1,
+                "mismatchCannotCloseOrFinalize(String)[2]": 1,
+                "mismatchCannotCloseOrFinalize(String)[3]": 1,
+                "mismatchCannotCloseOrFinalize(String)[4]": 1,
+                "remoteTerminalReleasesSlot(String)[1]": 1,
+                "remoteTerminalReleasesSlot(String)[2]": 1,
+                "remoteTerminalReleasesSlot(String)[3]": 1,
+                "disabledLiveUncertainWechatRejectsAlipayBeforeProvider": 1,
+                "walletPaidOrderCanCloseOutstandingUnpaidWechatAttempt": 1,
+                "confirmedCloseReleasesSlotKeepsMarker": 1,
+                "remoteProofAndTerminalImmutableOnMysql": 1
+              },
+              "co.yixiang.yshop.module.order.payment.LiveMerchantPreflightDatabaseTest": {
+                "rawCallbackIngressSyntheticSignatureAndReplay": 1,
+                "syntheticMerchantAndSchemaChecksReadOnly": 1,
+                "missingIndexMakesSchemaFailClosed": 1,
+                "terminalLateSuccessAndHistoricalRiskDetectedReadOnly": 1,
+                "uncertainAndConflictsDetectedWithoutMutation": 1,
+                "deploymentDiagnosticsDoNotHashOrExposeCredentialStorage": 1,
+                "modifiedRawBodyAndStrippedHeaderRejected": 1,
+                "renewablePrivateClockEvidenceFailsClosedWhenMissingOrPublic": 1
+              },
+              "co.yixiang.yshop.module.order.payment.WechatV3DatabaseTest": {
+                "repeatedPayDoesNotResend": 1,
+                "invalidNotificationMetadataRejected(String)[1]": 1,
+                "invalidNotificationMetadataRejected(String)[2]": 1,
+                "invalidNotificationMetadataRejected(String)[3]": 1,
+                "invalidNotificationMetadataRejected(String)[4]": 1,
+                "invalidNotificationMetadataRejected(String)[5]": 1,
+                "invalidNotificationMetadataRejected(String)[6]": 1,
+                "badSignatureRejectedWithoutReceipt": 1,
+                "legacyBusinessOrderAndAttemptReferenceCannotCompleteV3Attempt": 1,
+                "officialHttpClientSignsRequestAndVerifiesFakeResponse(String)[1]": 1,
+                "officialHttpClientSignsRequestAndVerifiesFakeResponse(String)[2]": 1,
+                "unknownReferenceCannotGuessBusinessOrder": 1,
+                "twentyConcurrentPrepayRequestsOnlyOneTransportCall": 1,
+                "authenticatedNotificationCompletesAndReplayIsIdempotent": 1,
+                "httpVerifiedCallback204AndReplay204": 1,
+                "httpInvalidCallback400NoReceipt(String)[1]": 1,
+                "httpInvalidCallback400NoReceipt(String)[2]": 1,
+                "httpInvalidCallback400NoReceipt(String)[3]": 1,
+                "httpInvalidCallback400NoReceipt(String)[4]": 1,
+                "legacyGuardUsesCurrentReadDespiteOuterRepeatableReadSnapshot": 1,
+                "changedOrderAmountAfterPrepayRefusesReplay": 1,
+                "officialRequestUsesSnapshotAndReturnsOnlyFiveParameters": 1,
+                "transactionCannotBindOtherAttempt": 1,
+                "verifiedWrongAmountIsDurablyRejected": 1,
+                "prepayCommitFailureReturnsNoPaymentParametersAndDoesNotRetryTransport": 1,
+                "v3MigrationRerunPreservesUncertaintyMarker": 1,
+                "noCallerTransactionAcrossProviderIo": 1,
+                "authenticatedBadCiphertextRejectedWithoutReceipt": 1,
+                "providerTimeoutRetainsActiveSlotAndCannotTerminateOrRepeat": 1,
+                "uncertaintyMarkerCannotBeClearedOrTerminatedViaSqlOnMysql": 1,
+                "callbackFinalizationRollbackRecovers": 1,
+                "earlySuccessBeforePrepayPersistenceFailsSafe": 1,
+                "httpUnknownAttemptRetriesWithoutFulfillment": 1,
+                "twentySignedNotificationsFulfillOnce": 1,
+                "mismatchedMerchantCannotSend(String)[1]": 1,
+                "mismatchedMerchantCannotSend(String)[2]": 1,
+                "malformedProviderResponseIsUncertain": 1
+              },
+              "co.yixiang.yshop.module.order.ordering.CouponCodeSecurityTest": {
+                "redisFailureDoesNotFailOpenOrLogRequestAndExceptionPayload": 1,
+                "ordinaryPublicClaimsDoNotConsumeCodeBudget": 1,
+                "existingAspectNeverReadsOrLogsArguments": 1,
+                "hiddenActivitiesHaveSameFailureResponse(String)[1]": 1,
+                "hiddenActivitiesHaveSameFailureResponse(String)[2]": 1,
+                "hiddenActivitiesHaveSameFailureResponse(String)[3]": 1,
+                "hiddenActivitiesHaveSameFailureResponse(String)[4]": 1,
+                "hiddenActivitiesHaveSameFailureResponse(String)[5]": 1,
+                "hiddenActivitiesHaveSameFailureResponse(String)[6]": 1,
+                "hiddenActivitiesHaveSameFailureResponse(String)[7]": 1,
+                "throttlePrecedesProviderDatabaseAndIgnoresForwardedHeaders": 1,
+                "generatedCodesUseRandomBytesAndAreUnique": 1,
+                "requestToStringAndCreationResultAreRedacted": 1,
+                "emptyOrMalformedCodesCannotBypassAdmission": 1,
+                "anonymousCannotConsumeOrRedeem": 1,
+                "sameRetryKeyIsPassedUnchangedToExistingIdempotency": 1,
+                "sharedNetworkHasIndependentMemberBuckets": 1,
+                "changingCodeAndKeyNeverChangesBucketsAndInvalidAttemptsCount": 1
+              },
+              "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest": {
+                "twentyConcurrentTransactions": 1,
+                "twoTransactionsCompeteForOneOrder": 1,
+                "cancellationRestorationFailureRollsBackDeletionAndInventory": 1,
+                "redeliveredMessageDoesNotRepeatEffects": 1,
+                "databaseConstraintsAreLastDefense": 1,
+                "wrongAmount(long)[1]": 1,
+                "wrongAmount(long)[2]": 1,
+                "sequentialDuplicatesOneHundred": 1,
+                "realCancellationPaymentRace": 20,
+                "internalProvidersAreNotExternalTransactions": 1,
+                "positiveAmountAndSuccessBindingChecksEnforced": 1,
+                "conditionalUpdateOnlyFirstOwnsEffects": 1,
+                "repeatedRecoveryAndProcessPending": 1,
+                "notificationFailureDoesNotRollbackPaymentOrRepeat": 1,
+                "canceledDeletedRefunded(String)[1]": 1,
+                "canceledDeletedRefunded(String)[2]": 1,
+                "canceledDeletedRefunded(String)[3]": 1,
+                "canceledDeletedRefunded(String)[4]": 1,
+                "rollbackAndRecovery(String)[1]": 1,
+                "rollbackAndRecovery(String)[2]": 1,
+                "rollbackAndRecovery(String)[3]": 1,
+                "rollbackAndRecovery(String)[4]": 1,
+                "rollbackAndRecovery(String)[5]": 1,
+                "paymentWinsNoInventoryOrCouponRestore": 1,
+                "streamFailureIsNotAcknowledgedAndRetryWorks": 1,
+                "singleSuccess": 1,
+                "noticeIsEmittedOnlyAfterVisibleDatabaseCommit": 1,
+                "unknownOrderFailsProviderButPersists": 1,
+                "transactionCannotPayAnotherOrder": 1,
+                "historicalPaidOrderIsNotGuessedDuplicate": 1,
+                "balanceAdapterRollsBackDebitOnFinalizationFailure": 1,
+                "redisOutageDoesNotLoseReceipt": 1,
+                "secondTransactionIsNotDuplicate": 1,
+                "cancellationWinsAndLatePaymentRequiresReconciliation": 1,
+                "sameTransactionDifferentPayloadIsRejected": 1,
+                "rechargeIsDurablyUnsupportedNotCredited": 1
+              },
+              "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest": {
+                "twentyConcurrentCreatesOneActiveRecord": 1,
+                "receiptCannotInvertCallerLockOrder": 1,
+                "terminateThenNewKeyRetriesWithoutReactivation(String)[1]": 1,
+                "terminateThenNewKeyRetriesWithoutReactivation(String)[2]": 1,
+                "terminateThenNewKeyRetriesWithoutReactivation(String)[3]": 1,
+                "merchantSnapshotChangeConflicts(String)[1]": 1,
+                "merchantSnapshotChangeConflicts(String)[2]": 1,
+                "lateSuccessRequiresReconciliation(String)[1]": 1,
+                "lateSuccessRequiresReconciliation(String)[2]": 1,
+                "lateSuccessRequiresReconciliation(String)[3]": 1,
+                "wrongOwnerCannotReadOrChange": 1,
+                "directSqlSnapshotTamperingRejectedOnMysql(String)[1]": 1,
+                "directSqlSnapshotTamperingRejectedOnMysql(String)[2]": 1,
+                "directSqlSnapshotTamperingRejectedOnMysql(String)[3]": 1,
+                "directSqlSnapshotTamperingRejectedOnMysql(String)[4]": 1,
+                "directSqlSnapshotTamperingRejectedOnMysql(String)[5]": 1,
+                "directSqlSnapshotTamperingRejectedOnMysql(String)[6]": 1,
+                "directSqlSnapshotTamperingRejectedOnMysql(String)[7]": 1,
+                "directSqlSnapshotTamperingRejectedOnMysql(String)[8]": 1,
+                "directSqlSnapshotTamperingRejectedOnMysql(String)[9]": 1,
+                "directSqlSnapshotTamperingRejectedOnMysql(String)[10]": 1,
+                "prepayReferenceCannotBindTwoAttempts": 1,
+                "sameKeyReturnsOriginal": 1,
+                "unknownReferenceDoesNotGuessOrderBinding": 1,
+                "orderAmountChangeCannotComplete": 1,
+                "invalidMerchantMetadataRejected(String)[1]": 1,
+                "invalidMerchantMetadataRejected(String)[2]": 1,
+                "invalidMerchantMetadataRejected(String)[3]": 1,
+                "invalidMerchantMetadataRejected(String)[4]": 1,
+                "legacyCannotCompleteWechatAttemptOrder": 1,
+                "completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[1]": 1,
+                "completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[2]": 1,
+                "completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[3]": 1,
+                "completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[4]": 1,
+                "wrongBindingDurablyRejected(String)[1]": 1,
+                "wrongBindingDurablyRejected(String)[2]": 1,
+                "wrongBindingDurablyRejected(String)[3]": 1,
+                "wrongBindingDurablyRejected(String)[4]": 1,
+                "wrongBindingDurablyRejected(String)[5]": 1,
+                "amountChangedCannotReuseOrRecordPrepay": 1,
+                "createdSnapshotAndReference": 1,
+                "twoTransactionsRaceOneAttempt": 1,
+                "differentKeysConcurrentStillOneActive": 1,
+                "terminatedAttemptSuccessCannotFulfillReplacement": 1,
+                "transactionCannotBindTwoAttempts": 1,
+                "directSqlReferenceOverwriteDeleteAndReactivationRejectedOnMysql": 1,
+                "twentyConcurrentCompletionsOneFulfillment": 1,
+                "invalidTerminationDoesNotReleaseSlot": 1,
+                "unknownOrderRejected": 1,
+                "internalProviderRejected": 1,
+                "boundSuccessAndReplay(String)[1]": 1,
+                "boundSuccessAndReplay(String)[2]": 1,
+                "activeBindingConflict(String)[1]": 1,
+                "activeBindingConflict(String)[2]": 1,
+                "activeBindingConflict(String)[3]": 1,
+                "absentOrWrongProviderMerchantRejected(String)[1]": 1,
+                "absentOrWrongProviderMerchantRejected(String)[2]": 1,
+                "migrationRerunPreservesAttemptAndHistoricalNull": 1,
+                "differentKeyCannotSilentlySwitchMerchant": 1,
+                "alipayBoundSuccessUsesSellerSnapshot": 1,
+                "prepayCanReplayButNotOverwriteOrTerminate": 1,
+                "unpayableOrderRejected(String)[1]": 1,
+                "unpayableOrderRejected(String)[2]": 1,
+                "unpayableOrderRejected(String)[3]": 1,
+                "unpayableOrderRejected(String)[4]": 1,
+                "unpayableOrderRejected(String)[5]": 1,
+                "unpayableOrderRejected(String)[6]": 1,
+                "unpayableOrderRejected(String)[7]": 1,
+                "unpayableOrderRejected(String)[8]": 1,
+                "unpayableOrderRejected(String)[9]": 1
+              },
+              "co.yixiang.yshop.module.order.payment.WalletDatabaseTest": {
+                "balanceRefundAcceptsExistingPaidLifecycleStates(int)[1]": 1,
+                "balanceRefundAcceptsExistingPaidLifecycleStates(int)[2]": 1,
+                "balanceRefundAcceptsExistingPaidLifecycleStates(int)[3]": 1,
+                "balanceRefundAcceptsExistingPaidLifecycleStates(int)[4]": 1,
+                "balanceRefundAcceptsExistingPaidLifecycleStates(int)[5]": 1,
+                "missingBalanceRefundOrderIsRejected": 1,
+                "invalidAmounts(String)[1]": 1,
+                "invalidAmounts(String)[2]": 1,
+                "invalidAmounts(String)[3]": 1,
+                "invalidAmounts(String)[4]": 1,
+                "ledgerConstraintsAndImmutability": 1,
+                "idempotencyConflict(String)[1]": 1,
+                "idempotencyConflict(String)[2]": 1,
+                "idempotencyConflict(String)[3]": 1,
+                "idempotencyConflict(String)[4]": 1,
+                "idempotencyConflict(String)[5]": 1,
+                "sameOrderBalancePayTwenty": 1,
+                "syntheticDisabled": 1,
+                "rechargeWrongAmountAndTransaction": 1,
+                "negativeOpeningStopsBeforeAnyLedger": 1,
+                "ledgerInsertFailureRollsBackBalance": 1,
+                "zeroOpeningThenCredit": 1,
+                "syntheticWeChatQueryDoesNotHoldOrderLock": 1,
+                "finalizationFailureRollsBackWallet": 1,
+                "duplicateIdempotency": 1,
+                "sameBalanceOrderRefundTwentyCreditsOnce": 1,
+                "balanceRefundPostCreditFailureRollsBackEverything(String)[1]": 1,
+                "balanceRefundPostCreditFailureRollsBackEverything(String)[2]": 1,
+                "balanceRefundPostCreditFailureRollsBackEverything(String)[3]": 1,
+                "balanceRefundPostCreditFailureRollsBackEverything(String)[4]": 1,
+                "balanceRefundValidatesLockedRowAfterOrdinaryRead(String)[1]": 1,
+                "balanceRefundValidatesLockedRowAfterOrdinaryRead(String)[2]": 1,
+                "balanceRefundValidatesLockedRowAfterOrdinaryRead(String)[3]": 1,
+                "balanceRefundValidatesLockedRowAfterOrdinaryRead(String)[4]": 1,
+                "unpaidBalanceRefundIsRejectedWithoutLedger": 1,
+                "duplicateWalletCreditTwenty": 1,
+                "rechargeTransactionCannotCreditTwoOrders": 1,
+                "balanceFinalizationRequiresDebit": 1,
+                "externalBalanceTamperingRequiresReconciliation": 1,
+                "threeOrdersCannotOverspendFiveCents": 1,
+                "insufficientLeavesNoLedgerOrPaid": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[1]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[2]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[3]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[4]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[5]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[6]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[7]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[8]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[9]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[10]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[11]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[12]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[13]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[14]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[15]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[16]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[17]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[18]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[19]": 1,
+                "balancePayAndRefundRaceHasConsistentState(int)[20]": 1,
+                "rechargeStatusFailureRollsBackCredit": 1,
+                "balanceRefundRejectsIneligibleStates(String)[1]": 1,
+                "balanceRefundRejectsIneligibleStates(String)[2]": 1,
+                "balanceRefundRejectsIneligibleStates(String)[3]": 1,
+                "balanceRefundRejectsIneligibleStates(String)[4]": 1,
+                "balanceRefundRejectsIneligibleStates(String)[5]": 1,
+                "balanceRefundRejectsIneligibleStates(String)[6]": 1,
+                "openingRerunNeverChangesMoney": 1,
+                "rechargeCompletionTwenty": 1,
+                "alternateIdempotencyKeyCannotRepeatBusiness": 1,
+                "debitThenExceptionRollsBack": 1,
+                "ordinaryAdminRequestIgnoresMoney": 1,
+                "genericMemberUpdateCannotOverwriteBalance": 1,
+                "balanceRefundRejectsInvalidAmounts(String)[1]": 1,
+                "balanceRefundRejectsInvalidAmounts(String)[2]": 1,
+                "balanceRefundRejectsInvalidAmounts(String)[3]": 1,
+                "balanceRefundRejectsInvalidAmounts(String)[4]": 1,
+                "balanceRefundRejectsInvalidAmounts(String)[5]": 1
+              }
+            },
+            "exactNamesChecked": true
+          },
+          "diagnostics": {
+            "runId": "f9e12481cf5649d3a40c3661eb969ebd",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "reports": [
+              {
+                "suite": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest",
+                "tests": 96,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.order.ordering.CouponCodeSecurityTest",
+                "tests": 18,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest",
+                "tests": 285,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest",
+                "tests": 84,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.order.payment.CouponPaymentDatabaseTest",
+                "tests": 68,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.order.payment.LiveMerchantPreflightDatabaseTest",
+                "tests": 8,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest",
+                "tests": 70,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest",
+                "tests": 108,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest",
+                "tests": 55,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.order.payment.PaymentLiveReadinessDatabaseTest",
+                "tests": 72,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest",
+                "tests": 79,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.order.payment.WechatV3DatabaseTest",
+                "tests": 37,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest",
+                "tests": 24,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              }
+            ],
+            "failures": [],
+            "missingSuites": []
+          },
+          "seconds": 42.941
+        },
+        {
+          "name": "java-yshop-module-shop-biz",
+          "result": "PASS",
+          "timeoutSeconds": 1800,
+          "exitCode": 0,
+          "evidence": {
+            "runId": "c90ba7bf9f564777b0d7dfb6bff23090",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "result": "PASS",
+            "suites": 1,
+            "tests": 7,
+            "cases": {
+              "co.yixiang.yshop.module.shop.service.material.MaterialServiceImplTest": {
+                "testDeleteMaterial_notExists": 1,
+                "testGetMaterialList": 1,
+                "testGetMaterialPage": 1,
+                "testCreateMaterial_success": 1,
+                "testDeleteMaterial_success": 1,
+                "testUpdateMaterial_success": 1,
+                "testUpdateMaterial_notExists": 1
+              }
+            },
+            "exactNamesChecked": true
+          },
+          "diagnostics": {
+            "runId": "c90ba7bf9f564777b0d7dfb6bff23090",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "reports": [
+              {
+                "suite": "co.yixiang.yshop.module.shop.service.material.MaterialServiceImplTest",
+                "tests": 7,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              }
+            ],
+            "failures": [],
+            "missingSuites": []
+          },
+          "seconds": 7.694
+        },
+        {
+          "name": "java-yshop-module-member-biz",
+          "result": "PASS",
+          "timeoutSeconds": 1800,
+          "exitCode": 0,
+          "evidence": {
+            "runId": "2b813b73c6c441ffb9732c4b08fb5fd8",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "result": "PASS",
+            "suites": 2,
+            "tests": 23,
+            "cases": {
+              "co.yixiang.yshop.module.member.service.auth.MemberAuthServiceTest": {
+                "invalidSmsNeverCreatesIdentityTokenOrSuccessLog": 1,
+                "passwordLoginChecksIdentityAndWritesOnlySuccessAfterGrant": 1,
+                "enabledWechatMemberReceivesOnlyItsOwnIdentity": 1,
+                "rejectedRefreshNeverRecordsSuccessfulLoginOrUserUpdate": 1,
+                "successfulLogoutLogsLogoutNotLoginAndDoesNotUpdateLoginTime": 1,
+                "disabledPasswordMemberNeverGrantsOrRecordsSuccess": 1,
+                "wrongOldPasswordNeverWrites": 1,
+                "missingPasswordAccountNeverGrantsOrRecordsSuccess": 1,
+                "disabledWechatMemberCannotReceiveToken": 1,
+                "wrongPasswordNeverGrantsOrRecordsSuccess": 1,
+                "encoderFailureNeverWrites": 1,
+                "passwordGrantRejectionDoesNotRecordSuccessfulLogin": 1,
+                "statusChangedBeforeTokenGrantCannotWriteSuccessLog": 1,
+                "missingTokenLogoutIsIdempotentWithoutIdentityLookup": 1,
+                "missingMemberNeverWrites": 1,
+                "enabledSmsUsesVerifiedIdentityAndRecordsSuccessAfterGrant": 1,
+                "disabledSmsMemberNeverGrantsOrWritesSuccess": 1,
+                "testUpdatePassword_success": 1,
+                "refreshIsMemberTypedAndNeverLogsSuccessfulLogin": 1,
+                "expiredWechatSessionNeverDecryptsOrCreatesToken": 1,
+                "wrongIdentityLogoutNeverRecordsAnyLog": 1
+              },
+              "co.yixiang.yshop.module.member.dal.redis.order.MiniRedisDAOTest": {
+                "refusesPermanentOrNegativeTimeouts": 1,
+                "cachesSessionWithConfiguredTimeout": 1
+              }
+            },
+            "exactNamesChecked": true
+          },
+          "diagnostics": {
+            "runId": "2b813b73c6c441ffb9732c4b08fb5fd8",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "reports": [
+              {
+                "suite": "co.yixiang.yshop.module.member.dal.redis.order.MiniRedisDAOTest",
+                "tests": 2,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.member.service.auth.MemberAuthServiceTest",
+                "tests": 21,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              }
+            ],
+            "failures": [],
+            "missingSuites": []
+          },
+          "seconds": 6.705
+        },
+        {
+          "name": "java-yshop-module-pay-biz",
+          "result": "PASS",
+          "timeoutSeconds": 1800,
+          "exitCode": 0,
+          "evidence": {
+            "runId": "fc8ef7aab5744084989409b1861dbc87",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "result": "PASS",
+            "suites": 6,
+            "tests": 81,
+            "cases": {
+              "co.yixiang.yshop.module.pay.credential.PaymentCredentialDatabaseTest": {
+                "runtimeV3FactoryDisabledByDefaultWithoutCredentialReads": 1,
+                "invalidApiV3KeyLengthRejectedBeforeDatabaseWrite": 1,
+                "apiV3KeyEncryptedBoundAndPreserved": 1,
+                "runtimeSdkReceivesPlaintextWithoutCallingPayment": 1,
+                "migrationRollsBackOnMalformedLaterRecord": 1,
+                "liveBlocksLegacySdkBeforeAnyDatabaseOrCredentialRead": 1,
+                "migrationIsVerifiedIdempotentAndIncludesDeletedRows": 1,
+                "createAndUpdatePreserveOrExplicitlyReplace": 1,
+                "runtimeV3FactoryBuildsSdkFromEncryptedSyntheticMaterialsAndLegacyFailsClosed": 1,
+                "runtimeRejectsLegacyAndDeletedMerchant": 1
+              },
+              "co.yixiang.yshop.module.pay.preflight.LivePaymentMysqlVersionTest": {
+                "supportedMysql(String)[1]": 1,
+                "supportedMysql(String)[2]": 1,
+                "supportedMysql(String)[3]": 1,
+                "supportedMysql(String)[4]": 1,
+                "supportedMysql(String)[5]": 1,
+                "unsupportedMysqlFailsBeforeSchemaReads(String)[1]": 1,
+                "unsupportedMysqlFailsBeforeSchemaReads(String)[2]": 1,
+                "unsupportedMysqlFailsBeforeSchemaReads(String)[3]": 1,
+                "unsupportedMysqlFailsBeforeSchemaReads(String)[4]": 1,
+                "unsupportedMysqlFailsBeforeSchemaReads(String)[5]": 1,
+                "unsupportedMysqlFailsBeforeSchemaReads(String)[6]": 1,
+                "unsupportedMysqlFailsBeforeSchemaReads(String)[7]": 1,
+                "unsupportedMysqlFailsBeforeSchemaReads(String)[8]": 1,
+                "unsupportedMysqlFailsBeforeSchemaReads(String)[9]": 1,
+                "unsupportedMysqlFailsBeforeSchemaReads(String)[10]": 1,
+                "unsupportedMysqlFailsBeforeSchemaReads(String)[11]": 1,
+                "unsupportedMysqlFailsBeforeSchemaReads(String)[12]": 1,
+                "unsupportedMysqlFailsBeforeSchemaReads(String)[13]": 1
+              },
+              "co.yixiang.yshop.module.pay.preflight.LivePaymentPreflightSecurityTest": {
+                "authenticatedWithoutPermissionCannotRead": 1,
+                "existingMerchantQueryPermissionAllowsReadOnlyDiagnostics": 1,
+                "anonymousCannotReadEitherEndpoint": 1
+              },
+              "co.yixiang.yshop.module.pay.credential.MerchantDetailsControllerSecurityTest": {
+                "createEncryptsAtActualEntryAndDoesNotAuditSecrets": 1,
+                "updateEncryptsAtActualEntryAndDoesNotAuditSecrets": 1,
+                "getReturnsStatusOnly": 1,
+                "realUpdateFailureCannotExposeRequestOrExceptionMaterial": 1,
+                "dtoAndDoSerializationAndToStringExcludeMaterial": 1,
+                "pageReturnsStatusOnly": 1,
+                "exportWorkbookContainsNeitherColumnsNorCiphertext": 1,
+                "listReturnsStatusOnly": 1
+              },
+              "co.yixiang.yshop.module.pay.preflight.LivePaymentPreflightTest": {
+                "unencryptedOrMalformedCredentialsFail": 1,
+                "legacyGateOffFailsAndRecoveryRelationshipDetected": 1,
+                "existingGatePropertiesInjectedWithoutEnablingPaymentClients": 1,
+                "missingPrivateKeyFails": 1,
+                "completeSyntheticConfigOfflinePassAndNoLeak": 1,
+                "wrongApiKeyLengthFails": 1,
+                "conflictAndUncertainFailReadiness": 1,
+                "deletedLegacyOrTestMerchantFail": 1,
+                "ingressAndHistoryRequireExplicitEvidence": 1,
+                "missingIdentityFails": 1,
+                "missingSchemaOrUnavailableAuditFails": 1,
+                "historicalEvidenceRequiresReviewButSettledReceiptsAreNotPermanentBlock": 1,
+                "unknownOrStaleClockFails": 1,
+                "missingMerchantMetadataFails(String)[1]": 1,
+                "missingMerchantMetadataFails(String)[2]": 1,
+                "missingMerchantMetadataFails(String)[3]": 1,
+                "missingMerchantMetadataFails(String)[4]": 1,
+                "malformedPublicKeyFails": 1,
+                "wrongMasterKeyFailsSafely": 1,
+                "missingApiV3Fails": 1,
+                "invalidNotifyFails(String)[1]": 1,
+                "invalidNotifyFails(String)[2]": 1,
+                "invalidNotifyFails(String)[3]": 1,
+                "invalidNotifyFails(String)[4]": 1,
+                "invalidNotifyFails(String)[5]": 1,
+                "invalidNotifyFails(String)[6]": 1,
+                "invalidNotifyFails(String)[7]": 1,
+                "invalidNotifyFails(String)[8]": 1
+              },
+              "co.yixiang.yshop.module.pay.credential.PaymentCredentialCryptoServiceTest": {
+                "wrongRecordAad": 1,
+                "envelopeVersion": 1,
+                "missingAndInvalidMasterKeyFailClosed": 1,
+                "blankIsAbsent": 1,
+                "legacyFailsClosed": 1,
+                "tamper": 1,
+                "randomNonce": 1,
+                "identityAndFieldValidation": 1,
+                "roundtrip": 1,
+                "errorsAndToStringContainNoMaterial": 1,
+                "clientCannotInjectCiphertext": 1,
+                "malformedNeverFallsBack": 1,
+                "wrongFieldAad": 1,
+                "wrongMasterKey": 1
+              }
+            },
+            "exactNamesChecked": true
+          },
+          "diagnostics": {
+            "runId": "fc8ef7aab5744084989409b1861dbc87",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "reports": [
+              {
+                "suite": "co.yixiang.yshop.module.pay.credential.MerchantDetailsControllerSecurityTest",
+                "tests": 8,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.pay.credential.PaymentCredentialCryptoServiceTest",
+                "tests": 14,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.pay.credential.PaymentCredentialDatabaseTest",
+                "tests": 10,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.pay.preflight.LivePaymentMysqlVersionTest",
+                "tests": 18,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.pay.preflight.LivePaymentPreflightSecurityTest",
+                "tests": 3,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.pay.preflight.LivePaymentPreflightTest",
+                "tests": 28,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              }
+            ],
+            "failures": [],
+            "missingSuites": []
+          },
+          "seconds": 8.466
+        },
+        {
+          "name": "java-yshop-module-system-biz",
+          "result": "PASS",
+          "timeoutSeconds": 1800,
+          "exitCode": 0,
+          "evidence": {
+            "runId": "4577d9f3a83b4c51b011ca90adcf437a",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "result": "PASS",
+            "suites": 37,
+            "tests": 512,
+            "cases": {
+              "co.yixiang.yshop.module.system.service.dict.DictTypeServiceImplTest": {
+                "testGetDictType_id": 1,
+                "testValidateDictDataExists_notExists": 1,
+                "testValidateDictTypeUnique_valueDuplicateForUpdate": 1,
+                "testDeleteDictType_hasChildren": 1,
+                "testGetDictType_type": 1,
+                "testDeleteDictType_success": 1,
+                "testUpdateDictType_success": 1,
+                "testGetDictTypeList": 1,
+                "testGetDictTypePage": 1,
+                "testValidateDictTypNameUnique_success": 1,
+                "testValidateDictTypeNameUnique_nameDuplicateForCreate": 1,
+                "testValidateDictDataExists_success": 1,
+                "testValidateDictTypeNameUnique_nameDuplicateForUpdate": 1,
+                "testValidateDictTypeUnique_success": 1,
+                "testCreateDictType_success": 1,
+                "testValidateDictTypeUnique_valueDuplicateForCreate": 1
+              },
+              "co.yixiang.yshop.module.system.service.oauth2.OAuth2TokenServiceImplTest": {
+                "revokedFamilyCannotBeAuthorizedFromStaleRedis": 1,
+                "testRefreshAccessToken_clientIdError": 1,
+                "testCheckAccessToken_success": 1,
+                "testCheckAccessToken_expired": 1,
+                "testRefreshAccessToken_null": 1,
+                "logoutRevokesEveryAccessTokenInTheRefreshFamily": 1,
+                "disabledMemberCannotRefreshAnExistingSession": 1,
+                "testRefreshAccessToken_success": 1,
+                "testCheckAccessToken_null": 1,
+                "testRefreshAccessToken_expired": 1,
+                "testGetAccessTokenPage": 1,
+                "nanosecondClockHasExactDatabaseRepresentableExpiry": 1,
+                "testGetAccessToken": 1,
+                "deletedMemberCannotRefreshAnExistingSession": 1,
+                "testCreateAccessToken": 1,
+                "testRemoveAccessToken_null": 1,
+                "testRemoveAccessToken_success": 1
+              },
+              "co.yixiang.yshop.module.system.service.sms.SmsLogServiceImplTest": {
+                "testCreateSmsLog": 1,
+                "testUpdateSmsReceiveResult": 1,
+                "testGetSmsLogPage": 1,
+                "testUpdateSmsSendResult": 1
+              },
+              "co.yixiang.yshop.module.system.service.sms.SmsTemplateServiceImplTest": {
+                "testGetSmsTemplateCountByChannelId": 1,
+                "testValidateSmsTemplateCodeDuplicate_valueDuplicateForCreate": 1,
+                "testValidateDictDataValueUnique_valueDuplicateForUpdate": 1,
+                "testParseTemplateContentParams": 1,
+                "testGetSmsTemplateByCodeFromCache": 1,
+                "testUpdateSmsTemplate_notExists": 1,
+                "testGetSmsTemplate": 1,
+                "testDeleteSmsTemplate_notExists": 1,
+                "testValidateSmsChannel_disable": 1,
+                "testFormatSmsTemplateContent": 1,
+                "testDeleteSmsTemplate_success": 1,
+                "testGetSmsTemplatePage": 1,
+                "testValidateDictDataValueUnique_success": 1,
+                "testValidateSmsChannel_success": 1,
+                "testCreateSmsTemplate_success": 1,
+                "testUpdateSmsTemplate_success": 1,
+                "testValidateSmsChannel_notExists": 1
+              },
+              "co.yixiang.yshop.module.system.framework.sms.core.client.impl.AliyunSmsClientTest": {
+                "testGetSmsTemplate": 1,
+                "tesSendSms_success": 1,
+                "tesSendSms_fail": 1,
+                "testDoInit": 1,
+                "testConvertSmsTemplateAuditStatus": 1,
+                "testParseSmsReceiveStatus": 1
+              },
+              "co.yixiang.yshop.module.system.service.notify.NotifyMessageServiceImplTest": {
+                "testGetNotifyMessagePage": 1,
+                "testGetNotifyMessage": 1,
+                "testUpdateAllNotifyMessageRead": 1,
+                "testUpdateNotifyMessageRead": 1,
+                "testGetUnreadNotifyMessageCount": 1,
+                "testGetUnreadNotifyMessageList": 1,
+                "testGetMyNotifyMessagePage": 1,
+                "testCreateNotifyMessage_success": 1
+              },
+              "co.yixiang.yshop.module.system.service.oauth2.OAuth2LifecycleDatabaseTest": {
+                "adminRevocationFailureRollsBackStatusAndCredentials": 1,
+                "disabledAndDeletedMemberCannotRefreshOrUseOldTokens": 1,
+                "actualApiRefreshChecksCurrentMemberAndCanonicalIdentity": 1,
+                "issuanceAndCacheDoNotEscapeDatabaseRollback": 1,
+                "logoutRevokesStaleRemoteCacheAndBothCredentials": 1,
+                "adminDisableReenableCannotResurrectOldCredentials": 1,
+                "disabledPrincipalCannotCreateNewAccessOrRefresh": 1,
+                "directStatusOrDeletionEvidenceFailsClosedWithoutCacheInvalidation": 1,
+                "invalidExpiredClientAndUserTypeCannotAlterFamily": 1,
+                "oldRotatedTokenLogoutRevokesTheCurrentFamily": 1,
+                "twentyRefreshesHaveOnlyOneCurrentAccessAcrossInstances": 20,
+                "realRequestFilterRejectsWrongUserTypeAndRevokedIdentity": 1,
+                "actualApiOverloadsAndRevokeKeepCanonicalMemberIdentity": 1,
+                "logoutAndRefreshRaceEndsWithNoUsableCredentials": 20,
+                "disableAndRefreshRaceEndsWithNoUsableCredentials": 20
+              },
+              "co.yixiang.yshop.module.system.service.mail.MailSendServiceImplTest": {
+                "testSendSingleMailToMember": 1,
+                "testSendSingleMail_successWhenSmsTemplateDisable": 1,
+                "testValidateMailTemplateValid_notExists": 1,
+                "testDoSendMail_success": 1,
+                "testSendSingleMail_successWhenMailTemplateEnable": 1,
+                "testValidateMail_notExists": 1,
+                "testSendSingleMailToAdmin": 1,
+                "testDoSendMail_exception": 1,
+                "testValidateTemplateParams_paramMiss": 1
+              },
+              "co.yixiang.yshop.module.system.service.oauth2.OAuth2ClientServiceImplTest": {
+                "testDeleteOAuth2Client_notExists": 1,
+                "testCreateOAuth2Client_success": 1,
+                "testUpdateOAuth2Client_success": 1,
+                "testValidateClientIdExists_withId": 1,
+                "testUpdateOAuth2Client_notExists": 1,
+                "testGetOAuth2ClientFromCache": 1,
+                "testDeleteOAuth2Client_success": 1,
+                "testGetOAuth2ClientPage": 1,
+                "testValidOAuthClientFromCache": 1,
+                "testValidateClientIdExists_noId": 1,
+                "testGetOAuth2Client": 1
+              },
+              "co.yixiang.yshop.module.system.service.dept.PostServiceImplTest": {
+                "testGetPostList": 1,
+                "testGetPostPage": 1,
+                "testGetPostList_idsAndStatus": 1,
+                "testValidatePostList_notEnable": 1,
+                "testValidatePost_codeDuplicateForUpdate": 1,
+                "testValidatePostList_notFound": 1,
+                "testValidatePostList_success": 1,
+                "testValidatePost_notFoundForDelete": 1,
+                "testValidatePost_nameDuplicateForCreate": 1,
+                "testGetPost": 1,
+                "testCreatePost_success": 1,
+                "testDeletePost_success": 1,
+                "testUpdatePost_success": 1
+              },
+              "co.yixiang.yshop.module.system.service.logger.OperateLogServiceImplTest": {
+                "testGetOperateLogPage_vo": 1,
+                "testCreateOperateLog": 1,
+                "testGetOperateLogPage_dto": 1
+              },
+              "co.yixiang.yshop.module.system.service.logger.LoginLogServiceImplTest": {
+                "testGetLoginLogPage": 1,
+                "testCreateLoginLog": 1
+              },
+              "co.yixiang.yshop.module.system.service.sms.SmsChannelServiceTest": {
+                "testUpdateSmsChannel_notExists": 1,
+                "testCreateSmsChannel_success": 1,
+                "testDeleteSmsChannel_success": 1,
+                "testDeleteSmsChannel_notExists": 1,
+                "testGetSmsClient_id": 1,
+                "testGetSmsClient_code": 1,
+                "testGetSmsChannelList": 1,
+                "testGetSmsChannelPage": 1,
+                "testUpdateSmsChannel_success": 1,
+                "testDeleteSmsChannel_hasChildren": 1,
+                "testGetSmsChannel": 1
+              },
+              "co.yixiang.yshop.module.system.service.permission.RoleServiceImplTest": {
+                "testValidateUpdateRole_systemRoleCanNotBeUpdate": 1,
+                "testGetRoleListByStatus": 1,
+                "testValidateRoleList_notFound": 1,
+                "testUpdateRoleDataScope": 1,
+                "testGetRoleFromCache": 1,
+                "testGetRoleListFromCache": 1,
+                "testValidateRoleDuplicate_success": 1,
+                "testUpdateRole": 1,
+                "testValidateRoleDuplicate_codeDuplicate": 1,
+                "testValidateRoleList_notEnable": 1,
+                "testGetRole": 1,
+                "testValidateRoleDuplicate_nameDuplicate": 1,
+                "testCreateRole": 1,
+                "testHasAnySuperAdmin_true": 1,
+                "testHasAnySuperAdmin_false": 1,
+                "testGetRoleList_ids": 1,
+                "testDeleteRole": 1,
+                "testGetRoleList": 1,
+                "testGetRolePage": 1,
+                "testValidateUpdateRole_roleIdNotExist": 1,
+                "testValidateRoleList_success": 1,
+                "testValidateUpdateRole_success": 1
+              },
+              "co.yixiang.yshop.module.system.service.permission.MenuServiceImplTest": {
+                "testValidateParentMenu_success": 1,
+                "testValidateMenu_sonMenuNameDuplicate": 1,
+                "testValidateMenu_success": 1,
+                "testGetMenu": 1,
+                "testCreateMenu_success": 1,
+                "testValidateParentMenu_canNotSetSelfToBeParent": 1,
+                "testDeleteMenu_success": 1,
+                "testUpdateMenu_sonIdNotExist": 1,
+                "testGetMenuList": 1,
+                "testDeleteMenu_menuNotExist": 1,
+                "testUpdateMenu_success": 1,
+                "testDeleteMenu_existChildren": 1,
+                "testValidateParentMenu_parentNotExist": 1,
+                "testGetMenuList_all": 1,
+                "testGetMenuList_ids": 1,
+                "testGetMenuIdListByPermissionFromCache": 1,
+                "testGetMenuListByTenant": 1,
+                "testValidateParentMenu_parentTypeError": 1
+              },
+              "co.yixiang.yshop.module.system.service.dept.DeptServiceImplTest": {
+                "testValidateParentDept_parentError": 1,
+                "testValidateNameUnique_duplicate": 1,
+                "testValidateParentDept_parentIsChild": 1,
+                "testValidateDeptList_notEnable": 1,
+                "testUpdateDept": 1,
+                "testGetDept": 1,
+                "testGetChildDeptListFromCache": 1,
+                "testValidateDeptList_success": 1,
+                "testValidateDeptList_notFound": 1,
+                "testGetChildDeptList": 1,
+                "testCreateDept": 1,
+                "testGetDeptList_reqVO": 1,
+                "testValidateDeptExists_notFound": 1,
+                "testDeleteDept_exitsChildren": 1,
+                "testDeleteDept_success": 1,
+                "testGetDeptList_ids": 1
+              },
+              "co.yixiang.yshop.module.system.service.mail.MailAccountServiceImplTest": {
+                "testUpdateMailAccount_notExists": 1,
+                "testDeleteMailAccount_success": 1,
+                "testGetMailAccountList": 1,
+                "testGetMailAccountPage": 1,
+                "testCreateMailAccount_success": 1,
+                "testDeleteMailAccount_notExists": 1,
+                "testUpdateMailAccount_success": 1,
+                "testGetMailAccount": 1,
+                "testGetMailAccountFromCache": 1
+              },
+              "co.yixiang.yshop.module.system.service.notify.NotifyTemplateServiceImplTest": {
+                "testGetNotifyTemplate": 1,
+                "testFormatNotifyTemplateContent": 1,
+                "testDeleteNotifyTemplate_notExists": 1,
+                "testCreateNotifyTemplate_success": 1,
+                "testUpdateNotifyTemplate_notExists": 1,
+                "testDeleteNotifyTemplate_success": 1,
+                "testGetNotifyTemplatePage": 1,
+                "testGetNotifyTemplateByCodeFromCache": 1,
+                "testUpdateNotifyTemplate_success": 1
+              },
+              "co.yixiang.yshop.module.system.service.social.SocialClientServiceImplTest": {
+                "testGetAuthorizeUrl": 1,
+                "testDeleteSocialClient_success": 1,
+                "testCreateWxMpJsapiSignature": 1,
+                "testGetWxMaPhoneNumberInfo_success": 1,
+                "testBuildAuthRequest_clientNull": 1,
+                "testGetWxMpService_clientEnable": 1,
+                "testGetSocialClient": 1,
+                "testDeleteSocialClient_notExists": 1,
+                "testBuildAuthRequest_clientEnable": 1,
+                "testBuildAuthRequest_clientDisable": 1,
+                "testGetWxMaService_clientEnable": 1,
+                "testAuthSocialUser_fail": 1,
+                "testGetWxMaService_clientNull": 1,
+                "testUpdateSocialClient_notExists": 1,
+                "testGetWxMpService_clientNull": 1,
+                "testGetSocialClientPage": 1,
+                "testGetWxMpService_clientDisable": 1,
+                "testAuthSocialUser_success": 1,
+                "testGetWxMaPhoneNumberInfo_exception": 1,
+                "testCreateSocialClient_success": 1,
+                "testGetWxMaService_clientDisable": 1,
+                "testUpdateSocialClient_success": 1
+              },
+              "co.yixiang.yshop.module.system.controller.admin.oauth2.OAuth2OpenControllerTest": {
+                "testApproveOrDeny_grantTypeError": 1,
+                "testApproveOrDeny_autoApproveNo": 1,
+                "testPostAccessToken_authorizationCode": 1,
+                "testPostAccessToken_refreshToken": 1,
+                "testCheckToken": 1,
+                "testRevokeToken": 1,
+                "testPostAccessToken_implicit": 1,
+                "testApproveOrDeny_autoApproveWithToken": 1,
+                "testApproveOrDeny_approveWithCode": 1,
+                "testPostAccessToken_password": 1,
+                "testApproveOrDeny_ApproveNo": 1,
+                "testAuthorize": 1
+              },
+              "co.yixiang.yshop.module.system.service.oauth2.OAuth2CodeServiceImplTest": {
+                "testConsumeAuthorizationCode_null": 1,
+                "testConsumeAuthorizationCode_success": 1,
+                "testConsumeAuthorizationCode_expired": 1,
+                "testCreateAuthorizationCode": 1
+              },
+              "co.yixiang.yshop.module.system.service.user.AdminUserServiceImplTest": {
+                "testCreatUser_max": 1,
+                "testUpdateUserPassword_success": 1,
+                "testGetUserListByStatus": 1,
+                "testValidateUserExists_notExists": 1,
+                "testValidateUserList_notEnable": 1,
+                "testGetUserListByDeptIds": 1,
+                "testValidateOldPassword_notExists": 1,
+                "testUpdateUserStatus": 1,
+                "testValidateMobileUnique_mobileExistsForCreate": 1,
+                "testUserListByPostIds": 1,
+                "testGetUser": 1,
+                "testUpdateUserAvatar_success": 1,
+                "testImportUserList_01": 1,
+                "testImportUserList_02": 1,
+                "testImportUserList_03": 1,
+                "testImportUserList_04": 1,
+                "testValidateMobileUnique_mobileExistsForUpdate": 1,
+                "testValidateUsernameUnique_usernameExistsForCreate": 1,
+                "testGetUserMap": 1,
+                "testGetUserListByNickname": 1,
+                "testGetUserByUsername": 1,
+                "testValidateUsernameUnique_usernameExistsForUpdate": 1,
+                "testUpdateUserPassword02_success": 1,
+                "testCreatUser_success": 1,
+                "testValidateUserList_notFound": 1,
+                "testValidateOldPassword_passwordFailed": 1,
+                "testDeleteUser_success": 1,
+                "testUpdateUserProfile_success": 1,
+                "testGetUserList": 1,
+                "testGetUserPage": 1,
+                "testUpdateUser_success": 1,
+                "testValidateEmailUnique_emailExistsForCreate": 1,
+                "testUpdateUserLogin": 1,
+                "testValidateEmailUnique_emailExistsForUpdate": 1,
+                "testValidateUserList_success": 1,
+                "testGetUserByMobile": 1
+              },
+              "co.yixiang.yshop.module.system.service.tenant.TenantPackageServiceImplTest": {
+                "testDeleteTenantPackage_used": 1,
+                "testDeleteTenantPackage_notExists": 1,
+                "testUpdateTenantPackage_success": 1,
+                "testUpdateTenantPackage_notExists": 1,
+                "testDeleteTenantPackage_success": 1,
+                "testValidTenantPackage_notExists": 1,
+                "testGetTenantPackage": 1,
+                "testGetTenantPackageListByStatus": 1,
+                "testCreateTenantPackage_success": 1,
+                "testValidTenantPackage_disable": 1,
+                "testGetTenantPackagePage": 1,
+                "testValidTenantPackage_success": 1
+              },
+              "co.yixiang.yshop.module.system.service.social.SocialUserServiceImplTest": {
+                "testUnbindSocialUser_success": 1,
+                "testGetSocialUser": 1,
+                "testAuthSocialUser_exists": 1,
+                "testAuthSocialUser_insert": 1,
+                "testAuthSocialUser_update": 1,
+                "testGetSocialUser_id": 1,
+                "testAuthSocialUser_notNull": 1,
+                "testGetSocialUserList": 1,
+                "testGetSocialUserPage": 1,
+                "testUnbindSocialUser_notFound": 1,
+                "testBindSocialUser": 1
+              },
+              "co.yixiang.yshop.module.system.service.notice.NoticeServiceImplTest": {
+                "testGetNotice_success": 1,
+                "testDeleteNotice_success": 1,
+                "testGetNoticePage_success": 1,
+                "testValidateNoticeExists_success": 1,
+                "testValidateNoticeExists_noExists": 1,
+                "testUpdateNotice_success": 1,
+                "testCreateNotice_success": 1
+              },
+              "co.yixiang.yshop.module.system.service.oauth2.OAuth2GrantServiceImplTest": {
+                "testGrantRefreshToken": 1,
+                "testRevokeToken_clientIdError": 1,
+                "testGrantClientCredentials": 1,
+                "testGrantPassword": 1,
+                "testGrantAuthorizationCodeForCode": 1,
+                "testGrantImplicit": 1,
+                "testGrantAuthorizationCodeForAccessToken": 1,
+                "testRevokeToken_success": 1
+              },
+              "co.yixiang.yshop.module.system.framework.sms.core.client.impl.TencentSmsClientTest": {
+                "testDoSendSms_success": 1,
+                "testGetSmsTemplate": 1,
+                "testRefresh": 1,
+                "testDoInit": 1,
+                "testConvertSmsTemplateAuditStatus": 1,
+                "testParseSmsReceiveStatus": 1,
+                "testDoSendSms_fail": 1
+              },
+              "co.yixiang.yshop.module.system.service.tenant.TenantServiceImplTest": {
+                "testGetTenantListByPackageId": 1,
+                "testGetTenantCountByPackageId": 1,
+                "testValidTenant_disable": 1,
+                "testCreateTenant": 1,
+                "testHandleTenantMenu_normal": 1,
+                "testUpdateTenant_success": 1,
+                "testHandleTenantMenu_system": 1,
+                "testValidTenant_success": 1,
+                "testGetTenantByName": 1,
+                "testDeleteTenant_notExists": 1,
+                "testUpdateTenant_notExists": 1,
+                "testGetTenantIdList": 1,
+                "testValidTenant_expired": 1,
+                "testDeleteTenant_success": 1,
+                "testGetTenantPage": 1,
+                "testValidTenant_notExists": 1,
+                "testHandleTenantMenu_disable": 1,
+                "testHandleTenantInfo_disable": 1,
+                "testGetTenant": 1,
+                "testHandleTenantInfo_success": 1,
+                "testDeleteTenant_system": 1,
+                "testGetTenantByWebsite": 1,
+                "testUpdateTenant_system": 1
+              },
+              "co.yixiang.yshop.module.system.service.sms.SmsCodeServiceImplTest": {
+                "testUseSmsCode_success": 1,
+                "sendSmsCode_success": 1,
+                "validateSmsCode_success": 1,
+                "sendSmsCode_tooFast": 1,
+                "validateSmsCode_notFound": 1,
+                "sendSmsCode_exceedDay": 1,
+                "validateSmsCode_expired": 1,
+                "validateSmsCode_used": 1
+              },
+              "co.yixiang.yshop.module.system.service.dict.DictDataServiceImplTest": {
+                "testValidateDictDataExists_notExists": 1,
+                "testValidateDictDataValueUnique_valueDuplicateForUpdate": 1,
+                "testValidateDictDataList_success": 1,
+                "testValidateDictDataList_notEnable": 1,
+                "testGetDictDataCountByDictType": 1,
+                "testValidateDictTypeExists_success": 1,
+                "testDeleteDictData_success": 1,
+                "testUpdateDictData_success": 1,
+                "testValidateDictDataValueUnique_success": 1,
+                "testValidateDictDataExists_success": 1,
+                "testParseDictData": 1,
+                "testGetDictData": 1,
+                "testGetDictData_dictType": 1,
+                "testValidateDictDataList_notFound": 1,
+                "testValidateDictDataValueUnique_valueDuplicateForCreate": 1,
+                "testValidateDictTypeExists_notEnable": 1,
+                "testCreateDictData_success": 1,
+                "testValidateDictTypeExists_notExists": 1,
+                "testGetDictDataList": 1,
+                "testGetDictDataPage": 1
+              },
+              "co.yixiang.yshop.module.system.service.notify.NotifySendServiceImplTest": {
+                "testCheckMailTemplateValid_notExists": 1,
+                "testSendSingleMail_successWhenSmsTemplateDisable": 1,
+                "testCheckTemplateParams_paramMiss": 1,
+                "testSendSingleNotifyToMember": 1,
+                "testSendSingleNotifyToAdmin": 1,
+                "testSendSingleNotify_successWhenMailTemplateEnable": 1,
+                "testSendBatchNotify": 1
+              },
+              "co.yixiang.yshop.module.system.service.oauth2.OAuth2ApproveServiceImplTest": {
+                "checkForPreApproval_reject": 1,
+                "checkForPreApproval_approve": 1,
+                "testGetApproveList": 1,
+                "testUpdateAfterApproval_reject": 1,
+                "testSaveApprove_insert": 1,
+                "testUpdateAfterApproval_approved": 1,
+                "testSaveApprove_update": 1,
+                "testUpdateAfterApproval_none": 1,
+                "checkForPreApproval_clientAutoApprove": 1
+              },
+              "co.yixiang.yshop.module.system.service.permission.PermissionServiceTest": {
+                "testGetMenuRoleIdListByMenuIdFromCache": 1,
+                "testGetUserRoleIdsFromCache": 1,
+                "testGetUserRoleIdListByUserIdFromCache": 1,
+                "testHasAnyPermissions_superAdmin": 1,
+                "testProcessRoleDeleted": 1,
+                "testGetDeptDataPermission_All": 1,
+                "testHasAnyPermissions_normal": 1,
+                "testProcessMenuDeleted": 1,
+                "testAssignRoleMenu": 1,
+                "testAssignUserRole": 1,
+                "testGetDeptDataPermission_DeptOnly": 1,
+                "testGetUserRoleIdListByRoleId": 1,
+                "testGetUserRoleIdListByUserId": 1,
+                "testAssignRoleDataScope": 1,
+                "testGetRoleMenuIds_superAdmin": 1,
+                "testGetRoleMenuIds_normal": 1,
+                "testGetDeptDataPermission_DeptAndChild": 1,
+                "testGetDeptDataPermission_Self": 1,
+                "testGetDeptDataPermission_DeptCustom": 1,
+                "testHasAnyRoles": 1,
+                "testProcessUserDeleted": 1,
+                "testGetEnableUserRoleListByUserIdFromCache": 1
+              },
+              "co.yixiang.yshop.module.system.service.sms.SmsSendServiceImplTest": {
+                "testSendSingleSmsToUser": 1,
+                "testSendSingleSms_successWhenSmsTemplateEnable": 1,
+                "testCheckSmsTemplateValid_notExists": 1,
+                "testCheckMobile_notExists": 1,
+                "testReceiveSmsStatus": 1,
+                "testSendSingleSmsToAdmin": 1,
+                "testDoSendSms": 1,
+                "testBuildTemplateParams_paramMiss": 1,
+                "testSendSingleSms_successWhenSmsTemplateDisable": 1,
+                "testSendBatchNotify": 1
+              },
+              "co.yixiang.yshop.module.system.service.auth.AdminAuthServiceImplTest": {
+                "testAuthenticate_userDisabled": 1,
+                "testAuthenticate_success": 1,
+                "testValidateCaptcha_successWithEnable": 1,
+                "testAuthenticate_userNotFound": 1,
+                "testSmsLogin_success": 1,
+                "testLogout_success": 1,
+                "testCaptcha_fail": 1,
+                "testValidateCaptcha_successWithDisable": 1,
+                "testAuthenticate_badCredentials": 1,
+                "testRefreshToken": 1,
+                "testValidateCaptcha_constraintViolationException": 1,
+                "testLogout_fail": 1,
+                "testSendSmsCode": 1,
+                "testLogin_success": 1,
+                "testSocialLogin_success": 1
+              },
+              "co.yixiang.yshop.module.system.service.mail.MailLogServiceImplTest": {
+                "testUpdateMailSendResult_exception": 1,
+                "testGetMailLogPage": 1,
+                "testCreateMailLog": 1,
+                "testUpdateMailSendResult_success": 1,
+                "testGetMailLog": 1
+              },
+              "co.yixiang.yshop.module.system.service.mail.MailTemplateServiceImplTest": {
+                "testGetMailTemplateByCodeFromCache": 1,
+                "testUpdateMailTemplate_notExists": 1,
+                "testCreateMailTemplate_success": 1,
+                "testUpdateMailTemplate_success": 1,
+                "testFormatMailTemplateContent": 1,
+                "testCountByAccountId": 1,
+                "testDeleteMailTemplate_success": 1,
+                "testDeleteMailTemplate_notExists": 1,
+                "testGetMailTemplateList": 1,
+                "testGetMailTemplatePage": 1,
+                "testGetMailTemplate": 1
+              }
+            },
+            "exactNamesChecked": true
+          },
+          "diagnostics": {
+            "runId": "4577d9f3a83b4c51b011ca90adcf437a",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+            "reports": [
+              {
+                "suite": "co.yixiang.yshop.module.system.controller.admin.oauth2.OAuth2OpenControllerTest",
+                "tests": 12,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.framework.sms.core.client.impl.AliyunSmsClientTest",
+                "tests": 6,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.framework.sms.core.client.impl.TencentSmsClientTest",
+                "tests": 7,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.auth.AdminAuthServiceImplTest",
+                "tests": 15,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.dept.DeptServiceImplTest",
+                "tests": 16,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.dept.PostServiceImplTest",
+                "tests": 13,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.dict.DictDataServiceImplTest",
+                "tests": 20,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.dict.DictTypeServiceImplTest",
+                "tests": 16,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.logger.LoginLogServiceImplTest",
+                "tests": 2,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.logger.OperateLogServiceImplTest",
+                "tests": 3,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.mail.MailAccountServiceImplTest",
+                "tests": 9,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.mail.MailLogServiceImplTest",
+                "tests": 5,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.mail.MailSendServiceImplTest",
+                "tests": 9,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.mail.MailTemplateServiceImplTest",
+                "tests": 11,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.notice.NoticeServiceImplTest",
+                "tests": 7,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.notify.NotifyMessageServiceImplTest",
+                "tests": 8,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.notify.NotifySendServiceImplTest",
+                "tests": 7,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.notify.NotifyTemplateServiceImplTest",
+                "tests": 9,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.oauth2.OAuth2ApproveServiceImplTest",
+                "tests": 9,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.oauth2.OAuth2ClientServiceImplTest",
+                "tests": 11,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.oauth2.OAuth2CodeServiceImplTest",
+                "tests": 4,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.oauth2.OAuth2GrantServiceImplTest",
+                "tests": 8,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.oauth2.OAuth2LifecycleDatabaseTest",
+                "tests": 72,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.oauth2.OAuth2TokenServiceImplTest",
+                "tests": 17,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.permission.MenuServiceImplTest",
+                "tests": 18,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.permission.PermissionServiceTest",
+                "tests": 22,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.permission.RoleServiceImplTest",
+                "tests": 22,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.sms.SmsChannelServiceTest",
+                "tests": 11,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.sms.SmsCodeServiceImplTest",
+                "tests": 8,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.sms.SmsLogServiceImplTest",
+                "tests": 4,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.sms.SmsSendServiceImplTest",
+                "tests": 10,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.sms.SmsTemplateServiceImplTest",
+                "tests": 17,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.social.SocialClientServiceImplTest",
+                "tests": 22,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.social.SocialUserServiceImplTest",
+                "tests": 11,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.tenant.TenantPackageServiceImplTest",
+                "tests": 12,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.tenant.TenantServiceImplTest",
+                "tests": 23,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              },
+              {
+                "suite": "co.yixiang.yshop.module.system.service.user.AdminUserServiceImplTest",
+                "tests": 36,
+                "failures": 0,
+                "errors": 0,
+                "skipped": 0
+              }
+            ],
+            "failures": [],
+            "missingSuites": []
+          },
+          "seconds": 15.878
+        }
+      ],
+      "paymentRequests": {
+        "value": null,
+        "evidence": "NOT_MEASURED_BY_DISPATCHER"
       },
-      {
-        "name": "admin creates two store products with distinct prices",
-        "result": "PASS"
-      },
-      {
-        "name": "price edit leaves other store price unchanged",
-        "result": "PASS"
-      },
-      {
-        "name": "staff cannot read store B product",
-        "result": "PASS"
-      },
-      {
-        "name": "coupon retry grants one right",
-        "result": "PASS"
-      },
-      {
-        "name": "SKU label roundtrips UTF8",
-        "result": "PASS"
-      },
-      {
-        "name": "lost response same-key retry keeps one unpaid order",
-        "result": "PASS"
-      },
-      {
-        "name": "server price and topping minus coupon unpaid",
-        "result": "PASS"
-      },
-      {
-        "name": "member sees pending order",
-        "result": "PASS"
-      },
-      {
-        "name": "other member cannot read order",
-        "result": "PASS"
-      },
-      {
-        "name": "authorized staff reads store A order",
-        "result": "PASS"
-      },
-      {
-        "name": "staff cannot read store B order",
-        "result": "PASS"
-      },
-      {
-        "name": "cancel retry restores inventory once",
-        "result": "PASS"
-      },
-      {
-        "name": "cancel restores coupon once",
-        "result": "PASS"
-      },
-      {
-        "name": "disabled member refresh denied",
-        "result": "PASS"
-      },
-      {
-        "name": "disabled member login denied",
-        "result": "PASS"
-      },
-      {
-        "name": "disable/refresh never add successful login logs",
-        "result": "PASS"
-      },
-      {
-        "name": "re-enable cannot resurrect revoked refresh",
-        "result": "PASS"
-      },
-      {
-        "name": "HTTP logout revokes refresh",
-        "result": "PASS"
-      },
-      {
-        "name": "all orders unpaid",
-        "result": "PASS"
-      },
-      {
-        "name": "financial tables untouched",
-        "result": "PASS"
-      },
-      {
-        "name": "issued tokens absent from backend log",
-        "result": "PASS"
+      "realFinancialOperations": {
+        "value": 0,
+        "evidence": "DECLARED_SYNTHETIC_ONLY"
       }
-    ],
-    "httpRequests": 30,
-    "paymentRequests": {
-      "value": 0,
-      "evidence": "MEASURED_THIS_HTTP_HARNESS_ONLY",
-      "globalNetworkMeasured": false
     },
-    "resources": {
-      "containersRemoved": 2,
-      "anonymousVolumesRemoved": 2,
-      "ownershipChecked": true
-    }
-  },
-  "mini": {
-    "result": "PASS",
-    "scope": "actual official simulator; own disposable MySQL/Redis/backend; synthetic password session",
-    "checks": [
-      {
-        "name": "backend ownership verified",
-        "result": "PASS"
+    "quick": {
+      "runId": "0231c0416e4a460fa2c3c405b13f84b8",
+      "sourceUnchanged": true,
+      "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+      "sourceDigest": "34100cee33878ded2601d34a14dca5fd3df84bf68481097c22717f563f21a159",
+      "result": "PASS",
+      "steps": [
+        {
+          "name": "node-0",
+          "result": "PASS",
+          "timeoutSeconds": 180,
+          "exitCode": 0,
+          "evidence": {
+            "tests": 2,
+            "pass": 2,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0
+          },
+          "seconds": 0.085
+        },
+        {
+          "name": "node-1",
+          "result": "PASS",
+          "timeoutSeconds": 180,
+          "exitCode": 0,
+          "evidence": {
+            "tests": 17,
+            "pass": 17,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0
+          },
+          "seconds": 0.09
+        },
+        {
+          "name": "node-2",
+          "result": "PASS",
+          "timeoutSeconds": 180,
+          "exitCode": 0,
+          "evidence": {
+            "tests": 11,
+            "pass": 11,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0
+          },
+          "seconds": 0.088
+        },
+        {
+          "name": "node-3",
+          "result": "PASS",
+          "timeoutSeconds": 180,
+          "exitCode": 0,
+          "evidence": {
+            "tests": 13,
+            "pass": 13,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0
+          },
+          "seconds": 0.091
+        },
+        {
+          "name": "node-4",
+          "result": "PASS",
+          "timeoutSeconds": 180,
+          "exitCode": 0,
+          "evidence": {
+            "tests": 4,
+            "pass": 4,
+            "fail": 0,
+            "cancelled": 0,
+            "skipped": 0,
+            "todo": 0
+          },
+          "seconds": 0.085
+        },
+        {
+          "name": "python-0",
+          "result": "PASS",
+          "timeoutSeconds": 180,
+          "exitCode": 0,
+          "evidence": {
+            "tests": 43
+          },
+          "diagnostics": {
+            "asset": "/Users/sur/Documents/Codex/iPeony/.worktrees/phase6q/tests/quality/test_evidence.py",
+            "failures": [],
+            "exceptionTypes": []
+          },
+          "seconds": 15.72
+        },
+        {
+          "name": "python-1",
+          "result": "PASS",
+          "timeoutSeconds": 180,
+          "exitCode": 0,
+          "evidence": {
+            "tests": 3
+          },
+          "diagnostics": {
+            "asset": "/Users/sur/Documents/Codex/iPeony/.worktrees/phase6q/tests/quality/test_secret_guard.py",
+            "failures": [],
+            "exceptionTypes": []
+          },
+          "seconds": 0.261
+        },
+        {
+          "name": "python-2",
+          "result": "PASS",
+          "timeoutSeconds": 180,
+          "exitCode": 0,
+          "evidence": {
+            "tests": 16
+          },
+          "diagnostics": {
+            "asset": "/Users/sur/Documents/Codex/iPeony/.worktrees/phase6q/tests/quality/test_owned_resources.py",
+            "failures": [],
+            "exceptionTypes": []
+          },
+          "seconds": 0.082
+        },
+        {
+          "name": "python-3",
+          "result": "PASS",
+          "timeoutSeconds": 180,
+          "exitCode": 0,
+          "evidence": {
+            "tests": 4
+          },
+          "diagnostics": {
+            "asset": "/Users/sur/Documents/Codex/iPeony/.worktrees/phase6q/tests/smoke/test_secret_scan.py",
+            "failures": [],
+            "exceptionTypes": []
+          },
+          "seconds": 0.54
+        },
+        {
+          "name": "python-4",
+          "result": "PASS",
+          "timeoutSeconds": 180,
+          "exitCode": 0,
+          "evidence": {
+            "tests": 26
+          },
+          "diagnostics": {
+            "asset": "/Users/sur/Documents/Codex/iPeony/.worktrees/phase6q/tests/payment/prepayment-tools-test.py",
+            "failures": [],
+            "exceptionTypes": []
+          },
+          "seconds": 0.375
+        }
+      ],
+      "paymentRequests": {
+        "value": null,
+        "evidence": "NOT_MEASURED_BY_DISPATCHER"
       },
-      {
-        "name": "cold boot transport/login guard really installed",
-        "result": "PASS"
-      },
-      {
-        "name": "homepage renders synthetic member",
-        "result": "PASS"
-      },
-      {
-        "name": "two owned stores visible",
-        "result": "PASS"
-      },
-      {
-        "name": "store catalog visible",
-        "result": "PASS"
-      },
-      {
-        "name": "real page selected SKU and topping in own cart",
-        "result": "PASS"
-      },
-      {
-        "name": "cart renders one selected item",
-        "result": "PASS"
-      },
-      {
-        "name": "cart quantity two for coupon threshold",
-        "result": "PASS"
-      },
-      {
-        "name": "checkout payment control frozen",
-        "result": "PASS"
-      },
-      {
-        "name": "coupon selected through actual page",
-        "result": "PASS"
-      },
-      {
-        "name": "lost response preserves checkout and idempotency key",
-        "result": "PASS"
-      },
-      {
-        "name": "actual submit opens unpaid order detail",
-        "result": "PASS"
-      },
-      {
-        "name": "actual cancel returns order list",
-        "result": "PASS"
-      },
-      {
-        "name": "local API successful; payment admission count zero",
-        "result": "PASS"
+      "realFinancialOperations": {
+        "value": 0,
+        "evidence": "DECLARED_SYNTHETIC_ONLY"
       }
-    ],
-    "paymentRequests": {
-      "value": 0,
-      "evidence": "MEASURED_GUARDED_WX_REQUEST_AND_REQUESTPAYMENT_FROM_COLD_BOOT",
-      "globalNetworkMeasured": false
     },
-    "counters": {
-      "paymentRequests": 0,
-      "blocked": 0,
-      "requests": 14,
-      "localApiSuccess": 13,
-      "lostResponses": 1
+    "controlledMac": {
+      "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+      "sourceDigest": "d89b07204bd73f21e2e74221091984b081b065f8f66d18ba9d523bf97bfea57b",
+      "runId": "95c315ef66b045c988140181bb30c096",
+      "result": "PASS",
+      "cleanup": "PASS",
+      "steps": [
+        {
+          "name": "mysql-business",
+          "result": "PASS",
+          "exitCode": 0,
+          "evidence": {
+            "runId": "3ded89aedb0f4870824f1b545fed6f91",
+            "tests": 490,
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "d89b07204bd73f21e2e74221091984b081b065f8f66d18ba9d523bf97bfea57b",
+            "cleanup": "PASS"
+          }
+        },
+        {
+          "name": "mysql-financial",
+          "result": "PASS",
+          "exitCode": 0,
+          "evidence": {
+            "runId": "86dae84d4cf34bfa89bc878af08ee3c6",
+            "tests": 497,
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "d89b07204bd73f21e2e74221091984b081b065f8f66d18ba9d523bf97bfea57b",
+            "cleanup": "PASS"
+          }
+        },
+        {
+          "name": "mysql-auth",
+          "result": "PASS",
+          "exitCode": 0,
+          "evidence": {
+            "tests": 72,
+            "cleanup": "PASS"
+          }
+        },
+        {
+          "name": "redis",
+          "result": "PASS",
+          "exitCode": 0,
+          "evidence": {
+            "runId": "e3d4f54c88af4f1faf285b1a6b7ea1f9",
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "d89b07204bd73f21e2e74221091984b081b065f8f66d18ba9d523bf97bfea57b",
+            "result": "PASS",
+            "suites": 1,
+            "tests": 66,
+            "cases": {
+              "co.yixiang.yshop.module.order.ordering.CouponCodeRedisAcceptanceTest": {
+                "naturalWindowExpiryAllowsBoundedRetryAndRejectedCallsDoNotExtendTtl": 1,
+                "actualClientShutdownFailsClosedWithoutClaim": 1,
+                "rotatingOnlyRequestKeysCannotBypass": 20,
+                "twentyMembersNormallyRedeemBehindOneNat": 1,
+                "hourlyBudgetSurvivesMinuteExpiryAndOtherInstances": 1,
+                "fullLengthPredictableGuessesStillShareMemberLimit": 20,
+                "ipLimitCannotBeBypassedByChangingMembersOrForwardedHeader": 1,
+                "twentyDifferentWrongCodesAndKeysAcrossTwoInstances": 20,
+                "legacyShortCodeHasSharedDailyQuotaWithoutDisablingCompatibility": 1
+              }
+            },
+            "exactNamesChecked": true
+          }
+        },
+        {
+          "name": "synthetic-tls",
+          "result": "PASS",
+          "exitCode": 0,
+          "evidence": {
+            "runId": "3688860602194ea3ad587989da964acc",
+            "tests": 10,
+            "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+            "sourceDigest": "d89b07204bd73f21e2e74221091984b081b065f8f66d18ba9d523bf97bfea57b",
+            "cleanup": "PASS"
+          }
+        }
+      ],
+      "scope": "owned Docker MySQL/Redis/auth/synthetic HTTPS; GUI/Mini excluded",
+      "paymentRequests": {
+        "value": 0,
+        "evidence": "DECLARED_SYNTHETIC_TRANSPORT_ONLY",
+        "globalNetworkMeasured": false
+      },
+      "resources": {
+        "containersRemoved": 2,
+        "anonymousVolumesRemoved": 2,
+        "ownershipChecked": true
+      },
+      "sourceUnchanged": true
     },
-    "databaseOracle": {
-      "allOrdersUnpaid": true,
-      "exactlyOneMiniOrderAfterLostResponseRetry": true,
-      "latestOrderCanceled": true,
-      "amountWithTwoToppingsAndCoupon": "31.00",
-      "latestReservationReleased": true,
-      "bothSkuStocksRestoredTo10": true,
-      "couponAvailableReservationCleared": true,
-      "financialFourTablesEmpty": true,
-      "backendOwnerVerified": true
+    "businessHttp": {
+      "owner": "e3d294f488fc4827932c5177a70d108d",
+      "result": "PASS",
+      "cleanup": "PASS",
+      "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+      "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+      "scope": "owned disposable MySQL/Redis/backend HTTP writes",
+      "gui": "NOT_EXECUTED",
+      "mini": "NOT_EXECUTED",
+      "seedInsertRowsCopied": 0,
+      "stage": "ISOLATED_BACKEND_HEALTH",
+      "backendArtifactHash": "8c7689c4fe568a9b90b4633e03d3a2b32e6465857f624c4ed533605beb9202f7",
+      "port": 48883,
+      "backendOwnershipVerified": true,
+      "checks": [
+        {
+          "name": "actual admin/member password login",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "admin creates two store products with distinct prices",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "price edit leaves other store price unchanged",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "staff cannot read store B product",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "coupon retry grants one right",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "SKU label roundtrips UTF8",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "lost response same-key retry keeps one unpaid order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "server price and topping minus coupon unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "member sees pending order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "catalog edit leaves existing order price snapshot unchanged",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "other member cannot read order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "authorized staff reads store A order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "staff cannot read store B order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cancel retry restores inventory once",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cancel restores coupon once",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disabled member refresh denied",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disabled member login denied",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disable/refresh never add successful login logs",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "re-enable cannot resurrect revoked refresh",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "HTTP logout revokes refresh",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "all orders unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "financial tables untouched",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "issued tokens absent from backend log",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process all orders remain unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process issued credentials absent from logs",
+          "result": "PASS",
+          "executed": true
+        }
+      ],
+      "httpRequests": 31,
+      "paymentRequests": {
+        "value": 0,
+        "evidence": "MEASURED_THIS_HTTP_HARNESS_ONLY",
+        "globalNetworkMeasured": false
+      },
+      "multiProcess": {
+        "instances": 2,
+        "rounds": 5,
+        "workers": 20,
+        "httpRequests": 331,
+        "sameJvm": false,
+        "sharedState": "owned MySQL and Redis",
+        "result": "PASS"
+      },
+      "resources": {
+        "containersRemoved": 2,
+        "anonymousVolumesRemoved": 2,
+        "ownershipChecked": true
+      },
+      "sourceUnchanged": true
     },
-    "compiledFixtureHash": "f963f61388aadedbe5f961b7f0817233dd3f141d51947623eeec1639be8f6bdb",
-    "privateHarnessSha256": "5eeb7dfaccb620de85ed92e1787a86f2589e55d4091ec9be031f38b7e58ecb8b",
-    "runtimeJarSha256": "09dfee7b22c534f624d2be1537d4ec17b68a392241f902396a45289266a674f5",
-    "testedCheckoutHead": "9274a5b8f2bf31a501bc735b0a8d3d449c5aebfd",
-    "uniappCompileEvidence": "1c6920069603a2a93980e359693380387ad2b784fe8aab31fc8ed31e0134d199"
-  },
-  "sourceChangeFault": {
-    "owner": "14ec070873d748f2a0d1e23c3cd0bfef",
-    "result": "FAIL",
-    "cleanup": "PASS",
-    "sourceSha": "9274a5b8f2bf31a501bc735b0a8d3d449c5aebfd",
-    "sourceDigest": "2a92df12bbfe2284b5f4ae93dcfed9dd0da1ec3588f7e80bcc951af01bb98ee0",
-    "scope": "owned disposable MySQL/Redis/backend HTTP writes",
-    "gui": "NOT_EXECUTED",
-    "mini": "NOT_EXECUTED",
-    "seedInsertRowsCopied": 0,
-    "stage": "ISOLATED_BACKEND_HEALTH",
-    "port": 48886,
-    "backendOwnershipVerified": true,
-    "checks": [
-      {
-        "name": "actual admin/member password login",
-        "result": "PASS"
+    "javaCoverageOrdinary": {
+      "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+      "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+      "result": "MEASURED",
+      "runId": "1846c118a11d4aefbad84068e14df7ef",
+      "runResult": "PASS",
+      "backendHttpIncluded": false,
+      "scope": "all compiled src/main classes including test infrastructure; high-risk business classes separately, no DTO threshold",
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 260156,
+          "covered": 52879,
+          "percent": 16.89
+        },
+        "BRANCH": {
+          "missed": 41803,
+          "covered": 3111,
+          "percent": 6.93
+        },
+        "LINE": {
+          "missed": 17934,
+          "covered": 8118,
+          "percent": 31.16
+        },
+        "COMPLEXITY": {
+          "missed": 35714,
+          "covered": 5034,
+          "percent": 12.35
+        },
+        "METHOD": {
+          "missed": 14084,
+          "covered": 4160,
+          "percent": 22.8
+        },
+        "CLASS": {
+          "missed": 1103,
+          "covered": 505,
+          "percent": 31.41
+        }
       },
-      {
-        "name": "admin creates two store products with distinct prices",
-        "result": "PASS"
-      },
-      {
-        "name": "price edit leaves other store price unchanged",
-        "result": "PASS"
-      },
-      {
-        "name": "staff cannot read store B product",
-        "result": "PASS"
-      },
-      {
-        "name": "coupon retry grants one right",
-        "result": "PASS"
-      },
-      {
-        "name": "SKU label roundtrips UTF8",
-        "result": "PASS"
-      },
-      {
-        "name": "lost response same-key retry keeps one unpaid order",
-        "result": "PASS"
-      },
-      {
-        "name": "server price and topping minus coupon unpaid",
-        "result": "PASS"
-      },
-      {
-        "name": "member sees pending order",
-        "result": "PASS"
-      },
-      {
-        "name": "other member cannot read order",
-        "result": "PASS"
-      },
-      {
-        "name": "authorized staff reads store A order",
-        "result": "PASS"
-      },
-      {
-        "name": "staff cannot read store B order",
-        "result": "PASS"
-      },
-      {
-        "name": "cancel retry restores inventory once",
-        "result": "PASS"
-      },
-      {
-        "name": "cancel restores coupon once",
-        "result": "PASS"
-      },
-      {
-        "name": "disabled member refresh denied",
-        "result": "PASS"
-      },
-      {
-        "name": "disabled member login denied",
-        "result": "PASS"
-      },
-      {
-        "name": "disable/refresh never add successful login logs",
-        "result": "PASS"
-      },
-      {
-        "name": "re-enable cannot resurrect revoked refresh",
-        "result": "PASS"
-      },
-      {
-        "name": "HTTP logout revokes refresh",
-        "result": "PASS"
-      },
-      {
-        "name": "all orders unpaid",
-        "result": "PASS"
-      },
-      {
-        "name": "financial tables untouched",
-        "result": "PASS"
-      },
-      {
-        "name": "issued tokens absent from backend log",
-        "result": "PASS"
+      "highRisk": {
+        "co/yixiang/yshop/module/system/api/oauth2/OAuth2TokenApiImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 0,
+              "covered": 76,
+              "percent": 100.0
+            },
+            "LINE": {
+              "missed": 0,
+              "covered": 13,
+              "percent": 100.0
+            },
+            "COMPLEXITY": {
+              "missed": 0,
+              "covered": 8,
+              "percent": 100.0
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 8,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/product/service/catalog/CatalogOptions": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 30,
+              "covered": 548,
+              "percent": 94.81
+            },
+            "BRANCH": {
+              "missed": 42,
+              "covered": 96,
+              "percent": 69.57
+            },
+            "LINE": {
+              "missed": 1,
+              "covered": 66,
+              "percent": 98.51
+            },
+            "COMPLEXITY": {
+              "missed": 41,
+              "covered": 37,
+              "percent": 47.44
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 9,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/payment/attempt/PaymentAttemptService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 41,
+              "covered": 773,
+              "percent": 94.96
+            },
+            "BRANCH": {
+              "missed": 38,
+              "covered": 128,
+              "percent": 77.11
+            },
+            "LINE": {
+              "missed": 5,
+              "covered": 156,
+              "percent": 96.89
+            },
+            "COMPLEXITY": {
+              "missed": 39,
+              "covered": 65,
+              "percent": 62.5
+            },
+            "METHOD": {
+              "missed": 1,
+              "covered": 20,
+              "percent": 95.24
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": [
+            "reconciliationCandidates"
+          ]
+        },
+        "co/yixiang/yshop/module/order/service/payment/attempt/PaymentCancellationGuard": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 3,
+              "covered": 206,
+              "percent": 98.56
+            },
+            "BRANCH": {
+              "missed": 14,
+              "covered": 38,
+              "percent": 73.08
+            },
+            "LINE": {
+              "missed": 1,
+              "covered": 38,
+              "percent": 97.44
+            },
+            "COMPLEXITY": {
+              "missed": 14,
+              "covered": 16,
+              "percent": 53.33
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 4,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/system/service/auth/AdminAuthServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 24,
+              "covered": 391,
+              "percent": 94.22
+            },
+            "BRANCH": {
+              "missed": 9,
+              "covered": 25,
+              "percent": 73.53
+            },
+            "LINE": {
+              "missed": 6,
+              "covered": 82,
+              "percent": 93.18
+            },
+            "COMPLEXITY": {
+              "missed": 9,
+              "covered": 23,
+              "percent": 71.88
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 15,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/store/service/storeshop/StoreAccessService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 10,
+              "covered": 184,
+              "percent": 94.85
+            },
+            "BRANCH": {
+              "missed": 3,
+              "covered": 21,
+              "percent": 87.5
+            },
+            "LINE": {
+              "missed": 2,
+              "covered": 33,
+              "percent": 94.29
+            },
+            "COMPLEXITY": {
+              "missed": 3,
+              "covered": 19,
+              "percent": 86.36
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 10,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/member/service/user/UserServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 292,
+              "covered": 0,
+              "percent": 0.0
+            },
+            "BRANCH": {
+              "missed": 22,
+              "covered": 0,
+              "percent": 0.0
+            },
+            "LINE": {
+              "missed": 52,
+              "covered": 0,
+              "percent": 0.0
+            },
+            "COMPLEXITY": {
+              "missed": 21,
+              "covered": 0,
+              "percent": 0.0
+            },
+            "METHOD": {
+              "missed": 10,
+              "covered": 0,
+              "percent": 0.0
+            },
+            "CLASS": {
+              "missed": 1,
+              "covered": 0,
+              "percent": 0.0
+            }
+          },
+          "unexecutedMethods": [
+            "<init>",
+            "createUser",
+            "updateUser",
+            "updateMony",
+            "deleteUser",
+            "validateUserExists",
+            "getUser",
+            "getUserList",
+            "getUserPage",
+            "getUserList"
+          ]
+        },
+        "co/yixiang/yshop/module/system/service/oauth2/OAuth2TokenServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 41,
+              "covered": 596,
+              "percent": 93.56
+            },
+            "BRANCH": {
+              "missed": 19,
+              "covered": 51,
+              "percent": 72.86
+            },
+            "LINE": {
+              "missed": 6,
+              "covered": 104,
+              "percent": 94.55
+            },
+            "COMPLEXITY": {
+              "missed": 19,
+              "covered": 41,
+              "percent": 68.33
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 25,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/system/service/permission/PermissionServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 28,
+              "covered": 424,
+              "percent": 93.81
+            },
+            "BRANCH": {
+              "missed": 14,
+              "covered": 34,
+              "percent": 70.83
+            },
+            "LINE": {
+              "missed": 12,
+              "covered": 94,
+              "percent": 88.68
+            },
+            "COMPLEXITY": {
+              "missed": 14,
+              "covered": 33,
+              "percent": 70.21
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 23,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/ordering/OrderPlacementService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 167,
+              "covered": 1633,
+              "percent": 90.72
+            },
+            "BRANCH": {
+              "missed": 60,
+              "covered": 140,
+              "percent": 70.0
+            },
+            "LINE": {
+              "missed": 25,
+              "covered": 270,
+              "percent": 91.53
+            },
+            "COMPLEXITY": {
+              "missed": 55,
+              "covered": 63,
+              "percent": 53.39
+            },
+            "METHOD": {
+              "missed": 1,
+              "covered": 17,
+              "percent": 94.44
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": [
+            "ownsVersion"
+          ]
+        },
+        "co/yixiang/yshop/module/order/service/payment/PaymentEffects": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 14,
+              "covered": 172,
+              "percent": 92.47
+            },
+            "BRANCH": {
+              "missed": 6,
+              "covered": 6,
+              "percent": 50.0
+            },
+            "LINE": {
+              "missed": 2,
+              "covered": 52,
+              "percent": 96.3
+            },
+            "COMPLEXITY": {
+              "missed": 6,
+              "covered": 4,
+              "percent": 40.0
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 4,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/payment/PaymentProcessor": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 71,
+              "covered": 376,
+              "percent": 84.12
+            },
+            "BRANCH": {
+              "missed": 19,
+              "covered": 78,
+              "percent": 80.41
+            },
+            "LINE": {
+              "missed": 13,
+              "covered": 77,
+              "percent": 85.56
+            },
+            "COMPLEXITY": {
+              "missed": 15,
+              "covered": 39,
+              "percent": 72.22
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 4,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/member/service/auth/MemberAuthServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 359,
+              "covered": 431,
+              "percent": 54.56
+            },
+            "BRANCH": {
+              "missed": 24,
+              "covered": 28,
+              "percent": 53.85
+            },
+            "LINE": {
+              "missed": 75,
+              "covered": 95,
+              "percent": 55.88
+            },
+            "COMPLEXITY": {
+              "missed": 21,
+              "covered": 25,
+              "percent": 54.35
+            },
+            "METHOD": {
+              "missed": 4,
+              "covered": 16,
+              "percent": 80.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": [
+            "weixinMiniAppLogin",
+            "wechatAuth",
+            "sendSmsCode",
+            "checkUserIfExists"
+          ]
+        },
+        "co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 160,
+              "covered": 1834,
+              "percent": 91.98
+            },
+            "BRANCH": {
+              "missed": 88,
+              "covered": 200,
+              "percent": 69.44
+            },
+            "LINE": {
+              "missed": 3,
+              "covered": 154,
+              "percent": 98.09
+            },
+            "COMPLEXITY": {
+              "missed": 85,
+              "covered": 77,
+              "percent": 47.53
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 18,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/coupon/service/marketing/CouponLifecycle": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 24,
+              "covered": 434,
+              "percent": 94.76
+            },
+            "BRANCH": {
+              "missed": 17,
+              "covered": 31,
+              "percent": 64.58
+            },
+            "LINE": {
+              "missed": 5,
+              "covered": 46,
+              "percent": 90.2
+            },
+            "COMPLEXITY": {
+              "missed": 17,
+              "covered": 15,
+              "percent": 46.88
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 8,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        }
       }
-    ],
-    "httpRequests": 30,
-    "paymentRequests": {
-      "value": 0,
-      "evidence": "MEASURED_THIS_HTTP_HARNESS_ONLY",
-      "globalNetworkMeasured": false
     },
-    "reasonType": "RuntimeError",
-    "failedStage": "ISOLATED_BACKEND_HEALTH",
-    "reasonCode": "SOURCE_CHANGED_DURING_TEST",
-    "resources": {
-      "containersRemoved": 2,
-      "anonymousVolumesRemoved": 2,
-      "ownershipChecked": true
+    "javaCoverageWithHttp": {
+      "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+      "sourceDigest": "dcf57204cc1c80f0c1cb5936527e824245f05453d7196594dd468e1f615d3532",
+      "result": "MEASURED",
+      "runId": "1846c118a11d4aefbad84068e14df7ef",
+      "runResult": "PASS",
+      "backendHttpIncluded": true,
+      "scope": "all compiled src/main classes including test infrastructure; high-risk business classes separately, no DTO threshold",
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 249848,
+          "covered": 63187,
+          "percent": 20.19
+        },
+        "BRANCH": {
+          "missed": 41588,
+          "covered": 3326,
+          "percent": 7.41
+        },
+        "LINE": {
+          "missed": 15881,
+          "covered": 10171,
+          "percent": 39.04
+        },
+        "COMPLEXITY": {
+          "missed": 34200,
+          "covered": 6548,
+          "percent": 16.07
+        },
+        "METHOD": {
+          "missed": 12648,
+          "covered": 5596,
+          "percent": 30.67
+        },
+        "CLASS": {
+          "missed": 756,
+          "covered": 852,
+          "percent": 52.99
+        }
+      },
+      "highRisk": {
+        "co/yixiang/yshop/module/system/api/oauth2/OAuth2TokenApiImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 0,
+              "covered": 76,
+              "percent": 100.0
+            },
+            "LINE": {
+              "missed": 0,
+              "covered": 13,
+              "percent": 100.0
+            },
+            "COMPLEXITY": {
+              "missed": 0,
+              "covered": 8,
+              "percent": 100.0
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 8,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/product/service/catalog/CatalogOptions": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 30,
+              "covered": 548,
+              "percent": 94.81
+            },
+            "BRANCH": {
+              "missed": 42,
+              "covered": 96,
+              "percent": 69.57
+            },
+            "LINE": {
+              "missed": 1,
+              "covered": 66,
+              "percent": 98.51
+            },
+            "COMPLEXITY": {
+              "missed": 41,
+              "covered": 37,
+              "percent": 47.44
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 9,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/payment/attempt/PaymentAttemptService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 41,
+              "covered": 773,
+              "percent": 94.96
+            },
+            "BRANCH": {
+              "missed": 38,
+              "covered": 128,
+              "percent": 77.11
+            },
+            "LINE": {
+              "missed": 5,
+              "covered": 156,
+              "percent": 96.89
+            },
+            "COMPLEXITY": {
+              "missed": 39,
+              "covered": 65,
+              "percent": 62.5
+            },
+            "METHOD": {
+              "missed": 1,
+              "covered": 20,
+              "percent": 95.24
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": [
+            "reconciliationCandidates"
+          ]
+        },
+        "co/yixiang/yshop/module/order/service/payment/attempt/PaymentCancellationGuard": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 3,
+              "covered": 206,
+              "percent": 98.56
+            },
+            "BRANCH": {
+              "missed": 14,
+              "covered": 38,
+              "percent": 73.08
+            },
+            "LINE": {
+              "missed": 1,
+              "covered": 38,
+              "percent": 97.44
+            },
+            "COMPLEXITY": {
+              "missed": 14,
+              "covered": 16,
+              "percent": 53.33
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 4,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/system/service/auth/AdminAuthServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 24,
+              "covered": 391,
+              "percent": 94.22
+            },
+            "BRANCH": {
+              "missed": 8,
+              "covered": 26,
+              "percent": 76.47
+            },
+            "LINE": {
+              "missed": 6,
+              "covered": 82,
+              "percent": 93.18
+            },
+            "COMPLEXITY": {
+              "missed": 8,
+              "covered": 24,
+              "percent": 75.0
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 15,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/store/service/storeshop/StoreAccessService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 10,
+              "covered": 184,
+              "percent": 94.85
+            },
+            "BRANCH": {
+              "missed": 3,
+              "covered": 21,
+              "percent": 87.5
+            },
+            "LINE": {
+              "missed": 2,
+              "covered": 33,
+              "percent": 94.29
+            },
+            "COMPLEXITY": {
+              "missed": 3,
+              "covered": 19,
+              "percent": 86.36
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 10,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/member/service/user/UserServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 253,
+              "covered": 39,
+              "percent": 13.36
+            },
+            "BRANCH": {
+              "missed": 18,
+              "covered": 4,
+              "percent": 18.18
+            },
+            "LINE": {
+              "missed": 43,
+              "covered": 9,
+              "percent": 17.31
+            },
+            "COMPLEXITY": {
+              "missed": 17,
+              "covered": 4,
+              "percent": 19.05
+            },
+            "METHOD": {
+              "missed": 7,
+              "covered": 3,
+              "percent": 30.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": [
+            "createUser",
+            "updateMony",
+            "deleteUser",
+            "getUser",
+            "getUserList",
+            "getUserPage",
+            "getUserList"
+          ]
+        },
+        "co/yixiang/yshop/module/system/service/oauth2/OAuth2TokenServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 38,
+              "covered": 599,
+              "percent": 94.03
+            },
+            "BRANCH": {
+              "missed": 18,
+              "covered": 52,
+              "percent": 74.29
+            },
+            "LINE": {
+              "missed": 5,
+              "covered": 105,
+              "percent": 95.45
+            },
+            "COMPLEXITY": {
+              "missed": 18,
+              "covered": 42,
+              "percent": 70.0
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 25,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/system/service/permission/PermissionServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 25,
+              "covered": 427,
+              "percent": 94.47
+            },
+            "BRANCH": {
+              "missed": 12,
+              "covered": 36,
+              "percent": 75.0
+            },
+            "LINE": {
+              "missed": 10,
+              "covered": 96,
+              "percent": 90.57
+            },
+            "COMPLEXITY": {
+              "missed": 12,
+              "covered": 35,
+              "percent": 74.47
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 23,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/ordering/OrderPlacementService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 128,
+              "covered": 1672,
+              "percent": 92.89
+            },
+            "BRANCH": {
+              "missed": 53,
+              "covered": 147,
+              "percent": 73.5
+            },
+            "LINE": {
+              "missed": 24,
+              "covered": 271,
+              "percent": 91.86
+            },
+            "COMPLEXITY": {
+              "missed": 50,
+              "covered": 68,
+              "percent": 57.63
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 18,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/payment/PaymentEffects": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 14,
+              "covered": 172,
+              "percent": 92.47
+            },
+            "BRANCH": {
+              "missed": 6,
+              "covered": 6,
+              "percent": 50.0
+            },
+            "LINE": {
+              "missed": 2,
+              "covered": 52,
+              "percent": 96.3
+            },
+            "COMPLEXITY": {
+              "missed": 6,
+              "covered": 4,
+              "percent": 40.0
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 4,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/payment/PaymentProcessor": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 71,
+              "covered": 376,
+              "percent": 84.12
+            },
+            "BRANCH": {
+              "missed": 19,
+              "covered": 78,
+              "percent": 80.41
+            },
+            "LINE": {
+              "missed": 13,
+              "covered": 77,
+              "percent": 85.56
+            },
+            "COMPLEXITY": {
+              "missed": 15,
+              "covered": 39,
+              "percent": 72.22
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 4,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/member/service/auth/MemberAuthServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 359,
+              "covered": 431,
+              "percent": 54.56
+            },
+            "BRANCH": {
+              "missed": 24,
+              "covered": 28,
+              "percent": 53.85
+            },
+            "LINE": {
+              "missed": 75,
+              "covered": 95,
+              "percent": 55.88
+            },
+            "COMPLEXITY": {
+              "missed": 21,
+              "covered": 25,
+              "percent": 54.35
+            },
+            "METHOD": {
+              "missed": 4,
+              "covered": 16,
+              "percent": 80.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": [
+            "weixinMiniAppLogin",
+            "wechatAuth",
+            "sendSmsCode",
+            "checkUserIfExists"
+          ]
+        },
+        "co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 154,
+              "covered": 1840,
+              "percent": 92.28
+            },
+            "BRANCH": {
+              "missed": 84,
+              "covered": 204,
+              "percent": 70.83
+            },
+            "LINE": {
+              "missed": 3,
+              "covered": 154,
+              "percent": 98.09
+            },
+            "COMPLEXITY": {
+              "missed": 82,
+              "covered": 80,
+              "percent": 49.38
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 18,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/coupon/service/marketing/CouponLifecycle": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 24,
+              "covered": 434,
+              "percent": 94.76
+            },
+            "BRANCH": {
+              "missed": 17,
+              "covered": 31,
+              "percent": 64.58
+            },
+            "LINE": {
+              "missed": 5,
+              "covered": 46,
+              "percent": 90.2
+            },
+            "COMPLEXITY": {
+              "missed": 17,
+              "covered": 15,
+              "percent": 46.88
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 8,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        }
+      }
+    },
+    "pythonCoverage": {
+      "sourceSha": "8eb6979037de5bb05d1ab4cdf7bacce1cc1bf291",
+      "sourceDigest": "938e2cc2994a56d6ab165499291d3af85291aa1a6a0a68a65595d444da11b437",
+      "result": "MEASURED",
+      "tests": 61,
+      "scope": "quality Python helpers instrumented by three driver suites; child processes NOT MEASURED",
+      "totals": {
+        "covered_lines": 479,
+        "num_statements": 1299,
+        "percent_covered": 36.268221574344025,
+        "percent_covered_display": "36",
+        "missing_lines": 820,
+        "excluded_lines": 0,
+        "num_branches": 416,
+        "num_partial_branches": 25,
+        "covered_branches": 143,
+        "missing_branches": 273
+      }
     }
   },
   "gui": {
     "result": "BLOCKED",
-    "reason": "Actual isolated admin login slider not completed; do not bypass CAPTCHA. GUI product/coupon write checks not claimed."
+    "assertionsExecuted": 0,
+    "reason": "manual slider not completed; expired fixture destroyed"
   },
-  "mutations": {
-    "KILLED": 21,
-    "SURVIVED": 3,
-    "INCONCLUSIVE": 3
+  "nodeCoverage": "NOT MEASURED",
+  "linux": "final pushed HEAD must be checked in actual controlled-dependencies GitHub job; no local result substitutes",
+  "financialSafety": {
+    "realCredentialsUsed": false,
+    "realProviderRequests": false,
+    "realFundsOperations": false,
+    "globalNetworkMeasured": false,
+    "paymentFlags": false,
+    "reconciliationFlag": false
   },
-  "secret": {
-    "strictPrivateValueRuntimeScan": "PASS_AT_DOCUMENT_FREEZE",
-    "newDiffLiteralGuard": "PASS_AT_DOCUMENT_FREEZE",
-    "finalHeadReceipt": "delivery report; scan rerun before final push"
-  },
-  "financialFingerprint": {
-    "unchanged": true,
-    "evidence": "MEASURED read-only shared development baseline comparison"
-  },
-  "financialOperations": {
-    "value": 0,
-    "evidence": "DECLARED isolation and no live calls; measured own HTTP/Mini payment admission zero and unchanged shared fingerprint; not global network accounting"
-  },
-  "remaining": [
-    "Isolated admin GUI CRUD requires human CAPTCHA; HTTP write acceptance is complete",
-    "Full legacy MySQL financial/business and synthetic TLS clean-machine bootstrap still requires explicit private local adapter/CA; not claimed portable on Linux Runner",
-    "Three old broad mutation operators remain INCONCLUSIVE; three independent-defence survivors remain SURVIVED",
-    "Full actual Mini coupon claim/disabled-login/device-specific permissions beyond measured fixture scope remain UNVERIFIED",
-    "Controller active-request interruption after admission, real multiple-process auth instances, real WeChat/SMS/provider calls are not measured"
-  ],
-  "inventory": {
-    "assets": 249,
-    "states": {
-      "ACTIVE": 209,
-      "UNVERIFIED": 39,
-      "OBSOLETE": 1
-    },
-    "executedJUnitSuites": 79,
-    "ordinaryJUnitSuites": 76,
-    "separateConditionalSuites": 3,
-    "nodeSuites": 5,
-    "pythonSuites": 5,
-    "repositoryMiniScriptsThisR1": "six UNVERIFIED; distinct private guarded owned simulator fixture14 checks PASS"
-  },
-  "miniBackendCleanup": {
-    "containersRemoved": 2,
-    "anonymousVolumesRemoved": 2,
-    "ownershipChecked": true
-  }
+  "negativeRunsRetained": [
+    "initial heavy adapter failure: exact root trigger unresolved, improved TCP readiness and safe numeric diagnostics",
+    "TLS prior-port and Docker Desktop host override failure: corrected and all ten tests passed",
+    "invalid admin mutant syntax INCONCLUSIVE: corrected real mutation killed",
+    "new injection-test temporary-directory fixture failure: corrected, quick138 passed"
+  ]
 }

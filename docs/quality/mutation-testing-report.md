@@ -1,10 +1,8 @@
-# Dangerous behavior mutations — Phase 6Q-R1
+# Dangerous mutation evidence — Phase 6Q-R2
 
-**27 operators:21 KILLED /3 SURVIVED /3 INCONCLUSIVE.** No unconditional green score. Raw MUTATION exits nonzero when any operator survives or is inconclusive. [Full hashes and actual receipts](mutation-results.json).
+The joined historical/focused matrix is **25 KILLED / 3 SURVIVED / 0 INCONCLUSIVE**. This is explicitly a union of attributed snapshots, **not 28 fresh final-head executions**. The original R1 report remains in Git history; the six requested operators were re-run against R2 source with a passing original before every mutation. See [machine results](mutation-results.json) for each SHA/content digest and source hashes.
 
-Each operator changes real production source only in a disposable copy; the original selected suite must pass immediately before mutation. Exact suites/methods/invocation counts and fresh runId are required. A compile,SQL,transport,initialization or cleanup error is NOT a kill, even when other cases assert. Only valid assertion failures with zero errors/skips qualify.
-
-| Operator | Actual classification | Assertion failures | Suite |
+| Operator | Classification | Assertion failures | Exact selection |
 |---|---|---:|---|
 | inventory-repeat-release | KILLED | 3 | OrderingDatabaseTest |
 | cross-store-price | KILLED | 1 | OrderingDatabaseTest |
@@ -21,11 +19,11 @@ Each operator changes real production source only in a disposable copy; the orig
 | coupon-reuse-state | KILLED | 3 | CouponDatabaseTest |
 | coupon-use-expired | KILLED | 22 | CouponDatabaseTest |
 | inventory-sku-check | SURVIVED | 0 | OrderingDatabaseTest |
-| inventory-conditional-update | INCONCLUSIVE | 1 | OrderingDatabaseTest |
+| inventory-conditional-update | KILLED | 1 | OrderingDatabaseTest#availableStockConditionalDebitMustSucceed |
 | cross-store-product | SURVIVED | 0 | OrderingDatabaseTest |
 | employee-store-scope | KILLED | 3 | OrderingDatabaseTest |
-| cancel-payment-guard | INCONCLUSIVE | 20 | PaymentCancellationDatabaseTest |
-| cancel-uncertain-safe | INCONCLUSIVE | 18 | PaymentCancellationDatabaseTest |
+| cancel-payment-guard | KILLED | 3 | PaymentCancellationDatabaseTest#activeOrUncertainBlocksCustomerAndExpiry |
+| cancel-uncertain-safe | KILLED | 1 | PaymentCancellationDatabaseTest#activeOrUncertainBlocksCustomerAndExpiry |
 | cancel-remote-proof | KILLED | 4 | PaymentCancellationDatabaseTest |
 | coupon-member-limit | KILLED | 42 | CouponDatabaseTest |
 | coupon-total-limit | SURVIVED | 0 | CouponDatabaseTest |
@@ -33,15 +31,16 @@ Each operator changes real production source only in a disposable copy; the orig
 | coupon-claim-rate | KILLED | 1 | CouponCodeSecurityTest |
 | coupon-redis-fail-open | KILLED | 1 | CouponCodeSecurityTest |
 | payment-amount | KILLED | 2 | PaymentDatabaseTest |
+| auth-admin-reenable-revocation | KILLED | 1 | OAuth2LifecycleDatabaseTest#adminDisableReenableCannotResurrectOldCredentials |
 
-## Review corrections and new boundaries
+## Resolution of the six requested cases
 
-The seven new composite boundaries are inventory-repeat-release,cross-store-price,coupon-double-reservation,duplicate-fulfillment-complete,auth-refresh-disable-bypass,auth-cache-revocation-bypass,payment-freeze-bypass. Each was actually killed by effective assertions, not compilation. Their failure counts are3,1,21,12,2,22,1 respectively.
+`inventory-conditional-update` now targets the independently asserted valid-stock debit path: one unpaid order, A stock9, B stock10 and exactly one reservation. Original PASS; mutant one assertion failure, zero errors/skips. The ordinary full suite is still run separately.
 
-The first price operator used an invalid SKU column and produced mixed errors; it was excluded, not called KILLED. The corrected valid operator initially SURVIVED because both test-store prices were1.23. A new independent oracle explicitly sets B9.87 while A stays1.23 and requires the A order amount1.23, B stock/price unchanged and paid0. Both original and mutant execute82 cases; original PASS, mutant one assertion failure,zero errors/skips. Fixture weakness was repaired without production price changes.
+`cancel-payment-guard` and `cancel-uncertain-safe` target `activeOrUncertainBlocksCustomerAndExpiry`: three and one assertion failures respectively, zero runtime errors. The complete payment/cancellation regression remains enabled; narrowing the mutation selector does not exclude ordinary tests.
 
-Three earlier broad operators previously overclaimed as kills were rerun and correctly reclassified INCONCLUSIVE: inventory-conditional-update,cancel-payment-guard,cancel-uncertain-safe. Their selected full-suite mutations cause runtime errors as well as assertions; valid originals pass but this does not establish a kill. This uncertainty remains visible.
+The three survivors are retained production defenses: removing the SKU admission check is still rejected by the conditional debit SQL matching product/stock; removing the product shop check is still rejected by category ownership and shop-bound SQL; removing the Java coupon capacity check is still rejected by `receive<distribute`. Independent composite mutants (`cross-store-all-defences`, `coupon-total-all-defences`, wrong debit) are killed. These are SURVIVED redundant defenses, not invented kills or blanket EQUIVALENT claims.
 
-Three SURVIVED operators have independent remaining defenses: inventory-sku-check is rejected by DB conditional update; cross-store-product by category/conditional-shop admission; coupon-total-limit by SQL capacity update. Composite removal of those boundaries is independently detected. Defenses were retained rather than removed to force a score.
+The new `auth-admin-reenable-revocation` removes both real ADMIN family revocations. The fresh original passes72 invocations; the exact selected regression kills the mutant with one assertion failure. Its first replacement left a dangling if body and failed compilation: that attempt is retained as INCONCLUSIVE, never included in kills. Corrected replacement is an explicit empty statement.
 
-Secret canary tests are separate from Java mutation percentages. A synthetic secret deliberately placed in a private log causes a real scan failure without echoing it. No real provider transport,merchant key or funds were involved.
+Broad R1 mutations that had initialization/SQL errors remain in historical evidence; the new focused reruns supersede only those requested uncertainty cases. A compile, SQL, timeout, initialization or cleanup failure is not a kill. Mutation residue is removed with the disposable source copy. No real transport or funds are used.

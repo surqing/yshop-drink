@@ -1,31 +1,36 @@
-# Runner and evidence audit — Phase 6Q-R1
+# Runner and evidence audit — Phase 6Q-R2
 
-`run.py`, `evidence.py`, inventory,MySQL/Redis/TLS adapters and workflow were audited by actual failures and fresh reruns. Private raw logs are never public artifacts. [Machine scope](evidence-summary.json).
+The existing runner is extended, not replaced. QUICK now has **139 exact invocations:47 Node +92 Python**, including43 evidence tests and16 ownership/GUI failure tests. [Machine scopes](evidence-summary.json), [asset classification](test-inventory.json).
 
-## Fail-closed rules proved
+## Fail-closed boundaries
 
-34 evidence/integrity tests cover no tests, missing suite, wrong method/invocation counts, empty/duplicate/foreign reports, skipped cases, hidden assertion failure, subprocess failure/timeout, stale report/runId, changed source SHA/content, standalone-module diagnostics and old inventory certificate/registry mismatch. QUICK discovers registered Python TestCase and Node suites and requires the discovered/planned/registered sets to match exactly; it cannot silently omit a new test file. Exact QUICK manifest is47 Node+79 Python=126.
+Fresh suite/method/invocation manifests, nonempty reports, no skips/errors/failures, unique runId, source SHA and full nonignored content digest remain mandatory. Missing suites, fewer invocations, stale XML, hidden assertion errors, subprocess failure/timeout, later integrity failure and changed source fail the gate. Maven target writes are serialized within a checkout; independent steps still collect diagnostics after another fails.
 
-Fresh Surefire directories contain exact suite and display-method invocation manifests. Every report carries quality.runId; evidence has both commit SHA and full tracked/new nonignored content digest. A dirty-tree run is not relabeled as a later commit. Reports with missing or changed registry cases cannot pass inventory validation. Test totals count invocations, not distinct scenarios or unique business risks.
+Controlled GUI/CLI commands need a fresh receipt matching run/source and the exact planned executed assertion names, result and cleanup. Exit0 without a receipt is BLOCKED. `--hold-for-gui` requires all eight actual GUI assertions; missing/partial/stale evidence cannot inherit the successful HTTP result. Device hold is separate. An unrelated private Mini harness cannot certify `mini-readonly.cjs` in inventory. Helper metadata is distinct from a certified test run.
 
-Subprocess groups are bounded; timeout kills children and cannot PASS. Maven writes within a checkout are serialized to avoid shared target-output corruption. Failure in one module still allows safe diagnostics and remaining independent checks; the whole gate fails. CI compile,guard,QUICK,Java and Vue use independent non-cancelled steps, with no ignored exit codes or excluded failing test classes.
+Backend builds parse all55 declared reactor artifacts and require every one SUCCESS plus BUILD SUCCESS; exit0 with a partial/duplicate/skipped reactor fails. MySQL DROP commands must also prove schema/account absence; successful exit with a residual object fails. Run-owned Docker label/name/anonymous volume ownership is verified before destruction and absence afterward. Redis acceptance verifies owned-prefix absence after cleanup. A cleanup error after assertions overrides PASS.
 
-## Actual newly found late-failure bug
+The R1 actual source-canary/late-failure run and cleanup fault injections remain; R2 adds missing GUI receipt, forged Mini attribution, incomplete build and bounded diagnostic failure injections. Ordinary exact test manifests are unchanged except the five explicitly added Java regressions and new runner assertions.
 
-The new owned HTTP fixture had already marked22 assertions PASS when its final source-integrity check threw. Its catch initially added reasonType but did not reset result, causing a false PASS. The held GUI receipt containing reasonType is explicitly rejected and preserved privately; it is not GUI acceptance.
+## Safe diagnostic evidence
 
-Fixed catch always calls failed_report(), resetting FAIL while retaining earlier valid assertion receipts, publishing only exception category/stage and a bounded known source-change code. Three direct failure tests check override, source-change and message privacy. An actual disposable-backend run first executes22 HTTP checks, then receives a nonignored source-canary change: process exit1, resultFAIL, SOURCE_CHANGED_DURING_TEST and cleanupPASS. The owned canary was removed afterward. A fresh normal run then passes22 and cleanup; no source-change exception is treated as benign.
+Java public artifacts contain registered class/method, failure category, exception classes and bounded source frames, never XML messages/system output. Python diagnostics contain only AST-declared test/class names and bounded exception categories; injected payload/unknown names are rejected. Raw logs, request bodies, token values, SQL and secrets remain private. Owned adapter errors publish only numeric MySQL error/SQLSTATE, with raw stderr in a600 file. Both acceptance wrappers save safe structural diagnostics even on Maven failure.
 
-12 owned-resource tests cover ownership mismatch,Docker outage,remove failure,remaining container/volume,unowned named volume,backend owner mismatch and late failures. Actual cleanup verifies random run labels, exact container identity and anonymous64-hex volume names before destruction,then verifies absence. Shared/named volumes are not removed. HTTP writes require the random owner from `/actuator/info`, not merely a healthy port. Credentials/configs are private600 files and deleted on completion.
+## Portable commands and actual scopes
 
-## Safe diagnostics
+Prerequisites: Docker, JDK17/Maven3.9, Python3.11; Node20/pnpm8 for standard frontend checks. No private daemon/schema/account/merchant credential is required.
 
-Public artifacts provide FQCN, known method name, failure/error/skip counts, exception/root-cause class and bounded source locations. They exclude exception messages, stdout/stderr, request bodies, tokens, SQL values and credentials. XML and raw subprocess output remain private. The original system failure was actually diagnosed through this path; final Linux CI executes all12 Java modules.
+```
+python3 tests/quality/run.py QUICK --output /tmp/new-quality
+python3 tests/quality/run.py INTEGRATION --output /tmp/new-controlled
+# or the exact controlled gate:
+python3 tests/quality/heavy.py --output /tmp/new-heavy
+python3 -m pip install -r tests/quality/requirements.txt
+python3 tests/quality/business-backend.py --output /tmp/new-business --port 48883 --instances 2
+```
 
-## Reproducibility
+Build the55 modules first (`Runner.backend()` verifies the reactor). Use a new output directory and free loopback ports. Heavy gate creates owned MySQL8/Redis7.4, random schemas/accounts/ports, synthetic TLS CA and proxy, and destroys them. All SQL is through a labelled own container. TCP readiness prevents using the temporary socket-only bootstrap daemon. The first adapter failure's exact trigger was not reproduced; it is not falsely labeled a confirmed environment flake. Improved diagnostics preserve future numeric causes.
 
-Standard GitHub Ubuntu runner: JDK17,Maven3.9,Node20,pnpm8,Python3; full55 build; QUICK; exact Java; Vue build before type check to generate declarations. Actual commit9274 CI SUCCESS, with later final-head result in delivery receipt. No Java test exclusion/disabled assertion/exit-ignore was used.
+Mac controlled gate actually passes490 business +497 financial +72 auth +66 Redis +10 TLS with cleanup. TLS was repaired to use the owned ingress URL; Docker Desktop uses native host DNS, while Linux uses host networking with localhost-only proxy/backend. No TLS bypass or host trust-store installation. The official Nginx digest is multi-architecture amd64/arm64.
 
-Portable owned dependencies (Docker required; no private service already running): `python3 tests/quality/auth-mysql.py --output <new-private-dir>` after full Maven install; `python3 tests/quality/business-backend.py --output <new-private-dir> --port <free-loopback-port>` after full backend package and installing `tests/quality/requirements.txt`. Both automatically create random MySQL schemas/accounts/container labels; business also owns Redis/backend. Do not reuse output directories.
-
-Full legacy financial/business and TLS acceptance still need an explicit private bootstrap adapter,synthetic local CA and available ports. They passed here but a complete clean-Linux heavy bootstrap is BLOCKED/not proven. Minimal preparation: Docker,JDK17/Maven snapshots; explicit synthetic-only local adapter/config; synthetic CA and dedicated loopback TLS port; then MYSQL/REDIS/TLS runner modes. Never substitute production credentials or silently use shared real accounts. Official Mini automation needs logged-in developer tools and its service port; new project trust must be granted by the user if prompted.
+GitHub has separate ordinary Java/Vue and controlled-dependencies jobs; controlled also runs two backend processes with synthetic HTTP writes. Ordinary CI SUCCESS does not certify GUI/Mini or controlled results. Both jobs upload safe report/evidence/diagnostic summaries only. Final-head execution is recorded in delivery/PR checks; old CI is not substituted.

@@ -393,7 +393,7 @@ class CallbackIngressEndToEndTest {
                     http.send(
                             HttpRequest.newBuilder(
                                             URI.create(
-                                                    "https://localhost:48443/admin-api/pay/live-preflight/"
+                                                    System.getenv("YSHOP_INGRESS_BASE_URL") + "/admin-api/pay/live-preflight/"
                                                             + suffix))
                                     .GET()
                                     .build(),

@@ -61,7 +61,7 @@ class OrderingDatabaseTest {
             assertTrue(
                     props.getProperty("url")
                             .matches(
-                                    "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase6a_[a-f0-9]{8}[?].*"));
+                                    "jdbc:mysql://127[.]0[.]0[.]1:[0-9]{2,5}/yshop_acceptance_phase6a_[a-f0-9]{8}[?].*"));
             assertTrue(props.getProperty("username").matches("accept6a_[a-f0-9]{8}"));
             ds.setDriverClassName("com.mysql.cj.jdbc.Driver");
             ds.setUrl(props.getProperty("url"));
@@ -266,6 +266,17 @@ class OrderingDatabaseTest {
     @AfterEach
     void clearSecurity() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void availableStockConditionalDebitMustSucceed() {
+        String id = assertDoesNotThrow(() -> place(request()));
+        assertNotNull(id);
+        assertEquals(9, count("SELECT stock FROM yshop_store_product WHERE id=1"));
+        assertEquals(9, count("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(10, count("SELECT stock FROM yshop_store_product WHERE id=2"));
+        assertEquals(0, count("SELECT paid FROM yshop_store_order WHERE order_id=?", id));
+        assertEquals(1, count("SELECT COUNT(*) FROM yshop_order_inventory_reservation WHERE order_id=?", id));
     }
 
     @Test
@@ -711,6 +722,19 @@ class OrderingDatabaseTest {
         var permission = mock(PermissionApi.class);
         when(permission.hasAnyRoles(eq(uid), any(String[].class))).thenReturn(hq);
         return new StoreAccessService(db, permission);
+    }
+
+    @Test
+    void categoryAndOrderAuthorizationUsesDatabaseShopNotTokenHint() {
+        String id=place(request());
+        Long oid=db.queryForObject("SELECT id FROM yshop_store_order WHERE order_id=?",Long.class,id);
+        var own=access(101,false);assertDoesNotThrow(()->own.requireOrder(oid));assertDoesNotThrow(()->own.requireCategory(1L));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,()->own.requireCategory(2L));
+        var other=access(102,false);assertThrows(org.springframework.security.access.AccessDeniedException.class,()->other.requireOrder(oid));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,()->other.requireCategory(1L));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,()->other.requireOrder(Long.MAX_VALUE));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,()->other.requireCategory(Long.MAX_VALUE));
+        var hq=access(999,true);assertDoesNotThrow(()->hq.requireOrder(oid));assertDoesNotThrow(()->hq.requireCategory(2L));
     }
 
     @Test

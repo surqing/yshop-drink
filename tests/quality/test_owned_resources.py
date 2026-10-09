@@ -46,4 +46,46 @@ class OwnedCleanupFaults(unittest.TestCase):
         failed_report(report,RuntimeError('sensitive-token-request-body'),'AFTER_HTTP')
         self.assertNotIn('sensitive-token-request-body',json.dumps(report))
         self.assertEqual('RuntimeError',report['reasonType'])
+    def test_adapter_refuses_different_owner_before_any_sql(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        import database_adapter
+        with tempfile.TemporaryDirectory() as folder:
+            config=Path(folder)/'db.json';config.write_text(json.dumps({'container':'yshop-quality-heavy-'+'a'*32,'owner':'a'*32}));config.chmod(0o600)
+            result=Mock(returncode=0,stdout=self.info('other'))
+            with patch.dict(os.environ,{'YSHOP_OWNED_DATABASE_CONFIG':str(config)}),patch.object(database_adapter.subprocess,'run',return_value=result) as child:
+                with self.assertRaisesRegex(RuntimeError,'OWNERSHIP'):database_adapter.mysql('CREATE DATABASE test;')
+                self.assertEqual(1,child.call_count)
+    def test_adapter_shared_container_identity_never_admitted(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        import database_adapter
+        with tempfile.TemporaryDirectory() as folder:
+            config=Path(folder)/'db.json';config.write_text(json.dumps({'container':'shared-mysql','owner':'a'*32}));config.chmod(0o600)
+            with patch.dict(os.environ,{'YSHOP_OWNED_DATABASE_CONFIG':str(config)}),patch.object(database_adapter.subprocess,'run') as child:
+                with self.assertRaisesRegex(RuntimeError,'IDENTITY'):database_adapter.mysql('SELECT 1;')
+                child.assert_not_called()
+    def test_missing_gui_assertions_cannot_pass(self):
+        import tempfile,time
+        from pathlib import Path
+        from owned_resources import gui_receipt
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaisesRegex(RuntimeError,'MISSING'):
+                gui_receipt(Path(folder)/'absent.json',time.time(),{'sourceSha':'sha','sourceDigest':'digest'},'owner')
+    def test_owned_database_error_diagnostics_do_not_publish_sql_or_secret(self):
+        import tempfile,os
+        from pathlib import Path
+        from unittest.mock import patch
+        import database_adapter
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);cfg=root/'db.json';cfg.write_text(json.dumps({'container':'yshop-quality-heavy-'+'a'*32,'owner':'a'*32}));cfg.chmod(0o600)
+            responses=[Mock(returncode=0,stdout=self.info('a'*32)),Mock(returncode=1,stderr='ERROR 1064 (42000): sql-request-secret-canary',stdout='')]
+            with patch.dict(os.environ,{'YSHOP_OWNED_DATABASE_CONFIG':str(cfg)}),patch.object(database_adapter.subprocess,'run',side_effect=responses):
+                with self.assertRaisesRegex(RuntimeError,'OWNED_DATABASE_OPERATION_FAILED'):database_adapter.mysql('SELECT private-canary;')
+            safe=json.loads((root/'database-diagnostics.json').read_text())
+            self.assertEqual(1064,safe['mysqlError']);self.assertEqual('42000',safe['sqlState'])
+            self.assertNotIn('canary',json.dumps(safe))
+            self.assertEqual(0,(root/'database-private-error.log').stat().st_mode&0o077)
 if __name__=='__main__':unittest.main()

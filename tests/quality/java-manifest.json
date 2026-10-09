@@ -340,7 +340,9 @@
     "databaseLockFailureRollsBackSubmissionAndInventory": 1,
     "globalAndExplicitMultiStoreCouponAllowed": 1,
     "workersHoldTwentyIndependentTransactionsAndConnections": 1,
-    "differentStoreSkuPriceCannotBecomeThisOrdersPrice": 1
+    "differentStoreSkuPriceCannotBecomeThisOrdersPrice": 1,
+    "availableStockConditionalDebitMustSucceed": 1,
+    "categoryAndOrderAuthorizationUsesDatabaseShopNotTokenHint": 1
   },
   "co.yixiang.yshop.module.order.payment.CallbackIngressEndToEndTest": {
     "validSyntheticAnonymousNotification": 1,
@@ -1353,6 +1355,9 @@
     "twentyRefreshesHaveOnlyOneCurrentAccessAcrossInstances": 20,
     "realRequestFilterRejectsWrongUserTypeAndRevokedIdentity": 1,
     "logoutAndRefreshRaceEndsWithNoUsableCredentials": 20,
-    "disableAndRefreshRaceEndsWithNoUsableCredentials": 20
+    "disableAndRefreshRaceEndsWithNoUsableCredentials": 20,
+    "adminDisableReenableCannotResurrectOldCredentials": 1,
+    "adminRevocationFailureRollsBackStatusAndCredentials": 1,
+    "actualApiOverloadsAndRevokeKeepCanonicalMemberIdentity": 1
   }
 }

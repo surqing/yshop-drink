@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """Actual isolated HTTP writes; no seed INSERTs, no shared data, no provider routes."""
-import argparse,json,os,secrets,subprocess,sys,time,uuid,re,signal
+import argparse,json,os,secrets,subprocess,sys,time,uuid,re,signal,hashlib
 from evidence import source_identity
-from owned_resources import remove_owned,assert_backend_owner,failed_report
+from owned_resources import remove_owned,assert_backend_owner,failed_report,gui_receipt
 from pathlib import Path
 import yaml
 repo=Path(__file__).resolve().parents[2]
-parser=argparse.ArgumentParser();parser.add_argument('--output',required=True);parser.add_argument('--port',type=int,default=48883);parser.add_argument('--hold-for-gui',type=int,default=0);args=parser.parse_args()
-if not 0<=args.hold_for_gui<=900:raise RuntimeError('GUI_HOLD_LIMIT_REQUIRED')
+parser=argparse.ArgumentParser();parser.add_argument('--output',required=True);parser.add_argument('--port',type=int,default=48883);parser.add_argument('--hold-for-gui',type=int,default=0);parser.add_argument('--hold-for-device',type=int,default=0);parser.add_argument('--instances',type=int,choices=[1,2],default=1);args=parser.parse_args()
+if not 0<=args.hold_for_gui<=900 or not 0<=args.hold_for_device<=900:raise RuntimeError('GUI_HOLD_LIMIT_REQUIRED')
 if not 1024<=args.port<=65535:raise RuntimeError('INVALID_LOOPBACK_PORT')
 owner=uuid.uuid4().hex;root=Path(args.output).resolve();root.mkdir(parents=True,mode=0o700,exist_ok=False)
-mysql='yshop-quality-business-mysql-'+owner;redis='yshop-quality-business-redis-'+owner;names=[mysql,redis];process=None;volumes=[]
+mysql='yshop-quality-business-mysql-'+owner;redis='yshop-quality-business-redis-'+owner;names=[mysql,redis];process=None;processes=[];volumes=[]
 schema='yshop_quality_business_'+owner[:16];pw=secrets.token_hex(24);rpw=secrets.token_hex(24)
 report={'owner':owner,'result':'FAIL','cleanup':'NOT_RUN',**source_identity(),'scope':'owned disposable MySQL/Redis/backend HTTP writes','gui':'NOT_EXECUTED','mini':'NOT_EXECUTED'}
 def file(n,s):
@@ -29,7 +29,7 @@ try:
  secret=file('root.secret',pw);client=file('client.cnf','[client]\ndefault-character-set=utf8mb4\nuser=root\npassword='+pw+'\n')
  docker('run','-d','--name',mysql,'--label','yshop.quality.owner='+owner,'--cap-drop=NET_RAW','--security-opt','no-new-privileges','-p','127.0.0.1::3306','--mount','type=bind,source='+str(secret)+',target=/run/root.secret,readonly','--mount','type=bind,source='+str(client)+',target=/run/client.cnf,readonly','-e','MYSQL_ROOT_PASSWORD_FILE=/run/root.secret','mysql:8.0')
  for _ in range(100):
-  try:docker('exec',mysql,'mysql','--defaults-extra-file=/run/client.cnf','-N','-e','SELECT 1');break
+  try:docker('exec',mysql,'mysql','--defaults-extra-file=/run/client.cnf','--protocol=TCP','-h','127.0.0.1','-N','-e','SELECT 1');break
   except RuntimeError:time.sleep(1)
  else:raise RuntimeError('MYSQL_NOT_READY')
  docker('exec',mysql,'mysql','--defaults-extra-file=/run/client.cnf','-e','CREATE DATABASE '+schema+' CHARACTER SET utf8mb4')
@@ -59,7 +59,12 @@ try:
  seed(sql,root,repo)
  config=file('application.yaml',yaml.safe_dump(base,allow_unicode=True));log=root/'backend.log'
  with log.open('w') as out:
-  log.chmod(0o600);process=subprocess.Popen(['java','-jar',str(repo/'yshop-drink-boot3/yshop-server/target/yshop-server.jar'),'--spring.config.location=file:'+str(config)],stdout=out,stderr=subprocess.STDOUT,start_new_session=True)
+  jar=repo/'yshop-drink-boot3/yshop-server/target/yshop-server.jar';report['backendArtifactHash']=hashlib.sha256(jar.read_bytes()).hexdigest()
+  java=['java'];agent=os.environ.get('YSHOP_QUALITY_COVERAGE_AGENT')
+  if agent:
+   if not Path(agent).is_file():raise RuntimeError('EXPLICIT_COVERAGE_AGENT_REQUIRED')
+   java+=['-javaagent:'+agent+'=destfile='+str(root/'backend-coverage.exec')+',append=false']
+  log.chmod(0o600);process=subprocess.Popen(java+['-jar',str(jar),'--spring.config.location=file:'+str(config)],stdout=out,stderr=subprocess.STDOUT,start_new_session=True);processes.append(process)
  file('process.json',json.dumps({'pid':process.pid,'port':args.port}));report['port']=args.port
  import urllib.request
  for _ in range(120):
@@ -73,21 +78,44 @@ try:
   assert_backend_owner(json.load(response),owner)
  report['backendOwnershipVerified']=True
  smoke(sql,root,report,args.port)
- if args.hold_for_gui:
+ if args.instances==2:
+  secondlog=root/'backend-second.log'
+  with secondlog.open('w') as out:
+   secondlog.chmod(0o600);second=subprocess.Popen(['java','-jar',str(jar),'--spring.config.location=file:'+str(config),'--server.port='+str(args.port+1)],stdout=out,stderr=subprocess.STDOUT,start_new_session=True);processes.append(second)
+  for _ in range(120):
+   if second.poll() is not None:raise RuntimeError('SECOND_BACKEND_EXITED')
+   try:
+    with urllib.request.urlopen('http://127.0.0.1:'+str(args.port+1)+'/actuator/info',timeout=2) as response:assert_backend_owner(json.load(response),owner)
+    break
+   except Exception:time.sleep(1)
+  else:raise RuntimeError('SECOND_BACKEND_TIMEOUT')
+  from business_http import multi_process_smoke
+  multi_process_smoke(sql,root,report,args.port,args.port+1)
+ if args.hold_for_gui or args.hold_for_device:
   file('gui-ready.json',json.dumps({'owner':owner,'backendPort':args.port,'result':'READY','syntheticAccount':True}))
-  deadline=time.time()+args.hold_for_gui
+  started=time.time();deadline=started+max(args.hold_for_gui,args.hold_for_device)
   while time.time()<deadline and not (root/'gui-finished').exists():time.sleep(1)
+  if args.hold_for_gui:
+   try:
+    report['guiEvidence']=gui_receipt(root/'gui-report.json',started,{k:report[k] for k in ['sourceSha','sourceDigest']},owner)
+    report['gui']='PASS'
+   except Exception as error:
+    report['gui']='BLOCKED';report['result']='BLOCKED';report['guiReasonType']=type(error).__name__
+
  if source_identity()!={k:report[k] for k in ['sourceSha','sourceDigest']}:raise RuntimeError('SOURCE_CHANGED_DURING_TEST')
 except Exception as e:failed_report(report,e,report.get('stage','PROVISION'))
 finally:
  try:
-  if process and process.poll() is None:
-   os.killpg(process.pid,signal.SIGTERM)
-   try:process.wait(timeout=20)
-   except subprocess.TimeoutExpired:os.killpg(process.pid,signal.SIGKILL);process.wait(timeout=5)
+  for process in reversed(processes):
+   if process.poll() is None:
+    os.killpg(process.pid,signal.SIGTERM)
+    try:process.wait(timeout=20)
+    except subprocess.TimeoutExpired:os.killpg(process.pid,signal.SIGKILL);process.wait(timeout=5)
   report['resources']=remove_owned(docker,names,owner)
   report['cleanup']='PASS'
  except Exception:report['cleanup']='FAIL';report['result']='FAIL'
  for n in ['root.secret','client.cnf','redis.conf','application.yaml','logback.xml']:(root/n).unlink(missing_ok=True)
+ report['sourceUnchanged']=source_identity()=={k:report[k] for k in ['sourceSha','sourceDigest']}
+ if not report['sourceUnchanged']:report['result']='FAIL'
  (root/'report.json').write_text(json.dumps(report,indent=2));print(json.dumps({'result':report['result'],'cleanup':report['cleanup'],'checks':len(report.get('checks',[]))}))
 sys.exit(0 if report['result']=='PASS' and report['cleanup']=='PASS' else 1)

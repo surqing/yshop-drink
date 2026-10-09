@@ -30,7 +30,7 @@ class CouponCodeRedisAcceptanceTest {
     AppCouponController one,two;
     @BeforeAll static void connect() throws Exception {
         var settings=new Properties();try(var reader=java.nio.file.Files.newBufferedReader(java.nio.file.Path.of(System.getenv("YSHOP_COUPON_REDIS_CONFIG")))){settings.load(reader);}
-        if(!"redis://127.0.0.1:6379".equals(settings.getProperty("url")))throw new IllegalArgumentException("LOOPBACK_REDIS_REQUIRED");
+        if(!settings.getProperty("url","").matches("redis://127[.]0[.]0[.]1:[0-9]{2,5}"))throw new IllegalArgumentException("LOOPBACK_REDIS_REQUIRED");
         Config config=new Config();config.useSingleServer().setAddress(settings.getProperty("url")).setPassword(settings.getProperty("password"))
                 .setTimeout(1500).setConnectTimeout(2000).setRetryAttempts(0).setConnectionPoolSize(4).setConnectionMinimumIdleSize(1);
         first=Redisson.create(config);second=Redisson.create(config);
@@ -48,7 +48,7 @@ class CouponCodeRedisAcceptanceTest {
         two=new AppCouponController(mock(AppCouponUserService.class),service,new CouponCodeGuard(b));
     }
     @AfterEach void cleanup() {
-        first.getKeys().deleteByPattern("rate_limiter:"+namespace+"*");SecurityContextHolder.clearContext();
+        try {first.getKeys().deleteByPattern("rate_limiter:"+namespace+"*");assertFalse(first.getKeys().getKeysByPattern("rate_limiter:"+namespace+"*").iterator().hasNext(), "REDIS_NAMESPACE_CLEANUP_INCOMPLETE");} finally {SecurityContextHolder.clearContext();}
     }
     MockHttpServletRequest request() {var r=new MockHttpServletRequest();r.setRemoteAddr("192.0.2.20");return r;}
     List<Integer> concurrent(boolean sameCode, boolean sameMember) throws Exception {

@@ -96,7 +96,7 @@ class PaymentDatabaseTest {
                 String url = settings.getProperty("url", "");
                 String user = settings.getProperty("username", "");
                 if (!url.matches(
-                                "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase5[bcdefgh]_[a-f0-9]{8}(\\?.*)?")
+                                "jdbc:mysql://127[.]0[.]0[.]1:[0-9]{2,5}/yshop_acceptance_phase5[bcdefgh]_[a-f0-9]{8}(\\?.*)?")
                         || !user.matches("accept5[bcdefgh]_[a-f0-9]{8}")) {
                     throw new IllegalStateException("ISOLATED_DATABASE_REQUIRED");
                 }

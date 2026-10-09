@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Inventory tracked test assets and evidence without assuming that presence means execution."""
 import argparse
+import hashlib
 import ast
 from collections import Counter
 import json
@@ -55,7 +56,15 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
                 files=node_files if parts[0]=='node' else python_files
                 executed[str(files[int(parts[1])].relative_to(REPO))]={**step,'executionIdentity':{k:r[k] for k in ['runId','sourceSha','sourceDigest']}}
     if mini:
-        r=json.loads(Path(mini).read_text());executed['tests/quality/mini-readonly.cjs']={'result':r['result'],'evidence':{'checks':len(r['checks']),'scope':r['scope']}}
+        r=json.loads(Path(mini).read_text())
+        target=REPO/'tests/quality/mini-readonly.cjs'
+        # A private device harness or historical screenshot is not this asset's execution.
+        if (r.get('script')=='tests/quality/mini-readonly.cjs'
+            and r.get('assetHash')==hashlib.sha256(target.read_bytes()).hexdigest()
+            and r.get('result')=='PASS' and r.get('cleanup')=='PASS'
+            and r.get('checks') and all(c.get('ok') is True for c in r['checks'])):
+            executed['tests/quality/mini-readonly.cjs']={'result':'PASS','evidence':{'checks':len(r['checks']),'scope':r['scope']}}
+
     covered_classes=set()
     if coverage:
         for cls in ET.parse(coverage).getroot().findall('package/class'):
@@ -63,6 +72,12 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
             if counter is not None and int(counter.get('covered',0))>0:covered_classes.add(cls.get('name'))
     registry=json.loads((REPO/'tests/quality/java-manifest.json').read_text())
     assets=[]
+    policy=json.loads((REPO/'tests/quality/inventory-policy.json').read_text())
+    references={}
+    for candidate in sorted(names):
+        if candidate.startswith('docs/quality/') or candidate.endswith(('.json','.svg','.png','.jpg')):continue
+        f=REPO/candidate
+        if f.is_file() and f.stat().st_size<500000:references[candidate]=f.read_text(errors='replace')
     for name in sorted(names):
         p=REPO/name
         if not p.is_file():continue
@@ -108,13 +123,31 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
         if p.name=='ProjectReactor.java':state='OBSOLETE';result='source rewriting utility, never execute as a test';command='DO NOT RUN'
         if script:command='not automatically executed; may require live authorization';result='operational tool, tested by prepayment-tools-test.py where covered'
         if tools and name in tools:
-            state='ACTIVE';result=tools[name]['result'];environment=tools[name].get('environment',environment);realdb=tools[name].get('realDatabase',realdb);synthetic=tools[name].get('syntheticPayment',synthetic)
+            tool=tools[name]
+            attributed=tool.get('executionIdentity')
+            certified=tool.get('executed') is True and isinstance(attributed,dict) and all(attributed.get(k) for k in ['runId','sourceSha','sourceDigest'])
+            state='ACTIVE' if certified else 'DECLARED_NOT_CERTIFIED'
+            result=tool['result'] if certified else 'Declared metadata only; not an execution certificate: '+tool['result']
+            execution_identity=attributed if certified else None
+            environment=tool.get('environment',environment);realdb=tool.get('realDatabase',realdb);synthetic=tool.get('syntheticPayment',synthetic)
         if name in executed:
             step=executed[name];state='ACTIVE' if step['result']=='PASS' else 'BROKEN';result=step['result']+' '+json.dumps(step.get('evidence',{}))
             execution_identity=step.get('executionIdentity')
         if p.name=='MailSendServiceImplTest.java':function+='; live SMTP demo retired, 9 mocked cases retained'
         called='quality dispatcher'  if category in ['JUnit','Node assertion suite'] else 'see runner audit'
-        assets.append(dict(path=name,category=category,function=function,command=command,caller=called,environment=environment,realDatabase=realdb,wechat=wechat,syntheticPayment=synthetic,recentExecution=result,executionIdentity=execution_identity,skip=skip,assertions=assertions,duplicateCoverage='shared fixtures/repeated cases are not unique scenarios',status=state))
+        execution_status=state
+        is_suite=category in ['JUnit','Node assertion suite','Python suite','WeChat UI automation']
+        state='ACTIVE_TEST' if is_suite else 'ACTIVE_HELPER'
+        reason='Registered executable test; execution is reported separately.' if is_suite else 'Build/fixture/helper, not an independent test PASS.'
+        if name in policy:state=policy[name]['status'];reason=policy[name]['reason']
+        if execution_status=='BROKEN':state='BROKEN'
+        callers=[n for n,t in references.items() if n!=name and (name in t or (p.name in t and len(p.name)>8))]
+        if category=='JUnit':callers=['tests/quality/run.py: manifest dispatcher',*callers]
+        if category=='Node assertion suite':callers=['tests/quality/run.py: quick discovery',*callers]
+        if '/src/test/resources/' in name:
+            callers+=['owning module test classpath; BaseDbUnitTest/ActiveProfiles consumption where declared']
+        if not callers:callers=['no static reference found; preserved extension/manual entry; no deletion inference']
+        assets.append(dict(path=name,assetHash=hashlib.sha256(p.read_bytes()).hexdigest(),category=category,function=function,command=command,caller=called,callerEvidence=callers,classificationReason=reason,environment=environment,realDatabase=realdb,wechat=wechat,syntheticPayment=synthetic,recentExecution=result,executionStatus=execution_status,executionIdentity=execution_identity,skip=skip,assertions=assertions,duplicateCoverage='shared fixtures/repeated cases are not unique scenarios',status=state))
     return assets
 
 
@@ -123,7 +156,7 @@ def main():
     assets=collect(a.evidence,a.run,a.mini,json.loads(Path(a.tool_evidence).read_text()) if a.tool_evidence else None,a.coverage);dest=REPO/a.output;dest.parent.mkdir(parents=True,exist_ok=True)
     header='''# Test asset inventory — Phase 6Q
 
-Generated from all tracked/new test assets and build/operational entry points. File presence is not proof of execution. `ACTIVE` for a resource/config means used by an entry point, not an independently passing test. `UNVERIFIED` is deliberate; no inference of dead code from absence of a caller. Full per-file fields are in [test-inventory.json](test-inventory.json).
+Generated from all tracked/new test assets and build/operational entry points. File presence is not proof of execution. Maintenance categories ACTIVE_TEST/ACTIVE_HELPER/CONDITIONAL/BLOCKED_EXTERNAL/REDUNDANT/OBSOLETE/BROKEN/UNKNOWN are independent of execution status. No helper is counted as a standalone passing test. Unexecuted conditional paths are deliberate; no inference of dead code from absence of a caller. Full per-file fields are in [test-inventory.json](test-inventory.json).
 
 Commands below omit private environment flags; use `tests/quality/run.py` for attributed execution. MySQL column means the suite has an actual isolated-MySQL path, not that every invocation uses MySQL. Repeat annotations contribute invocations, not different scenarios. Historical evidence is not substituted for this audit's results.
 

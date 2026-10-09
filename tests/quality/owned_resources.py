@@ -28,3 +28,8 @@ def failed_report(report, error, stage):
     report['failedStage']=stage
     if isinstance(error,RuntimeError) and str(error)=='SOURCE_CHANGED_DURING_TEST':
         report['reasonCode']='SOURCE_CHANGED_DURING_TEST'
+
+GUI_CHECKS=['product-create','product-edit','sku-stock','coupon-create','coupon-disable','permission-denied','unpaid-order-query','history-snapshot']
+def gui_receipt(path, started, identity, owner):
+    from run import controlled_receipt
+    return controlled_receipt(path,started,identity,owner,GUI_CHECKS)

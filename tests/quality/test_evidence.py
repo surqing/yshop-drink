@@ -198,7 +198,7 @@ class AcceptanceLifecycleFaultInjection(unittest.TestCase):
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
         return module
 
-    def exercise(self, folder, cleanup_failure=False, exit_code=0, provision_failure=None):
+    def exercise(self, folder, cleanup_failure=False, exit_code=0, provision_failure=None, residual=False):
         import contextlib,io
         from types import SimpleNamespace
         from unittest.mock import Mock
@@ -209,12 +209,13 @@ class AcceptanceLifecycleFaultInjection(unittest.TestCase):
                 seen.append(sql.split(' ',1)[0])
                 if provision_failure and sql.startswith(provision_failure):raise RuntimeError('SYNTHETIC_PROVISION_FAILURE')
                 if sql.startswith('SELECT VERSION'):return '8.0.46'
+                if sql.startswith('SELECT COUNT(*) FROM information_schema.SCHEMATA') or sql.startswith('SELECT COUNT(*) FROM mysql.user'):return '1' if residual else '0'
                 if sql.startswith('SELECT COUNT(*)'):return '17\t17' if folder=='business' else '12\t12'
                 if sql.startswith('DROP') and cleanup_failure:raise RuntimeError('SYNTHETIC_CLEANUP_FAILURE')
                 return ''
             fake=SimpleNamespace(mysql=mysql)
             spec=SimpleNamespace(loader=SimpleNamespace(exec_module=lambda value:None))
-            ev=Mock();ev.id='synthetic-run';ev.arguments.return_value=[];ev.validate.return_value={'tests':80}
+            ev=Mock();ev.id='synthetic-run';ev.arguments.return_value=[];ev.validate.return_value={'tests':80,'sourceSha':'synthetic','sourceDigest':'synthetic'}
             expected={'synthetic.OrderingDatabaseTest':{'invariant':1}} if folder=='business' else {'synthetic.PaymentDatabaseTest':{'invariant':1}}
             stream=io.StringIO()
             with patch.object(module,'PRIVATE',root),patch.object(module,'WORKSPACE',root),patch.object(module.importlib.util,'spec_from_file_location',return_value=spec),patch.object(module.importlib.util,'module_from_spec',return_value=fake),patch.object(module,'Evidence',return_value=ev),patch.object(module,'manifest',return_value=expected),patch.object(module,'execute',return_value=exit_code),patch.object(sys,'argv',['runner']),contextlib.redirect_stdout(stream):
@@ -222,12 +223,14 @@ class AcceptanceLifecycleFaultInjection(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError,'PROVISION_FAILURE'):module.main()
                 elif cleanup_failure:
                     with self.assertRaisesRegex(RuntimeError,'CLEANUP_FAILURE'):module.main()
+                elif residual:
+                    with self.assertRaisesRegex(RuntimeError,'NOT_DESTROYED'):module.main()
                 elif exit_code:
                     with self.assertRaisesRegex(RuntimeError,'ACCEPTANCE_FAILED'):module.main()
                 else:module.main()
             self.assertIn('DROP',seen)
             self.assertFalse(list(root.glob('*.properties')),'private JDBC config must be removed even on cleanup failure')
-            if cleanup_failure or exit_code or provision_failure:self.assertNotIn('"result": "PASS"',stream.getvalue())
+            if cleanup_failure or exit_code or provision_failure or residual:self.assertNotIn('"result": "PASS"',stream.getvalue())
             else:self.assertIn('"cleanup": "PASS"',stream.getvalue())
 
     def test_real_entrypoints_cleanup_failure_cannot_emit_pass(self):
@@ -250,4 +253,85 @@ class AcceptanceLifecycleFaultInjection(unittest.TestCase):
         for folder in ['business','payment']:
             with self.subTest(folder=folder):self.exercise(folder)
 
+    def test_drop_exit_zero_with_residual_database_cannot_pass(self):
+        for folder in ['business','payment']:
+            with self.subTest(folder=folder):self.exercise(folder,residual=True)
+
+class ControlledEvidenceFaults(unittest.TestCase):
+    def test_backend_exit_zero_needs_every_successful_reactor_module(self):
+        from run import backend_build_evidence
+        good='[INFO] one ... SUCCESS [ 1 s]\n[INFO] two ... SUCCESS [ 1 s]\n[INFO] BUILD SUCCESS\n'
+        self.assertEqual(2,backend_build_evidence(good,['one','two'])['modules'])
+        for text in ['',good.replace('two','one'),good.replace('two ... SUCCESS','two ... SKIPPED'),good.replace('[INFO] two ... SUCCESS [ 1 s]\n','')]:
+            with self.assertRaisesRegex(RuntimeError,'INCOMPLETE'):backend_build_evidence(text,['one','two'])
+    def test_exit_zero_without_assertion_report_is_blocked(self):
+        from run import Runner
+        with tempfile.TemporaryDirectory() as temp:
+            r=Runner(temp);r.env['QA_ARGV']=json.dumps([sys.executable,'-c','pass'])
+            r.configured('gui','QA_ARGV')
+            self.assertEqual('BLOCKED',r.steps[-1]['result'])
+            self.assertEqual('NOT_READY',r.save()['result'])
+
+    def test_receipt_rejects_stale_foreign_partial_skipped_and_cleanup_failure(self):
+        from run import controlled_receipt
+        import copy,time
+        with tempfile.TemporaryDirectory() as temp:
+            p=Path(temp)/'receipt.json';start=time.time()-1
+            good={'runId':'run','sourceSha':'sha','sourceDigest':'digest','result':'PASS',
+                  'cleanup':'PASS','sourceUnchanged':True,
+                  'checks':[{'name':'create','executed':True,'result':'PASS'}]}
+            identity={'sourceSha':'sha','sourceDigest':'digest'}
+            p.write_text(json.dumps(good));self.assertEqual(1,controlled_receipt(p,start,identity,'run',['create'])['tests'])
+            variants=[]
+            for key,value in [('runId','old'),('sourceDigest','changed'),('result','FAIL'),('cleanup','FAIL'),('sourceUnchanged',False),('checks',[])]:
+                v=copy.deepcopy(good);v[key]=value;variants.append(v)
+            for key,value in [('executed',False),('result','SKIPPED'),('name','other')]:
+                v=copy.deepcopy(good);v['checks'][0][key]=value;variants.append(v)
+            v=copy.deepcopy(good);v['checks'].append(v['checks'][0]);variants.append(v)
+            for v in variants:
+                p.write_text(json.dumps(v))
+                with self.assertRaises(RuntimeError):controlled_receipt(p,start,identity,'run',['create'])
+            p.write_text(json.dumps(good));os.utime(p,(1,1))
+            with self.assertRaisesRegex(RuntimeError,'STALE'):controlled_receipt(p,start,identity,'run',['create'])
+
+    def test_validation_exception_cannot_publish_secret(self):
+        from run import Runner
+        with tempfile.TemporaryDirectory() as temp:
+            r=Runner(temp)
+            def fail(log):raise RuntimeError('UPPERCASE_SECRET_TOKEN')
+            self.assertFalse(r.step('guard',[sys.executable,'-c','pass'],validator=fail))
+            self.assertNotIn('UPPERCASE_SECRET_TOKEN',(r.root/'report.json').read_text())
+            self.assertEqual('STEP_FAILED',r.steps[-1]['reason'])
+
+    def test_mutation_method_scope_is_exact_and_missing_method_fails(self):
+        from mutate import scoped_cases
+        registry={'qa.Suite':{'a':1,'b(String)[1]':1,'b(String)[2]':1}}
+        self.assertEqual({'qa.Suite':{'b(String)[1]':1,'b(String)[2]':1}},scoped_cases(registry,['Suite#b']))
+        with self.assertRaisesRegex(RuntimeError,'NOT_REGISTERED'):scoped_cases(registry,['Suite#missing'])
+
+    def test_private_mini_receipt_cannot_certify_tracked_asset(self):
+        from inventory import collect
+        temporary=tempfile.TemporaryDirectory();self.addCleanup(temporary.cleanup)
+        receipt=Path(temporary.name)/'mini.json'
+        receipt.write_text(json.dumps({'result':'PASS','checks':[{'ok':True}],'scope':'different private harness'}))
+        asset=next(a for a in collect(mini=receipt) if a['path']=='tests/quality/mini-readonly.cjs')
+        self.assertEqual('NOT_EXECUTED',asset['recentExecution'])
+        self.assertIsNone(asset['executionIdentity'])
+    def test_inventory_helpers_are_never_standalone_tests(self):
+        from inventory import collect
+        assets=collect()
+        helper=next(a for a in assets if a['path']=='tests/quality/evidence.py')
+        self.assertEqual('ACTIVE_HELPER',helper['status'])
+        self.assertTrue(helper['callerEvidence'])
+        self.assertEqual(64,len(helper['assetHash']))
+        allowed={'ACTIVE_TEST','ACTIVE_HELPER','CONDITIONAL','BLOCKED_EXTERNAL','REDUNDANT','OBSOLETE','BROKEN','UNKNOWN'}
+        self.assertTrue(all(a['status'] in allowed for a in assets))
+    def test_python_failure_diagnostics_exclude_payload_and_unknown_names(self):
+        from run import python_diagnostics
+        text='ERROR: test_python_failure_diagnostics_exclude_payload_and_unknown_names (__main__.ControlledEvidenceFaults)\nAttributeError: private-token-member-body\nERROR: test_attacker_name (__main__.InjectedClass)'
+        d=python_diagnostics(text,Path(__file__));encoded=json.dumps(d)
+        self.assertEqual('test_python_failure_diagnostics_exclude_payload_and_unknown_names',d['failures'][0]['method'])
+        self.assertEqual('UNKNOWN_CASE',d['failures'][1]['method'])
+        self.assertEqual(['AttributeError'],d['exceptionTypes'])
+        for secret in ['private-token-member-body','test_attacker_name','InjectedClass']:self.assertNotIn(secret,encoded)
 if __name__=='__main__':unittest.main()

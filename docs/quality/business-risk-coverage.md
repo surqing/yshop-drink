@@ -1,25 +1,27 @@
-# Business risk evidence — Phase 6Q-R1
+# Business and authentication risk evidence — Phase 6Q-R2
 
-Evidence is scoped and independent of file/class existence. [Exact asset inventory](test-inventory.md), [run receipts](evidence-summary.json), [coverage](test-coverage-report.md), [mutations](mutation-testing-report.md).
+All resources and identities are synthetic and run-owned. Ordinary and MySQL counts overlap; they are not summed into unique scenarios. [Runner](test-runner-audit.md), [mutations](mutation-testing-report.md), [machine receipts](evidence-summary.json).
 
-| Boundary | Actual evidence | Remaining limit |
+| Boundary | Actual evidence | Scope limit |
 |---|---|---|
-| Disabled/deleted member issuance/refresh/access | OAuth2LifecycleDatabaseTest69, real MySQL69, typed API/filter, own HTTP login+refresh rejection | no real accounts or WeChat/SMS calls |
-| Logout/revocation/old rotated access | DB family deletion, DB-backed access check, stale-cache service instance; HTTP logout/refresh denied | request already admitted before disable may finish |
-| Refresh/status/logout concurrency |20 rounds each,20 workers, row locks; shared DB, two independent cache/service instances | same JVM; not two separately deployed processes |
-| Member/admin identity | typed refresh/logout and actual request filter; admin/member HTTP credentials isolated | full browser authentication still CAPTCHA-blocked |
-| Store employee scope | actual HQ/staff roles and two stores; HTTP product/order B denied, A allowed; ordering DB suite | GUI editing with staff not measured |
-| Order/attempt cancellation race | existing financial/cancellation tests kept; real MySQL497; order→attempt/event locks; unchanged snapshots | broad mutation operators with runtime errors remain INCONCLUSIVE |
-| Server price/stock/SKU | ordering82 including A1.23/B9.87 independent oracle; MySQL488; conditional stock update and concurrency | not production-load performance |
-| Coupon claim/preoccupation/cancel | ordinary and MySQL coupon tests; real Redis66; own HTTP claim+retry+reservation+release | complete Mini claim UI beyond measured checkout scope unverified |
-| Complete repeated effects/release | new compound mutants detected by valid assertions and balance/stock/coupon/bill DB oracles | retained redundant-defence survivors are not hidden |
-| Payment freeze | client factory frozen synthetic key test; compound mutation killed; owned HTTP/Mini hooks measured zero | dispatcher/compile do not measure whole-machine network |
-| Actual writes | owned94-table schema,0 seed INSERTs, dedicated accounts/roles, independent Redis/backend; HTTP22; actual official Mini fixture | admin GUI CRUD slider not completed; not claimed PASS |
+| Disabled/deleted/re-enabled member | lifecycle72 + actual two-process HTTP disable/refresh/re-enable/logout | no real accounts/WeChat/SMS |
+| Admin disable/re-enable/delete | reproduced before-fix assertion failure; real AdminUserMapper/transaction/service regression; rollback after revoke; member same-ID survives | legacy direct DB state writes are unsupported administrative operations |
+| Typed refresh/revoke API | real API delegates/service/mappers, canonical principal and client, old rotated access, stale Redis refusal | existing reusable refresh contract; not one-use rotation |
+| Multi-process shared auth | two independent JVM backends;5 rounds x20 workers for refresh/disable/logout;331 HTTP requests | auth boundary measured across processes; not all business races |
+| Store product/category/order access | real HQ/staff roles and two stores; database ownership not token shop hint; HTTP B denied/A allowed | staff GUI blocked |
+| Store price/SKU/stock | ordering84, catalog96, editing25 real MySQL; A/B oracle, conditional debit and product-edit/order competition | business engine tests use separate connections in one JVM |
+| Cancellation/uncertainty/late success | full financial497, including cancellation108; focused guards killed by assertions | synthetic events only; no live reconciliation |
+| Coupon issuance/reservation/retry/cancel | coupon285 + payment/coupon68 + Redis66, distinct clients/atomic shared state; own HTTP rights/order retries | complete claim/disable Mini UI not measured |
+| Duplicate effects/release | existing compound mutants and DB bill/stock/coupon oracles preserved | three redundant-defense survivors explicitly retained |
+| Actual business writes | fresh schema with0 seed INSERTs, own roles/accounts;45 HTTP checks incl two processes, historical amount unchanged after catalog edit, unpaid retry/cancel | CAPTCHA GUI writes not counted PASS |
+| Payment freeze | synthetic factory tests, frozen config and request admission counters | not whole-machine packet capture |
 
-## Authentication contract
+## Authentication production review
 
-Token creation, refresh and authorization consult current principal and refresh-family/access-row evidence in the database. Disabled/deleted status cannot be bypassed by a stale Redis cache. Principal→family→access lock order and READ COMMITTED transactions serialize refresh with disable/logout; cache changes happen after commit. Disable/delete revokes credentials in the same transaction. Re-enable does not resurrect them. Historical rotated access can still identify its family for logout; revocation is idempotent. Member and admin overloads validate user type,client and canonical identity.
+Current-principal database row → refresh family → access row lock order is used by issuance,refresh,authorization,logout and revocation. READ COMMITTED transactions revalidate principal/family after lock; disabled/deleted accounts and stale caches cannot authorize. Cache writes occur after commit and cache failures only emit a constant warning. Typed endpoints isolate MEMBER/ADMIN and client identity; untyped compatibility delegates preserve canonical token identity.
 
-The existing reusable refresh-token contract is preserved: repeated valid refreshes rotate access; only the current access token is valid, while the refresh token remains reusable until expiry/revocation. This is not one-use refresh-token rotation. Failed issuance/disabled refresh do not record successful login; logout logs LOGOUT rather than LOGIN and does not update last-login success.
+An actual missing ADMIN revocation was found: old credentials could resume after disable/re-enable. AdminUserServiceImpl now updates principal/revokes families in one transaction, and deletion also revokes. Regression verifies another MEMBER with the same ID is unaffected; injected failure after revocation restores both principal and credentials. Existing member service disable/delete and current-principal checks remain. Ordinary AdminUser36+lifecycle72 and real MySQL lifecycle72 pass.
 
-Conservative limits: authorization is linearized at its current-principal/family decision. An already admitted request is not retroactively aborted. Real WeChat auth, SMS transport, production merchant activity and multi-process scheduling are neither needed nor claimed tested.
+Reusable refresh remains the documented contract: concurrent refresh may return several access generations but only the final one remains valid. Logout of an old rotated access still finds/revokes its family. Re-enable does not resurrect revoked credentials. Refresh does not record a successful login; logout records logout, not login, and failed issuance/status checks do not update successful login timestamps.
+
+Authorization linearizes at its DB principal/family decision; already admitted requests may finish. Directly changing status in SQL without the service/revocation contract is not supported. GUI/physical-device behaviors beyond the actual measured scenarios remain explicit. No wallet, payment or marketing behavior was changed to improve a test score.

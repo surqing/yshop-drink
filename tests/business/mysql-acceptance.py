@@ -13,8 +13,9 @@ import xml.etree.ElementTree as ET
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / 'tests/quality'))
 from evidence import Evidence, execute, manifest, workspace
+from acceptance_support import mysql_port, maven_command, database_helper, supported_mysql, assert_removed
 WORKSPACE = workspace(REPO)
-PRIVATE = WORKSPACE / '.local-dev/acceptance'
+PRIVATE = Path(os.environ.get('YSHOP_ACCEPTANCE_OUTPUT',str(WORKSPACE / '.local-dev/acceptance')))
 
 
 def main():
@@ -22,11 +23,11 @@ def main():
     catalog = '--catalog' in sys.argv or coupon
     PRIVATE.mkdir(parents=True, exist_ok=True, mode=0o700)
     PRIVATE.chmod(0o700)
-    spec = importlib.util.spec_from_file_location('local_database', WORKSPACE / '.local-dev/database.py')
+    spec = importlib.util.spec_from_file_location('local_database', database_helper(WORKSPACE))
     db = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(db)
     version = db.mysql('SELECT VERSION();').strip()
-    if not re.match(r'^8[.]0[.](?:[3-9][0-9]|29)(?:\D|$)', version):
+    if not supported_mysql(version):
         raise RuntimeError('SUPPORTED_MYSQL_8_REQUIRED')
     suffix = secrets.token_hex(4)
     schema, account = 'yshop_acceptance_phase6a_' + suffix, 'accept6a_' + suffix
@@ -34,6 +35,7 @@ def main():
     jdbc = PRIVATE / ('ordering-jdbc-' + suffix + '.properties')
     log = PRIVATE / ('ordering-mysql-' + suffix + '.log')
     schema_created = account_created = False
+    evidence = None
     receipt = PRIVATE / ("resources-" + suffix + ".json")
     try:
         db.mysql(f"CREATE DATABASE `{schema}` CHARACTER SET utf8mb4;")
@@ -43,14 +45,11 @@ def main():
         db.mysql(f"CREATE USER '{account}'@'%' IDENTIFIED BY '{password}';")
         account_created = True
         db.mysql(f"GRANT ALL PRIVILEGES ON `{schema}`.* TO '{account}'@'%';")
-        jdbc.write_text(f'url=jdbc:mysql://127.0.0.1:3306/{schema}?useSSL=false&connectTimeout=5000&socketTimeout=30000&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&sessionVariables=innodb_lock_wait_timeout=2\nusername={account}\npassword={password}\n')
+        jdbc.write_text(f'url=jdbc:mysql://127.0.0.1:{mysql_port()}/{schema}?useSSL=false&connectTimeout=5000&socketTimeout=30000&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&sessionVariables=innodb_lock_wait_timeout=2\nusername={account}\npassword={password}\n')
         jdbc.chmod(0o600)
         env = os.environ.copy()
-        env['JAVA_HOME'] = str(WORKSPACE / '.dev-tools/java-home')
-        env['PATH'] = env['JAVA_HOME'] + '/bin' + os.pathsep + env['PATH']
         env['YSHOP_ORDERING_ACCEPTANCE_CONFIG'] = str(jdbc)
-        command = [str(WORKSPACE / '.dev-tools/maven/bin/mvn'),
-                   '-Dmaven.repo.local=' + str(WORKSPACE / '.local-dev/cache/maven'),
+        command = maven_command(WORKSPACE) + [
                    '-pl', 'yshop-module-mall/yshop-module-order-biz', '-Pmysql-acceptance', 'test',
                    '-Dtest=' + ('OrderingDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance,CouponDatabaseTest' if coupon else 'OrderingDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance' if catalog else 'OrderingDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=true']
         evidence = Evidence(PRIVATE / 'quality')
@@ -78,6 +77,7 @@ def main():
         report = log.with_suffix('.json')
 
     finally:
+        if evidence is not None: evidence.diagnostics()
         try:
             if schema_created or account_created:
                 assert re.fullmatch(r'yshop_acceptance_phase6a_[a-f0-9]{8}', schema)
@@ -86,9 +86,11 @@ def main():
                     if schema_created: db.mysql(f"DROP DATABASE `{schema}`;")
                 finally:
                     if account_created: db.mysql(f"DROP USER '{account}'@'%';")
+            if schema_created or account_created: assert_removed(db,schema,account)
             receipt.unlink(missing_ok=True)
         finally:
             jdbc.unlink(missing_ok=True)
+    summary.update({k:verified[k] for k in ['sourceSha','sourceDigest']})
     summary['cleanup'] = 'PASS'
     report.write_text(json.dumps(summary, indent=2) + '\n')
     report.chmod(0o600)

@@ -27,8 +27,8 @@ def seed(sql,root,repo):
 def smoke(sql,root,report,port):
     checks=[];sent=[];issued=[]
     def check(name,predicate):
-        if not predicate:raise RuntimeError('HTTP_ASSERTION:'+name)
-        checks.append({'name':name,'result':'PASS'});report['checks']=checks
+        checks.append({'name':name,'result':'PASS' if predicate else 'FAIL','executed':True});report['checks']=checks
+        if not predicate:raise RuntimeError('HTTP_ASSERTION_FAILED')
     def api(method,path,data=None,token=None,success=True,drop_response=False):
         if any(p in path for p in ['/order/pay','/notify','/prepay','/refund','/recharge']):raise RuntimeError('FINANCIAL_PATH_FORBIDDEN')
         headers={'Content-Type':'application/json'}
@@ -86,6 +86,9 @@ def smoke(sql,root,report,port):
     again=api('POST','/app-api/order/create',order,token);oid=again['orderId'];check('lost response same-key retry keeps one unpaid order',int(sql('SELECT COUNT(*) FROM yshop_store_order;').strip())==1)
     amounts=sql("SELECT pay_price,paid FROM yshop_store_order WHERE order_id='"+oid+"';").strip().split('\t');check('server price and topping minus coupon unpaid',amounts==['31.00','0'])
     detail=api('GET','/app-api/order/detail/'+oid,token=token);check('member sees pending order',detail.get('paid')==0)
+    current=int(sql('SELECT catalog_version FROM yshop_store_product WHERE id='+str(pid)+';').strip())
+    api('PUT','/admin-api/product/catalog/price',{'productId':pid,'skuId':sku,'price':19,'version':current,'reason':'synthetic history test','key':uuid.uuid4().hex},admin)
+    check('catalog edit leaves existing order price snapshot unchanged',sql("SELECT pay_price FROM yshop_store_order WHERE order_id='"+oid+"';").strip()=='31.00')
     deny=api('GET','/app-api/order/detail/'+oid,token=other,success=False);check('other member cannot read order',deny.get('code')!=0)
     order_id=int(sql("SELECT id FROM yshop_store_order WHERE order_id='"+oid+"';").strip())
     check('authorized staff reads store A order',bool(api('GET','/admin-api/order/store-order/get?id='+str(order_id),token=staff)))
@@ -112,3 +115,51 @@ def smoke(sql,root,report,port):
     log=(root/'backend.log').read_text(errors='replace')
     check('issued tokens absent from backend log',all(value not in log for value in issued))
     report['httpRequests']=len(sent);report['paymentRequests']={'value':0,'evidence':'MEASURED_THIS_HTTP_HARNESS_ONLY','globalNetworkMeasured':False};report['result']='PASS'
+
+def multi_process_smoke(sql,root,report,first,second):
+    """Actual two JVMs share only MySQL/Redis, including lifecycle races, not mocked services."""
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    issued=[];requests=0;counter_lock=threading.Lock()
+    def api(port,path,data=None,token=None):
+        nonlocal requests
+        if not path.startswith(('/app-api/member/auth/','/admin-api/system/auth/','/admin-api/member/user/update')):
+            raise RuntimeError('AUTH_ONLY_MULTIPROCESS_PATH_REQUIRED')
+        request=urllib.request.Request('http://127.0.0.1:'+str(port)+path,
+            data=json.dumps(data).encode() if data is not None else b'',
+            headers={'Content-Type':'application/json',**({'Authorization':'Bearer '+token} if token else {})},
+            method='PUT' if path.startswith('/admin-api/member/user/update') else 'POST')
+        try:
+            with urllib.request.urlopen(request,timeout=30) as response:r=json.load(response)
+        except urllib.error.HTTPError as response:r=json.load(response)
+        with counter_lock:
+            requests+=1
+            if isinstance(r.get('data'),dict):issued.extend(r['data'][k] for k in ['accessToken','refreshToken'] if isinstance(r['data'].get(k),str))
+        return r
+    def checked(name,value):
+        if not value:raise RuntimeError('MULTIPROCESS_ASSERTION_FAILED')
+        report['checks'].append({'name':name,'result':'PASS','executed':True})
+    def login():
+        r=api(first,'/app-api/member/auth/login',{'mobile':'13800000001','password':'syntheticQA12'})
+        if r.get('code')!=0:raise RuntimeError('SYNTHETIC_LOGIN_FAILED')
+        return r['data']
+    admin=api(first,'/admin-api/system/auth/login',{'username':'qualityadmin','password':'syntheticQA12'})['data']['accessToken']
+    def race(fn):
+        gate=threading.Barrier(20)
+        with ThreadPoolExecutor(max_workers=20) as workers:
+            def task(n):gate.wait(timeout=30);return fn(n,first if n%2==0 else second)
+            return list(workers.map(task,range(20)))
+    for round in range(5):
+        token=login();refresh=token['refreshToken']
+        rows=race(lambda n,port:api(port,'/app-api/member/auth/refresh-token?refreshToken='+refresh))
+        checked('two-process refresh only one current access round '+str(round),all(r.get('code')==0 for r in rows) and sql("SELECT COUNT(*) FROM system_oauth2_access_token WHERE user_id=101 AND user_type=1 AND deleted=0;").strip()=='1')
+        rows=race(lambda n,port:api(port,'/admin-api/member/user/update',{'id':101,'status':1},admin) if n==0 else api(port,'/app-api/member/auth/refresh-token?refreshToken='+refresh))
+        checked('two-process disable revokes final family round '+str(round),rows[0].get('code')==0 and sql("SELECT COUNT(*) FROM system_oauth2_refresh_token WHERE user_id=101 AND user_type=1 AND deleted=0;").strip()=='0' and api(second,'/app-api/member/auth/refresh-token?refreshToken='+refresh).get('code')!=0)
+        checked('two-process reenable keeps old refresh revoked round '+str(round),api(second,'/admin-api/member/user/update',{'id':101,'status':0},admin).get('code')==0 and api(first,'/app-api/member/auth/refresh-token?refreshToken='+refresh).get('code')!=0)
+        token=login();refresh=token['refreshToken']
+        rows=race(lambda n,port:api(port,'/app-api/member/auth/logout',token=token['accessToken']) if n==0 else api(port,'/app-api/member/auth/refresh-token?refreshToken='+refresh))
+        checked('two-process logout revokes final family round '+str(round),rows[0].get('code')==0 and sql("SELECT COUNT(*) FROM system_oauth2_refresh_token WHERE user_id=101 AND user_type=1 AND deleted=0;").strip()=='0' and api(second,'/app-api/member/auth/refresh-token?refreshToken='+refresh).get('code')!=0)
+    checked('two-process all orders remain unpaid',sql('SELECT COUNT(*) FROM yshop_store_order WHERE paid<>0;').strip()=='0')
+    logs=(root/'backend.log').read_text(errors='replace')+(root/'backend-second.log').read_text(errors='replace')
+    checked('two-process issued credentials absent from logs',all(t not in logs for t in issued))
+    report['multiProcess']={'instances':2,'rounds':5,'workers':20,'httpRequests':requests,'sameJvm':False,'sharedState':'owned MySQL and Redis','result':'PASS'}

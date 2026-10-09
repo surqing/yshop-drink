@@ -46,17 +46,17 @@ class OAuth2LifecycleDatabaseTest {
         jdbc=new JdbcTemplate(ds);tm=new DataSourceTransactionManager(ds);
         for(String table:List.of("system_oauth2_access_token","system_oauth2_refresh_token","system_users","yshop_user")) jdbc.execute("DROP TABLE IF EXISTS "+table);
         jdbc.execute("CREATE TABLE yshop_user(id BIGINT PRIMARY KEY,status INT,deleted INT DEFAULT 0)");
-        jdbc.execute("CREATE TABLE system_users(id BIGINT PRIMARY KEY,status INT,deleted INT DEFAULT 0)");
+        jdbc.execute("CREATE TABLE system_users(id BIGINT PRIMARY KEY,status INT,deleted INT DEFAULT 0,username VARCHAR(30),password VARCHAR(100),nickname VARCHAR(30),remark VARCHAR(500),dept_id BIGINT,post_ids VARCHAR(255),email VARCHAR(50),mobile VARCHAR(11),sex INT,avatar VARCHAR(100),login_ip VARCHAR(50),login_date DATETIME,creator VARCHAR(64),updater VARCHAR(64),create_time DATETIME,update_time DATETIME,tenant_id BIGINT DEFAULT 0)");
         String tail=",tenant_id BIGINT DEFAULT 0,shop_id BIGINT,creator VARCHAR(64),updater VARCHAR(64),create_time DATETIME,update_time DATETIME,deleted INT DEFAULT 0";
         jdbc.execute("CREATE TABLE system_oauth2_refresh_token(id BIGINT PRIMARY KEY,refresh_token VARCHAR(64) UNIQUE,user_id BIGINT,user_type INT,client_id VARCHAR(64),scopes VARCHAR(2000),expires_time DATETIME"+tail+")");
         jdbc.execute("CREATE TABLE system_oauth2_access_token(id BIGINT PRIMARY KEY,access_token VARCHAR(64) UNIQUE,refresh_token VARCHAR(64),user_id BIGINT,user_type INT,user_info VARCHAR(2000),client_id VARCHAR(64),scopes VARCHAR(2000),expires_time DATETIME"+tail+")");
-        jdbc.update("INSERT INTO yshop_user VALUES(1,0,0)");jdbc.update("INSERT INTO system_users VALUES(1,0,0)");
+        jdbc.update("INSERT INTO yshop_user VALUES(1,0,0)");jdbc.update("INSERT INTO system_users(id,username,password,nickname,status,deleted) VALUES(1,'synthetic-admin','synthetic-unused','synthetic-admin',0,0)");
         var bean=new MybatisSqlSessionFactoryBean();bean.setDataSource(ds);
         var config=new MybatisConfiguration();config.setMapUnderscoreToCamelCase(true);
         var global=com.baomidou.mybatisplus.core.toolkit.GlobalConfigUtils.defaults();
         global.setMetaObjectHandler(new co.yixiang.yshop.framework.mybatis.core.handler.DefaultDBFieldHandler());
         bean.setGlobalConfig(global);com.baomidou.mybatisplus.core.toolkit.GlobalConfigUtils.setGlobalConfig(config,global);
-        for(var c:List.of(OAuth2PrincipalMapper.class,OAuth2AccessTokenMapper.class,OAuth2RefreshTokenMapper.class)) config.addMapper(c);
+        for(var c:List.of(OAuth2PrincipalMapper.class,OAuth2AccessTokenMapper.class,OAuth2RefreshTokenMapper.class,co.yixiang.yshop.module.system.dal.mysql.user.AdminUserMapper.class)) config.addMapper(c);
         bean.setConfiguration(config);sql=new SqlSessionTemplate(bean.getObject());
         one=instance(cache1);two=instance(cache2);api=new OAuth2TokenApiImpl();ReflectionTestUtils.setField(api,"oauth2TokenService",one);
     }
@@ -89,6 +89,49 @@ class OAuth2LifecycleDatabaseTest {
         proxy.addAdvice(new TransactionInterceptor(tm,new AnnotationTransactionAttributeSource()));return (OAuth2TokenService)proxy.getProxy();
     }
     OAuth2AccessTokenDO member(){return one.createAccessToken(1L,1,"synthetic-client",List.of());}
+    co.yixiang.yshop.module.system.service.user.AdminUserService adminLifecycle(OAuth2TokenService tokens) {
+        var target=new co.yixiang.yshop.module.system.service.user.AdminUserServiceImpl();
+        ReflectionTestUtils.setField(target,"userMapper",sql.getMapper(co.yixiang.yshop.module.system.dal.mysql.user.AdminUserMapper.class));
+        ReflectionTestUtils.setField(target,"oauth2Tokens",tokens);
+        ReflectionTestUtils.setField(target,"permissionService",mock(co.yixiang.yshop.module.system.service.permission.PermissionService.class));
+        ReflectionTestUtils.setField(target,"userPostMapper",mock(co.yixiang.yshop.module.system.dal.mysql.dept.UserPostMapper.class));
+        ReflectionTestUtils.setField(target,"storeShopMapper",mock(co.yixiang.yshop.module.store.dal.mysql.storeshop.StoreShopMapper.class));
+        var proxy=new ProxyFactory(target);proxy.setProxyTargetClass(true);proxy.addAdvice(new TransactionInterceptor(tm,new AnnotationTransactionAttributeSource()));
+        return (co.yixiang.yshop.module.system.service.user.AdminUserService)proxy.getProxy();
+    }
+    @Test void adminDisableReenableCannotResurrectOldCredentials() {
+        var member=member();var admin=one.createAccessToken(1L,2,"synthetic-client",List.of());
+        cache2.put(admin.getAccessToken(),admin);
+        var users=adminLifecycle(one);users.updateUserStatus(1L,1);
+        denied(()->two.checkAccessToken(admin.getAccessToken()));
+        users.updateUserStatus(1L,0);
+        denied(()->two.refreshAccessToken(admin.getRefreshToken(),"synthetic-client",2));
+        denied(()->two.checkAccessToken(admin.getAccessToken()));
+        assertEquals(1L,two.checkAccessToken(member.getAccessToken()).getUserId());
+        var fresh=one.createAccessToken(1L,2,"synthetic-client",List.of());users.deleteUser(1L);
+        denied(()->two.refreshAccessToken(fresh.getRefreshToken(),"synthetic-client",2));
+        assertEquals(1,count("system_oauth2_refresh_token")); // Member identity with same id survives.
+    }
+    @Test void adminRevocationFailureRollsBackStatusAndCredentials() {
+        var admin=one.createAccessToken(1L,2,"synthetic-client",List.of());
+        var failing=mock(OAuth2TokenService.class);
+        doAnswer(c->{one.revokeUserTokens(1L,2);throw new IllegalStateException("SYNTHETIC_AFTER_REVOKE");}).when(failing).revokeUserTokens(1L,2);
+        assertThrows(IllegalStateException.class,()->adminLifecycle(failing).updateUserStatus(1L,1));
+        assertEquals(0,jdbc.queryForObject("SELECT status FROM system_users WHERE id=1",Integer.class));
+        assertEquals(1,count("system_oauth2_refresh_token"));
+        assertEquals(admin.getAccessToken(),two.checkAccessToken(admin.getAccessToken()).getAccessToken());
+        assertNotNull(two.refreshAccessToken(admin.getRefreshToken(),"synthetic-client",2));
+    }
+    @Test void actualApiOverloadsAndRevokeKeepCanonicalMemberIdentity() {
+        var req=new co.yixiang.yshop.module.system.api.oauth2.dto.OAuth2AccessTokenCreateReqDTO().setUserId(1L).setUserType(1).setClientId("synthetic-client").setScopes(List.of());
+        var token=api.createAccessToken(req);assertEquals(1,api.checkAccessToken(token.getAccessToken()).getUserType());
+        var next=api.refreshAccessToken(token.getRefreshToken(),"synthetic-client");
+        denied(()->two.checkAccessToken(token.getAccessToken()));assertEquals(1L,next.getUserId());
+        assertNotNull(api.removeAccessToken(next.getAccessToken()));
+        denied(()->api.refreshAccessToken(token.getRefreshToken(),"synthetic-client"));
+        var fresh=api.createAccessToken(req);api.revokeUserTokens(1L,1);
+        denied(()->api.checkAccessToken(fresh.getAccessToken()));assertEquals(0,count("system_oauth2_refresh_token"));
+    }
     int count(String table){return jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" WHERE deleted=0",Integer.class);}
     void denied(Runnable action){assertThrows(ServiceException.class,action::run);}
     void disable(boolean delete) {

@@ -13,6 +13,7 @@ from evidence import execute, workspace, source_identity
 REPO=Path(__file__).resolve().parents[2]
 
 def main():
+    identity=source_identity()
     ws=workspace(REPO);root=ws/'.local-dev/quality/uniapp'/uuid.uuid4().hex
     root.mkdir(parents=True,mode=0o700);project=root/'project'
     appconfig=ws/'.uniapp-dev/.env'
@@ -44,7 +45,8 @@ def main():
     (output/'project.private.config.json').write_text(json.dumps(local)+'\n')
     compiled=''.join(f.read_text(errors='replace') for f in output.rglob('*.js'))
     if 'http://127.0.0.1:'+api_port+'/app-api' not in compiled:raise RuntimeError('COMPILED_API_BINDING_MISMATCH')
-    report={**source_identity(),'result':'PASS','sourceRepo':str(REPO),'sourceHashes':json.loads((root/'source-hashes.json').read_text()),'project':str(output),'apiPort':env['YSHOP_API_PORT'],'appidConfigured':bool(config['appid']),'paymentRequests':{'value':None,'evidence':'COMPILATION_ONLY_NOT_MEASURED'}}
+    if source_identity()!=identity:raise RuntimeError('SOURCE_CHANGED_DURING_TEST')
+    report={**identity,'sourceUnchanged':True,'result':'PASS','sourceRepo':str(REPO),'sourceHashes':json.loads((root/'source-hashes.json').read_text()),'project':str(output),'apiPort':env['YSHOP_API_PORT'],'appidConfigured':bool(config['appid']),'paymentRequests':{'value':None,'evidence':'COMPILATION_ONLY_NOT_MEASURED'}}
     (root/'report.json').write_text(json.dumps(report,indent=2))
     print(json.dumps({'result':'PASS','report':str(root/'report.json'),'project':str(output)}))
     return 0
