@@ -1,3 +1,5 @@
+> Historical R2 record. Current original-request audit: [coverage-report.md](coverage-report.md).
+
 # Coverage measurement — Phase 6Q-R2
 
 Coverage is risk evidence, not a whole-repository100% target. Every receipt retains its actual SHA/content digest; a dirty8eb measurement is not relabeled as a later commit. Final-head CI regenerates attributed ordinary Java coverage; delivery must also record the actual final-head measurements. [Machine scope](evidence-summary.json).

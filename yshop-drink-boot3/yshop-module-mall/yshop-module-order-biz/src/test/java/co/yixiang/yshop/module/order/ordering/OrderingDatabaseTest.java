@@ -48,6 +48,23 @@ class OrderingDatabaseTest {
                     "yshop_order_inventory_reservation");
     Path boot;
 
+    private static boolean raceRejection(RuntimeException error, Set<String> allowedReasons) {
+        var denied = assertInstanceOf(co.yixiang.yshop.framework.common.exception.ServiceException.class, error);
+        assertTrue(allowedReasons.contains(denied.getMessage()), "Unexpected race rejection");
+        return false;
+    }
+
+    @Test
+    void unexpectedDatabaseFailuresCannotBecomeNormalRaceLosers() {
+        var allowed = Set.of("PRODUCT_STOCK_INSUFFICIENT");
+        assertThrows(AssertionError.class, () -> raceRejection(
+                new org.springframework.dao.DataAccessResourceFailureException("synthetic database outage"), allowed));
+        assertThrows(AssertionError.class, () -> raceRejection(
+                new co.yixiang.yshop.framework.common.exception.ServiceException(1008003090, "UNEXPECTED_REJECTION"), allowed));
+        assertFalse(raceRejection(new co.yixiang.yshop.framework.common.exception.ServiceException(
+                1008003090, "PRODUCT_STOCK_INSUFFICIENT"), allowed));
+    }
+
     @BeforeEach
     void setup() throws Exception {
         var ds = new DriverManagerDataSource();
@@ -520,7 +537,7 @@ class OrderingDatabaseTest {
                                 place(request());
                                 return true;
                             } catch (RuntimeException expected) {
-                                return false;
+                                return raceRejection(expected, Set.of("PRODUCT_STOCK_OR_PRICE_INVALID", "PRODUCT_STOCK_INSUFFICIENT"));
                             }
                         });
         assertEquals(1, results.stream().filter(Boolean::booleanValue).count());
@@ -613,7 +630,7 @@ class OrderingDatabaseTest {
                                 place(p);
                                 return true;
                             } catch (RuntimeException ex) {
-                                return false;
+                                return raceRejection(ex, Set.of("COUPON_NOT_AVAILABLE"));
                             }
                         });
         assertEquals(1, results.stream().filter(Boolean::booleanValue).count());

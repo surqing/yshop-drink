@@ -19,7 +19,37 @@ from evidence import Evidence, execute, manifest, workspace, source_identity
 
 REPO = Path(__file__).resolve().parents[2]
 BOOT = REPO / 'yshop-drink-boot3'
-MODES = ['QUICK','BUSINESS','INTEGRATION','PAYMENT-SAFETY','MINIPROGRAM','FULL','MUTATION']
+MODES = ['QUICK','BUSINESS','INTEGRATION','PAYMENT-SAFETY','MINIPROGRAM','FULL','MUTATION','JAVA','FRONTEND','SECURITY','REPORT']
+
+def aggregate_reports(paths, identity):
+    if not paths: raise RuntimeError('CURRENT_REPORTS_REQUIRED')
+    reports = [json.loads(Path(p).read_text()) for p in paths]
+    ids = [r.get('runId') for r in reports]
+    if len(set(ids)) != len(ids) or any(not i for i in ids): raise RuntimeError('DUPLICATE_OR_MISSING_RUN_ID')
+    for path,r in zip(paths,reports):
+        if any(r.get(k) != v for k,v in identity.items()): raise RuntimeError('STALE_REPORT_SOURCE')
+        if not r.get('steps') or r.get('result') != 'PASS' or r.get('sourceUnchanged') is not True or any(s.get('result') != 'PASS' for s in r['steps']):
+            raise RuntimeError('INCOMPLETE_OR_FAILED_RUN')
+        executed=sum(s.get('evidence',{}).get('tests',0) for s in r['steps'])
+        if not executed and any(s.get('name')=='owned-controlled-dependencies' for s in r['steps']):
+            controlled=json.loads((Path(path).parent/'controlled/report.json').read_text())
+            if controlled.get('result')!='PASS' or controlled.get('cleanup')!='PASS' or any(controlled.get(k)!=v for k,v in identity.items()):raise RuntimeError('INCOMPLETE_OR_FAILED_RUN')
+            executed=sum(s.get('evidence',{}).get('tests',0) for s in controlled.get('steps',[]))
+        if executed<=0:raise RuntimeError('ZERO_EXECUTED_TESTS')
+    return {'result':'PASS', **identity, 'runIds': ids, 'reports': [str(Path(p).resolve()) for p in paths],
+            'scope':'explicit current-source reports only; repeated scopes are not summed as unique test cases'}
+
+def vue_evidence(path, expected):
+    report=json.loads(Path(path).read_text()); actual={}
+    for suite in report.get('testResults',[]):
+        relative=str(Path(suite['name']).relative_to(REPO/'yshop-drink-vue3'))
+        cases=suite.get('assertionResults',[])
+        if relative in actual or suite.get('status')!='passed' or any(c.get('status')!='passed' for c in cases):raise RuntimeError('VUE_TESTS_INCOMPLETE')
+        actual[relative]=[c['title'] for c in cases]
+    count=sum(map(len,actual.values()))
+    if not count or actual!=expected or report.get('numTotalTests')!=count or report.get('numPassedTests')!=count or not report.get('success') or report.get('numPendingTests') or report.get('numTodoTests'):
+        raise RuntimeError('VUE_TESTS_INCOMPLETE')
+    return {'tests':count,'exactNamesChecked':True,'cases':actual}
 
 def controlled_receipt(path, started, identity, run_id, expected):
     """An exit code is not evidence that controlled GUI/CLI assertions ran."""
@@ -117,7 +147,9 @@ class Runner:
 
     def step(self, name, command, cwd=REPO, timeout=1800, validator=None, diagnostic=None):
         folder=self.root/name;folder.mkdir(mode=0o700)
-        entry={'name':name,'result':'FAIL','timeoutSeconds':timeout}
+        entry={'name':name,'result':'FAIL','timeoutSeconds':timeout,'startedAt':time.time(),
+               'commandSha256':hashlib.sha256(json.dumps(command).encode()).hexdigest(),'executable':Path(command[0]).name}
+        (folder/'command.json').write_text(json.dumps({'argv':command,'cwd':str(cwd)}));(folder/'command.json').chmod(0o600)
         start=time.time()
         try:
             code=execute(command,cwd,self.env,folder/'output.log',timeout)
@@ -143,6 +175,7 @@ class Runner:
             try: entry['diagnostics']=diagnostic()
             except Exception: entry['diagnosticError']='DIAGNOSTICS_UNAVAILABLE';entry['result']='FAIL'
         entry['seconds']=round(time.time()-start,3)
+        entry['endedAt']=time.time()
         self.steps.append(entry);self.save()
         print(name+': '+entry['result'],flush=True)
         return entry['result']=='PASS'
@@ -170,6 +203,7 @@ class Runner:
             self.step('java-'+mod.name,cmd,mod,validator=lambda log,ev=ev:ev.validate(),diagnostic=ev.diagnostics)
 
     def quick(self):
+        self.env['NODE_V8_COVERAGE']=str(self.root/'node-v8')
         expected=json.loads((REPO/'tests/quality/quick-manifest.json').read_text())
         files=sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])
         planned=[str(f.relative_to(REPO)) for f in sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])]
@@ -181,7 +215,7 @@ class Runner:
                 if counts.get('tests',0)<=0 or counts.get('tests')!=counts.get('pass') or any(counts.get(k,0) for k in ['fail','skipped','cancelled','todo']):raise RuntimeError('NODE_REPORT_INCOMPLETE')
                 require_count(counts['tests'],expected[str(file.relative_to(REPO))])
                 return counts
-            self.step('node-'+str(index),[shutil.which('node') or 'node','--test','--test-reporter=tap',str(file)],timeout=180,validator=node_evidence)
+            self.step('node-'+str(index),[shutil.which('node') or 'node','--experimental-default-type=module','--test','--test-reporter=tap',str(file)],timeout=180,validator=node_evidence)
         for index,file in enumerate([REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/quality/test_owned_resources.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']):
             def python_evidence(log):
                 text=log.read_text();match=re.search(r'Ran (\d+) tests? in',text)
@@ -189,6 +223,16 @@ class Runner:
                 require_count(int(match[1]),expected[str(file.relative_to(REPO))])
                 return {'tests':int(match[1])}
             self.step('python-'+str(index),[sys.executable,str(file)],timeout=180,validator=python_evidence,diagnostic=lambda file=file,index=index:python_diagnostics((self.root/('python-'+str(index))/'output.log').read_text(),file))
+
+    def frontend(self):
+        expected=json.loads((REPO/'tests/quality/vue-manifest.json').read_text())
+        discovered={str(f.relative_to(REPO/'yshop-drink-vue3')) for f in (REPO/'yshop-drink-vue3/tests').rglob('*.test.ts')}
+        if discovered!=set(expected):raise RuntimeError('VUE_TEST_INVENTORY_CHANGED')
+        output=self.root/'vue-result.json'
+        self.env['YSHOP_VUE_COVERAGE']=str(self.root/'vue-coverage')
+        self.step('vue-components',['pnpm','exec','vitest','run','--config','vitest.config.ts','--coverage','--reporter=json','--outputFile='+str(output)],REPO/'yshop-drink-vue3',timeout=600,validator=lambda log:vue_evidence(output,expected))
+        self.step('uniapp-v8-coverage',[shutil.which('node') or 'node','tests/quality/frontend-coverage.cjs',str(self.root/'node-v8'),str(self.root/'node-coverage')],timeout=180,
+                  validator=lambda log:json.loads((self.root/'node-coverage/coverage.json').read_text()))
 
     def integration(self):
         output=self.root/'controlled'
@@ -234,27 +278,38 @@ class Runner:
         unchanged=source_identity()=={'sourceSha':self.source_sha,'sourceDigest':self.digest}
         report={'runId':self.id,'sourceUnchanged':unchanged,'sourceSha':self.source_sha,
                 'sourceDigest':self.digest,'result':'PASS' if unchanged and self.steps and all(s['result']=='PASS' for s in self.steps) else 'NOT_READY','steps':self.steps,
+                'startedAt':self.started,'endedAt':time.time(),
                 'paymentRequests':{'value':None,'evidence':'NOT_MEASURED_BY_DISPATCHER'},'realFinancialOperations':{'value':0,'evidence':'DECLARED_SYNTHETIC_ONLY'}}
         (self.root/'report.json').write_text(json.dumps(report,indent=2))
         return report
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('mode',choices=MODES);p.add_argument('--output',default=os.environ.get('YSHOP_QUALITY_OUTPUT',str(Path(tempfile.gettempdir())/'yshop-quality')));a=p.parse_args()
+    aliases={'FINANCE':'PAYMENT-SAFETY','MYSQL':'INTEGRATION'}
+    p=argparse.ArgumentParser();p.add_argument('mode',type=lambda s:aliases.get(s.upper(),s.upper()),choices=MODES);p.add_argument('--run-report',action='append',default=[]);p.add_argument('--output',default=os.environ.get('YSHOP_QUALITY_OUTPUT',str(Path(tempfile.gettempdir())/'yshop-quality')));a=p.parse_args()
+    if a.mode=='REPORT':
+        try:print(json.dumps(aggregate_reports(a.run_report,source_identity())));return 0
+        except Exception as e:print(json.dumps({'result':'FAIL','reason':str(e) if isinstance(e,RuntimeError) else type(e).__name__}));return 1
     r=Runner(a.output)
     try:
-        if a.mode in ['QUICK','FULL']:r.quick()
-        if a.mode in ['BUSINESS','PAYMENT-SAFETY','FULL']:
+        if a.mode in ['QUICK','FULL','FRONTEND','SECURITY']:r.quick()
+        if a.mode in ['BUSINESS','PAYMENT-SAFETY','FULL','JAVA']:
             selected=None
             if a.mode=='BUSINESS':selected=[k for k in manifest(REPO) if k.endswith(('.OrderingDatabaseTest','.CatalogDatabaseTest','.CouponDatabaseTest','.CouponCodeSecurityTest'))]
             if a.mode=='PAYMENT-SAFETY':selected=[k for k in manifest(REPO) if '.payment.' in k or '.credential.' in k or '.preflight.' in k]
             if selected is not None:selected=[k for k in selected if k.rsplit('.',1)[-1] not in CONDITIONAL]
             r.java(selected)
         if a.mode in ['INTEGRATION','FULL']:r.integration()
+        if a.mode in ['FRONTEND','FULL']:r.frontend()
+        if a.mode=='SECURITY':
+            r.java([k for k in manifest(REPO) if k.endswith(('.DesensitizeTest','.CouponCodeSecurityTest','.PermissionServiceImplTest','.OAuth2LifecycleDatabaseTest'))])
+            r.step('offline-credential-guard',[sys.executable,'tests/quality/secret_guard.py','--base','f96c70a10978939f66392788fa3f0fb863d8aca2'])
         if a.mode=='FULL':
             r.build();r.configured('uniapp','YSHOP_UNIAPP_ARGV');r.configured('strict-secret-scan','YSHOP_SECRET_SCAN_ARGV')
         if a.mode in ['MINIPROGRAM','FULL']:r.configured('mini-program','YSHOP_MINIPROGRAM_ARGV')
-        if a.mode=='MUTATION':r.step('mutation',[sys.executable,'tests/quality/mutate.py','--output',str(r.root/'mutations')],timeout=7200)
+        if a.mode=='MUTATION':
+            r.step('mutation',[sys.executable,'tests/quality/mutate.py','--output',str(r.root/'mutations')],timeout=7200)
+            r.step('frontend-mutation',[sys.executable,'tests/quality/frontend-mutate.py','--output',str(r.root/'frontend-mutations')],timeout=600)
         if source_digest()!=r.digest:r.blocked('source-integrity','SOURCE_CHANGED_DURING_RUN')
     except Exception as exc:r.blocked('dispatcher',type(exc).__name__)
     report=r.save();print(json.dumps({'runId':r.id,'result':report['result'],'report':str(r.root/'report.json')}))

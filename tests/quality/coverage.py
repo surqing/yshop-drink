@@ -42,7 +42,7 @@ def main():
             missed,covered=int(c.get('missed')),int(c.get('covered'))
             result[c.get('type')]={'missed':missed,'covered':covered,'percent':round(100*covered/(missed+covered),2) if missed+covered else None}
         return result
-    names={'OrderPlacementService','PaymentCancellationGuard','PaymentAttemptService','PaymentProcessor','PaymentEffects','CouponMarketingService','CouponLifecycle','CatalogOptions','StoreAccessService','MemberAuthServiceImpl','PermissionServiceImpl','OAuth2TokenServiceImpl','OAuth2TokenApiImpl','UserServiceImpl','AdminAuthServiceImpl'}
+    names={'OrderPlacementService','PaymentCancellationGuard','PaymentAttemptService','PaymentProcessor','PaymentEffects','CouponMarketingService','CouponLifecycle','CouponCodeGuard','CatalogOptions','StoreAccessService','MemberAuthServiceImpl','PermissionServiceImpl','OAuth2TokenServiceImpl','OAuth2TokenApiImpl','UserServiceImpl','AdminAuthServiceImpl'}
     classes={}
     for cls in xml.findall('package/class'):
         if cls.get('name').rsplit('/',1)[-1] in names:

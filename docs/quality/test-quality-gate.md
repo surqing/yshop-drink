@@ -1,3 +1,21 @@
+# PHASE 6Q quality gate — original request
+
+QUALITY_GATE_READY = NO
+
+PHASE_6D_ALLOWED = NO
+
+This conclusion applies to the original comprehensive request and overrides the earlier R2 scoped READY statement below. No PR is merged. PR12 stays at f96c70a; existing stacked PR13 is reused to preserve9 prior commits and its independent worktree. develop/master are untouched.
+
+Measured results and defects: [inventory](test-inventory.md), [coverage](coverage-report.md), [mutations](mutation-report.md), [gaps](test-gaps.md), [execution](test-execution.md), [machine receipts](request-evidence.json).
+
+Blocking criteria: high-risk survivors3;85/75 critical coverage not all achieved; current real GUI/Mini and broader components not fully verified. Passing ordinary tests or Linux CI do not override these criteria. No unrun test is called PASS. The known empty-plan and broad race exception false-pass paths are repaired with before/after evidence. Latest-head CI still must actually finish before delivery; its exact result is recorded outside Git to avoid a self-referential commit hash.
+
+CI remains pull_request-triggered,contents:read, no pull_request_target or merchant secrets, bounded timeout and sanitized artifact upload. It now runs a real Vue component test and both frontend mutations. Database gates use owned resources. A workflow configuration does not itself make branch protection required; repository rules were not changed.
+
+Financial safety: zero real payment/provider/funds operations, synthetic-only fixtures, both flags false. This is declared scoped execution evidence, not whole-machine packet monitoring. No Phase6D.
+
+## Historical scoped R2 record (does not certify this revision)
+
 # Phase 6Q-R2 quality gate
 
 **PHASE 6Q QUALITY GATE: READY for the completed `808294c` code snapshot. Final publication requires actual latest-head CI SUCCESS.**

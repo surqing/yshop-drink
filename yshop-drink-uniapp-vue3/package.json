@@ -4,7 +4,7 @@
   "description": "",
   "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --experimental-default-type=module --test ../tests/auth-errors.test.mjs ../tests/sms-errors.test.mjs ../tests/business/cart-context-test.mjs ../tests/business/catalog-options-test.mjs ../tests/business/coupon-context-test.mjs"
   },
   "author": "",
   "license": "ISC",

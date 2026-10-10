@@ -42,19 +42,25 @@ const enabled = computed({get: () => data.value.isSwitch === 1, set: value => {d
 watch(selectedShops, value => { data.value.shopId = value.join(',') }, {deep: true})
 const rules = Object.fromEntries(['title','shopId','least','value','claimStartTime','claimEndTime','startTime','endTime','distribute','limit'].map(key => [key,[{required:true,message:'请填写此项',trigger:'change'}]]))
 const emit = defineEmits(['success'])
+let openGeneration = 0
 const open = async (type: string, id?: number) => {
+  const generation = ++openGeneration
   visible.value = true; formType.value = type; loading.value = true
   try {
-    shops.value = await ShopApi.getShopList()
+    const availableShops = await ShopApi.getShopList()
+    if (generation !== openGeneration) return
+    shops.value = availableShops
     const today = Date.now(), end = today + 30 * 86400000
-    data.value = id ? await Api.getCoupon(id) : {title:'',shopId:'',couponKind:'REGULAR',claimMode:'PUBLIC',type:0,least:30,value:5,distribute:100,limit:1,score:0,isSwitch:1,instructions:'',image:'',startTime:today as unknown as Date,endTime:end as unknown as Date,claimStartTime:today,claimEndTime:end}
+    const activity = id ? await Api.getCoupon(id) : {title:'',shopId:'',couponKind:'REGULAR',claimMode:'PUBLIC',type:0,least:30,value:5,distribute:100,limit:1,score:0,isSwitch:1,instructions:'',image:'',startTime:today as unknown as Date,endTime:end as unknown as Date,claimStartTime:today,claimEndTime:end}
+    if (generation !== openGeneration) return
+    data.value = activity
     data.value.claimStartTime ||= data.value.startTime
     data.value.claimEndTime ||= data.value.endTime
     data.value.couponKind ||= 'REGULAR';data.value.claimMode ||= 'PUBLIC'
     data.value.exchangeCode = ''
     selectedShops.value = data.value.shopId ? String(data.value.shopId).split(',') : []
     formRef.value?.clearValidate()
-  } finally {loading.value=false}
+  } finally {if (generation === openGeneration) loading.value=false}
 }
 const close = async () => {try {await message.confirm('放弃本次未保存的活动修改？');visible.value=false}catch {}}
 const save = async () => {

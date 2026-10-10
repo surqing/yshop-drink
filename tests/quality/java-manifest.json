@@ -342,7 +342,8 @@
     "workersHoldTwentyIndependentTransactionsAndConnections": 1,
     "differentStoreSkuPriceCannotBecomeThisOrdersPrice": 1,
     "availableStockConditionalDebitMustSucceed": 1,
-    "categoryAndOrderAuthorizationUsesDatabaseShopNotTokenHint": 1
+    "categoryAndOrderAuthorizationUsesDatabaseShopNotTokenHint": 1,
+    "unexpectedDatabaseFailuresCannotBecomeNormalRaceLosers": 1
   },
   "co.yixiang.yshop.module.order.payment.CallbackIngressEndToEndTest": {
     "validSyntheticAnonymousNotification": 1,

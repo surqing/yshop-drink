@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 import xml.etree.ElementTree as ET
 from evidence import Evidence, execute, workspace, manifest, source_identity
@@ -84,7 +85,7 @@ def run(output, only=None):
     operators=[x for x in OPERATORS if only is None or x[0] in only]
     if not operators:raise RuntimeError('NO_MUTATIONS_SELECTED')
     registry=manifest(REPO)
-    results=[];identity=source_identity()
+    results=[];identity=source_identity();run_id=uuid.uuid4().hex;started=time.time()
     with tempfile.TemporaryDirectory(prefix='yshop-mutation-') as temp:
         copy=Path(temp)/'source'
         shutil.copytree(REPO,copy,ignore=shutil.ignore_patterns('.git','target','node_modules','unpackage','__pycache__','dist'))
@@ -158,9 +159,9 @@ def run(output, only=None):
             (output/'report.json').write_text(json.dumps({'baseline':baseline,'mutations':results},indent=2))
             print(name,results[-1]['result'],flush=True)
         # Source tree remains untouched; temporary mutant copy is removed by context manager.
-    summary={**identity,'baseline':baseline,'mutations':results,'intentionalMutationResidue':False,'paymentRequests':{'value':0,'evidence':'DECLARED_H2_SYNTHETIC_ONLY'}}
+    summary={**identity,'runId':run_id,'startedAt':started,'endedAt':time.time(),'sourceUnchanged':source_identity()==identity,'baseline':baseline,'mutations':results,'intentionalMutationResidue':False,'paymentRequests':{'value':0,'evidence':'DECLARED_H2_SYNTHETIC_ONLY'}}
     (output/'report.json').write_text(json.dumps(summary,indent=2))
-    return 0 if results and all(x['result']=='KILLED' for x in results) else 1
+    return 0 if summary['sourceUnchanged'] and results and all(x['result']=='KILLED' for x in results) else 1
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--output',required=True);p.add_argument('--only',help='Comma-separated operator names; unselected operators are not reported as tested');a=p.parse_args()

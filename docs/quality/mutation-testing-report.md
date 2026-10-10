@@ -1,3 +1,5 @@
+> Historical R2 record. Current original-request audit: [mutation-report.md](mutation-report.md).
+
 # Dangerous mutation evidence — Phase 6Q-R2
 
 The joined historical/focused matrix is **25 KILLED / 3 SURVIVED / 0 INCONCLUSIVE**. This is explicitly a union of attributed snapshots, **not 28 fresh final-head executions**. The original R1 report remains in Git history; the six requested operators were re-run against R2 source with a passing original before every mutation. See [machine results](mutation-results.json) for each SHA/content digest and source hashes.

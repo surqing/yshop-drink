@@ -65,6 +65,38 @@ class EvidenceFaultInjection(unittest.TestCase):
     def test_missing_report(self):
         with self.assertRaisesRegex(RuntimeError,'MISSING'):self.e.validate()
 
+    def test_empty_plan_cannot_certify_zero_tests(self):
+        for plan in [{}, {'synthetic.Suite': {}}]:
+            with self.assertRaisesRegex(RuntimeError,'EMPTY_TEST_PLAN'):
+                self.e.validate(plan)
+
+    def test_report_aggregation_rejects_stale_failed_and_duplicate_runs(self):
+        from run import aggregate_reports
+        file=Path(self.temp.name)/'aggregate.json'
+        identity={'sourceSha':'synthetic','sourceDigest':'synthetic-digest'}
+        report={**identity,'runId':'run-1','sourceUnchanged':True,'result':'PASS','steps':[{'result':'PASS','evidence':{'tests':1}}]}
+        file.write_text(json.dumps(report))
+        self.assertEqual('PASS',aggregate_reports([file],identity)['result'])
+        for paths,target in [([],identity),([file,file],identity),([file],{**identity,'sourceSha':'stale'})]:
+            with self.assertRaises(RuntimeError):aggregate_reports(paths,target)
+        for change in [{'steps':[]},{'result':'FAIL'},{'sourceUnchanged':False},{'steps':[{'result':'SKIPPED'}]},{'steps':[{'result':'PASS','evidence':{'tests':0}}]}]:
+            file.write_text(json.dumps({**report,**change}))
+            with self.assertRaises(RuntimeError):aggregate_reports([file],identity)
+
+    def test_vue_report_rejects_zero_skips_and_substituted_names(self):
+        from run import vue_evidence,REPO
+        file=Path(self.temp.name)/'vue.json';expected={'tests/coupon-form.test.ts':['checksInvariant']}
+        suite={'name':str(REPO/'yshop-drink-vue3/tests/coupon-form.test.ts'),'status':'passed','assertionResults':[{'title':'checksInvariant','status':'passed'}]}
+        report={'testResults':[suite],'numTotalTests':1,'numPassedTests':1,'success':True,'numPendingTests':0,'numTodoTests':0}
+        file.write_text(json.dumps(report));self.assertEqual(1,vue_evidence(file,expected)['tests'])
+        for change in [{'numTotalTests':0},{'numPendingTests':1},{'numTodoTests':1},{'success':False},{'testResults':[]}]:
+            file.write_text(json.dumps({**report,**change}))
+            with self.assertRaises(RuntimeError):vue_evidence(file,expected)
+        for field,value in [('title','otherInvariant'),('status','pending')]:
+            case={**suite,'assertionResults':[{**suite['assertionResults'][0],field:value}]}
+            file.write_text(json.dumps({**report,'testResults':[case]}))
+            with self.assertRaises(RuntimeError):vue_evidence(file,expected)
+
     def test_source_change_cannot_relabel_old_execution(self):
         self.report()
         with patch('evidence.source_identity',return_value={'sourceSha':'changed','sourceDigest':'changed'}):

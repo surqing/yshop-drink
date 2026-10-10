@@ -80,7 +80,7 @@ class Evidence:
 
     def arguments(self, expected):
         self.expected = expected
-        (self.root / 'run.json').write_text(json.dumps({'runId': self.id, **self.source, 'expected': expected}))
+        (self.root / 'run.json').write_text(json.dumps({'runId': self.id, **self.source, 'expected': expected, 'startedAt': self.started}))
         return ['-Dquality.runId=' + self.id, '-Dsurefire.reportsDirectory=' + str(self.directory)]
 
     def validate(self, expected=None):
@@ -88,6 +88,8 @@ class Evidence:
         None validates discovery only and is explicitly unsuitable for final suite certification.
         """
         expected = expected if expected is not None else self.expected
+        if not expected or any(cases == {} for cases in expected.values()):
+            raise RuntimeError('EMPTY_TEST_PLAN')
         if source_identity() != self.source:
             raise RuntimeError('SOURCE_CHANGED_DURING_TEST')
         found = {}
@@ -114,7 +116,7 @@ class Evidence:
             raise RuntimeError('MISSING_OR_UNEXPECTED_TEST_SUITE')
         self.summary = {'runId': self.id, **self.source, 'result': 'PASS', 'suites': len(found),
                         'tests': sum(sum(x.values()) for x in found.values()), 'cases': found,
-                        'exactNamesChecked': all(x is not None for x in expected.values())}
+                        'exactNamesChecked': all(x is not None for x in expected.values()), 'startedAt': self.started, 'endedAt': time.time()}
         (self.root / 'evidence.json').write_text(json.dumps(self.summary, indent=2))
         return self.summary
 

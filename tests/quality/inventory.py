@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Inventory tracked test assets and evidence without assuming that presence means execution."""
 import argparse
+import fnmatch
 import hashlib
 import ast
 from collections import Counter
@@ -20,7 +21,6 @@ def certified_suites(folder, registry):
             if summary.get('result')!='PASS' or not summary.get('exactNamesChecked'):continue
             if any(summary.get(k)!=run.get(k) for k in ['runId','sourceSha','sourceDigest']):continue
             expected=run['expected']
-            if any(registry.get(k)!=v for k,v in expected.items()):continue
             found={};valid=True
             for file in (certificate.parent/'surefire').rglob('TEST-*.xml'):
                 root=ET.parse(file).getroot();name=root.get('name')
@@ -34,7 +34,9 @@ def certified_suites(folder, registry):
                 found[name]={'tests':len(cases),'failures':0,'errors':0,'skipped':0,
                              'sourceSha':summary['sourceSha'],'sourceDigest':summary['sourceDigest'],'runId':run['runId']}
             if valid and set(found)==set(expected) and sum(x['tests'] for x in found.values())==summary['tests']:
-                result.update(found)
+                # Validate the complete original certificate, then accept only unchanged suite plans.
+                # Adding one case must not hide executed, still-compatible sibling suites.
+                result.update({k:v for k,v in found.items() if registry.get(k)==expected[k]})
         except (OSError,ValueError,KeyError,ET.ParseError):continue
     return result
 
@@ -82,8 +84,8 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
         p=REPO/name
         if not p.is_file():continue
         infrastructure='yshop-spring-boot-starter-test/src/main/' in name
-        is_test='/src/test/' in name or name.startswith('tests/') or infrastructure
-        config=p.name in ['pom.xml','package.json'] or name.startswith('.github/workflows/')
+        is_test='/src/test/' in name or name.startswith(('tests/','yshop-drink-vue3/tests/')) or infrastructure
+        config=p.name in ['pom.xml','package.json','vitest.config.ts'] or name.startswith('.github/workflows/')
         script=name.startswith('scripts/') and p.suffix in ['.py','.sh','.cjs','.mjs']
         shell=p.suffix=='.sh'
         if not (is_test or config or script or shell):continue
@@ -108,12 +110,23 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
             else:state='SKIPPED' if skip!='none' else 'UNVERIFIED'
             if suite not in registry:state='BROKEN';result='NOT_REGISTERED'
         elif p.suffix=='.mjs' and is_test:
-            category='Node assertion suite';command=f'node --test {name}';assertions='yes' if 'assert.' in text else 'REVIEW';environment='Node20';state='UNVERIFIED'
+            category='Node assertion suite';command=f'node --experimental-default-type=module --test {name}';assertions='yes' if 'assert.' in text else 'REVIEW';environment='Node20';state='UNVERIFIED'
         elif p.suffix=='.py' and is_test:
             category='Python suite' if any(isinstance(n,ast.ClassDef) and any((isinstance(b,ast.Attribute) and b.attr=='TestCase') or (isinstance(b,ast.Name) and b.id=='TestCase') for b in n.bases) for n in ast.walk(ast.parse(text))) else 'Python runner/helper'
             command=f'python3 {name} (see documented flags)';assertions='yes' if 'assert' in text else 'see called suite';environment='Python3; runner-specific tools'
         elif p.suffix=='.cjs' and is_test:
-            category='WeChat UI automation';wechat=True;environment='macOS; official CLI + automator; explicit local API';command=f'node {name}';assertions='yes' if 'check(' in text else 'REVIEW'
+            if name=='tests/quality/frontend-coverage.cjs':
+                category='coverage helper';environment='Node20; fixed Vue test dependencies';command='invoked by tests/quality/run.py frontend';assertions='conversion validates core source execution'
+            else:
+                category='WeChat UI automation';wechat=True;environment='macOS; official CLI + automator; explicit local API';command=f'node {name}';assertions='yes' if 'check(' in text else 'REVIEW'
+        elif name.startswith('yshop-drink-vue3/tests/') and p.name.endswith('.test.ts'):
+            category='Vue component suite';environment='Node20; Vitest; jsdom; Vue compiler; mocked HTTP only';command='python3 tests/quality/run.py frontend';assertions='explicit expected values, rendered component and API/emit assertions'
+            for run in runs:
+                r=json.loads(Path(run).read_text())
+                for step in r['steps']:
+                    if step['name']=='vue-components' and step['result']=='PASS' and name.split('yshop-drink-vue3/',1)[1] in step.get('evidence',{}).get('cases',{}):
+                        state='ACTIVE';result='PASS '+str(len(step['evidence']['cases'][name.split('yshop-drink-vue3/',1)[1]]))+' cases'
+                        execution_identity={k:r[k] for k in ['runId','sourceSha','sourceDigest']}
         elif config:command='quality dispatcher / documented build';result='configuration, not test';state='ACTIVE'
         elif p.suffix in ['.sql','.yaml','.xml']:result='fixture; consumption depends on owning suite';state='UNVERIFIED'
         if infrastructure:
@@ -136,7 +149,7 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
         if p.name=='MailSendServiceImplTest.java':function+='; live SMTP demo retired, 9 mocked cases retained'
         called='quality dispatcher'  if category in ['JUnit','Node assertion suite'] else 'see runner audit'
         execution_status=state
-        is_suite=category in ['JUnit','Node assertion suite','Python suite','WeChat UI automation']
+        is_suite=category in ['JUnit','Node assertion suite','Python suite','WeChat UI automation','Vue component suite']
         state='ACTIVE_TEST' if is_suite else 'ACTIVE_HELPER'
         reason='Registered executable test; execution is reported separately.' if is_suite else 'Build/fixture/helper, not an independent test PASS.'
         if name in policy:state=policy[name]['status'];reason=policy[name]['reason']
@@ -148,6 +161,25 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
             callers+=['owning module test classpath; BaseDbUnitTest/ActiveProfiles consumption where declared']
         if not callers:callers=['no static reference found; preserved extension/manual entry; no deletion inference']
         assets.append(dict(path=name,assetHash=hashlib.sha256(p.read_bytes()).hexdigest(),category=category,function=function,command=command,caller=called,callerEvidence=callers,classificationReason=reason,environment=environment,realDatabase=realdb,wechat=wechat,syntheticPayment=synthetic,recentExecution=result,executionStatus=execution_status,executionIdentity=execution_identity,skip=skip,assertions=assertions,duplicateCoverage='shared fixtures/repeated cases are not unique scenarios',status=state))
+        asset=assets[-1]
+        default=category in ['Node assertion suite','Python suite','Vue component suite']
+        if category=='JUnit':
+            pom=ET.parse(REPO/'yshop-drink-boot3/pom.xml').getroot()
+            ns={'m':'http://maven.apache.org/POM/4.0.0'}
+            patterns=[n.text for plugin in pom.findall('.//m:plugin',ns) if plugin.findtext('m:artifactId',namespaces=ns)=='maven-surefire-plugin' for n in plugin.findall('m:configuration/m:includes/m:include',ns)]
+            patterns=patterns or ['**/Test*.java','**/*Test.java','**/*Tests.java','**/*TestCase.java']
+            default=any(fnmatch.fnmatch(name,pattern) for pattern in patterns)
+        actual='PASS' if execution_identity and (result.startswith('PASS') or result.startswith('tests=')) else 'FAIL' if execution_status=='BROKEN' else 'ENV_BLOCKED' if state in ['CONDITIONAL','BLOCKED_EXTERNAL'] else 'NOT_RUN'
+        audit='BROKEN' if actual=='FAIL' else 'OBSOLETE' if state=='OBSOLETE' else 'ENV_BLOCKED' if actual=='ENV_BLOCKED' else 'DISCOVERABLE_BUT_NOT_RUN' if is_suite and actual=='NOT_RUN' else 'ACTIVE'
+        asset.update(defaultDiscovered=default,defaultExecutionEligible=default and skip=='none',lastActualStatus=actual,auditClassification=audit,
+                     productionTargets=sorted(set(re.findall(r'import (?:static )?(co\.yixiang\.[\w.]+)',text))) if category=='JUnit' else function,
+                     requiresExternalResources=environment!='none' and (wechat or realdb or state in ['CONDITIONAL','BLOCKED_EXTERNAL']),
+                     localPrivateReferences=bool(re.search(r'\.local-dev|\.uniapp-dev|/Applications/',text)),
+                     requiresPrivateFiles=wechat or state in ['CONDITIONAL','BLOCKED_EXTERNAL'],
+                     possibleSharedDataWrites=bool(re.search(r'INSERT |UPDATE |DELETE |TRUNCATE |jdbc\.update|request\.(?:post|put|delete)',text)),
+                     paymentSafety='owned synthetic database/fake transport required' if synthetic else 'private device guard required' if wechat else 'no payment provider called by ordinary suite; external tools remain conditional',
+                     faultInjection=bool(re.search(r'fault|rollback|failClosed|Failure|mutation|throws|assertThrows',text)),
+                     replacement='none established; preserve asset',findings=['NOT_DISCOVERED_BY_DEFAULT_MAVEN: explicitly dispatched in owned MySQL gate'] if category=='JUnit' and not default and 'MysqlAcceptance' in p.stem else [],recommendation=reason)
     return assets
 
 
@@ -158,7 +190,7 @@ def main():
 
 Generated from all tracked/new test assets and build/operational entry points. File presence is not proof of execution. Maintenance categories ACTIVE_TEST/ACTIVE_HELPER/CONDITIONAL/BLOCKED_EXTERNAL/REDUNDANT/OBSOLETE/BROKEN/UNKNOWN are independent of execution status. No helper is counted as a standalone passing test. Unexecuted conditional paths are deliberate; no inference of dead code from absence of a caller. Full per-file fields are in [test-inventory.json](test-inventory.json).
 
-Commands below omit private environment flags; use `tests/quality/run.py` for attributed execution. MySQL column means the suite has an actual isolated-MySQL path, not that every invocation uses MySQL. Repeat annotations contribute invocations, not different scenarios. Historical evidence is not substituted for this audit's results.
+Commands below omit private environment flags; use `tests/quality/run.py` for attributed execution. MySQL column means the suite has an actual isolated-MySQL path, not that every invocation uses MySQL. Repeat annotations contribute invocations, not different scenarios. Historical evidence is not substituted for this audit's results. Local path references are recorded separately from required private environment dependencies; static caller/write/fault flags are review hints, not proof of runtime behavior.
 
 | Asset | Category/function | Entry/caller | Dependencies | Database / WeChat / synthetic payment | Executed result | Skip / assertions | Maintenance |
 |---|---|---|---|---|---|---|---|

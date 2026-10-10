@@ -1,0 +1,14 @@
+{
+  "tests/coupon-form.test.ts": [
+    "renders edit data and blanks historical redemption code",
+    "latest open wins when earlier network response arrives last",
+    "mixed all-store and specific-store selection cannot submit",
+    "invalid claim/use windows cannot submit",
+    "permission rejection keeps dialog and edits for retry, without success",
+    "normal save button sends numeric times and closes only after success",
+    "generated public code shown once and cleared on close",
+    "cancel refusal preserves unsaved activity",
+    "stale request completion cannot clear loading for a newer pending request",
+    "stale shop-list response cannot start a coupon request after a newer open"
+  ]
+}

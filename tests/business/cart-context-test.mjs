@@ -1,10 +1,7 @@
-import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 const file = new URL('../../yshop-drink-uniapp-vue3/utils/ordering-context.js', import.meta.url)
-const optionsUrl = 'data:text/javascript;base64,' + readFileSync(new URL('../../yshop-drink-uniapp-vue3/utils/catalog-options.js', import.meta.url)).toString('base64')
-const source = readFileSync(file, 'utf8').replace("'./catalog-options.js'", JSON.stringify(optionsUrl))
-const { switchStore, reconcileCart, submissionKey, PAYMENT_FROZEN, eligibleCoupons } = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'))
+const { switchStore, reconcileCart, submissionKey, PAYMENT_FROZEN, eligibleCoupons } = await import(file)
 function storage() { const data = new Map(); return { getStorageSync:k=>data.get(k), setStorageSync:(k,v)=>data.set(k,v), removeStorageSync:k=>data.delete(k) } }
 const groups = [{goodsList:[{id:11,shopId:1,stock:2,storeName:'Fresh server title',image:'local.png',productValue:{'cold,normal':{stock:1,price:'1.23'}}}]}]
 const line = {id:11,shopId:1,number:1,valueStr:'cold,normal',price:999}
@@ -27,3 +24,8 @@ test('coupon in another store is hidden',()=>assert.deepEqual(eligibleCoupons([c
 test('global and explicitly shared coupon are eligible',()=>{for(const shopId of ['0','1,2'])assert.equal(eligibleCoupons([{...coupon,shopId}],2,'takein',10).length,1)})
 test('minimum spend and enjoyment type are enforced',()=>{assert.deepEqual(eligibleCoupons([coupon],1,'takein',9.99),[]);assert.deepEqual(eligibleCoupons([{...coupon,type:2}],1,'takein',10),[])})
 test('reserved, used and expired coupons cannot be selected',()=>{for(const reservationState of ['RESERVED','USED','EXPIRED',undefined])assert.deepEqual(eligibleCoupons([{...coupon,reservationState}],1,'takein',10),[])})
+test('missing store and malformed containers discard stale context safely',()=>{const s=storage(),state={cart:[line],mycoupon:{id:1}};switchStore(state,s,null);assert.deepEqual(state.store,{});assert.deepEqual(state.cart,[]);assert.deepEqual(reconcileCart(null,null,1),[]);assert.deepEqual(eligibleCoupons(null,1,'takein',10),[])})
+test('multiple cart entries cannot each spend the same last SKU stock',()=>{const result=reconcileCart([line,{...line,selections:[]}],groups,1);assert.equal(result.length,1);assert.equal(result[0].number,1)})
+test('hidden SKU, changed catalog version, invalid stock or invalid price remove stale lines',()=>{for(const patch of [{catalogVersion:2},{productValue:{'cold,normal':{stock:1,price:1,isShow:0}}},{productValue:{'cold,normal':{stock:0.5,price:1}}},{productValue:{'cold,normal':{stock:1,price:0}}}])assert.deepEqual(reconcileCart([line],[{goodsList:[{...groups[0].goodsList[0],...patch}]}],1),[])})
+test('invalid option quote is removed before checkout',()=>{const product={...groups[0].goodsList[0],catalogConfiguration:{groups:[{id:'required',name:'Required',enabled:true,min:1,max:1,multiple:false,options:[{id:'x',enabled:true,surcharge:0}]}]}};assert.deepEqual(reconcileCart([line],[{goodsList:[product]}],1),[])})
+test('takeout eligibility uses server state and rejects nonfinite subtotal',()=>{assert.equal(eligibleCoupons([{...coupon,type:2}],1,'takeout',10).length,1);for(const amount of [NaN,Infinity,'invalid'])assert.deepEqual(eligibleCoupons([coupon],1,'takein',amount),[])})

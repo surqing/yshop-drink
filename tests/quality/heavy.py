@@ -13,7 +13,7 @@ def main():
     owner=uuid.uuid4().hex;mysql='yshop-quality-heavy-'+owner;redis=mysql+'-redis'
     identity=source_identity();env=os.environ.copy();steps=[]
     report={**identity,'runId':owner,'result':'FAIL','cleanup':'NOT_RUN','steps':steps,
-            'scope':'owned Docker MySQL/Redis/auth/synthetic HTTPS; GUI/Mini excluded',
+            'startedAt':time.time(),'scope':'owned Docker MySQL/Redis/auth/synthetic HTTPS; GUI/Mini excluded',
             'paymentRequests':{'value':0,'evidence':'DECLARED_SYNTHETIC_TRANSPORT_ONLY','globalNetworkMeasured':False}}
     def private(name,text):
         f=root/name;f.parent.mkdir(parents=True,exist_ok=True,mode=0o700);f.write_text(text);f.chmod(0o600);return f
@@ -22,7 +22,7 @@ def main():
         if r.returncode:raise RuntimeError('OWNED_DOCKER_OPERATION_FAILED')
         return r.stdout.strip()
     def command(name,argv,validator=None,timeout=2400):
-        item={'name':name,'result':'FAIL'};steps.append(item)
+        item={'name':name,'result':'FAIL','startedAt':time.time()};steps.append(item)
         try:
             code=execute(argv,REPO,env,root/(name+'.log'),timeout);item['exitCode']=code
             if code:raise RuntimeError('CONTROLLED_SUBPROCESS_FAILED')
@@ -40,6 +40,7 @@ def main():
             item['diagnostics']=diagnostics
             database=root/'database-diagnostics.json'
             if database.exists():item['databaseDiagnostics']=json.loads(database.read_text())
+        item['endedAt']=time.time();item['seconds']=round(item['endedAt']-item['startedAt'],3)
         print(name+': '+item['result'],flush=True)
     def acceptance_log(name,suffixes):
         rows=[]
@@ -52,7 +53,7 @@ def main():
         r=rows[0]
         if r.get('result')!='PASS' or r.get('cleanup')!='PASS' or r.get('tests')!=expected or any(r.get(k)!=v for k,v in identity.items()):
             raise RuntimeError('ACCEPTANCE_REPORT_INVALID')
-        return {k:r[k] for k in ['runId','tests','sourceSha','sourceDigest','cleanup']}
+        return {k:r[k] for k in ['runId','tests','sourceSha','sourceDigest','cleanup','mysql','engine']}
     def auth_report():
         r=json.loads((root/'auth/report.json').read_text())
         if r.get('result')!='PASS' or r.get('cleanup')!='PASS' or any(r.get(k)!=v for k,v in identity.items()):raise RuntimeError('AUTH_REPORT_INVALID')
@@ -112,6 +113,7 @@ def main():
             if f.is_file() and (f.name in ['mysql.secret','mysql.cnf','database.json','redis.conf','redis.properties'] or f.suffix in ['.key','.pem','.csr','.srl']):f.unlink()
         report['sourceUnchanged']=source_identity()==identity
         if not report['sourceUnchanged']:report['result']='FAIL'
+        report['endedAt']=time.time()
         (root/'report.json').write_text(json.dumps(report,indent=2))
     print(json.dumps({'result':report['result'],'cleanup':report['cleanup']}))
     return 0 if report['result']=='PASS' and report['cleanup']=='PASS' else 1

@@ -1,10 +1,10 @@
 {
   "tests/auth-errors.test.mjs": 2,
-  "tests/business/cart-context-test.mjs": 17,
+  "tests/business/cart-context-test.mjs": 22,
   "tests/business/catalog-options-test.mjs": 11,
   "tests/business/coupon-context-test.mjs": 13,
   "tests/sms-errors.test.mjs": 4,
-  "tests/quality/test_evidence.py": 43,
+  "tests/quality/test_evidence.py": 46,
   "tests/quality/test_secret_guard.py": 3,
   "tests/smoke/test_secret_scan.py": 4,
   "tests/payment/prepayment-tools-test.py": 26,

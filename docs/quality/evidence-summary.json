@@ -1,6 +1,6 @@
 {
   "phase": "6Q-R2",
-  "gate": "READY_FOR_COMPLETED_808_CODE_SNAPSHOT",
+  "gate": "NOT_READY_FOR_ORIGINAL_PHASE6Q_REQUEST",
   "criteria": [
     "exact-suite ordinary Java and QUICK",
     "owned MySQL Redis TLS and cleanup",
@@ -6720,5 +6720,7 @@
     "invalid admin mutant syntax INCONCLUSIVE: corrected real mutation killed",
     "new injection-test temporary-directory fixture failure: corrected, quick138 passed"
   ],
-  "publicationRule": "Final publication changes only documentation and owned synthetic GUI seed metadata/media. Require both actual latest-head CI jobs SUCCESS before delivery; do not relabel 808 GUI/Mini/mutations as the publication SHA. GUI and Mini production source equivalence must be separately verified."
+  "publicationRule": "Final publication changes only documentation and owned synthetic GUI seed metadata/media. Require both actual latest-head CI jobs SUCCESS before delivery; do not relabel 808 GUI/Mini/mutations as the publication SHA. GUI and Mini production source equivalence must be separately verified.",
+  "historicalGate": "READY_FOR_COMPLETED_808_CODE_SNAPSHOT",
+  "currentEvidence": "request-evidence.json"
 }

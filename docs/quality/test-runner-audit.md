@@ -1,3 +1,5 @@
+> Historical R2 record. Current original-request audit: [test-execution.md](test-execution.md).
+
 # Runner and evidence audit — Phase 6Q-R2
 
 The existing runner is extended, not replaced. QUICK now has **139 exact invocations:47 Node +92 Python**, including43 evidence tests and16 ownership/GUI failure tests. [Machine scopes](evidence-summary.json), [asset classification](test-inventory.json).

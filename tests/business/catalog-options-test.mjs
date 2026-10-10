@@ -1,8 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 const file = new URL('../../yshop-drink-uniapp-vue3/utils/catalog-options.js', import.meta.url)
-const { preview, defaults, pruneSelections, selectionKey, activeGroups } = await import('data:text/javascript;base64,' + readFileSync(file).toString('base64'))
+const { preview, defaults, pruneSelections, selectionKey, activeGroups } = await import(file)
 const option = (id, surcharge = 0, defaultQuantity = 0) => ({ id, name: id, surcharge, defaultQuantity, enabled: true })
 const group = (id, options, extra = {}) => ({ id, name: id, enabled: true, multiple: false, min: 1, max: 1, maxPerOption: 1, options, ...extra })
 const configuration = { groups: [group('temperature', [option('hot', 0, 1), option('cold')]), group('ice', [option('normal', 0, 1)], { when: { groupId: 'temperature', optionId: 'cold' } }), group('topping', [option('pearl', 2), option('cream', 3)], { multiple: true, min: 0, max: 3, maxPerOption: 2 })] }

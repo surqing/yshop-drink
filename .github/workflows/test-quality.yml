@@ -79,6 +79,12 @@ jobs:
         if: ${{ !cancelled() }}
         working-directory: yshop-drink-vue3
         run: pnpm install --frozen-lockfile
+      - name: Frontend logic, actual coupon component and V8 coverage
+        if: ${{ !cancelled() }}
+        run: python3 tests/quality/run.py frontend --output "$RUNNER_TEMP/frontend"
+      - name: Detect reversed frontend stale-response fix
+        if: ${{ !cancelled() }}
+        run: python3 tests/quality/frontend-mutate.py --output "$RUNNER_TEMP/frontend-mutation"
       - name: Vue build (generates auto-import declarations from this checkout)
         if: ${{ !cancelled() }}
         working-directory: yshop-drink-vue3
@@ -99,6 +105,10 @@ jobs:
             ${{ runner.temp }}/quality/**/evidence.json
             ${{ runner.temp }}/quality/**/diagnostics.json
             ${{ runner.temp }}/quality/**/coverage.json
+            ${{ runner.temp }}/frontend-mutation/report.json
+            ${{ runner.temp }}/frontend/**/report.json
+            ${{ runner.temp }}/frontend/**/coverage.json
+            ${{ runner.temp }}/frontend/**/coverage-summary.json
             ${{ runner.temp }}/build/**/report.json
           retention-days: 7
           if-no-files-found: error
@@ -152,6 +162,10 @@ jobs:
             ${{ runner.temp }}/controlled/**/diagnostics.json
             ${{ runner.temp }}/business/report.json
             ${{ runner.temp }}/redis-permission/report.json
+            ${{ runner.temp }}/frontend-mutation/report.json
+            ${{ runner.temp }}/frontend/**/report.json
+            ${{ runner.temp }}/frontend/**/coverage.json
+            ${{ runner.temp }}/frontend/**/coverage-summary.json
             ${{ runner.temp }}/build/**/report.json
           retention-days: 7
           if-no-files-found: error
