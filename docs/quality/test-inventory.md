@@ -2,8 +2,6 @@
 
 Generated from all tracked/new test assets and build/operational entry points. File presence is not proof of execution. Maintenance categories ACTIVE_TEST/ACTIVE_HELPER/CONDITIONAL/BLOCKED_EXTERNAL/REDUNDANT/OBSOLETE/BROKEN/UNKNOWN are independent of execution status. No helper is counted as a standalone passing test. Unexecuted conditional paths are deliberate; no inference of dead code from absence of a caller. Full per-file fields are in [test-inventory.json](test-inventory.json).
 
-R2 classifies253 assets:89 ACTIVE_TEST,145 ACTIVE_HELPER,17 CONDITIONAL,1 BLOCKED_EXTERNAL,1 OBSOLETE. Script cleanup: **0 deletions**. All previous39 UNVERIFIED entries have a maintenance purpose/caller/command or explicit conditional/external reason; classification is not runtime PASS. Manual/deployment/device entry points are retained. No UNKNOWN/REDUNDANT/BROKEN classifications are invented to improve a score.
-
 Commands below omit private environment flags; use `tests/quality/run.py` for attributed execution. MySQL column means the suite has an actual isolated-MySQL path, not that every invocation uses MySQL. Repeat annotations contribute invocations, not different scenarios. Historical evidence is not substituted for this audit's results.
 
 | Asset | Category/function | Entry/caller | Dependencies | Database / WeChat / synthetic payment | Executed result | Skip / assertions | Maintenance |
@@ -261,3 +259,7 @@ Commands below omit private environment flags; use `tests/quality/run.py` for at
 | yshop-drink-uniapp-vue3/uni_modules/uv-ui-tools/package.json | build configuration / package | quality dispatcher / documented build / see runner audit | none | False / False / False | configuration, not test | none / not applicable | ACTIVE_HELPER |
 | yshop-drink-uniapp-vue3/uni_modules/uv-waterfall/package.json | build configuration / package | quality dispatcher / documented build / see runner audit | none | False / False / False | configuration, not test | none / not applicable | ACTIVE_HELPER |
 | yshop-drink-vue3/package.json | build configuration / package | quality dispatcher / documented build / see runner audit | none | False / False / False | configuration, not test | none / not applicable | ACTIVE_HELPER |
+
+## R2 refresh
+
+253 assets:89 ACTIVE_TEST,145 ACTIVE_HELPER,17 CONDITIONAL,1 BLOCKED_EXTERNAL,1 OBSOLETE. Every asset hash reflects this inventory generation; executionIdentity retains the actual original tested source. Updated Redis controllers are exercised by the owned corrected gate and two-process HTTP checks; Mac original-bootstrap probe does not claim to reproduce the Linux denial. No script was deleted; missing external/manual ownership is preserved explicitly.

@@ -44,3 +44,7 @@ The three survivors are retained production defenses: removing the SKU admission
 The new `auth-admin-reenable-revocation` removes both real ADMIN family revocations. The fresh original passes72 invocations; the exact selected regression kills the mutant with one assertion failure. Its first replacement left a dangling if body and failed compilation: that attempt is retained as INCONCLUSIVE, never included in kills. Corrected replacement is an explicit empty statement.
 
 Broad R1 mutations that had initialization/SQL errors remain in historical evidence; the new focused reruns supersede only those requested uncertainty cases. A compile, SQL, timeout, initialization or cleanup failure is not a kill. Mutation residue is removed with the disposable source copy. No real transport or funds are used.
+
+## Reproduction ownership
+
+Redis bootstrap and menu-fixture repairs do not change the production sites under mutation. The28 operator records retain their original SHA,digest,baseline and assertion evidence;25 KILLED/3 SURVIVED is an attributed multi-snapshot matrix, not a claim that all operators were rerun against an arbitrary later documentation commit. Compile/init/timeout failures remain separately preserved and are never promoted to KILLED.

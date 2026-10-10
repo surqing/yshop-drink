@@ -7,12 +7,12 @@ Coverage is risk evidence, not a whole-repository100% target. Every receipt reta
 | R1 ordinary Java |31.10|6.92|22.75|
 | R2 ordinary Java1710 |31.16|6.93|22.80|
 | R2 ordinary + owned HTTP backend agent |39.04|7.41|30.67|
-| Python61 selected driver invocations |36.87|34.38|NOT MEASURED|
+| Python62 selected driver invocations |36.55|34.10|NOT MEASURED|
 | Node/Vue |NOT MEASURED|NOT MEASURED|NOT MEASURED|
 
 The Java denominator includes all compiled src/main classes, DTOs and test infrastructure. The HTTP increment includes actual application startup: it is not attributed exclusively to new business assertions. The report requires matching artifact hash and current source, fresh exec certificates, and rejects JaCoCo class mismatch. Java final-head CI uses ordinary suites; separate local HTTP coverage must not be silently added to it.
 
-Python uses coverage.py branch instrumentation over quality helpers from three actual unittest drivers (43 evidence,15 ownership and3 credential tests at this measurement snapshot; the newly added numeric-diagnostic test is measured again at final head).479/1299 statements and143/416 branches executed. Child subprocesses are not instrumented and no function/method coverage is claimed. Node source-transform/data-URL suites pass real assertions but V8 source-file coverage was not collected; they are NOT MEASURED, not assumed100%.
+Python uses coverage.py branch instrumentation over quality helpers from three actual unittest drivers (43 evidence,16 ownership and3 credential tests at the recorded precommit snapshot).493/1349 statements and148/434 branches executed. Child subprocesses are not instrumented and no function/method coverage is claimed. Node source-transform/data-URL suites pass real assertions but V8 source-file coverage was not collected; they are NOT MEASURED, not assumed100%.
 
 | High-risk class | Line % | Branch % | Method % | Unexecuted methods |
 |---|---:|---:|---:|---|

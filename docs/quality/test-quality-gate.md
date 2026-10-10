@@ -22,8 +22,9 @@ READY requires: exact ordinary/quick suites with no skips; both final-head GitHu
 | UniApp |fresh HBuilderX mirror compile PASS;380 source files; local-only binding; compile is not a runtime payment measurement|
 | Mutations |joined25 KILLED/3 SURVIVED/0 INCONCLUSIVE; explicitly different attributed snapshots|
 | Asset taxonomy |253 assets:89 ACTIVE_TEST,145 ACTIVE_HELPER,17 CONDITIONAL,1 BLOCKED_EXTERNAL,1 OBSOLETE;no files deleted|
+| Actual official Mini |15 fresh runtime+DB checks at1f8; source380 hashes verified; measured guarded paymentRequests=0; paired owned backend cleanup PASS|
 | Admin GUI |BLOCKED: manual slider was not completed; expired old fixture destroyed; zero GUI assertions claimed|
-| Linux controlled |final pushed HEAD must be inspected in controlled-dependencies job; local Mac PASS is not a Linux result|
+| Linux controlled |37963090520 FAILURE: ordinary job SUCCESS, dependency bootstrap KeyError, cleanup PASS;69ec fix/reproduction run38010582858 pending at document write; final result is not predicted|
 
 Final-head CI, renewed coverage, strict scan and official device evidence are recorded in delivery and the PR's actual checks. This source document does not predict a pending run's conclusion. Failures/blocked scopes are not suppressed.
 

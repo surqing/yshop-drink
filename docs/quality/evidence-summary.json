@@ -3919,6 +3919,779 @@
         "covered_branches": 143,
         "missing_branches": 273
       }
+    },
+    "controlledRedisOwnershipFix": {
+      "sourceSha": "1f8bc6b1d6c6c4c7985afd34cee245e075702063",
+      "sourceDigest": "046bf5fde067fd3b13f12f5d7bbdb84dbc4bf58ab2a2ad4b2412f5455854afca",
+      "runId": "1e394d3e3e494813af6c4bc773a61676",
+      "result": "PASS",
+      "cleanup": "PASS",
+      "steps": [
+        {
+          "name": "mysql-business",
+          "result": "PASS",
+          "exitCode": 0,
+          "evidence": {
+            "runId": "2c50bac541b14f58b934c55c76905050",
+            "tests": 490,
+            "sourceSha": "1f8bc6b1d6c6c4c7985afd34cee245e075702063",
+            "sourceDigest": "046bf5fde067fd3b13f12f5d7bbdb84dbc4bf58ab2a2ad4b2412f5455854afca",
+            "cleanup": "PASS"
+          }
+        },
+        {
+          "name": "mysql-financial",
+          "result": "PASS",
+          "exitCode": 0,
+          "evidence": {
+            "runId": "14042e212c524a11a98d8d147a5afd8d",
+            "tests": 497,
+            "sourceSha": "1f8bc6b1d6c6c4c7985afd34cee245e075702063",
+            "sourceDigest": "046bf5fde067fd3b13f12f5d7bbdb84dbc4bf58ab2a2ad4b2412f5455854afca",
+            "cleanup": "PASS"
+          }
+        },
+        {
+          "name": "mysql-auth",
+          "result": "PASS",
+          "exitCode": 0,
+          "evidence": {
+            "tests": 72,
+            "cleanup": "PASS"
+          }
+        },
+        {
+          "name": "redis",
+          "result": "PASS",
+          "exitCode": 0,
+          "evidence": {
+            "runId": "9d551aed71604d2781058d354a2c136b",
+            "sourceSha": "1f8bc6b1d6c6c4c7985afd34cee245e075702063",
+            "sourceDigest": "046bf5fde067fd3b13f12f5d7bbdb84dbc4bf58ab2a2ad4b2412f5455854afca",
+            "result": "PASS",
+            "suites": 1,
+            "tests": 66,
+            "cases": {
+              "co.yixiang.yshop.module.order.ordering.CouponCodeRedisAcceptanceTest": {
+                "naturalWindowExpiryAllowsBoundedRetryAndRejectedCallsDoNotExtendTtl": 1,
+                "actualClientShutdownFailsClosedWithoutClaim": 1,
+                "rotatingOnlyRequestKeysCannotBypass": 20,
+                "twentyMembersNormallyRedeemBehindOneNat": 1,
+                "hourlyBudgetSurvivesMinuteExpiryAndOtherInstances": 1,
+                "fullLengthPredictableGuessesStillShareMemberLimit": 20,
+                "ipLimitCannotBeBypassedByChangingMembersOrForwardedHeader": 1,
+                "twentyDifferentWrongCodesAndKeysAcrossTwoInstances": 20,
+                "legacyShortCodeHasSharedDailyQuotaWithoutDisablingCompatibility": 1
+              }
+            },
+            "exactNamesChecked": true
+          }
+        },
+        {
+          "name": "synthetic-tls",
+          "result": "PASS",
+          "exitCode": 0,
+          "evidence": {
+            "runId": "4b40a9f78a574d8d9e10348894819519",
+            "tests": 10,
+            "sourceSha": "1f8bc6b1d6c6c4c7985afd34cee245e075702063",
+            "sourceDigest": "046bf5fde067fd3b13f12f5d7bbdb84dbc4bf58ab2a2ad4b2412f5455854afca",
+            "cleanup": "PASS"
+          }
+        }
+      ],
+      "scope": "owned Docker MySQL/Redis/auth/synthetic HTTPS; GUI/Mini excluded",
+      "paymentRequests": {
+        "value": 0,
+        "evidence": "DECLARED_SYNTHETIC_TRANSPORT_ONLY",
+        "globalNetworkMeasured": false
+      },
+      "resources": {
+        "containersRemoved": 2,
+        "anonymousVolumesRemoved": 2,
+        "ownershipChecked": true
+      },
+      "sourceUnchanged": true
+    },
+    "httpRedisOwnershipFix": {
+      "owner": "259a162183034482843beb07ad6e2d07",
+      "result": "PASS",
+      "cleanup": "PASS",
+      "sourceSha": "1f8bc6b1d6c6c4c7985afd34cee245e075702063",
+      "sourceDigest": "046bf5fde067fd3b13f12f5d7bbdb84dbc4bf58ab2a2ad4b2412f5455854afca",
+      "scope": "owned disposable MySQL/Redis/backend HTTP writes",
+      "gui": "NOT_EXECUTED",
+      "mini": "NOT_EXECUTED",
+      "seedInsertRowsCopied": 0,
+      "stage": "ISOLATED_BACKEND_HEALTH",
+      "backendArtifactHash": "650e049d5ea5b41289e0fbff82d66bcdaeac8e1396aa8f11f47a9813b501fe1b",
+      "port": 48889,
+      "backendOwnershipVerified": true,
+      "checks": [
+        {
+          "name": "actual admin/member password login",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "admin creates two store products with distinct prices",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "price edit leaves other store price unchanged",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "staff cannot read store B product",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "coupon retry grants one right",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "SKU label roundtrips UTF8",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "lost response same-key retry keeps one unpaid order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "server price and topping minus coupon unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "member sees pending order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "catalog edit leaves existing order price snapshot unchanged",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "other member cannot read order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "authorized staff reads store A order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "staff cannot read store B order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cancel retry restores inventory once",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cancel restores coupon once",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disabled member refresh denied",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disabled member login denied",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disable/refresh never add successful login logs",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "re-enable cannot resurrect revoked refresh",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "HTTP logout revokes refresh",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "all orders unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "financial tables untouched",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "issued tokens absent from backend log",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process all orders remain unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process issued credentials absent from logs",
+          "result": "PASS",
+          "executed": true
+        }
+      ],
+      "httpRequests": 31,
+      "paymentRequests": {
+        "value": 0,
+        "evidence": "MEASURED_THIS_HTTP_HARNESS_ONLY",
+        "globalNetworkMeasured": false
+      },
+      "multiProcess": {
+        "instances": 2,
+        "rounds": 5,
+        "workers": 20,
+        "httpRequests": 331,
+        "sameJvm": false,
+        "sharedState": "owned MySQL and Redis",
+        "result": "PASS"
+      },
+      "resources": {
+        "containersRemoved": 2,
+        "anonymousVolumesRemoved": 2,
+        "ownershipChecked": true
+      },
+      "sourceUnchanged": true
+    },
+    "officialMiniRuntime": {
+      "result": "PASS",
+      "scope": "actual official simulator; own disposable MySQL/Redis/backend; synthetic password session",
+      "checks": [
+        {
+          "name": "backend ownership verified",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cold boot transport/login guard really installed",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "homepage renders synthetic member",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two owned stores visible",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "store catalog visible",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "real page selected SKU and topping in own cart",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cart renders one selected item",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cart quantity two for coupon threshold",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "checkout payment control frozen",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "coupon selected through actual page",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "lost response preserves checkout and idempotency key",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "actual submit opens unpaid order detail",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "actual cancel returns order list",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "local API successful; payment admission count zero",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "fresh owned database oracle: unpaid retry cancel inventory coupon financial snapshots",
+          "result": "PASS",
+          "executed": true
+        }
+      ],
+      "paymentRequests": {
+        "value": 0,
+        "evidence": "MEASURED_GUARDED_WX_REQUEST_AND_REQUESTPAYMENT_FROM_COLD_BOOT",
+        "globalNetworkMeasured": false
+      },
+      "sourceCommit": "1f8bc6b1d6c6c4c7985afd34cee245e075702063",
+      "sourceSha": "1f8bc6b1d6c6c4c7985afd34cee245e075702063",
+      "sourceDigest": "5bbfc84f12af76bb79596887c156a72e83d16be83fc9fde042135f7feed2124d",
+      "compiledSourceHashesVerified": 380,
+      "scriptHash": "84b50ea2fb5881d15b6c52c333f9f865f4b4a0ba7e55cd7eb60b6dff6bf0dffe",
+      "counters": {
+        "paymentRequests": 0,
+        "blocked": 0,
+        "requests": 14,
+        "localApiSuccess": 12,
+        "lostResponses": 1
+      },
+      "databaseOracle": {
+        "ownershipVerified": true,
+        "result": "PASS",
+        "scope": "three unpaid orders, stock20, no reservations/ledger/payments/attempts, one available right, two releases, last amount37.00"
+      }
+    },
+    "officialMiniBackendCleanup": {
+      "owner": "11f9b38914cc4d7a8b6246a643c0b44b",
+      "result": "PASS",
+      "cleanup": "PASS",
+      "sourceSha": "1f8bc6b1d6c6c4c7985afd34cee245e075702063",
+      "sourceDigest": "5bbfc84f12af76bb79596887c156a72e83d16be83fc9fde042135f7feed2124d",
+      "scope": "owned disposable MySQL/Redis/backend HTTP writes",
+      "gui": "NOT_EXECUTED",
+      "mini": "NOT_EXECUTED",
+      "seedInsertRowsCopied": 0,
+      "stage": "ISOLATED_BACKEND_HEALTH",
+      "backendArtifactHash": "650e049d5ea5b41289e0fbff82d66bcdaeac8e1396aa8f11f47a9813b501fe1b",
+      "port": 48885,
+      "backendOwnershipVerified": true,
+      "checks": [
+        {
+          "name": "actual admin/member password login",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "admin creates two store products with distinct prices",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "price edit leaves other store price unchanged",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "staff cannot read store B product",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "coupon retry grants one right",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "SKU label roundtrips UTF8",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "lost response same-key retry keeps one unpaid order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "server price and topping minus coupon unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "member sees pending order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "catalog edit leaves existing order price snapshot unchanged",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "other member cannot read order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "authorized staff reads store A order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "staff cannot read store B order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cancel retry restores inventory once",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cancel restores coupon once",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disabled member refresh denied",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disabled member login denied",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disable/refresh never add successful login logs",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "re-enable cannot resurrect revoked refresh",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "HTTP logout revokes refresh",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "all orders unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "financial tables untouched",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "issued tokens absent from backend log",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process all orders remain unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process issued credentials absent from logs",
+          "result": "PASS",
+          "executed": true
+        }
+      ],
+      "httpRequests": 31,
+      "paymentRequests": {
+        "value": 0,
+        "evidence": "MEASURED_THIS_HTTP_HARNESS_ONLY",
+        "globalNetworkMeasured": false
+      },
+      "multiProcess": {
+        "instances": 2,
+        "rounds": 5,
+        "workers": 20,
+        "httpRequests": 331,
+        "sameJvm": false,
+        "sharedState": "owned MySQL and Redis",
+        "result": "PASS"
+      },
+      "resources": {
+        "containersRemoved": 2,
+        "anonymousVolumesRemoved": 2,
+        "ownershipChecked": true
+      },
+      "sourceUnchanged": true
+    },
+    "pythonLatestPrecommit": {
+      "sourceSha": "1f8bc6b1d6c6c4c7985afd34cee245e075702063",
+      "sourceDigest": "046bf5fde067fd3b13f12f5d7bbdb84dbc4bf58ab2a2ad4b2412f5455854afca",
+      "scope": "three actual quality unittest drivers; subprocesses not instrumented",
+      "tests": 62,
+      "line": {
+        "covered": 493,
+        "total": 1349,
+        "percent": 36.55
+      },
+      "branch": {
+        "covered": 148,
+        "total": 434,
+        "percent": 34.1
+      },
+      "method": "NOT MEASURED"
+    },
+    "macOriginalRedisProbe": {
+      "sourceSha": "1f8bc6b1d6c6c4c7985afd34cee245e075702063",
+      "sourceDigest": "046bf5fde067fd3b13f12f5d7bbdb84dbc4bf58ab2a2ad4b2412f5455854afca",
+      "owner": "4c94dcb2c09042a28e89da466962b0e7",
+      "result": "PASS",
+      "cleanup": "PASS",
+      "scope": "original Redis bootstrap permission reproduction; synthetic only",
+      "oldBootstrapConfigReadDenied": false,
+      "oldBootstrapRunning": true,
+      "hostPlatform": "darwin",
+      "hostFileOwnerUid": 501,
+      "resources": {
+        "containersRemoved": 1,
+        "anonymousVolumesRemoved": 1,
+        "ownershipChecked": true
+      },
+      "sourceUnchanged": true
+    },
+    "r2FirstLinuxCi": {
+      "headSha": "1f8bc6b1d6c6c4c7985afd34cee245e075702063",
+      "url": "https://github.com/surqing/yshop-drink/actions/runs/37963090520",
+      "result": "FAILURE",
+      "ordinaryJob": "SUCCESS",
+      "controlledJob": "FAILURE",
+      "failure": "KeyError during dependency bootstrap; cleanup PASS; no controlled tests started",
+      "candidateCause": "Redis non-root entrypoint cannot read host-owner private 600 config on Linux; actual Linux reproduction is required before confirmation"
+    },
+    "redisFixCi": {
+      "headSha": "69ec4acd5d2ba99bb2fbccabab301dc1d6edcc82",
+      "url": "https://github.com/surqing/yshop-drink/actions/runs/38010582858",
+      "result": "IN_PROGRESS_AT_DOCUMENT_WRITE",
+      "scope": "original Linux permission reproduction plus corrected controlled tests; final-head results belong in final delivery, not predicted here",
+      "originalLinuxPermissionReproduction": "PASS (actual GitHub step; full controlled result still pending)"
     }
   },
   "gui": {
