@@ -98,6 +98,17 @@ class PageEvidenceTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):aggregate_reports([r.root/'report.json'],source_identity())
         self.assertTrue(r.save()['complete'])
         self.assertEqual('PASS',aggregate_reports([r.root/'report.json'],source_identity())['result'])
+    def test_tls_only_cannot_certify_full_integration(self):
+        from unittest.mock import patch
+        from run import Runner
+        r=Runner(Path(self.temp.name)/'runs')
+        out=r.root/'controlled';out.mkdir()
+        (out/'report.json').write_text(json.dumps({'sourceSha':r.source_sha,'sourceDigest':r.digest,
+            'runId':'owned','result':'PASS','cleanup':'PASS','sourceUnchanged':True,
+            'selectedScope':'synthetic-tls','steps':[{'name':'synthetic-tls','result':'PASS','evidence':{'tests':11}}]}))
+        def check(*args,**kw):return kw['validator'](self.path)
+        with patch.object(r,'step',side_effect=check):
+            with self.assertRaisesRegex(RuntimeError,'CONTROLLED_REPORT_FAILED_OR_INCOMPLETE'):r.integration()
     def test_current_exact_plan_passes(self):self.assertEqual(1,self.receipt()['tests'])
     def test_missing_report_rejected(self):
         with self.assertRaises(RuntimeError):browser_receipt(self.path,self.started,self.identity,'run',['one'])

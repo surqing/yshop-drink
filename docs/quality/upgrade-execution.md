@@ -41,7 +41,7 @@ python3 tests/quality/coverage.py --run /tmp/quality-java/<runId> --cli "$HOME/.
 python3 tests/quality/run.py REPORT --run-report /tmp/quality-browser/<runId>/report.json --run-report /tmp/quality-cross/<runId>/report.json
 ```
 
-当前注册计划为77个普通Java套件/1721次调用、3个条件套件；QUICK183次（原147+新增36）。页面5项合成API Smoke与2项实际后端，官方Mini10项检查。次数不是独特场景数量，MySQL重新运行同套件也不累加为独特测试。
+当前注册计划为77个普通Java套件/1721次调用、3个条件套件；QUICK184次（原147+新增37）。页面5项合成API Smoke与2项实际后端，官方Mini10项检查。次数不是独特场景数量，MySQL重新运行同套件也不累加为独特测试。
 
 开发阶段验证（保留原SHA、内容摘要与失败历史，不作为最终HEAD证明）：
 
@@ -54,9 +54,9 @@ python3 tests/quality/run.py REPORT --run-report /tmp/quality-browser/<runId>/re
 | 双JVM读基准 | PASSED，240请求，错误率0 | 上述run；商品P95/P99 95.143/231.134ms，鉴权64.224/65.817ms，锁等待119次/3624ms；不是生产SLO或因果缺陷结论 |
 | 官方Mini→Spring/MySQL→Vue | PASSED，10页面检查+2商家页面+5SQL断言；cleanup PASS；金融计数0 | `0294dc52167745aa8eeae1d76606390e` |
 | 全构建/类型 | PASSED，55模块、Vue构建/类型 | `86f1359a418a403f8c0494668562d49e` |
-| 新门禁负例 | PASSED，36项 | 实际先复现旧构建/外来run/零浏览器误接收，再修复；缺环境完整入口BLOCKED与超时等待清理均已测试 |
+| 新门禁负例 | PASSED，37项 | 实际先复现旧构建/外来run/零浏览器误接收，再修复；缺环境完整入口BLOCKED与超时等待清理均已测试 |
 
-QUICK清单为183次：52 Node+95原Python+36新增页面/来源/状态检查。上表以清单和报告为准，不从文档估计数量。
+QUICK清单为184次：52 Node+95原Python+37新增页面/来源/状态检查。上表以清单和报告为准，不从文档估计数量。
 
 已复现并修复的测试基础设施问题：初始缺PyYAML；连续后端端口被Docker随机映射抢占；登录缓存封装与Vue历史路由错误；过宽金融路径匹配误阻断通知源码模块；自定义Dialog缺少预期无障碍名称；开关的隐藏input与订单单元格文字导致定位错误；Mini跨执行上下文读取wx属性失败（改为私有Storage计数）；审查发现旧JAR来源、测试结果归属、环境状态传播与SIGTERM清理缺口。失败报告/截图/Trace保留在私有证据目录，未改写成PASS。
 
@@ -71,3 +71,5 @@ QUICK清单为183次：52 Node+95原Python+36新增页面/来源/状态检查。
 跨端表单编辑先等待实际详情值与加载遮罩消失，避免初始GET覆盖自动化提前输入；同时校验实际PUT的名称/停用状态、刷新后的页面和独立SQL状态。保留装载竞态失败Trace（PUT旧名称已实际复现），不弱化持久化断言。
 
 Linux CI 已复现合成TLS入口连接拒绝（MySQL业务、金融模拟、鉴权、Redis全部通过，TLS11项失败，CI run38037420340保留为FAILED）。代理现在对IPv4/IPv6 localhost分别监听，并在Java测试前校验所属容器运行状态、TLS连接及本轮证书指纹；启动或证书归属不符即失败。最终结果以修复后CI为准。
+
+CI先执行 `python3 tests/quality/heavy.py --scope synthetic-tls --output /tmp/tls-preflight` 并立即上传安全摘要，再执行默认完整集成。局部报告明确标注其余范围NOT_RUN，完整入口要求全部五个范围，新增负例证明仅TLS通过不能认证INTEGRATION。该先行检查不是新增独特业务场景，重复TLS调用不累加为独特测试。

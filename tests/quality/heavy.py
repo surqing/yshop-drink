@@ -8,11 +8,12 @@ from owned_resources import remove_owned,failed_report
 REPO=Path(__file__).resolve().parents[2]
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--output',required=True);a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('--output',required=True);p.add_argument('--scope',choices=['full','synthetic-tls'],default='full');a=p.parse_args()
     root=Path(a.output).resolve();root.mkdir(parents=True,exist_ok=False,mode=0o700)
     owner=uuid.uuid4().hex;mysql='yshop-quality-heavy-'+owner;redis=mysql+'-redis'
     identity=source_identity();env=os.environ.copy();steps=[]
     report={**identity,'runId':owner,'result':'FAIL','cleanup':'NOT_RUN','steps':steps,
+            'selectedScope':a.scope,'notSelected':[] if a.scope=='full' else [{'name':n,'status':'NOT_RUN'} for n in ['mysql-business','mysql-financial','mysql-auth','redis']],
             'startedAt':time.time(),'scope':'owned Docker MySQL/Redis/auth/synthetic HTTPS; GUI/Mini excluded',
             'paymentRequests':{'value':0,'evidence':'DECLARED_SYNTHETIC_TRANSPORT_ONLY','globalNetworkMeasured':False}}
     def private(name,text):
@@ -85,13 +86,14 @@ def main():
         rbind=json.loads(docker('inspect',redis))[0]['NetworkSettings']['Ports']['6379/tcp'][0]
         redis_config=private('redis.properties','url=redis://127.0.0.1:'+rbind['HostPort']+'\npassword='+rpw+'\n')
         env.update(YSHOP_COUPON_REDIS_ACCEPTANCE='true',YSHOP_COUPON_REDIS_CONFIG=str(redis_config))
-        command('mysql-business',[sys.executable,'tests/business/mysql-acceptance.py','--coupon'],lambda:acceptance_log('mysql-business',{'OrderingDatabaseTest','CatalogDatabaseTest','CatalogEditingMysqlAcceptance','CouponDatabaseTest'}))
-        command('mysql-financial',[sys.executable,'tests/payment/mysql-acceptance.py','--coupon'],lambda:acceptance_log('mysql-financial',{'PaymentDatabaseTest','WalletDatabaseTest','PaymentAttemptDatabaseTest','WechatV3DatabaseTest','PaymentLiveReadinessDatabaseTest','LiveMerchantPreflightDatabaseTest','PaymentCancellationDatabaseTest','CouponPaymentDatabaseTest'}))
-        command('mysql-auth',[sys.executable,'tests/quality/auth-mysql.py','--output',str(root/'auth')],auth_report)
-        ev=Evidence(root/'redis-evidence');selected={k:v for k,v in manifest(REPO).items() if k.endswith('.CouponCodeRedisAcceptanceTest')}
-        from acceptance_support import maven_command
-        cmd=maven_command(REPO.parent)+['-f','yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/pom.xml','-Pmysql-acceptance','test','-Dtest=CouponCodeRedisAcceptanceTest','-Dsurefire.failIfNoSpecifiedTests=true']+ev.arguments(selected)
-        command('redis',cmd,ev.validate)
+        if a.scope=='full':
+            command('mysql-business',[sys.executable,'tests/business/mysql-acceptance.py','--coupon'],lambda:acceptance_log('mysql-business',{'OrderingDatabaseTest','CatalogDatabaseTest','CatalogEditingMysqlAcceptance','CouponDatabaseTest'}))
+            command('mysql-financial',[sys.executable,'tests/payment/mysql-acceptance.py','--coupon'],lambda:acceptance_log('mysql-financial',{'PaymentDatabaseTest','WalletDatabaseTest','PaymentAttemptDatabaseTest','WechatV3DatabaseTest','PaymentLiveReadinessDatabaseTest','LiveMerchantPreflightDatabaseTest','PaymentCancellationDatabaseTest','CouponPaymentDatabaseTest'}))
+            command('mysql-auth',[sys.executable,'tests/quality/auth-mysql.py','--output',str(root/'auth')],auth_report)
+            ev=Evidence(root/'redis-evidence');selected={k:v for k,v in manifest(REPO).items() if k.endswith('.CouponCodeRedisAcceptanceTest')}
+            from acceptance_support import maven_command
+            cmd=maven_command(REPO.parent)+['-f','yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/pom.xml','-Pmysql-acceptance','test','-Dtest=CouponCodeRedisAcceptanceTest','-Dsurefire.failIfNoSpecifiedTests=true']+ev.arguments(selected)
+            command('redis',cmd,ev.validate)
         tls=root/'tls';tls.mkdir(mode=0o700)
         def openssl(*args):
             if execute(['openssl',*args],tls,env,root/'openssl.log',60):raise RuntimeError('SYNTHETIC_TLS_GENERATION_FAILED')

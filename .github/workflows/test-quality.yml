@@ -154,6 +154,19 @@ jobs:
           python3 tests/quality/termination_probe.py --phase cleanup --output "$RUNNER_TEMP/termination/cleanup"
       - name: Reproduce original Redis private-file permission failure
         run: python3 tests/quality/owned_resources.py --redis-permission-probe "$RUNNER_TEMP/redis-permission"
+      - name: Early owned synthetic TLS compatibility check
+        run: python3 tests/quality/heavy.py --scope synthetic-tls --output "$RUNNER_TEMP/tls-preflight"
+      - name: Publish safe early TLS diagnosis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tls-preflight-summary
+          path: |
+            ${{ runner.temp }}/tls-preflight/**/report.json
+            ${{ runner.temp }}/tls-preflight/**/evidence.json
+            ${{ runner.temp }}/tls-preflight/**/diagnostics.json
+          retention-days: 7
+          if-no-files-found: error
       - name: Owned MySQL, Redis, authentication and synthetic TLS acceptance
         if: ${{ !cancelled() }}
         run: python3 tests/quality/heavy.py --output "$RUNNER_TEMP/controlled"
