@@ -5,6 +5,10 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import socket
+import ssl
+import time
+import hashlib
 import sys
 import tarfile
 import uuid
@@ -28,7 +32,7 @@ def main():
         config=(REPO/'scripts/payment/callback-nginx.conf').read_text().replace('host.docker.internal:48081','127.0.0.1:48881' if linux else 'host.docker.internal:48881')
         # Linux host networking preserves the test backend's loopback-only binding.
         # Docker Desktop has its own host DNS/proxy; overriding it causes 502.
-        if linux:config=config.replace('listen 8443 ssl;', 'listen 127.0.0.1:48444 ssl;')
+        if linux:config=config.replace('listen 8443 ssl;', 'listen 127.0.0.1:48444 ssl;\n        listen [::1]:48444 ssl;')
         with tarfile.open(fileobj=archive,mode='w') as out:
             for file in ['server.pem','server-key.pem','nginx.conf']:
                 data=config.encode() if file=='nginx.conf' else (folder/file).read_bytes()
@@ -37,6 +41,23 @@ def main():
         docker('run','--rm','-i','--network','none','--entrypoint','sh','-v',volume+':/tls',IMAGE,'-c','tar xf - -C /tls',input=archive.getvalue())
         docker('create','--name',name,'--label','quality.owner='+name,*(['--network','host'] if linux else []),'--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--user','101:101','--tmpfs','/tmp:rw,nosuid,nodev,noexec,mode=1777',*([] if linux else ['-p','127.0.0.1:48444:8443']),'-v',volume+':/tls:ro','--entrypoint','nginx',IMAGE,'-c','/tls/nginx.conf','-g','daemon off;');container_created=True
         docker('start',name)
+        context=ssl.create_default_context(cafile=str(folder/'ca.pem'))
+        expected=hashlib.sha256(ssl.PEM_cert_to_DER_cert((folder/'server.pem').read_text())).digest()
+        deadline=time.monotonic()+30
+        while True:
+            state=json.loads(docker('inspect',name))[0]
+            if not state['State']['Running']:
+                (folder/'ingress-private.log').write_bytes(docker('logs',name))
+                raise RuntimeError('OWNED_TLS_PROXY_EXITED')
+            try:
+                with socket.create_connection(('localhost',48444),timeout=2) as connection:
+                    with context.wrap_socket(connection,server_hostname='localhost') as tls:
+                        if hashlib.sha256(tls.getpeercert(binary_form=True)).digest()!=expected:
+                            raise RuntimeError('OWNED_TLS_CERTIFICATE_MISMATCH')
+                break
+            except (OSError,ssl.SSLError):
+                if time.monotonic()>=deadline:raise RuntimeError('OWNED_TLS_PROXY_NOT_READY')
+                time.sleep(.1)
         env=os.environ.copy();env['YSHOP_INGRESS_BASE_URL']='https://localhost:48444';env['YSHOP_INGRESS_CA']=str(folder/'ca.pem')
         result=subprocess.run([sys.executable,str(REPO/'tests/payment/mysql-acceptance.py'),'--prepayment','--ingress-only'],env=env,timeout=780)
         if result.returncode:raise RuntimeError('SYNTHETIC_INGRESS_TEST_FAILED')
