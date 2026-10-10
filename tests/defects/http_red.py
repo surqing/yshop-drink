@@ -109,8 +109,9 @@ try:
   finally:api('POST','/app-api/order/cancel',{'id':oid},token)
  case('D008','pickup order must retain contact phone',phone)
  reset()
- from minimal_security_cases import address_cases
+ from minimal_security_cases import address_cases, profile_cases
  address_cases(api,sql,case,token,login)
+ profile_cases(api,sql,case,token)
  report['status']='FAILED' if any(c['status']=='FAILED' for c in report['cases']) else 'PASSED'
  if any(c['status']=='INCONCLUSIVE' for c in report['cases']):report['status']='INCONCLUSIVE'
 except Exception as e:

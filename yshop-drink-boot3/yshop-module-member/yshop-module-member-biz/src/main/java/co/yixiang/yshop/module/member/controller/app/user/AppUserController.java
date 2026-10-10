@@ -48,8 +48,8 @@ public class AppUserController {
                     required = true, example = "o"),
             @Parameter(name = "avatar", description = "用户头像",
                     required = true, example = ""),
-            @Parameter(name = "mobile", description = "手机",
-                    required = true, example = "")
+            @Parameter(name = "mobile", description = "兼容旧资料请求，不参与手机号修改",
+                    required = false, example = "")
     })
     @PreAuthenticated
     public CommonResult<Boolean> updateUserNickname(@RequestBody @Valid AppUserNickVO appUserNickVO) {

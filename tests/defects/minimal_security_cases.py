@@ -55,6 +55,9 @@ def address_cases(api, sql, case, token, login):
         for value in ['0', '-1', '1.5', '1e3', '9223372036854775808', 'abc']:
             for prefix in ['/app-api/address/default/set/', '/app-api/address/del/']:
                 codes.append(api('POST', prefix + value, token=token)['code'])
+            codes.append(api('POST', '/app-api/address/addAndEdit', payload(value), token)['code'])
+            codes.append(api('POST', '/app-api/score-order/submit',
+                             {'productId': '9101', 'addressId': value, 'num': '1'}, token)['code'])
         o.update(codes=codes, unchanged=snapshot() == before)
         assert all(c == 1004004001 for c in codes) and o['unchanged'], 'Invalid IDs must produce parameter errors with no mutation'
 
@@ -65,6 +68,8 @@ def address_cases(api, sql, case, token, login):
             codes.append(api('POST', '/app-api/address/addAndEdit', payload(value), token)['code'])
             codes.append(api('POST', '/app-api/address/default/set/' + str(value), token=token)['code'])
             codes.append(api('POST', '/app-api/address/del/' + str(value), token=token)['code'])
+            codes.append(api('POST', '/app-api/score-order/submit',
+                             {'productId': '9101', 'addressId': str(value), 'num': '1'}, token)['code'])
         o.update(codes=codes, unchanged=snapshot() == before)
         assert all(c == 1004004000 for c in codes) and o['unchanged'], 'Missing/deleted addresses must fail before a default reset'
 
@@ -75,8 +80,11 @@ def address_cases(api, sql, case, token, login):
         aid = r['data']
         try:
             assert sql('SELECT uid FROM yshop_user_address WHERE id=' + str(aid)).strip() == '101', 'Client UID cannot select address owner'
-            assert api('POST', '/app-api/address/addAndEdit', payload(aid, 0), token)['code'] == 0
+            edited = dict(payload(aid, 0), realName='Synthetic persisted', address='New street', detail='New unit')
+            assert api('POST', '/app-api/address/addAndEdit', edited, token)['code'] == 0
+            assert sql('SELECT uid,real_name,address,detail FROM yshop_user_address WHERE id=' + str(aid)).strip() == '101\tSynthetic persisted\tNew street\tNew unit'
             assert api('POST', '/app-api/address/default/set/' + str(aid), token=token)['code'] == 0
+            assert sql('SELECT is_default FROM yshop_user_address WHERE id=' + str(aid)).strip() == '1'
             rows = api('GET', '/app-api/address/list?page=1&limit=100', token=token)
             assert rows['code'] == 0 and any(str(x['id']) == str(aid) for x in rows['data'])
             assert all(str(x['id']) != '9202' for x in rows['data']), 'Address list must exclude other member addresses'
@@ -149,3 +157,46 @@ def address_cases(api, sql, case, token, login):
                        ('checkout-controls', reward_sides), ('admin-owner', admin_transfer),
                        ('concurrent-defaults', concurrent_defaults), ('admin-races', admin_races)]:
         case('D004-' + suffix, fn.__doc__ or suffix, fn)
+
+
+def profile_cases(api, sql, case, token):
+    """A profile request must succeed while preserving both members' identities."""
+    def identities():
+        return sql('SELECT id,mobile,username,openid,routine_openid,now_money,integral,status '
+                   'FROM yshop_user WHERE id IN (101,102) ORDER BY id')
+
+    def profile(o, mobile):
+        before = identities()
+        try:
+            body = {'nickname': 'Synthetic persisted profile', 'birthday': '2001-02-03',
+                    'gender': 1, 'avatar': 'synthetic-new-avatar', 'mobile': mobile,
+                    'uid': 102, 'openid': 'synthetic-attacker-openid', 'routineOpenid': 'synthetic-attacker-mini'}
+            r = api('POST', '/app-api/member/user/update-nickname', body, token)
+            o.update(code=r['code'], identityUnchanged=identities() == before)
+            assert r['code'] == 0, 'A valid authenticated profile update must succeed, including old mobile-bearing payloads'
+            assert sql('SELECT nickname,birthday,gender,avatar FROM yshop_user WHERE id=101').strip() == 'Synthetic persisted profile\t2001-02-03\t1\tsynthetic-new-avatar'
+            assert o['identityUnchanged'], 'Profile must not write mobile, WeChat identity, username or assets'
+            victim = api('POST', '/app-api/member/auth/login', {'mobile': '13800000002', 'password': 'syntheticQA12'})
+            o['victimLoginCode'] = victim['code']
+            assert victim['code'] == 0 and victim['data']['userId'] == 102, 'The other member must still log into its own UID'
+        finally:
+            sql("UPDATE yshop_user SET mobile='13800000001' WHERE id=101")
+
+    def concurrent(o):
+        before = identities(); gate = threading.Barrier(8)
+        def worker(i):
+            gate.wait(timeout=10)
+            return api('POST', '/app-api/member/user/update-nickname',
+                       {'nickname': 'Synthetic concurrent ' + str(i), 'birthday': '2001-02-03',
+                        'gender': 0, 'avatar': 'synthetic-avatar', 'mobile': '13800000002'}, token)
+        try:
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                results = list(pool.map(worker, range(8)))
+            o.update(allSucceeded=all(r['code'] == 0 for r in results), identityUnchanged=identities() == before)
+            assert o['allSucceeded'] and o['identityUnchanged'], 'Concurrent valid profile updates must not change identity or reject all requests'
+        finally:
+            sql("UPDATE yshop_user SET mobile='13800000001' WHERE id=101")
+
+    for suffix, mobile in [('foreign-phone', '13800000002'), ('own-phone', '13800000001'), ('empty-phone', '')]:
+        case('D001-' + suffix, suffix, lambda o, mobile=mobile: profile(o, mobile))
+    case('D001-concurrent-profile', 'concurrent profile identity preservation', concurrent)
