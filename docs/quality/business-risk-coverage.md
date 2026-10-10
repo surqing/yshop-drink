@@ -29,3 +29,7 @@ Authorization linearizes at its DB principal/family decision; already admitted r
 ## Actual official simulator supplement
 
 A fresh1f8 compiled mirror verifies380 source hashes and connects only to a newly owned backend. Fifteen checks cover two stores,SKU/topping,quantity,full coupon selection,37.00 unpaid order after deliberately dropped committed response,same-key retry and cancellation. A SQL oracle confirms inventory/coupon restoration and no wallet ledger/payment/attempt records. The paired backend receipt proves cleanup. PaymentRequests=0 is measured from guarded cold boot; globalNetworkMeasured=false. This does not certify old Mini scripts or a later SHA. New synthetic menu fixtures expose product/order navigation to the already-authorized staff role and order navigation to HQ for forthcoming GUI checks, with no production permissions changed.
+
+## Completed808 evidence supplement
+
+Fresh808 actual official Mini15 passed from guarded cold boot, including SKU+topping/coupon37 unpaid, committed-response loss, same-key retry and cancellation with independent SQL. Actual owned admin GUI8 passed after manual HQ/staff CAPTCHA: product creation/edit, stock adjustment, coupon creation/disable, cross-store access refusal, unpaid query and price history. GUI changed original product19→22 while existing order19 and historic coupon order31 stayed unchanged. All owned resources were destroyed; paymentRequests=0 applies only to the declared guarded harness intervals.

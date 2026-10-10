@@ -48,3 +48,7 @@ Broad R1 mutations that had initialization/SQL errors remain in historical evide
 ## Reproduction ownership
 
 Redis bootstrap and menu-fixture repairs do not change the production sites under mutation. The28 operator records retain their original SHA,digest,baseline and assertion evidence;25 KILLED/3 SURVIVED is an attributed multi-snapshot matrix, not a claim that all operators were rerun against an arbitrary later documentation commit. Compile/init/timeout failures remain separately preserved and are never promoted to KILLED.
+
+## Completed808 evidence supplement
+
+All six requested uncertainties have real scoped results: three SURVIVED with independent SQL/category/conditional-issuance defense evidence, and inventory-conditional-update/cancel-payment-guard/cancel-uncertain-safe KILLED by assertions. Joined matrix25 KILLED/3 SURVIVED/0 INCONCLUSIVE retains per-run snapshots, including the corrected admin revoke mutant. The initial compile-error admin mutant remains historical INCONCLUSIVE, not a kill. Final publication does not change mutated production behavior.

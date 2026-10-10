@@ -3,7 +3,7 @@ import datetime, json, subprocess, urllib.request, urllib.error, uuid
 from pathlib import Path
 
 def seed(sql,root,repo):
-    import zipfile
+    import base64, struct, zipfile, zlib
     jar=repo/'yshop-drink-boot3/yshop-server/target/yshop-server.jar'
     with zipfile.ZipFile(jar) as bundle:
         for prefix in ['spring-security-crypto-','spring-jcl-']:
@@ -19,6 +19,18 @@ def seed(sql,root,repo):
     sql("INSERT INTO system_oauth2_client(client_id,secret,name,logo,status,access_token_validity_seconds,refresh_token_validity_seconds,redirect_uris,authorized_grant_types,scopes,auto_approve_scopes) VALUES('default','synthetic-test-only','quality','',0,3600,7200,'[]','[\"password\",\"refresh_token\"]','[]','[]');")
     sql("INSERT INTO system_role(id,name,code,sort,status,type) VALUES(101,'QA HQ','super_admin',0,0,1),(102,'QA staff','quality_staff',1,0,2); INSERT INTO system_users(id,username,password,nickname,status,tenant_id) VALUES(101,'qualityadmin','"+hashed+"','synthetic-hq',0,0),(102,'qualitystaff','"+hashed+"','synthetic-staff',0,0); INSERT INTO system_user_role(user_id,role_id) VALUES(101,101),(102,102);")
     sql("INSERT INTO system_menu(id,name,permission,type,parent_id,path,component,component_name,status) VALUES(3110,'Quality Mall','',1,0,'/mall',NULL,NULL,0),(3111,'商品经营','shop:store-product:query',2,3110,'products','mall/product/storeProduct/index','QualityProducts',0),(3112,'优惠券','coupon::query',2,3110,'coupons','mall/coupon/index','QualityCoupons',0),(3113,'订单','order:store-order:query',2,3110,'orders','mall/order/storeOrder/index','QualityOrders',0); INSERT INTO system_role_menu(role_id,menu_id) VALUES(102,3110),(102,3111),(102,3113);")
+    # The Vue permission directive needs action menu metadata even for synthetic HQ.
+    # Do not grant these coupon actions to the store staff role.
+    sql("INSERT INTO system_menu(id,name,permission,type,parent_id,status) VALUES(3120,'QA coupon create','coupon::create',3,3112,0),(3121,'QA coupon update','coupon::update',3,3112,0),(3122,'QA coupon delete','coupon::delete',3,3112,0); INSERT INTO system_role_menu(role_id,menu_id) VALUES(101,3120),(101,3121),(101,3122);")
+    # A generated local PNG makes required GUI media independent of any upload provider.
+    def png_chunk(kind, data):
+        return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data)&0xffffffff)
+    png=(b'\x89PNG\r\n\x1a\n'+png_chunk(b'IHDR',struct.pack('>IIBBBBB',8,8,8,6,0,0,0))
+         +png_chunk(b'IDAT',zlib.compress(b''.join(b'\0'+b'\x33\x99\xff\xff'*8 for _ in range(8))))
+         +png_chunk(b'IEND',b''))
+    (root/'synthetic-image.png').write_bytes(png)
+    media='data:image/png;base64,'+base64.b64encode(png).decode()
+    sql("INSERT INTO yshop_material_group(id,name,creator) VALUES(101,'QA synthetic images','quality'); INSERT INTO yshop_material(id,type,group_id,name,url,creator) VALUES(101,1,101,'QA synthetic image','"+media+"','quality');")
     for i,permission in enumerate(['shop:store-product:create','shop:store-product:update','shop:store-product:query','order:store-order:query','order:store-order:update']):
         sql("INSERT INTO system_menu(id,name,permission,type,status) VALUES("+str(3100+i)+",'QA permission','"+permission+"',3,0); INSERT INTO system_role_menu(role_id,menu_id) VALUES(102,"+str(3100+i)+");")
     sql("INSERT INTO yshop_user(id,username,password,nickname,mobile,status,create_time,tenant_id) VALUES(101,'qualitymember','"+hashed+"','synthetic-member','13800000001',0,NOW(),0),(102,'qualityother','"+hashed+"','synthetic-other','13800000002',0,NOW(),0);")

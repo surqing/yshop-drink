@@ -35,3 +35,7 @@ Python uses coverage.py branch instrumentation over quality helpers from three a
 OAuth2TokenApiImpl increased from38.46% line/50% methods to100% through real service/mappers, typed/untyped refresh and revoke. StoreAccessService increased from82.86/83.33/80 to94.29/87.5/100 with database-owned category/order authorization. Legacy member UserServiceImpl now has17.31/18.18/30 through actual HTTP status updates; remaining financial/admin paths are not pretended covered. MemberAuth55.88% lines still leaves real WeChat/SMS/profile branches outside this synthetic scope. No real provider call is made to inflate coverage.
 
 Independent assertions require current-token identity, disabled/deleted/reenabled rejection, rollback, cross-store refusal, owned stock, unpaid order/coupon snapshots and logs without issued tokens. Mutation results prove selected boundaries can detect wrong behavior. Coverage does not replace concurrency/GUI evidence.
+
+## Completed808 evidence supplement
+
+Renewed808 ordinary Java: line31.16%, branch6.93%, method22.80% locally. Ordinary plus owned HTTP: line38.99%, branch7.40%, method30.65%. Python62 driver assertions:493/1349 lines36.55%,148/434 branches34.10%, methods NOT MEASURED. Node coverage remains NOT MEASURED. The HTTP increment includes real application startup, not only extra tests. Linux Java method rounding/class scope is retained in its own coverage receipt. Final-publication coverage must carry its own SHA; these808 numbers are not relabeled.

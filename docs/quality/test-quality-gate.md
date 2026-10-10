@@ -1,6 +1,6 @@
 # Phase 6Q-R2 quality gate
 
-**PHASE 6Q QUALITY GATE: NOT READY**
+**PHASE 6Q QUALITY GATE: READY for the completed `808294c` code snapshot. Final publication requires actual latest-head CI SUCCESS.**
 
 Only existing PR13 is updated, based on feature/phase6c-coupon-marketing. PR12/13 are not merged; develop/master and Phase6D are untouched. Read [criteria and machine evidence](evidence-summary.json), [assets](test-inventory.md), [runner](test-runner-audit.md), [risk](business-risk-coverage.md), [coverage](test-coverage-report.md), [mutations](mutation-testing-report.md).
 
@@ -22,9 +22,9 @@ READY requires: exact ordinary/quick suites with no skips; both final-head GitHu
 | UniApp |fresh HBuilderX mirror compile PASS;380 source files; local-only binding; compile is not a runtime payment measurement|
 | Mutations |joined25 KILLED/3 SURVIVED/0 INCONCLUSIVE; explicitly different attributed snapshots|
 | Asset taxonomy |253 assets:89 ACTIVE_TEST,145 ACTIVE_HELPER,17 CONDITIONAL,1 BLOCKED_EXTERNAL,1 OBSOLETE;no files deleted|
-| Actual official Mini |15 fresh runtime+DB checks at1f8; source380 hashes verified; measured guarded paymentRequests=0; paired owned backend cleanup PASS|
-| Admin GUI |BLOCKED: manual slider was not completed; expired old fixture destroyed; zero GUI assertions claimed|
-| Linux controlled |37963090520 FAILURE: ordinary job SUCCESS, dependency bootstrap KeyError, cleanup PASS;69ec fix/reproduction run38010582858 pending at document write; final result is not predicted|
+| Actual official Mini |15 fresh runtime+DB checks at808; source380 hashes verified; measured guarded paymentRequests=0; paired owned backend cleanup PASS|
+| Admin GUI |8/8 actual GUI checks at808; manual HQ/staff slider, independent SQL oracles, normal logout; backend/frontend/owned containers and volumes destroyed|
+| Linux controlled |38011484288 at808 SUCCESS in both jobs; original Redis UID/0600 fault reproduced;490 business+497 financial+72 auth+66 Redis+10 TLS+45 HTTP checks, cleanup PASS|
 
 Final-head CI, renewed coverage, strict scan and official device evidence are recorded in delivery and the PR's actual checks. This source document does not predict a pending run's conclusion. Failures/blocked scopes are not suppressed.
 
@@ -40,8 +40,14 @@ The six requested mutation uncertainties are resolved without removing defenses.
 
 ## Human action pack
 
-Only manual slider authentication can unlock remaining admin GUI writes/stock/coupon/permission/order/history checks. Use a fresh owned5185 fixture, never the expired page or shared5175 session. The actual new URL/expiry/prefilled synthetic identity and confirmation text are supplied once at handoff. Missing GUI receipt stays BLOCKED, and owned resources auto-expire/destroy. No CAPTCHA bypass.
+The manual HQ and staff slider actions were completed for the renewed owned5185 environment; all eight GUI checks passed. No human blocker remains for this scope. Only manual slider authentication can unlock a future renewed GUI run. Use a fresh owned5185 fixture, never the expired page or shared5175 session. The actual new URL/expiry/prefilled synthetic identity and confirmation text are supplied once at handoff. Missing GUI receipt stays BLOCKED, and owned resources auto-expire/destroy. No CAPTCHA bypass.
 
 ## Financial Safety Statement
 
 No real merchant credentials, real WeChat prepay/query/close/callback, wx.requestPayment, refund,recharge or funds operation. Both payment/reconciliation flags are false. Financial events use only isolated synthetic databases. Shared balances/points/ledger/payment history/markers are not modified. Measured HTTP/Mini admission counts apply only to their stated hook/interval; zero global network traffic is not claimed.
+
+## Final publication attribution
+
+The completed808 CI checked the pull-request merge checkout fc77e92d; its content digest matches local808. Local ordinary Java1710, fresh UniApp compile, official Mini15, actual GUI8, HTTP45 and coverage carry their original808 identities. The final publication adds only this evidence and owned synthetic coupon action/menu/media fixtures; it does not modify application Java/Vue/UniApp behavior. Production source equivalence is verified separately, and latest-head CI must actually succeed before handoff. An earlier SUCCESS never substitutes for that requirement.
+
+GUI measured storeA product23→24 and stock7+3=10, created/stopped coupon30−5, and queried two unpaid storeA/B orders. StoreA staff searching the known storeB order saw no rows; its own order remained visible. Original product19→22 left the existing order19 and historical coupon order31 unchanged; all orders remained unpaid, issued coupon right remained available, financial tables stayed empty. Three coupon action menu entries were missing from the synthetic HQ browser cache; only the owned fixture was corrected, followed by normal logout and manual re-login. The source seed now includes those entries and one generated local PNG; no real role, media or upload provider is used.

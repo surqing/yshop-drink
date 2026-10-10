@@ -1,6 +1,6 @@
 {
   "phase": "6Q-R2",
-  "gate": "NOT READY",
+  "gate": "READY_FOR_COMPLETED_808_CODE_SNAPSHOT",
   "criteria": [
     "exact-suite ordinary Java and QUICK",
     "owned MySQL Redis TLS and cleanup",
@@ -4692,15 +4692,2020 @@
       "result": "IN_PROGRESS_AT_DOCUMENT_WRITE",
       "scope": "original Linux permission reproduction plus corrected controlled tests; final-head results belong in final delivery, not predicted here",
       "originalLinuxPermissionReproduction": "PASS (actual GitHub step; full controlled result still pending)"
+    },
+    "completed808Ci": {
+      "headSha": "808294c51a4d38a091210dfcea7b375efcfdc952",
+      "checkoutSha": "fc77e92dda1891f13d18609b9f6d04922d605808",
+      "sourceDigest": "8340bf565c0fb6823a58b53738a815df247d6ce5c8e96033f2cbe81fd4dd6ff9",
+      "url": "https://github.com/surqing/yshop-drink/actions/runs/38011484288",
+      "result": "SUCCESS",
+      "ordinaryJob": "SUCCESS",
+      "controlledJob": "SUCCESS",
+      "scope": "actual Linux CI, not a predicted run"
+    },
+    "final808OrdinaryJava": {
+      "sourceSha": "808294c51a4d38a091210dfcea7b375efcfdc952",
+      "sourceDigest": "8340bf565c0fb6823a58b53738a815df247d6ce5c8e96033f2cbe81fd4dd6ff9",
+      "runId": "23aa2a7ec06247e2b138fb243d272b76",
+      "result": "PASS",
+      "sourceUnchanged": true,
+      "paymentRequests": {
+        "value": null,
+        "evidence": "NOT_MEASURED_BY_DISPATCHER"
+      },
+      "receiptSha256": "fcdb00949d4645a66a5a425d640dbf91d96203013019957073cdac3b9a2c8a05",
+      "steps": [
+        {
+          "name": "java-yshop-common",
+          "result": "PASS",
+          "tests": 1,
+          "exactNamesChecked": true
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-biz-data-permission",
+          "result": "PASS",
+          "tests": 48,
+          "exactNamesChecked": true
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-biz-ip",
+          "result": "PASS",
+          "tests": 6,
+          "exactNamesChecked": true
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-excel",
+          "result": "PASS",
+          "tests": 2,
+          "exactNamesChecked": true
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-mybatis",
+          "result": "PASS",
+          "tests": 3,
+          "exactNamesChecked": true
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-test",
+          "result": "PASS",
+          "tests": 3,
+          "exactNamesChecked": true
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-web",
+          "result": "PASS",
+          "tests": 20,
+          "exactNamesChecked": true
+        },
+        {
+          "name": "java-yshop-module-order-biz",
+          "result": "PASS",
+          "tests": 1004,
+          "exactNamesChecked": true
+        },
+        {
+          "name": "java-yshop-module-shop-biz",
+          "result": "PASS",
+          "tests": 7,
+          "exactNamesChecked": true
+        },
+        {
+          "name": "java-yshop-module-member-biz",
+          "result": "PASS",
+          "tests": 23,
+          "exactNamesChecked": true
+        },
+        {
+          "name": "java-yshop-module-pay-biz",
+          "result": "PASS",
+          "tests": 81,
+          "exactNamesChecked": true
+        },
+        {
+          "name": "java-yshop-module-system-biz",
+          "result": "PASS",
+          "tests": 512,
+          "exactNamesChecked": true
+        }
+      ]
+    },
+    "final808Http": {
+      "sourceSha": "808294c51a4d38a091210dfcea7b375efcfdc952",
+      "sourceDigest": "8340bf565c0fb6823a58b53738a815df247d6ce5c8e96033f2cbe81fd4dd6ff9",
+      "owner": "803370708b1f4a47b82fce6b4312920e",
+      "result": "PASS",
+      "cleanup": "PASS",
+      "sourceUnchanged": true,
+      "scope": "owned disposable MySQL/Redis/backend HTTP writes",
+      "paymentRequests": {
+        "value": 0,
+        "evidence": "MEASURED_THIS_HTTP_HARNESS_ONLY",
+        "globalNetworkMeasured": false
+      },
+      "multiProcess": {
+        "instances": 2,
+        "rounds": 5,
+        "workers": 20,
+        "httpRequests": 331,
+        "sameJvm": false,
+        "sharedState": "owned MySQL and Redis",
+        "result": "PASS"
+      },
+      "resources": {
+        "containersRemoved": 2,
+        "anonymousVolumesRemoved": 2,
+        "ownershipChecked": true
+      },
+      "gui": "NOT_EXECUTED",
+      "mini": "NOT_EXECUTED",
+      "receiptSha256": "8e3f990f51268df21e1d54205ca0eceacf41fccd3ad771e479fef23d0f923131",
+      "assertionsExecuted": 45,
+      "checks": [
+        {
+          "name": "actual admin/member password login",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "admin creates two store products with distinct prices",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "price edit leaves other store price unchanged",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "staff cannot read store B product",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "coupon retry grants one right",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "SKU label roundtrips UTF8",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "lost response same-key retry keeps one unpaid order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "server price and topping minus coupon unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "member sees pending order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "catalog edit leaves existing order price snapshot unchanged",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "other member cannot read order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "authorized staff reads store A order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "staff cannot read store B order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cancel retry restores inventory once",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cancel restores coupon once",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disabled member refresh denied",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disabled member login denied",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disable/refresh never add successful login logs",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "re-enable cannot resurrect revoked refresh",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "HTTP logout revokes refresh",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "all orders unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "financial tables untouched",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "issued tokens absent from backend log",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process all orders remain unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process issued credentials absent from logs",
+          "result": "PASS",
+          "executed": true
+        }
+      ]
+    },
+    "final808Mini": {
+      "sourceSha": "808294c51a4d38a091210dfcea7b375efcfdc952",
+      "sourceDigest": "8340bf565c0fb6823a58b53738a815df247d6ce5c8e96033f2cbe81fd4dd6ff9",
+      "result": "PASS",
+      "scope": "actual official simulator; own disposable MySQL/Redis/backend; synthetic password session",
+      "paymentRequests": {
+        "value": 0,
+        "evidence": "MEASURED_GUARDED_WX_REQUEST_AND_REQUESTPAYMENT_FROM_COLD_BOOT",
+        "globalNetworkMeasured": false
+      },
+      "counters": {
+        "paymentRequests": 0,
+        "blocked": 0,
+        "requests": 14,
+        "localApiSuccess": 13,
+        "lostResponses": 1
+      },
+      "receiptSha256": "8033a3ddd125d603788775499d14c67c3e29655e5b7e33424d53070bfd5c9180",
+      "assertionsExecuted": 15,
+      "checks": [
+        {
+          "name": "backend ownership verified",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cold boot transport/login guard really installed",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "homepage renders synthetic member",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two owned stores visible",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "store catalog visible",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "real page selected SKU and topping in own cart",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cart renders one selected item",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cart quantity two for coupon threshold",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "checkout payment control frozen",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "coupon selected through actual page",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "lost response preserves checkout and idempotency key",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "actual submit opens unpaid order detail",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "actual cancel returns order list",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "local API successful; payment admission count zero",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "owned MySQL oracle: unpaid stock coupon and financial state",
+          "result": "PASS",
+          "executed": true
+        }
+      ]
+    },
+    "final808PythonCoverage": {
+      "sourceSha": "808294c51a4d38a091210dfcea7b375efcfdc952",
+      "sourceDigest": "8340bf565c0fb6823a58b53738a815df247d6ce5c8e96033f2cbe81fd4dd6ff9",
+      "sourceUnchanged": true,
+      "scope": "three quality drivers; subprocesses not instrumented",
+      "tests": 62,
+      "line": 36.55,
+      "branch": 34.1,
+      "method": "NOT MEASURED",
+      "receiptSha256": "aed001c2e0455fb7fb6520c6b0f57346e42d049bfe8a3ce28e0b08b32c7209f5"
+    },
+    "final808JavaCoverage": {
+      "sourceSha": "808294c51a4d38a091210dfcea7b375efcfdc952",
+      "sourceDigest": "8340bf565c0fb6823a58b53738a815df247d6ce5c8e96033f2cbe81fd4dd6ff9",
+      "runId": "23aa2a7ec06247e2b138fb243d272b76",
+      "result": "MEASURED",
+      "scope": "all compiled src/main classes including test infrastructure; high-risk business classes separately, no DTO threshold",
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 260154,
+          "covered": 52881,
+          "percent": 16.89
+        },
+        "BRANCH": {
+          "missed": 41802,
+          "covered": 3112,
+          "percent": 6.93
+        },
+        "LINE": {
+          "missed": 17934,
+          "covered": 8118,
+          "percent": 31.16
+        },
+        "COMPLEXITY": {
+          "missed": 35713,
+          "covered": 5035,
+          "percent": 12.36
+        },
+        "METHOD": {
+          "missed": 14084,
+          "covered": 4160,
+          "percent": 22.8
+        },
+        "CLASS": {
+          "missed": 1103,
+          "covered": 505,
+          "percent": 31.41
+        }
+      },
+      "highRisk": {
+        "co/yixiang/yshop/module/system/api/oauth2/OAuth2TokenApiImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 0,
+              "covered": 76,
+              "percent": 100.0
+            },
+            "LINE": {
+              "missed": 0,
+              "covered": 13,
+              "percent": 100.0
+            },
+            "COMPLEXITY": {
+              "missed": 0,
+              "covered": 8,
+              "percent": 100.0
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 8,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/product/service/catalog/CatalogOptions": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 30,
+              "covered": 548,
+              "percent": 94.81
+            },
+            "BRANCH": {
+              "missed": 42,
+              "covered": 96,
+              "percent": 69.57
+            },
+            "LINE": {
+              "missed": 1,
+              "covered": 66,
+              "percent": 98.51
+            },
+            "COMPLEXITY": {
+              "missed": 41,
+              "covered": 37,
+              "percent": 47.44
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 9,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/payment/attempt/PaymentAttemptService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 41,
+              "covered": 773,
+              "percent": 94.96
+            },
+            "BRANCH": {
+              "missed": 38,
+              "covered": 128,
+              "percent": 77.11
+            },
+            "LINE": {
+              "missed": 5,
+              "covered": 156,
+              "percent": 96.89
+            },
+            "COMPLEXITY": {
+              "missed": 39,
+              "covered": 65,
+              "percent": 62.5
+            },
+            "METHOD": {
+              "missed": 1,
+              "covered": 20,
+              "percent": 95.24
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": [
+            "reconciliationCandidates"
+          ]
+        },
+        "co/yixiang/yshop/module/order/service/payment/attempt/PaymentCancellationGuard": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 3,
+              "covered": 206,
+              "percent": 98.56
+            },
+            "BRANCH": {
+              "missed": 14,
+              "covered": 38,
+              "percent": 73.08
+            },
+            "LINE": {
+              "missed": 1,
+              "covered": 38,
+              "percent": 97.44
+            },
+            "COMPLEXITY": {
+              "missed": 14,
+              "covered": 16,
+              "percent": 53.33
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 4,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/system/service/auth/AdminAuthServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 24,
+              "covered": 391,
+              "percent": 94.22
+            },
+            "BRANCH": {
+              "missed": 9,
+              "covered": 25,
+              "percent": 73.53
+            },
+            "LINE": {
+              "missed": 6,
+              "covered": 82,
+              "percent": 93.18
+            },
+            "COMPLEXITY": {
+              "missed": 9,
+              "covered": 23,
+              "percent": 71.88
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 15,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/store/service/storeshop/StoreAccessService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 10,
+              "covered": 184,
+              "percent": 94.85
+            },
+            "BRANCH": {
+              "missed": 3,
+              "covered": 21,
+              "percent": 87.5
+            },
+            "LINE": {
+              "missed": 2,
+              "covered": 33,
+              "percent": 94.29
+            },
+            "COMPLEXITY": {
+              "missed": 3,
+              "covered": 19,
+              "percent": 86.36
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 10,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/member/service/user/UserServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 292,
+              "covered": 0,
+              "percent": 0.0
+            },
+            "BRANCH": {
+              "missed": 22,
+              "covered": 0,
+              "percent": 0.0
+            },
+            "LINE": {
+              "missed": 52,
+              "covered": 0,
+              "percent": 0.0
+            },
+            "COMPLEXITY": {
+              "missed": 21,
+              "covered": 0,
+              "percent": 0.0
+            },
+            "METHOD": {
+              "missed": 10,
+              "covered": 0,
+              "percent": 0.0
+            },
+            "CLASS": {
+              "missed": 1,
+              "covered": 0,
+              "percent": 0.0
+            }
+          },
+          "unexecutedMethods": [
+            "<init>",
+            "createUser",
+            "updateUser",
+            "updateMony",
+            "deleteUser",
+            "validateUserExists",
+            "getUser",
+            "getUserList",
+            "getUserPage",
+            "getUserList"
+          ]
+        },
+        "co/yixiang/yshop/module/system/service/oauth2/OAuth2TokenServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 41,
+              "covered": 596,
+              "percent": 93.56
+            },
+            "BRANCH": {
+              "missed": 19,
+              "covered": 51,
+              "percent": 72.86
+            },
+            "LINE": {
+              "missed": 6,
+              "covered": 104,
+              "percent": 94.55
+            },
+            "COMPLEXITY": {
+              "missed": 19,
+              "covered": 41,
+              "percent": 68.33
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 25,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/system/service/permission/PermissionServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 28,
+              "covered": 424,
+              "percent": 93.81
+            },
+            "BRANCH": {
+              "missed": 14,
+              "covered": 34,
+              "percent": 70.83
+            },
+            "LINE": {
+              "missed": 12,
+              "covered": 94,
+              "percent": 88.68
+            },
+            "COMPLEXITY": {
+              "missed": 14,
+              "covered": 33,
+              "percent": 70.21
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 23,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/ordering/OrderPlacementService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 167,
+              "covered": 1633,
+              "percent": 90.72
+            },
+            "BRANCH": {
+              "missed": 60,
+              "covered": 140,
+              "percent": 70.0
+            },
+            "LINE": {
+              "missed": 25,
+              "covered": 270,
+              "percent": 91.53
+            },
+            "COMPLEXITY": {
+              "missed": 55,
+              "covered": 63,
+              "percent": 53.39
+            },
+            "METHOD": {
+              "missed": 1,
+              "covered": 17,
+              "percent": 94.44
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": [
+            "ownsVersion"
+          ]
+        },
+        "co/yixiang/yshop/module/order/service/payment/PaymentEffects": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 14,
+              "covered": 172,
+              "percent": 92.47
+            },
+            "BRANCH": {
+              "missed": 6,
+              "covered": 6,
+              "percent": 50.0
+            },
+            "LINE": {
+              "missed": 2,
+              "covered": 52,
+              "percent": 96.3
+            },
+            "COMPLEXITY": {
+              "missed": 6,
+              "covered": 4,
+              "percent": 40.0
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 4,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/payment/PaymentProcessor": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 71,
+              "covered": 376,
+              "percent": 84.12
+            },
+            "BRANCH": {
+              "missed": 19,
+              "covered": 78,
+              "percent": 80.41
+            },
+            "LINE": {
+              "missed": 13,
+              "covered": 77,
+              "percent": 85.56
+            },
+            "COMPLEXITY": {
+              "missed": 15,
+              "covered": 39,
+              "percent": 72.22
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 4,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/member/service/auth/MemberAuthServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 359,
+              "covered": 431,
+              "percent": 54.56
+            },
+            "BRANCH": {
+              "missed": 24,
+              "covered": 28,
+              "percent": 53.85
+            },
+            "LINE": {
+              "missed": 75,
+              "covered": 95,
+              "percent": 55.88
+            },
+            "COMPLEXITY": {
+              "missed": 21,
+              "covered": 25,
+              "percent": 54.35
+            },
+            "METHOD": {
+              "missed": 4,
+              "covered": 16,
+              "percent": 80.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": [
+            "weixinMiniAppLogin",
+            "wechatAuth",
+            "sendSmsCode",
+            "checkUserIfExists"
+          ]
+        },
+        "co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 160,
+              "covered": 1834,
+              "percent": 91.98
+            },
+            "BRANCH": {
+              "missed": 88,
+              "covered": 200,
+              "percent": 69.44
+            },
+            "LINE": {
+              "missed": 3,
+              "covered": 154,
+              "percent": 98.09
+            },
+            "COMPLEXITY": {
+              "missed": 85,
+              "covered": 77,
+              "percent": 47.53
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 18,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/coupon/service/marketing/CouponLifecycle": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 24,
+              "covered": 434,
+              "percent": 94.76
+            },
+            "BRANCH": {
+              "missed": 17,
+              "covered": 31,
+              "percent": 64.58
+            },
+            "LINE": {
+              "missed": 5,
+              "covered": 46,
+              "percent": 90.2
+            },
+            "COMPLEXITY": {
+              "missed": 17,
+              "covered": 15,
+              "percent": 46.88
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 8,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        }
+      },
+      "receiptSha256": "50499dbe5e245f1f4eef5b864e7ddff24fcfda381d61efac97ba72ad6ab3f7a5"
+    },
+    "final808JavaHttpCoverage": {
+      "sourceSha": "808294c51a4d38a091210dfcea7b375efcfdc952",
+      "sourceDigest": "8340bf565c0fb6823a58b53738a815df247d6ce5c8e96033f2cbe81fd4dd6ff9",
+      "runId": "23aa2a7ec06247e2b138fb243d272b76",
+      "result": "MEASURED",
+      "scope": "all compiled src/main classes including test infrastructure; high-risk business classes separately, no DTO threshold",
+      "counters": {
+        "INSTRUCTION": {
+          "missed": 249890,
+          "covered": 63145,
+          "percent": 20.17
+        },
+        "BRANCH": {
+          "missed": 41590,
+          "covered": 3324,
+          "percent": 7.4
+        },
+        "LINE": {
+          "missed": 15895,
+          "covered": 10157,
+          "percent": 38.99
+        },
+        "COMPLEXITY": {
+          "missed": 34205,
+          "covered": 6543,
+          "percent": 16.06
+        },
+        "METHOD": {
+          "missed": 12653,
+          "covered": 5591,
+          "percent": 30.65
+        },
+        "CLASS": {
+          "missed": 756,
+          "covered": 852,
+          "percent": 52.99
+        }
+      },
+      "highRisk": {
+        "co/yixiang/yshop/module/system/api/oauth2/OAuth2TokenApiImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 0,
+              "covered": 76,
+              "percent": 100.0
+            },
+            "LINE": {
+              "missed": 0,
+              "covered": 13,
+              "percent": 100.0
+            },
+            "COMPLEXITY": {
+              "missed": 0,
+              "covered": 8,
+              "percent": 100.0
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 8,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/product/service/catalog/CatalogOptions": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 30,
+              "covered": 548,
+              "percent": 94.81
+            },
+            "BRANCH": {
+              "missed": 42,
+              "covered": 96,
+              "percent": 69.57
+            },
+            "LINE": {
+              "missed": 1,
+              "covered": 66,
+              "percent": 98.51
+            },
+            "COMPLEXITY": {
+              "missed": 41,
+              "covered": 37,
+              "percent": 47.44
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 9,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/payment/attempt/PaymentAttemptService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 41,
+              "covered": 773,
+              "percent": 94.96
+            },
+            "BRANCH": {
+              "missed": 38,
+              "covered": 128,
+              "percent": 77.11
+            },
+            "LINE": {
+              "missed": 5,
+              "covered": 156,
+              "percent": 96.89
+            },
+            "COMPLEXITY": {
+              "missed": 39,
+              "covered": 65,
+              "percent": 62.5
+            },
+            "METHOD": {
+              "missed": 1,
+              "covered": 20,
+              "percent": 95.24
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": [
+            "reconciliationCandidates"
+          ]
+        },
+        "co/yixiang/yshop/module/order/service/payment/attempt/PaymentCancellationGuard": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 3,
+              "covered": 206,
+              "percent": 98.56
+            },
+            "BRANCH": {
+              "missed": 14,
+              "covered": 38,
+              "percent": 73.08
+            },
+            "LINE": {
+              "missed": 1,
+              "covered": 38,
+              "percent": 97.44
+            },
+            "COMPLEXITY": {
+              "missed": 14,
+              "covered": 16,
+              "percent": 53.33
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 4,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/system/service/auth/AdminAuthServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 24,
+              "covered": 391,
+              "percent": 94.22
+            },
+            "BRANCH": {
+              "missed": 8,
+              "covered": 26,
+              "percent": 76.47
+            },
+            "LINE": {
+              "missed": 6,
+              "covered": 82,
+              "percent": 93.18
+            },
+            "COMPLEXITY": {
+              "missed": 8,
+              "covered": 24,
+              "percent": 75.0
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 15,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/store/service/storeshop/StoreAccessService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 10,
+              "covered": 184,
+              "percent": 94.85
+            },
+            "BRANCH": {
+              "missed": 3,
+              "covered": 21,
+              "percent": 87.5
+            },
+            "LINE": {
+              "missed": 2,
+              "covered": 33,
+              "percent": 94.29
+            },
+            "COMPLEXITY": {
+              "missed": 3,
+              "covered": 19,
+              "percent": 86.36
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 10,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/member/service/user/UserServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 253,
+              "covered": 39,
+              "percent": 13.36
+            },
+            "BRANCH": {
+              "missed": 18,
+              "covered": 4,
+              "percent": 18.18
+            },
+            "LINE": {
+              "missed": 43,
+              "covered": 9,
+              "percent": 17.31
+            },
+            "COMPLEXITY": {
+              "missed": 17,
+              "covered": 4,
+              "percent": 19.05
+            },
+            "METHOD": {
+              "missed": 7,
+              "covered": 3,
+              "percent": 30.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": [
+            "createUser",
+            "updateMony",
+            "deleteUser",
+            "getUser",
+            "getUserList",
+            "getUserPage",
+            "getUserList"
+          ]
+        },
+        "co/yixiang/yshop/module/system/service/oauth2/OAuth2TokenServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 38,
+              "covered": 599,
+              "percent": 94.03
+            },
+            "BRANCH": {
+              "missed": 18,
+              "covered": 52,
+              "percent": 74.29
+            },
+            "LINE": {
+              "missed": 5,
+              "covered": 105,
+              "percent": 95.45
+            },
+            "COMPLEXITY": {
+              "missed": 18,
+              "covered": 42,
+              "percent": 70.0
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 25,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/system/service/permission/PermissionServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 25,
+              "covered": 427,
+              "percent": 94.47
+            },
+            "BRANCH": {
+              "missed": 12,
+              "covered": 36,
+              "percent": 75.0
+            },
+            "LINE": {
+              "missed": 10,
+              "covered": 96,
+              "percent": 90.57
+            },
+            "COMPLEXITY": {
+              "missed": 12,
+              "covered": 35,
+              "percent": 74.47
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 23,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/ordering/OrderPlacementService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 128,
+              "covered": 1672,
+              "percent": 92.89
+            },
+            "BRANCH": {
+              "missed": 53,
+              "covered": 147,
+              "percent": 73.5
+            },
+            "LINE": {
+              "missed": 24,
+              "covered": 271,
+              "percent": 91.86
+            },
+            "COMPLEXITY": {
+              "missed": 50,
+              "covered": 68,
+              "percent": 57.63
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 18,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/payment/PaymentEffects": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 14,
+              "covered": 172,
+              "percent": 92.47
+            },
+            "BRANCH": {
+              "missed": 6,
+              "covered": 6,
+              "percent": 50.0
+            },
+            "LINE": {
+              "missed": 2,
+              "covered": 52,
+              "percent": 96.3
+            },
+            "COMPLEXITY": {
+              "missed": 6,
+              "covered": 4,
+              "percent": 40.0
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 4,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/order/service/payment/PaymentProcessor": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 71,
+              "covered": 376,
+              "percent": 84.12
+            },
+            "BRANCH": {
+              "missed": 19,
+              "covered": 78,
+              "percent": 80.41
+            },
+            "LINE": {
+              "missed": 13,
+              "covered": 77,
+              "percent": 85.56
+            },
+            "COMPLEXITY": {
+              "missed": 15,
+              "covered": 39,
+              "percent": 72.22
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 4,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/member/service/auth/MemberAuthServiceImpl": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 359,
+              "covered": 431,
+              "percent": 54.56
+            },
+            "BRANCH": {
+              "missed": 24,
+              "covered": 28,
+              "percent": 53.85
+            },
+            "LINE": {
+              "missed": 75,
+              "covered": 95,
+              "percent": 55.88
+            },
+            "COMPLEXITY": {
+              "missed": 21,
+              "covered": 25,
+              "percent": 54.35
+            },
+            "METHOD": {
+              "missed": 4,
+              "covered": 16,
+              "percent": 80.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": [
+            "weixinMiniAppLogin",
+            "wechatAuth",
+            "sendSmsCode",
+            "checkUserIfExists"
+          ]
+        },
+        "co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 154,
+              "covered": 1840,
+              "percent": 92.28
+            },
+            "BRANCH": {
+              "missed": 84,
+              "covered": 204,
+              "percent": 70.83
+            },
+            "LINE": {
+              "missed": 3,
+              "covered": 154,
+              "percent": 98.09
+            },
+            "COMPLEXITY": {
+              "missed": 82,
+              "covered": 80,
+              "percent": 49.38
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 18,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        },
+        "co/yixiang/yshop/module/coupon/service/marketing/CouponLifecycle": {
+          "counters": {
+            "INSTRUCTION": {
+              "missed": 24,
+              "covered": 434,
+              "percent": 94.76
+            },
+            "BRANCH": {
+              "missed": 17,
+              "covered": 31,
+              "percent": 64.58
+            },
+            "LINE": {
+              "missed": 5,
+              "covered": 46,
+              "percent": 90.2
+            },
+            "COMPLEXITY": {
+              "missed": 17,
+              "covered": 15,
+              "percent": 46.88
+            },
+            "METHOD": {
+              "missed": 0,
+              "covered": 8,
+              "percent": 100.0
+            },
+            "CLASS": {
+              "missed": 0,
+              "covered": 1,
+              "percent": 100.0
+            }
+          },
+          "unexecutedMethods": []
+        }
+      },
+      "receiptSha256": "6115f855673ac0d662013d499ba26f01e5903bcffead88852f34ed8497ac9c58"
+    },
+    "final808LinuxControlled": {
+      "sourceSha": "fc77e92dda1891f13d18609b9f6d04922d605808",
+      "sourceDigest": "8340bf565c0fb6823a58b53738a815df247d6ce5c8e96033f2cbe81fd4dd6ff9",
+      "runId": "4c410b65d4c34277910a3a1148d61706",
+      "result": "PASS",
+      "cleanup": "PASS",
+      "sourceUnchanged": true,
+      "scope": "owned Docker MySQL/Redis/auth/synthetic HTTPS; GUI/Mini excluded",
+      "paymentRequests": {
+        "value": 0,
+        "evidence": "DECLARED_SYNTHETIC_TRANSPORT_ONLY",
+        "globalNetworkMeasured": false
+      },
+      "resources": {
+        "containersRemoved": 2,
+        "anonymousVolumesRemoved": 2,
+        "ownershipChecked": true
+      },
+      "receiptSha256": "c410cbe7a40d31dbdbfc8fb1f3a334ddbcf04518cd268bdbf3391679cf23c761",
+      "steps": [
+        {
+          "name": "mysql-business",
+          "result": "PASS",
+          "tests": 490,
+          "exactNamesChecked": null
+        },
+        {
+          "name": "mysql-financial",
+          "result": "PASS",
+          "tests": 497,
+          "exactNamesChecked": null
+        },
+        {
+          "name": "mysql-auth",
+          "result": "PASS",
+          "tests": 72,
+          "exactNamesChecked": null
+        },
+        {
+          "name": "redis",
+          "result": "PASS",
+          "tests": 66,
+          "exactNamesChecked": true
+        },
+        {
+          "name": "synthetic-tls",
+          "result": "PASS",
+          "tests": 10,
+          "exactNamesChecked": null
+        }
+      ]
+    },
+    "final808LinuxBusiness": {
+      "sourceSha": "fc77e92dda1891f13d18609b9f6d04922d605808",
+      "sourceDigest": "8340bf565c0fb6823a58b53738a815df247d6ce5c8e96033f2cbe81fd4dd6ff9",
+      "owner": "bc4d4e5221b848a79a7ec3761f065c9b",
+      "result": "PASS",
+      "cleanup": "PASS",
+      "sourceUnchanged": true,
+      "scope": "owned disposable MySQL/Redis/backend HTTP writes",
+      "paymentRequests": {
+        "value": 0,
+        "evidence": "MEASURED_THIS_HTTP_HARNESS_ONLY",
+        "globalNetworkMeasured": false
+      },
+      "multiProcess": {
+        "instances": 2,
+        "rounds": 5,
+        "workers": 20,
+        "httpRequests": 331,
+        "sameJvm": false,
+        "sharedState": "owned MySQL and Redis",
+        "result": "PASS"
+      },
+      "resources": {
+        "containersRemoved": 2,
+        "anonymousVolumesRemoved": 2,
+        "ownershipChecked": true
+      },
+      "gui": "NOT_EXECUTED",
+      "mini": "NOT_EXECUTED",
+      "receiptSha256": "51c3f422b0ba86bc043796010a45ec4474bdeb631cfc8fe50353e707e0b3c5b2",
+      "assertionsExecuted": 45,
+      "checks": [
+        {
+          "name": "actual admin/member password login",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "admin creates two store products with distinct prices",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "price edit leaves other store price unchanged",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "staff cannot read store B product",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "coupon retry grants one right",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "SKU label roundtrips UTF8",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "lost response same-key retry keeps one unpaid order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "server price and topping minus coupon unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "member sees pending order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "catalog edit leaves existing order price snapshot unchanged",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "other member cannot read order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "authorized staff reads store A order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "staff cannot read store B order",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cancel retry restores inventory once",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "cancel restores coupon once",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disabled member refresh denied",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disabled member login denied",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "disable/refresh never add successful login logs",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "re-enable cannot resurrect revoked refresh",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "HTTP logout revokes refresh",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "all orders unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "financial tables untouched",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "issued tokens absent from backend log",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 0",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 1",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 2",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 3",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process refresh only one current access round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process disable revokes final family round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process reenable keeps old refresh revoked round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process logout revokes final family round 4",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process all orders remain unpaid",
+          "result": "PASS",
+          "executed": true
+        },
+        {
+          "name": "two-process issued credentials absent from logs",
+          "result": "PASS",
+          "executed": true
+        }
+      ]
+    },
+    "final808LinuxRedisProbe": {
+      "sourceSha": "fc77e92dda1891f13d18609b9f6d04922d605808",
+      "sourceDigest": "8340bf565c0fb6823a58b53738a815df247d6ce5c8e96033f2cbe81fd4dd6ff9",
+      "owner": "b985259c27b34cde91c34f3302e43446",
+      "result": "PASS",
+      "cleanup": "PASS",
+      "sourceUnchanged": true,
+      "scope": "original Redis bootstrap permission reproduction; synthetic only",
+      "resources": {
+        "containersRemoved": 1,
+        "anonymousVolumesRemoved": 1,
+        "ownershipChecked": true
+      },
+      "hostPlatform": "linux",
+      "oldBootstrapConfigReadDenied": true,
+      "oldBootstrapRunning": false,
+      "receiptSha256": "318cec044f8225fcd55cbd3fd3ba06ddbfe79b8552c66b00877750bc00748565"
     }
   },
   "gui": {
-    "result": "BLOCKED",
-    "assertionsExecuted": 0,
-    "reason": "manual slider not completed; expired fixture destroyed"
+    "result": "PASS",
+    "assertionsExecuted": 8,
+    "sourceSha": "808294c51a4d38a091210dfcea7b375efcfdc952",
+    "sourceDigest": "8340bf565c0fb6823a58b53738a815df247d6ce5c8e96033f2cbe81fd4dd6ff9",
+    "runId": "4942a65f564c43619a8ca35574db5c56",
+    "cleanup": "PASS",
+    "checks": [
+      {
+        "name": "product-create",
+        "result": "PASS",
+        "executed": true,
+        "evidence": "actual HQ form saved product28 price23 stock7"
+      },
+      {
+        "name": "product-edit",
+        "result": "PASS",
+        "executed": true,
+        "evidence": "actual HQ form name Edited SKU/product24"
+      },
+      {
+        "name": "sku-stock",
+        "result": "PASS",
+        "executed": true,
+        "evidence": "actual stock operation7+3=10 with reason and SQL"
+      },
+      {
+        "name": "coupon-create",
+        "result": "PASS",
+        "executed": true,
+        "evidence": "actual HQ form created coupon5 shopA least30 value5 total100"
+      },
+      {
+        "name": "coupon-disable",
+        "result": "PASS",
+        "executed": true,
+        "evidence": "actual HQ edit toggle disabled coupon5; existing right0 unchanged"
+      },
+      {
+        "name": "permission-denied",
+        "result": "PASS",
+        "executed": true,
+        "evidence": "actual staff GUI known storeB order search no rows; storeA order visible; HQ saw both"
+      },
+      {
+        "name": "unpaid-order-query",
+        "result": "PASS",
+        "executed": true,
+        "evidence": "actual HQ pending filter two rows all unpaid; staff A row unpaid"
+      },
+      {
+        "name": "history-snapshot",
+        "result": "PASS",
+        "executed": true,
+        "evidence": "actual GUI changed original product26 price19->22; UI order64 still19; SQL order62 remains31"
+      }
+    ],
+    "scope": "actual CUA UI after manual HQ/staff CAPTCHA, independent owned SQL, normal logout, backend/frontend/container/volume destruction"
   },
   "nodeCoverage": "NOT MEASURED",
-  "linux": "final pushed HEAD must be checked in actual controlled-dependencies GitHub job; no local result substitutes",
+  "linux": "completed808 actual Ubuntu24.04 controlled job SUCCESS; original Redis UID/0600 fault reproduced, corrected bootstrap and cleanup passed; final publication run remains required.",
   "financialSafety": {
     "realCredentialsUsed": false,
     "realProviderRequests": false,
@@ -4714,5 +6719,6 @@
     "TLS prior-port and Docker Desktop host override failure: corrected and all ten tests passed",
     "invalid admin mutant syntax INCONCLUSIVE: corrected real mutation killed",
     "new injection-test temporary-directory fixture failure: corrected, quick138 passed"
-  ]
+  ],
+  "publicationRule": "Final publication changes only documentation and owned synthetic GUI seed metadata/media. Require both actual latest-head CI jobs SUCCESS before delivery; do not relabel 808 GUI/Mini/mutations as the publication SHA. GUI and Mini production source equivalence must be separately verified."
 }
