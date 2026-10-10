@@ -50,7 +50,7 @@ def build_lock(command, cwd, timeout):
         finally:fcntl.flock(lock,fcntl.LOCK_UN)
 
 
-def execute(command, cwd, env, log, timeout=1800):
+def execute(command, cwd, env, log, timeout=1800, termination_grace=5):
     """Private output, bounded process group; a timeout never leaves Maven children running."""
     started=time.monotonic()
     with build_lock(command,cwd,timeout), Path(log).open('w') as output:
@@ -61,10 +61,19 @@ def execute(command, cwd, env, log, timeout=1800):
             return child.wait(timeout=max(.01,timeout-(time.monotonic()-started)))
         except subprocess.TimeoutExpired:
             os.killpg(child.pid, signal.SIGTERM)
-            try:child.wait(timeout=5)
+            try:child.wait(timeout=termination_grace)
             except subprocess.TimeoutExpired:
                 os.killpg(child.pid, signal.SIGKILL);child.wait()
             raise RuntimeError('TEST_PROCESS_TIMEOUT') from None
+        except BaseException:
+            # A controlled launcher's SIGTERM handler may interrupt a nested browser/CLI wait.
+            # Do not orphan that independent process group while the owner cleans DB/JVMs.
+            if child.poll() is None:
+                os.killpg(child.pid, signal.SIGTERM)
+                try:child.wait(timeout=termination_grace)
+                except subprocess.TimeoutExpired:
+                    os.killpg(child.pid, signal.SIGKILL);child.wait()
+            raise
 
 
 class Evidence:

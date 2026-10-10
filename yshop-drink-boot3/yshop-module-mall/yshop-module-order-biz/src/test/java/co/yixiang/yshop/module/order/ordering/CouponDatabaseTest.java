@@ -68,6 +68,19 @@ class CouponDatabaseTest {
     @AfterEach void clear(){if(f!=null)f.clearSecurity();}
     void coupon(long id,String shops,int total,int limit){f.db.update("INSERT INTO yshop_coupon(id,shop_id,shop_name,title,is_switch,least,`value`,start_time,end_time,claim_start_time,claim_end_time,create_time,update_time,distribute,`limit`,instructions,coupon_kind,claim_mode,template_version) VALUES(?,?,?,'Synthetic coupon',1,0,0.10,'2020-01-01','2030-01-01','2026-10-08','2030-01-01',?,?,?,?,'Synthetic rights','REGULAR','PUBLIC',1)",id,shops,"Synthetic scope",now.minusHours(1),now,total,limit);}
     String key(){return UUID.randomUUID().toString();}
+
+    @Test void exhaustedTemplateIsNotAdvertisedAvailableToAnotherEligibleMember() {
+        f.db.update("UPDATE yshop_coupon SET distribute=1 WHERE id=1");
+        claim(1,1);
+        var template=f.db.queryForMap("SELECT *, (type+0) AS coupon_type FROM yshop_coupon WHERE id=1");
+        template.put("type",template.get("coupon_type"));
+        assertEquals("COUPON_SOLD_OUT",marketing.claimReason(template,2));
+        var error=assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,()->claim(2,1));
+        assertEquals("COUPON_SOLD_OUT",error.getMessage());
+        assertEquals(1,n("SELECT COUNT(*) FROM yshop_coupon_user WHERE coupon_id=1"));
+        assertEquals(0,n("SELECT COUNT(*) FROM yshop_coupon_user WHERE coupon_id=1 AND user_id=2"));
+        assertEquals(1,n("SELECT receive FROM yshop_coupon WHERE id=1"));
+    }
     long claim(long uid,long coupon){return marketing.claim(uid,coupon,null,key());}
     long n(String sql,Object...args){return f.count(sql,args);}
     co.yixiang.yshop.module.order.controller.app.order.param.AppOrderParam request(long instance){var p=f.request();p.setCouponId(Long.toString(instance));return p;}
