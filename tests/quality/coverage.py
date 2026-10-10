@@ -16,7 +16,7 @@ def main():
     if not data or any(not f.stat().st_size for f in data):raise RuntimeError('FRESH_EXECUTION_DATA_REQUIRED')
     if not (a.run/'report.json').exists():raise RuntimeError('ATTRIBUTED_RUN_REQUIRED')
     run=json.loads((a.run/'report.json').read_text());identity=source_identity()
-    if run.get('result')!='PASS' or not run.get('sourceUnchanged') or any(run.get(k)!=v for k,v in identity.items()):raise RuntimeError('COVERAGE_SOURCE_OR_GATE_MISMATCH')
+    if run.get('complete') is not True or run.get('result')!='PASS' or not run.get('sourceUnchanged') or any(run.get(k)!=v for k,v in identity.items()):raise RuntimeError('COVERAGE_SOURCE_OR_GATE_MISMATCH')
     for f in data:
         certificate=json.loads((f.parent/'evidence.json').read_text());receipt=json.loads((f.parent/'run.json').read_text())
         if certificate.get('result')!='PASS' or any(certificate.get(k)!=v for k,v in identity.items()) or f.stat().st_mtime < (f.parent/'run.json').stat().st_mtime or certificate.get('runId')!=receipt.get('runId'):

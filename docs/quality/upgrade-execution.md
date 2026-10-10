@@ -41,7 +41,7 @@ python3 tests/quality/coverage.py --run /tmp/quality-java/<runId> --cli "$HOME/.
 python3 tests/quality/run.py REPORT --run-report /tmp/quality-browser/<runId>/report.json --run-report /tmp/quality-cross/<runId>/report.json
 ```
 
-当前注册计划为77个普通Java套件/1721次调用、3个条件套件；QUICK181次（原147+新增34）。页面5项合成API Smoke与2项实际后端，官方Mini10项检查。次数不是独特场景数量，MySQL重新运行同套件也不累加为独特测试。
+当前注册计划为77个普通Java套件/1721次调用、3个条件套件；QUICK183次（原147+新增36）。页面5项合成API Smoke与2项实际后端，官方Mini10项检查。次数不是独特场景数量，MySQL重新运行同套件也不累加为独特测试。
 
 开发阶段验证（保留原SHA、内容摘要与失败历史，不作为最终HEAD证明）：
 
@@ -54,12 +54,14 @@ python3 tests/quality/run.py REPORT --run-report /tmp/quality-browser/<runId>/re
 | 双JVM读基准 | PASSED，240请求，错误率0 | 上述run；商品P95/P99 95.143/231.134ms，鉴权64.224/65.817ms，锁等待119次/3624ms；不是生产SLO或因果缺陷结论 |
 | 官方Mini→Spring/MySQL→Vue | PASSED，10页面检查+2商家页面+5SQL断言；cleanup PASS；金融计数0 | `0294dc52167745aa8eeae1d76606390e` |
 | 全构建/类型 | PASSED，55模块、Vue构建/类型 | `86f1359a418a403f8c0494668562d49e` |
-| 新门禁负例 | PASSED，34项 | 实际先复现旧构建/外来run/零浏览器误接收，再修复；缺环境完整入口BLOCKED与超时等待清理均已测试 |
+| 新门禁负例 | PASSED，36项 | 实际先复现旧构建/外来run/零浏览器误接收，再修复；缺环境完整入口BLOCKED与超时等待清理均已测试 |
 
-QUICK清单为181次：52 Node+95原Python+34新增页面/来源/状态检查。上表以清单和报告为准，不从文档估计数量。
+QUICK清单为183次：52 Node+95原Python+36新增页面/来源/状态检查。上表以清单和报告为准，不从文档估计数量。
 
 已复现并修复的测试基础设施问题：初始缺PyYAML；连续后端端口被Docker随机映射抢占；登录缓存封装与Vue历史路由错误；过宽金融路径匹配误阻断通知源码模块；自定义Dialog缺少预期无障碍名称；开关的隐藏input与订单单元格文字导致定位错误；Mini跨执行上下文读取wx属性失败（改为私有Storage计数）；审查发现旧JAR来源、测试结果归属、环境状态传播与SIGTERM清理缺口。失败报告/截图/Trace保留在私有证据目录，未改写成PASS。
 
 遗留范围：GUI正常验证码登录、真实微信身份/物理设备、多浏览器兼容、大规模负载与崩溃恢复、页面级Redis/事务故障、全部优惠券页面领取→预留→合成支付→核销生命周期、完整商品/SKU经营页面。现有Java/HTTP合成支付和并发测试继续保留，不能替代这些跨端范围。关键类仍有85%/75%未达项，Vue全源码和组件覆盖率保持单独指标。
 
 因此本文不宣布原Phase6Q质量准入通过：QUALITY_GATE_READY=NO，PHASE_6D_ALLOWED=NO。TEST_FRAMEWORK_UPGRADE_COMPLETE必须在冻结源码的执行与最新CI完成后独立判断。未进行真实支付、退款、充值、生产部署或PR合并。
+
+执行中报告使用 `complete=false` 与 `NOT_READY/INCONCLUSIVE`；仅整轮结束写入 `complete=true`。汇总与覆盖率拒绝缺失完成标志或未完成的报告，写入采用同目录原子替换。新增负例先复现已完成前缀被误接收，再验证修复。

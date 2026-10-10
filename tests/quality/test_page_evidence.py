@@ -81,6 +81,23 @@ class PageEvidenceTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'TEST_PROCESS_TIMEOUT'):
             execute([sys.executable,str(child),str(marker)],self.temp.name,os.environ.copy(),Path(self.temp.name)/'output.log',timeout=.5,termination_grace=2)
         self.assertEqual('cleaned',marker.read_text())
+    def test_report_aggregation_rejects_in_progress_run(self):
+        from run import aggregate_reports
+        r={**self.identity,'runId':'run','result':'PASS','complete':False,'sourceUnchanged':True,
+           'steps':[{'name':'finished-first-scope','result':'PASS','evidence':{'tests':1}}]}
+        self.path.write_text(json.dumps(r))
+        with self.assertRaises(RuntimeError):aggregate_reports([self.path],self.identity)
+    def test_runner_prefix_cannot_certify_until_finalized(self):
+        from run import Runner, aggregate_reports, source_identity
+        r=Runner(Path(self.temp.name)/'runs')
+        r.steps=[{'name':'finished-first-scope','result':'PASS','evidence':{'tests':1}}]
+        partial=r.save(final=False)
+        self.assertFalse(partial['complete'])
+        self.assertEqual('NOT_READY',partial['result'])
+        self.assertEqual('INCONCLUSIVE',partial['status'])
+        with self.assertRaises(RuntimeError):aggregate_reports([r.root/'report.json'],source_identity())
+        self.assertTrue(r.save()['complete'])
+        self.assertEqual('PASS',aggregate_reports([r.root/'report.json'],source_identity())['result'])
     def test_current_exact_plan_passes(self):self.assertEqual(1,self.receipt()['tests'])
     def test_missing_report_rejected(self):
         with self.assertRaises(RuntimeError):browser_receipt(self.path,self.started,self.identity,'run',['one'])

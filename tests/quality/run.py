@@ -29,7 +29,7 @@ def aggregate_reports(paths, identity):
     if len(set(ids)) != len(ids) or any(not i for i in ids): raise RuntimeError('DUPLICATE_OR_MISSING_RUN_ID')
     for path,r in zip(paths,reports):
         if any(r.get(k) != v for k,v in identity.items()): raise RuntimeError('STALE_REPORT_SOURCE')
-        if not r.get('steps') or r.get('result') != 'PASS' or r.get('sourceUnchanged') is not True or any(s.get('result') != 'PASS' for s in r['steps']):
+        if r.get('complete') is not True or not r.get('steps') or r.get('result') != 'PASS' or r.get('sourceUnchanged') is not True or any(s.get('result') != 'PASS' for s in r['steps']):
             raise RuntimeError('INCOMPLETE_OR_FAILED_RUN')
         executed=sum(s.get('evidence',{}).get('tests',0) for s in r['steps'])
         if not executed and any(s.get('name')=='owned-controlled-dependencies' for s in r['steps']):
@@ -178,12 +178,12 @@ class Runner:
         entry['seconds']=round(time.time()-start,3)
         entry['status']=status_of(entry['result'])
         entry['endedAt']=time.time()
-        self.steps.append(entry);self.save()
+        self.steps.append(entry);self.save(final=False)
         print(name+': '+entry['result'],flush=True)
         return entry['result']=='PASS'
 
     def blocked(self, name, reason):
-        self.steps.append({'name':name,'result':'BLOCKED','status':'BLOCKED','reason':reason});self.save()
+        self.steps.append({'name':name,'result':'BLOCKED','status':'BLOCKED','reason':reason});self.save(final=False)
         print(name+': BLOCKED',flush=True)
 
     def java(self, selected=None):
@@ -323,14 +323,18 @@ class Runner:
         self.step(name,argv,timeout=600,validator=lambda log:controlled_receipt(report,started,
                   {'sourceSha':self.source_sha,'sourceDigest':self.digest},self.id,expected))
 
-    def save(self):
+    def save(self, final=True):
         unchanged=source_identity()=={'sourceSha':self.source_sha,'sourceDigest':self.digest}
-        report={'runId':self.id,'sourceUnchanged':unchanged,'sourceSha':self.source_sha,
-                'status':overall_status(self.steps,unchanged),
-                'sourceDigest':self.digest,'result':'PASS' if unchanged and self.steps and all(s['result']=='PASS' for s in self.steps) else 'NOT_READY','steps':self.steps,
+        status=overall_status(self.steps,unchanged)
+        if not final and status=='PASSED':status='INCONCLUSIVE'
+        report={'runId':self.id,'complete':final,'sourceUnchanged':unchanged,'sourceSha':self.source_sha,
+                'status':status,
+                'sourceDigest':self.digest,'result':'PASS' if final and unchanged and self.steps and all(s['result']=='PASS' for s in self.steps) else 'NOT_READY','steps':self.steps,
                 'startedAt':self.started,'endedAt':time.time(),
                 'paymentRequests':{'value':None,'evidence':'NOT_MEASURED_BY_DISPATCHER'},'realFinancialOperations':{'value':0,'evidence':'DECLARED_SYNTHETIC_ONLY'}}
-        (self.root/'report.json').write_text(json.dumps(report,indent=2))
+        temporary=self.root/'report.json.tmp'
+        temporary.write_text(json.dumps(report,indent=2))
+        temporary.replace(self.root/'report.json')
         return report
 
 

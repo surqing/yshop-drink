@@ -9,5 +9,5 @@
   "tests/smoke/test_secret_scan.py": 4,
   "tests/payment/prepayment-tools-test.py": 26,
   "tests/quality/test_owned_resources.py": 16,
-  "tests/quality/test_page_evidence.py": 34
+  "tests/quality/test_page_evidence.py": 36
 }
