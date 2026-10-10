@@ -1,0 +1,91 @@
+{
+  "testSnapshotSha": "b3646bff8e3fad01db36abdf9d549a1db46b0292",
+  "testSnapshotDigest": "7ce183e6ea25cd85c09f831553a267fc13fe35d0d4b4054691e85c343acc2183",
+  "countingRule": "Reverification of existing cases; not added to discovery totals.",
+  "runs": [
+    {
+      "suite": "delivery-build",
+      "runId": "91226f1a9b8d4f99968634aed0e36a0a",
+      "status": "PASSED",
+      "sourceSha": "b3646bff8e3fad01db36abdf9d549a1db46b0292",
+      "sourceDigest": "7ce183e6ea25cd85c09f831553a267fc13fe35d0d4b4054691e85c343acc2183",
+      "complete": true,
+      "sourceUnchanged": true,
+      "reportSha256": "0670c5dcd4cad28a097d5b2e1b6fdf87779906c936b3ccab5d501c190a8980e0",
+      "privateEvidence": "delivery-build/91226f1a9b8d4f99968634aed0e36a0a/report.json",
+      "cleanup": "See nested owned-resource report"
+    },
+    {
+      "suite": "delivery-java",
+      "runId": "d3f52e717b6a4f0c95122f3e2275cbe6",
+      "status": "PASSED",
+      "sourceSha": "b3646bff8e3fad01db36abdf9d549a1db46b0292",
+      "sourceDigest": "7ce183e6ea25cd85c09f831553a267fc13fe35d0d4b4054691e85c343acc2183",
+      "complete": true,
+      "sourceUnchanged": true,
+      "reportSha256": "3ad2096d5b83e57c9c2ca3701161ea76ff56dbc7a77534b007f0f4dc57be9eb2",
+      "privateEvidence": "delivery-java/d3f52e717b6a4f0c95122f3e2275cbe6/report.json",
+      "cleanup": "See nested owned-resource report"
+    },
+    {
+      "suite": "final-frontend",
+      "runId": "72a7f47c82f24056ba76292d44fce201",
+      "status": "PASSED",
+      "sourceSha": "b3646bff8e3fad01db36abdf9d549a1db46b0292",
+      "sourceDigest": "7ce183e6ea25cd85c09f831553a267fc13fe35d0d4b4054691e85c343acc2183",
+      "complete": true,
+      "sourceUnchanged": true,
+      "reportSha256": "cfc42ace1da84543cf57d09951bb1ef9f39a0566023560146e4aa4d0b2770950",
+      "privateEvidence": "final-frontend/72a7f47c82f24056ba76292d44fce201/report.json",
+      "cleanup": "See nested owned-resource report"
+    },
+    {
+      "suite": "delivery-cross-end",
+      "runId": "536d0286461c4b5ca35e63c943d7041d",
+      "status": "PASSED",
+      "sourceSha": "b3646bff8e3fad01db36abdf9d549a1db46b0292",
+      "sourceDigest": "7ce183e6ea25cd85c09f831553a267fc13fe35d0d4b4054691e85c343acc2183",
+      "complete": true,
+      "sourceUnchanged": true,
+      "reportSha256": "755c9c63902ea76393bd5b40c9591aa456c81000f4ac3aecc3816f8d6d53ad2d",
+      "privateEvidence": "delivery-cross-end/536d0286461c4b5ca35e63c943d7041d/report.json",
+      "cleanup": "See nested owned-resource report"
+    },
+    {
+      "suite": "delivery-http-red",
+      "runId": "3ebaf64ded2042b1b0f1ba201d5ae3ea",
+      "status": "FAILED",
+      "sourceSha": "b3646bff8e3fad01db36abdf9d549a1db46b0292",
+      "sourceDigest": "7ce183e6ea25cd85c09f831553a267fc13fe35d0d4b4054691e85c343acc2183",
+      "complete": true,
+      "sourceUnchanged": true,
+      "reportSha256": "0b078bc806e292851e66adf115a2fa8848c56b0a24b2349e843c58f757a43e09",
+      "privateEvidence": "delivery-http-red/report.json",
+      "cleanup": "PASSED"
+    },
+    {
+      "suite": "delivery-browser-red",
+      "runId": "f70b68e2ae5747e7ab056ff898183313",
+      "status": "FAILED",
+      "sourceSha": "b3646bff8e3fad01db36abdf9d549a1db46b0292",
+      "sourceDigest": "7ce183e6ea25cd85c09f831553a267fc13fe35d0d4b4054691e85c343acc2183",
+      "complete": true,
+      "sourceUnchanged": true,
+      "reportSha256": "52216284e08219eefda93fc9f68664252d752b0ef08405f2f5e79bf523035f79",
+      "privateEvidence": "delivery-browser-red/report.json",
+      "cleanup": "PASSED"
+    },
+    {
+      "suite": "delivery-coupon-pages",
+      "runId": "0c7ee630e0b04b2c9ac429dd9d2220c8",
+      "status": "PASSED",
+      "sourceSha": "b3646bff8e3fad01db36abdf9d549a1db46b0292",
+      "sourceDigest": "7ce183e6ea25cd85c09f831553a267fc13fe35d0d4b4054691e85c343acc2183",
+      "complete": true,
+      "sourceUnchanged": true,
+      "reportSha256": "3f21b19d221ba322749ea5c091ab2acbf639fa3563e0fb56e1d8b047c9eccfd9",
+      "privateEvidence": "delivery-coupon-pages/report.json",
+      "cleanup": "PASSED"
+    }
+  ]
+}
