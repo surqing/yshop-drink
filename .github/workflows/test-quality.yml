@@ -131,6 +131,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '8.15.9'
       - name: Build dedicated Linux test artifacts
         run: |
           python3 - <<'PYTHON'
@@ -141,8 +147,26 @@ jobs:
           r.backend()
           sys.exit(0 if r.save()['result']=='PASS' else 1)
           PYTHON
+      - name: Cancel actual owned launcher during readiness and verify cleanup
+        run: |
+          python3 -m pip install -r tests/quality/requirements.txt
+          python3 tests/quality/termination_probe.py --output "$RUNNER_TEMP/termination/readiness"
+          python3 tests/quality/termination_probe.py --phase cleanup --output "$RUNNER_TEMP/termination/cleanup"
       - name: Reproduce original Redis private-file permission failure
         run: python3 tests/quality/owned_resources.py --redis-permission-probe "$RUNNER_TEMP/redis-permission"
+      - name: Early owned synthetic TLS compatibility check
+        run: python3 tests/quality/heavy.py --scope synthetic-tls --output "$RUNNER_TEMP/tls-preflight"
+      - name: Publish safe early TLS diagnosis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tls-preflight-summary
+          path: |
+            ${{ runner.temp }}/tls-preflight/**/report.json
+            ${{ runner.temp }}/tls-preflight/**/evidence.json
+            ${{ runner.temp }}/tls-preflight/**/diagnostics.json
+          retention-days: 7
+          if-no-files-found: error
       - name: Owned MySQL, Redis, authentication and synthetic TLS acceptance
         if: ${{ !cancelled() }}
         run: python3 tests/quality/heavy.py --output "$RUNNER_TEMP/controlled"
@@ -151,21 +175,96 @@ jobs:
         run: |
           python3 -m pip install -r tests/quality/requirements.txt
           python3 tests/quality/business-backend.py --output "$RUNNER_TEMP/business" --port 48883 --instances 2
+      - name: Install locked browser dependencies
+        if: ${{ !cancelled() }}
+        run: |
+          pnpm --dir yshop-drink-vue3 install --frozen-lockfile
+          pnpm --dir yshop-drink-vue3 exec playwright install --with-deps chromium
+      - name: Actual Vue to Spring and MySQL business state oracles
+        if: ${{ !cancelled() }}
+        run: python3 tests/quality/run.py CROSS-END --output "$RUNNER_TEMP/cross-end"
       - name: Safe controlled-gate diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: controlled-summary
           path: |
+            ${{ runner.temp }}/termination/**/report.json
             ${{ runner.temp }}/controlled/**/report.json
             ${{ runner.temp }}/controlled/**/evidence.json
             ${{ runner.temp }}/controlled/**/diagnostics.json
             ${{ runner.temp }}/business/report.json
+            ${{ runner.temp }}/cross-end/**/report.json
+            ${{ runner.temp }}/cross-end/**/receipt.json
             ${{ runner.temp }}/redis-permission/report.json
             ${{ runner.temp }}/frontend-mutation/report.json
             ${{ runner.temp }}/frontend/**/report.json
             ${{ runner.temp }}/frontend/**/coverage.json
             ${{ runner.temp }}/frontend/**/coverage-summary.json
             ${{ runner.temp }}/build/**/report.json
+          retention-days: 7
+          if-no-files-found: error
+  browser-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      YSHOP_PAY_WECHAT_V3_ENABLED: 'false'
+      YSHOP_PAY_WECHAT_V3_RECONCILIATION_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '8.15.9'
+      - run: pnpm --dir yshop-drink-vue3 install --frozen-lockfile
+      - run: pnpm --dir yshop-drink-vue3 exec playwright install --with-deps chromium
+      - name: Actual application pages with explicit synthetic API fixtures
+        run: python3 tests/quality/run.py BROWSER --output "$RUNNER_TEMP/browser"
+      - name: Upload safe receipts only; screenshots and traces remain private
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-summary
+          path: |
+            ${{ runner.temp }}/browser/**/report.json
+            ${{ runner.temp }}/browser/**/receipt.json
+          retention-days: 7
+          if-no-files-found: error
+  high-risk-mutations:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      YSHOP_PAY_WECHAT_V3_ENABLED: 'false'
+      YSHOP_PAY_WECHAT_V3_RECONCILIATION_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Three independent defense mutations on PR; full Java matrix on manual runs
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            python3 tests/quality/mutate.py --only inventory-sku-check,cross-store-product,coupon-total-limit --output "$RUNNER_TEMP/mutations"
+          else
+            python3 tests/quality/mutate.py --output "$RUNNER_TEMP/mutations"
+          fi
+      - name: Upload mutation attribution only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-summary
+          path: ${{ runner.temp }}/mutations/report.json
           retention-days: 7
           if-no-files-found: error

@@ -16,7 +16,7 @@ import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import { createSvgIconsPlugin } from 'vite-plugin-svg-icons'
 import UnoCSS from 'unocss/vite'
 
-export function createVitePlugins() {
+export function createVitePlugins(writeDeclarations = true) {
   const root = process.cwd()
 
   // 路径查找
@@ -51,7 +51,7 @@ export function createVitePlugins() {
           '@/utils/dict': ['DICT_TYPE']
         }
       ],
-      dts: 'src/types/auto-imports.d.ts',
+      dts: writeDeclarations ? 'src/types/auto-imports.d.ts' : false,
       resolvers: [ElementPlusResolver()],
       eslintrc: {
         enabled: false, // Default `false`
@@ -61,7 +61,7 @@ export function createVitePlugins() {
     }),
     Components({
       // 生成自定义 `auto-components.d.ts` 全局声明
-      dts: 'src/types/auto-components.d.ts',
+      dts: writeDeclarations ? 'src/types/auto-components.d.ts' : false,
       // 自定义组件的解析器
       resolvers: [ElementPlusResolver()],
       // 0.25.x checks watcher globs with OR: a negative glob matches build artifacts.

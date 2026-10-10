@@ -1,7 +1,7 @@
 {
   "name": "yshop-drink-vue3",
   "version": "3.0.0",
-  "description": "基于vue3、vite4、element-plus、typesScript",
+  "description": "\u57fa\u4e8evue3\u3001vite4\u3001element-plus\u3001typesScript",
   "author": "yshop",
   "private": false,
   "scripts": {
@@ -24,7 +24,8 @@
     "lint:style": "stylelint --fix \"./src/**/*.{vue,less,postcss,css,scss}\" --cache --cache-location node_modules/.cache/stylelint/",
     "lint:lint-staged": "lint-staged -c ",
     "test": "vitest run --config vitest.config.ts",
-    "test:coverage": "vitest run --config vitest.config.ts --coverage"
+    "test:coverage": "vitest run --config vitest.config.ts --coverage",
+    "test:e2e": "playwright test --config playwright.config.ts"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.1.0",
@@ -80,6 +81,7 @@
     "@commitlint/config-conventional": "^19.0.0",
     "@iconify/json": "^2.2.187",
     "@intlify/unplugin-vue-i18n": "^2.0.0",
+    "@playwright/test": "1.64.0",
     "@purge-icons/generated": "^0.9.0",
     "@types/lodash-es": "^4.17.12",
     "@types/node": "^20.11.21",

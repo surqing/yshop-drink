@@ -1,0 +1,12 @@
+[
+  "current compiled app starts",
+  "actual store page loads",
+  "store A actual product and SKU render",
+  "tap adds store A cart",
+  "switch to B clears cart and checkout context",
+  "switch back to A and add current server price",
+  "checkout actual page and amount",
+  "committed response loss preserves checkout",
+  "same key page retry opens unpaid order",
+  "local APIs responded and financial admission remained zero"
+]

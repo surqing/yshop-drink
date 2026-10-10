@@ -49,14 +49,16 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
         for folder in evidence:reports.update(certified_suites(folder,registry))
     executed={}
     node_files=sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])
-    python_files=[REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/quality/test_owned_resources.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']
+    python_files=[REPO/name for name in ['tests/quality/test_evidence.py','tests/quality/test_secret_guard.py','tests/quality/test_owned_resources.py','tests/quality/test_page_evidence.py','tests/smoke/test_secret_scan.py','tests/payment/prepayment-tools-test.py']]
     for run in runs:
         r=json.loads(Path(run).read_text())
         for step in r['steps']:
             parts=step['name'].split('-')
             if len(parts)==2 and parts[0] in {'node','python'} and parts[1].isdigit():
                 files=node_files if parts[0]=='node' else python_files
-                executed[str(files[int(parts[1])].relative_to(REPO))]={**step,'executionIdentity':{k:r[k] for k in ['runId','sourceSha','sourceDigest']}}
+                asset=step.get('evidence',{}).get('asset') or str(files[int(parts[1])].relative_to(REPO))
+                if asset not in {str(f.relative_to(REPO)) for f in files}:raise RuntimeError('QUICK_ASSET_IDENTITY_MISMATCH')
+                executed[asset]={**step,'executionIdentity':{k:r[k] for k in ['runId','sourceSha','sourceDigest']}}
     if mini:
         r=json.loads(Path(mini).read_text())
         target=REPO/'tests/quality/mini-readonly.cjs'
@@ -84,8 +86,8 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
         p=REPO/name
         if not p.is_file():continue
         infrastructure='yshop-spring-boot-starter-test/src/main/' in name
-        is_test='/src/test/' in name or name.startswith(('tests/','yshop-drink-vue3/tests/')) or infrastructure
-        config=p.name in ['pom.xml','package.json','vitest.config.ts'] or name.startswith('.github/workflows/')
+        is_test='/src/test/' in name or name.startswith(('tests/','yshop-drink-vue3/tests/','yshop-drink-vue3/e2e/')) or infrastructure
+        config=p.name in ['pom.xml','package.json','vitest.config.ts','playwright.config.ts','vite.e2e.config.ts'] or name.startswith('.github/workflows/')
         script=name.startswith('scripts/') and p.suffix in ['.py','.sh','.cjs','.mjs']
         shell=p.suffix=='.sh'
         if not (is_test or config or script or shell):continue
@@ -127,6 +129,17 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
                     if step['name']=='vue-components' and step['result']=='PASS' and name.split('yshop-drink-vue3/',1)[1] in step.get('evidence',{}).get('cases',{}):
                         state='ACTIVE';result='PASS '+str(len(step['evidence']['cases'][name.split('yshop-drink-vue3/',1)[1]]))+' cases'
                         execution_identity={k:r[k] for k in ['runId','sourceSha','sourceDigest']}
+        elif name.startswith('yshop-drink-vue3/e2e/') and p.name.endswith('.spec.ts'):
+            category='Browser page suite';environment='Node20+; pinned Playwright Chromium; actual Vue application'
+            command='python3 tests/quality/run.py '+('CROSS-END' if p.name=='cross-end.spec.ts' else 'BROWSER')
+            realdb=p.name=='cross-end.spec.ts';assertions='actual DOM, emitted API payload; owned Spring/MySQL oracles for CROSS-END'
+            for run in runs:
+                r=json.loads(Path(run).read_text())
+                for step in r.get('steps',[]):
+                    ev=step.get('evidence',{})
+                    if step.get('name')=='browser-pages' and step.get('result')=='PASS' and p.name!='cross-end.spec.ts' and ev.get('exactNamesChecked'):
+                        state='ACTIVE';result='PASS '+str(ev.get('tests',0))+' cases'
+                        execution_identity={k:r[k] for k in ['runId','sourceSha','sourceDigest']}
         elif config:command='quality dispatcher / documented build';result='configuration, not test';state='ACTIVE'
         elif p.suffix in ['.sql','.yaml','.xml']:result='fixture; consumption depends on owning suite';state='UNVERIFIED'
         if infrastructure:
@@ -149,7 +162,7 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
         if p.name=='MailSendServiceImplTest.java':function+='; live SMTP demo retired, 9 mocked cases retained'
         called='quality dispatcher'  if category in ['JUnit','Node assertion suite'] else 'see runner audit'
         execution_status=state
-        is_suite=category in ['JUnit','Node assertion suite','Python suite','WeChat UI automation','Vue component suite']
+        is_suite=category in ['JUnit','Node assertion suite','Python suite','WeChat UI automation','Vue component suite','Browser page suite']
         state='ACTIVE_TEST' if is_suite else 'ACTIVE_HELPER'
         reason='Registered executable test; execution is reported separately.' if is_suite else 'Build/fixture/helper, not an independent test PASS.'
         if name in policy:state=policy[name]['status'];reason=policy[name]['reason']

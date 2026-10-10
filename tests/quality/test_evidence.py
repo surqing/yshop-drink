@@ -74,7 +74,7 @@ class EvidenceFaultInjection(unittest.TestCase):
         from run import aggregate_reports
         file=Path(self.temp.name)/'aggregate.json'
         identity={'sourceSha':'synthetic','sourceDigest':'synthetic-digest'}
-        report={**identity,'runId':'run-1','sourceUnchanged':True,'result':'PASS','steps':[{'result':'PASS','evidence':{'tests':1}}]}
+        report={**identity,'runId':'run-1','complete':True,'sourceUnchanged':True,'result':'PASS','steps':[{'result':'PASS','evidence':{'tests':1}}]}
         file.write_text(json.dumps(report))
         self.assertEqual('PASS',aggregate_reports([file],identity)['result'])
         for paths,target in [([],identity),([file,file],identity),([file],{**identity,'sourceSha':'stale'})]:

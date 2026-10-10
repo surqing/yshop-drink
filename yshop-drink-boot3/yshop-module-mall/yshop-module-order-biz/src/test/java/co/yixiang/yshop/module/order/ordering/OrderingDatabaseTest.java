@@ -227,6 +227,36 @@ class OrderingDatabaseTest {
         return db.queryForObject(sql, Long.class, args);
     }
 
+    @Test
+    void skuCapacityAdmissionHasIndependentReasonAndNoPartialReservation() {
+        // Product aggregate stock remains sufficient; only this SKU is exhausted.
+        db.update("UPDATE yshop_store_product_attr_value SET stock=0 WHERE id=1");
+        var error = assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,
+                () -> place(request()));
+        assertEquals("PRODUCT_STOCK_OR_PRICE_INVALID", error.getMessage());
+        assertEquals(10, count("SELECT stock FROM yshop_store_product WHERE id=1"));
+        assertEquals(0, count("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(0, count("SELECT COUNT(*) FROM yshop_order_inventory_reservation"));
+        assertEquals(0, count("SELECT COUNT(*) FROM yshop_order_submission"));
+        assertEquals(0, count("SELECT COUNT(*) FROM yshop_store_order"));
+    }
+
+    @Test
+    void productOwnershipAdmissionPrecedesCategoryAndConditionalDebit() {
+        var p = request();
+        p.setShopId("2"); // Product, SKU and category still belong to store 1.
+        var error = assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,
+                () -> place(p));
+        assertEquals("PRODUCT_NOT_AVAILABLE_IN_STORE", error.getMessage());
+        for (int id : List.of(1, 2)) {
+            assertEquals(10, count("SELECT stock FROM yshop_store_product WHERE id=?", id));
+            assertEquals(10, count("SELECT stock FROM yshop_store_product_attr_value WHERE id=?", id));
+        }
+        assertEquals(0, count("SELECT COUNT(*) FROM yshop_order_inventory_reservation"));
+        assertEquals(0, count("SELECT COUNT(*) FROM yshop_order_submission"));
+        assertEquals(0, count("SELECT COUNT(*) FROM yshop_store_order"));
+    }
+
     void rejected(AppOrderParam p) {
         assertThrows(RuntimeException.class, () -> place(p));
         assertEquals(0, count("SELECT COUNT(*) FROM yshop_store_order"));

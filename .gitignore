@@ -10,3 +10,5 @@
 __pycache__/
 *.pyc
 /.quality/
+/tests/mini/node_modules/
+/yshop-drink-vue3/.quality/

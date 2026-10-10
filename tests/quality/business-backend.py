@@ -6,17 +6,18 @@ from owned_resources import remove_owned,assert_backend_owner,failed_report,gui_
 from pathlib import Path
 import yaml
 repo=Path(__file__).resolve().parents[2]
-parser=argparse.ArgumentParser();parser.add_argument('--output',required=True);parser.add_argument('--port',type=int,default=48883);parser.add_argument('--hold-for-gui',type=int,default=0);parser.add_argument('--hold-for-device',type=int,default=0);parser.add_argument('--instances',type=int,choices=[1,2],default=1);args=parser.parse_args()
+parser=argparse.ArgumentParser();parser.add_argument('--output',required=True);parser.add_argument('--port',type=int,default=48883);parser.add_argument('--hold-for-gui',type=int,default=0);parser.add_argument('--hold-for-device',type=int,default=0);parser.add_argument('--cleanup-probe',action='store_true');parser.add_argument('--instances',type=int,choices=[1,2],default=1);args=parser.parse_args()
 if not 0<=args.hold_for_gui<=900 or not 0<=args.hold_for_device<=900:raise RuntimeError('GUI_HOLD_LIMIT_REQUIRED')
 if not 1024<=args.port<=65535:raise RuntimeError('INVALID_LOOPBACK_PORT')
 owner=uuid.uuid4().hex;root=Path(args.output).resolve();root.mkdir(parents=True,mode=0o700,exist_ok=False)
 mysql='yshop-quality-business-mysql-'+owner;redis='yshop-quality-business-redis-'+owner;names=[mysql,redis];process=None;processes=[];volumes=[]
 schema='yshop_quality_business_'+owner[:16];pw=secrets.token_hex(24);rpw=secrets.token_hex(24)
 report={'owner':owner,'result':'FAIL','cleanup':'NOT_RUN',**source_identity(),'scope':'owned disposable MySQL/Redis/backend HTTP writes','gui':'NOT_EXECUTED','mini':'NOT_EXECUTED'}
+report['runId']=os.environ.get('YSHOP_QUALITY_RUN_ID',owner);report['startedAt']=time.time()
 def file(n,s):
  p=root/n;p.write_text(s);p.chmod(0o600);return p
 def docker(*args,input=None):
- p=subprocess.run(['docker',*args],input=input,text=True,capture_output=True,timeout=180)
+ p=subprocess.run(['docker',*args],input=input,text=True,capture_output=True,timeout=180,start_new_session=True)
  if p.returncode:
   file('operation-failure.log',p.stderr);raise RuntimeError('DOCKER_OPERATION_FAILED')
  return p.stdout.strip()
@@ -25,7 +26,20 @@ def merge(a,b):
  for k,v in b.items():
   if isinstance(v,dict) and isinstance(a.get(k),dict):merge(a[k],v)
   else:a[k]=v
+cleanup_phase=False
+class ControlledInterrupted(BaseException):pass
+def interrupted(signum,frame):
+ if cleanup_phase:
+  report['result']='FAIL';report['reasonType']='ControlledInterrupted';report['interruptedDuringCleanup']=True
+  return
+ signal.signal(signal.SIGTERM,signal.SIG_IGN)
+ signal.signal(signal.SIGINT,signal.SIG_IGN)
+ raise ControlledInterrupted('CONTROLLED_RUN_INTERRUPTED')
+signal.signal(signal.SIGTERM,interrupted);signal.signal(signal.SIGINT,interrupted)
 try:
+ if os.environ.get('YSHOP_CROSS_END')=='1':
+  from backend_artifact import verify_artifact
+  report['backendBuild']=verify_artifact(repo/'yshop-drink-boot3/yshop-server/target/yshop-server.jar',repo/'.quality/backend-build.json',source_identity())
  if os.getuid()==0:raise RuntimeError('NONROOT_TEST_LAUNCHER_REQUIRED')
  secret=file('root.secret',pw);client=file('client.cnf','[client]\ndefault-character-set=utf8mb4\nuser=root\npassword='+pw+'\n')
  docker('run','-d','--name',mysql,'--label','yshop.quality.owner='+owner,'--cap-drop=NET_RAW','--security-opt','no-new-privileges','-p','127.0.0.1::3306','--mount','type=bind,source='+str(secret)+',target=/run/root.secret,readonly','--mount','type=bind,source='+str(client)+',target=/run/client.cnf,readonly','-e','MYSQL_ROOT_PASSWORD_FILE=/run/root.secret','mysql:8.0')
@@ -66,7 +80,7 @@ try:
    if not Path(agent).is_file():raise RuntimeError('EXPLICIT_COVERAGE_AGENT_REQUIRED')
    java+=['-javaagent:'+agent+'=destfile='+str(root/'backend-coverage.exec')+',append=false']
   log.chmod(0o600);process=subprocess.Popen(java+['-jar',str(jar),'--spring.config.location=file:'+str(config)],stdout=out,stderr=subprocess.STDOUT,start_new_session=True);processes.append(process)
- file('process.json',json.dumps({'pid':process.pid,'port':args.port}));report['port']=args.port
+ file('process.json.tmp',json.dumps({'pid':process.pid,'port':args.port})).replace(root/'process.json');report['port']=args.port
  import urllib.request
  for _ in range(120):
   if process.poll() is not None:raise RuntimeError('ISOLATED_BACKEND_EXITED')
@@ -92,6 +106,10 @@ try:
   else:raise RuntimeError('SECOND_BACKEND_TIMEOUT')
   from business_http import multi_process_smoke
   multi_process_smoke(sql,root,report,args.port,args.port+1)
+ if os.environ.get('YSHOP_CROSS_END')=='1':
+  report['stage']='CROSS_END'
+  from cross_end import run_cross_end
+  run_cross_end(sql,root,report,args.port,args.port+1)
  if args.hold_for_gui or args.hold_for_device:
   file('gui-ready.json',json.dumps({'owner':owner,'backendPort':args.port,'result':'READY','syntheticAccount':True}))
   started=time.time();deadline=started+max(args.hold_for_gui,args.hold_for_device)
@@ -104,8 +122,14 @@ try:
     report['gui']='BLOCKED';report['result']='BLOCKED';report['guiReasonType']=type(error).__name__
 
  if source_identity()!={k:report[k] for k in ['sourceSha','sourceDigest']}:raise RuntimeError('SOURCE_CHANGED_DURING_TEST')
-except Exception as e:failed_report(report,e,report.get('stage','PROVISION'))
+except (Exception,ControlledInterrupted) as e:
+ import traceback
+ file('failure-private.log',traceback.format_exc())
+ failed_report(report,e,report.get('stage','PROVISION'))
 finally:
+ cleanup_phase=True
+ if args.cleanup_probe:
+  file('cleanup-started','READY');time.sleep(2)
  try:
   for process in reversed(processes):
    if process.poll() is None:
@@ -117,6 +141,7 @@ finally:
  except Exception:report['cleanup']='FAIL';report['result']='FAIL'
  for n in ['root.secret','client.cnf','redis.conf','application.yaml','logback.xml']:(root/n).unlink(missing_ok=True)
  report['sourceUnchanged']=source_identity()=={k:report[k] for k in ['sourceSha','sourceDigest']}
+ report['endedAt']=time.time()
  if not report['sourceUnchanged']:report['result']='FAIL'
  (root/'report.json').write_text(json.dumps(report,indent=2));print(json.dumps({'result':report['result'],'cleanup':report['cleanup'],'checks':len(report.get('checks',[]))}))
 sys.exit(0 if report['result']=='PASS' and report['cleanup']=='PASS' else 1)

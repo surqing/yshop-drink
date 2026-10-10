@@ -16,10 +16,11 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 from evidence import Evidence, execute, manifest, workspace, source_identity
+from page_evidence import overall_status, status_of, browser_receipt
 
 REPO = Path(__file__).resolve().parents[2]
 BOOT = REPO / 'yshop-drink-boot3'
-MODES = ['QUICK','BUSINESS','INTEGRATION','PAYMENT-SAFETY','MINIPROGRAM','FULL','MUTATION','JAVA','FRONTEND','SECURITY','REPORT']
+MODES = ['QUICK','BUSINESS','INTEGRATION','PAYMENT-SAFETY','MINIPROGRAM','FULL','MUTATION','JAVA','FRONTEND','SECURITY','REPORT','BROWSER','CROSS-END','MINI-PAGES','PERFORMANCE','BUILD']
 
 def aggregate_reports(paths, identity):
     if not paths: raise RuntimeError('CURRENT_REPORTS_REQUIRED')
@@ -28,7 +29,7 @@ def aggregate_reports(paths, identity):
     if len(set(ids)) != len(ids) or any(not i for i in ids): raise RuntimeError('DUPLICATE_OR_MISSING_RUN_ID')
     for path,r in zip(paths,reports):
         if any(r.get(k) != v for k,v in identity.items()): raise RuntimeError('STALE_REPORT_SOURCE')
-        if not r.get('steps') or r.get('result') != 'PASS' or r.get('sourceUnchanged') is not True or any(s.get('result') != 'PASS' for s in r['steps']):
+        if r.get('complete') is not True or not r.get('steps') or r.get('result') != 'PASS' or r.get('sourceUnchanged') is not True or any(s.get('result') != 'PASS' for s in r['steps']):
             raise RuntimeError('INCOMPLETE_OR_FAILED_RUN')
         executed=sum(s.get('evidence',{}).get('tests',0) for s in r['steps'])
         if not executed and any(s.get('name')=='owned-controlled-dependencies' for s in r['steps']):
@@ -152,7 +153,7 @@ class Runner:
         (folder/'command.json').write_text(json.dumps({'argv':command,'cwd':str(cwd)}));(folder/'command.json').chmod(0o600)
         start=time.time()
         try:
-            code=execute(command,cwd,self.env,folder/'output.log',timeout)
+            code=execute(command,cwd,self.env,folder/'output.log',timeout,termination_grace=120 if 'tests/quality/business-backend.py' in command else 5)
             entry['exitCode']=code
             if code:raise RuntimeError('SUBPROCESS_FAILED')
             if validator:entry['evidence']=validator(folder/'output.log')
@@ -175,13 +176,14 @@ class Runner:
             try: entry['diagnostics']=diagnostic()
             except Exception: entry['diagnosticError']='DIAGNOSTICS_UNAVAILABLE';entry['result']='FAIL'
         entry['seconds']=round(time.time()-start,3)
+        entry['status']=status_of(entry['result'])
         entry['endedAt']=time.time()
-        self.steps.append(entry);self.save()
+        self.steps.append(entry);self.save(final=False)
         print(name+': '+entry['result'],flush=True)
         return entry['result']=='PASS'
 
     def blocked(self, name, reason):
-        self.steps.append({'name':name,'result':'BLOCKED','reason':reason});self.save()
+        self.steps.append({'name':name,'result':'BLOCKED','status':'BLOCKED','reason':reason});self.save(final=False)
         print(name+': BLOCKED',flush=True)
 
     def java(self, selected=None):
@@ -207,7 +209,7 @@ class Runner:
         expected=json.loads((REPO/'tests/quality/quick-manifest.json').read_text())
         files=sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])
         planned=[str(f.relative_to(REPO)) for f in sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])]
-        planned+=['tests/quality/test_evidence.py','tests/quality/test_secret_guard.py','tests/quality/test_owned_resources.py','tests/smoke/test_secret_scan.py','tests/payment/prepayment-tools-test.py']
+        planned+=['tests/quality/test_evidence.py','tests/quality/test_secret_guard.py','tests/quality/test_owned_resources.py','tests/quality/test_page_evidence.py','tests/smoke/test_secret_scan.py','tests/payment/prepayment-tools-test.py']
         require_suites(planned,expected,discover_quick_suites())
         for index,file in enumerate(files):
             def node_evidence(log):
@@ -216,12 +218,12 @@ class Runner:
                 require_count(counts['tests'],expected[str(file.relative_to(REPO))])
                 return counts
             self.step('node-'+str(index),[shutil.which('node') or 'node','--experimental-default-type=module','--test','--test-reporter=tap',str(file)],timeout=180,validator=node_evidence)
-        for index,file in enumerate([REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/quality/test_owned_resources.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']):
+        for index,file in enumerate([REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/quality/test_owned_resources.py',REPO/'tests/quality/test_page_evidence.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']):
             def python_evidence(log):
                 text=log.read_text();match=re.search(r'Ran (\d+) tests? in',text)
                 if not match or int(match[1])==0 or not re.search(r'^OK$',text,re.M):raise RuntimeError('PYTHON_REPORT_INCOMPLETE_OR_SKIPPED')
                 require_count(int(match[1]),expected[str(file.relative_to(REPO))])
-                return {'tests':int(match[1])}
+                return {'tests':int(match[1]),'asset':str(file.relative_to(REPO))}
             self.step('python-'+str(index),[sys.executable,str(file)],timeout=180,validator=python_evidence,diagnostic=lambda file=file,index=index:python_diagnostics((self.root/('python-'+str(index))/'output.log').read_text(),file))
 
     def frontend(self):
@@ -233,6 +235,47 @@ class Runner:
         self.step('vue-components',['pnpm','exec','vitest','run','--config','vitest.config.ts','--coverage','--reporter=json','--outputFile='+str(output)],REPO/'yshop-drink-vue3',timeout=600,validator=lambda log:vue_evidence(output,expected))
         self.step('uniapp-v8-coverage',[shutil.which('node') or 'node','tests/quality/frontend-coverage.cjs',str(self.root/'node-v8'),str(self.root/'node-coverage')],timeout=180,
                   validator=lambda log:json.loads((self.root/'node-coverage/coverage.json').read_text()))
+
+    def browser(self):
+        import socket
+        expected=json.loads((REPO/'tests/quality/browser-manifest.json').read_text())
+        discovered={f.name:re.findall(r"test\('([^']+)'",f.read_text()) for f in (REPO/'yshop-drink-vue3/e2e').glob('*.spec.ts') if f.name!='cross-end.spec.ts'}
+        if discovered!=expected:raise RuntimeError('BROWSER_MANIFEST_SOURCE_MISMATCH')
+        if not (REPO/'yshop-drink-vue3/node_modules/@playwright/test').exists():
+            self.blocked('browser','LOCKED_PLAYWRIGHT_INSTALL_REQUIRED');return
+        with socket.socket() as probe:
+            probe.bind(('127.0.0.1',0));port=probe.getsockname()[1]
+        output=self.root/'browser'
+        self.env.update(YSHOP_BROWSER_PORT=str(port),YSHOP_BROWSER_OUTPUT=str(output),
+            YSHOP_QUALITY_RUN_ID=self.id,YSHOP_QUALITY_SOURCE_SHA=self.source_sha,YSHOP_QUALITY_SOURCE_DIGEST=self.digest)
+        started=time.time()
+        self.step('browser-pages',['pnpm','exec','playwright','test','--config','playwright.config.ts',*expected],REPO/'yshop-drink-vue3',timeout=600,
+            validator=lambda log:browser_receipt(output/'receipt.json',started,{'sourceSha':self.source_sha,'sourceDigest':self.digest},self.id,[n for names in expected.values() for n in names]))
+
+    def cross_end(self, performance=False, mini=False):
+        from backend_artifact import verify_artifact
+        try:verify_artifact(BOOT/'yshop-server/target/yshop-server.jar',REPO/'.quality/backend-build.json',
+                            {'sourceSha':self.source_sha,'sourceDigest':self.digest})
+        except (RuntimeError,OSError,ValueError):
+            self.blocked('cross-end','CURRENT_BACKEND_BUILD_REQUIRED');return
+        if mini:
+            from mini_pages import mini_prerequisite
+            reason=mini_prerequisite()
+            if reason:self.blocked('mini-pages',reason);return
+        from loopback_ports import backend_pair
+        port=backend_pair()
+        output=self.root/'cross-end'
+        def verified(log):
+            r=json.loads((output/'report.json').read_text())
+            identity={'sourceSha':self.source_sha,'sourceDigest':self.digest}
+            if r.get('runId')!=self.id or r.get('result')!='PASS' or r.get('cleanup')!='PASS' or r.get('sourceUnchanged') is not True or any(r.get(k)!=v for k,v in identity.items()):
+                raise RuntimeError('CROSS_END_FAILED_OR_INCOMPLETE')
+            from cross_end import cross_receipt
+            return cross_receipt(r,identity,performance,mini)
+        self.env['YSHOP_CROSS_END']='1';self.env['YSHOP_QUALITY_RUN_ID']=self.id
+        if performance:self.env['YSHOP_PERFORMANCE']='1'
+        if mini:self.env['YSHOP_MINI_PAGES']='1'
+        self.step('cross-end-owned',[sys.executable,'tests/quality/business-backend.py','--output',str(output),'--port',str(port),'--instances','2'],timeout=2400,validator=verified)
 
     def integration(self):
         output=self.root/'controlled'
@@ -252,7 +295,13 @@ class Runner:
         cmd=[self.maven,'install','package','-Dmaven.test.skip=true']
         if self.env.get('YSHOP_MAVEN_REPOSITORY'):cmd+=['-Dmaven.repo.local='+self.env['YSHOP_MAVEN_REPOSITORY']]
         expected=backend_modules()
-        self.step('backend-build',cmd,BOOT,validator=lambda log:backend_build_evidence(log.read_text(),expected))
+        if self.step('backend-build',cmd,BOOT,validator=lambda log:backend_build_evidence(log.read_text(),expected)):
+            jar=BOOT/'yshop-server/target/yshop-server.jar'
+            identity={'sourceSha':self.source_sha,'sourceDigest':self.digest}
+            if source_identity()!=identity:raise RuntimeError('SOURCE_CHANGED_DURING_TEST')
+            folder=REPO/'.quality';folder.mkdir(mode=0o700,exist_ok=True)
+            (folder/'backend-build.json').write_text(json.dumps({**identity,'result':'PASS','runId':self.id,
+                'modules':len(expected),'artifactHash':hashlib.sha256(jar.read_bytes()).hexdigest()}))
 
     def build(self):
         self.backend()
@@ -274,13 +323,18 @@ class Runner:
         self.step(name,argv,timeout=600,validator=lambda log:controlled_receipt(report,started,
                   {'sourceSha':self.source_sha,'sourceDigest':self.digest},self.id,expected))
 
-    def save(self):
+    def save(self, final=True):
         unchanged=source_identity()=={'sourceSha':self.source_sha,'sourceDigest':self.digest}
-        report={'runId':self.id,'sourceUnchanged':unchanged,'sourceSha':self.source_sha,
-                'sourceDigest':self.digest,'result':'PASS' if unchanged and self.steps and all(s['result']=='PASS' for s in self.steps) else 'NOT_READY','steps':self.steps,
+        status=overall_status(self.steps,unchanged)
+        if not final and status=='PASSED':status='INCONCLUSIVE'
+        report={'runId':self.id,'complete':final,'sourceUnchanged':unchanged,'sourceSha':self.source_sha,
+                'status':status,
+                'sourceDigest':self.digest,'result':'PASS' if final and unchanged and self.steps and all(s['result']=='PASS' for s in self.steps) else 'NOT_READY','steps':self.steps,
                 'startedAt':self.started,'endedAt':time.time(),
                 'paymentRequests':{'value':None,'evidence':'NOT_MEASURED_BY_DISPATCHER'},'realFinancialOperations':{'value':0,'evidence':'DECLARED_SYNTHETIC_ONLY'}}
-        (self.root/'report.json').write_text(json.dumps(report,indent=2))
+        temporary=self.root/'report.json.tmp'
+        temporary.write_text(json.dumps(report,indent=2))
+        temporary.replace(self.root/'report.json')
         return report
 
 
@@ -292,6 +346,7 @@ def main():
         except Exception as e:print(json.dumps({'result':'FAIL','reason':str(e) if isinstance(e,RuntimeError) else type(e).__name__}));return 1
     r=Runner(a.output)
     try:
+        if a.mode=='BUILD':r.build()
         if a.mode in ['QUICK','FULL','FRONTEND','SECURITY']:r.quick()
         if a.mode in ['BUSINESS','PAYMENT-SAFETY','FULL','JAVA']:
             selected=None
@@ -301,6 +356,10 @@ def main():
             r.java(selected)
         if a.mode in ['INTEGRATION','FULL']:r.integration()
         if a.mode in ['FRONTEND','FULL']:r.frontend()
+        if a.mode in ['BROWSER','FULL']:r.browser()
+        if a.mode=='CROSS-END':r.cross_end()
+        if a.mode=='MINI-PAGES':r.cross_end(mini=True)
+        if a.mode=='PERFORMANCE':r.cross_end(performance=True)
         if a.mode=='SECURITY':
             r.java([k for k in manifest(REPO) if k.endswith(('.DesensitizeTest','.CouponCodeSecurityTest','.PermissionServiceImplTest','.OAuth2LifecycleDatabaseTest'))])
             r.step('offline-credential-guard',[sys.executable,'tests/quality/secret_guard.py','--base','f96c70a10978939f66392788fa3f0fb863d8aca2'])

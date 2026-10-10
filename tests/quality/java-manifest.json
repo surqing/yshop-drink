@@ -275,7 +275,8 @@
     "expiryAndOrderReservationRace": 20,
     "releaseAuditFailureRollsBackBusinessState": 1,
     "legacyAuditIsReadOnlyAndReportsUnknownCounterAndMissingEvidence": 1,
-    "issuedSnapshotDoesNotFollowTemplateEditsOrDisable": 1
+    "issuedSnapshotDoesNotFollowTemplateEditsOrDisable": 1,
+    "exhaustedTemplateIsNotAdvertisedAvailableToAnotherEligibleMember": 1
   },
   "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest": {
     "couponOtherOwner": 1,
@@ -343,7 +344,9 @@
     "differentStoreSkuPriceCannotBecomeThisOrdersPrice": 1,
     "availableStockConditionalDebitMustSucceed": 1,
     "categoryAndOrderAuthorizationUsesDatabaseShopNotTokenHint": 1,
-    "unexpectedDatabaseFailuresCannotBecomeNormalRaceLosers": 1
+    "unexpectedDatabaseFailuresCannotBecomeNormalRaceLosers": 1,
+    "skuCapacityAdmissionHasIndependentReasonAndNoPartialReservation": 1,
+    "productOwnershipAdmissionPrecedesCategoryAndConditionalDebit": 1
   },
   "co.yixiang.yshop.module.order.payment.CallbackIngressEndToEndTest": {
     "validSyntheticAnonymousNotification": 1,
@@ -1360,5 +1363,14 @@
     "adminDisableReenableCannotResurrectOldCredentials": 1,
     "adminRevocationFailureRollsBackStatusAndCredentials": 1,
     "actualApiOverloadsAndRevokeKeepCanonicalMemberIdentity": 1
+  },
+  "co.yixiang.yshop.module.order.payment.PaymentEffectsTest": {
+    "ineligibleNotificationsDoNotSendOrReadCart(String)[1]": 1,
+    "ineligibleNotificationsDoNotSendOrReadCart(String)[2]": 1,
+    "ineligibleNotificationsDoNotSendOrReadCart(String)[3]": 1,
+    "ineligibleNotificationsDoNotSendOrReadCart(String)[4]": 1,
+    "routineNoticeKeepsOrderStoreAndItemSnapshot": 1,
+    "missingPickupNumberStillSendsEligibleNotice": 1,
+    "failedStatisticsDoesNotSuppressPostCommitNotice": 1
   }
 }

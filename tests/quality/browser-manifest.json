@@ -1,0 +1,9 @@
+{
+  "admin.spec.ts": [
+    "anonymous protected page redirects to actual login",
+    "coupon edit survives reload with actual Element Plus form",
+    "required fields prevent coupon creation request",
+    "403 retains coupon edit and retry sends unchanged business fields",
+    "staff page omits unauthorized coupon write controls"
+  ]
+}
