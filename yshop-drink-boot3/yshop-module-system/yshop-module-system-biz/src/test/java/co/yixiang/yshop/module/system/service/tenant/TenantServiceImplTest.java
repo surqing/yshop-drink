@@ -306,7 +306,7 @@ public class TenantServiceImplTest extends BaseDbUnitTest {
         // 准备参数
         TenantPageReqVO reqVO = new TenantPageReqVO();
         reqVO.setName("yshop");
-        reqVO.setContactName("艿");
+        reqVO.setContactName("ysh");
         reqVO.setContactMobile("1560");
         reqVO.setStatus(CommonStatusEnum.ENABLE.getStatus());
         reqVO.setCreateTime(buildBetweenTime(2020, 12, 1, 2020, 12, 24));

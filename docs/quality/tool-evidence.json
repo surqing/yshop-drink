@@ -1,0 +1,72 @@
+{
+  "tests/quality/run.py": {
+    "result": "Exact 1705 Java + 126 QUICK; real Linux CI 9274 SUCCESS; current runner faults fail closed",
+    "environment": "JDK17/Maven3.9/Node20/Python3; own fresh reports"
+  },
+  "tests/quality/evidence.py": {
+    "result": "34 fault/integrity tests PASS; expected names, invocation counts, runId, SHA and full source digest; bounded private logs"
+  },
+  "tests/quality/inventory.py": {
+    "result": "Fresh certificate-only inventory generated; stale XML, certificate and registry mismatch fault injections PASS"
+  },
+  "tests/quality/owned_resources.py": {
+    "result": "12 fault tests PASS; real source-change failure exit=1 plus container/volume cleanup PASS"
+  },
+  "tests/quality/auth-mysql.py": {
+    "result": "69 real MySQL8.0.46 auth cases PASS; 4 InnoDB tables; one owned container/volume destroyed",
+    "realDatabase": true
+  },
+  "tests/quality/business-backend.py": {
+    "result": "22 actual owned HTTP checks PASS; 30 requests; source-change fault FAIL/exit1/cleanup PASS",
+    "environment": "owned MySQL8 + Redis7.4 + dedicated loopback backend/account/roles; no seed INSERTs copied",
+    "realDatabase": true
+  },
+  "tests/quality/business_http.py": {
+    "result": "actual product/SKU/topping/coupon/unpaid-order/retry/cancel/status/refresh/logout HTTP writes PASS",
+    "realDatabase": true
+  },
+  "tests/quality/uniapp.py": {
+    "result": "Actual fresh HBuilderX compile; 380 source hashes and compiled loopback API48083 verified; no runtime count implied"
+  },
+  "tests/quality/coverage.py": {
+    "result": "Measured JaCoCo line31.10%,branch6.92%,method22.75%; risk class table and unexecuted methods"
+  },
+  "tests/quality/mutate.py": {
+    "result": "27 reviewed operators: 21 KILLED/3 SURVIVED/3 INCONCLUSIVE; baseline required; raw mode nonzero honestly"
+  },
+  "tests/quality/ingress.py": {
+    "result": "10 real synthetic HTTPS/MySQL checks PASS; ownership/cleanup PASS",
+    "realDatabase": true,
+    "syntheticPayment": true
+  },
+  "tests/business/mysql-business-acceptance.py": {
+    "result": "488 MySQL8.0.46 cases/23 InnoDB tables PASS; cleanup PASS",
+    "realDatabase": true
+  },
+  "tests/payment/mysql-acceptance.py": {
+    "result": "497 MySQL8.0.46 financial/cancellation/coupon cases/12 InnoDB tables PASS; cleanup PASS",
+    "realDatabase": true,
+    "syntheticPayment": true
+  },
+  "tests/quality/secret_guard.py": {
+    "result": "Offline diff literal guard and 3 guard failure-canary tests PASS"
+  },
+  "tests/smoke/secret-scan.py": {
+    "result": "Strict private-value/runtime scan PASS; 4 regression tests; no private values printed"
+  },
+  "scripts/payment/private_support.py": {
+    "result": "26 helper tests plus 10 isolated synthetic TLS cases where called; no live CLI authorization",
+    "realDatabase": true,
+    "syntheticPayment": true
+  },
+  "scripts/payment/acceptance-harness.py": {
+    "result": "Synthetic TLS read-only replay/preservation cases PASS; not a real-payment run",
+    "realDatabase": true,
+    "syntheticPayment": true
+  },
+  "scripts/payment/provision-merchant.py": {
+    "result": "Synthetic local HTTPS provisioning case PASS; no real merchant/provider",
+    "realDatabase": true,
+    "syntheticPayment": true
+  }
+}

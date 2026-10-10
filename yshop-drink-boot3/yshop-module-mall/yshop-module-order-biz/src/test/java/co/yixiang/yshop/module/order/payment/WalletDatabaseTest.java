@@ -77,6 +77,7 @@ class WalletDatabaseTest {
             throws Exception {
         var pool = Executors.newFixedThreadPool(count);
         var gate = new CountDownLatch(1);
+        var ready = new CountDownLatch(count);
         try {
             List<Future<Boolean>> futures = new ArrayList<>();
             for (int i = 0; i < count; i++) {
@@ -84,10 +85,12 @@ class WalletDatabaseTest {
                 futures.add(
                         pool.submit(
                                 () -> {
-                                    gate.await();
+                                    ready.countDown();
+                                    assertTrue(gate.await(30, TimeUnit.SECONDS));
                                     return task.apply(n);
                                 }));
             }
+            assertTrue(ready.await(30, TimeUnit.SECONDS), "All workers must be ready before release");
             gate.countDown();
             List<Boolean> results = new ArrayList<>();
             for (var future : futures) results.add(future.get(60, TimeUnit.SECONDS));

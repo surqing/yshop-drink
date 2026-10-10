@@ -65,6 +65,10 @@ public class AdminUserServiceImplTest extends BaseDbUnitTest {
     private UserPostMapper userPostMapper;
 
     @MockBean
+    private co.yixiang.yshop.module.store.dal.mysql.storeshop.StoreShopMapper storeShopMapper;
+    @MockBean
+    private co.yixiang.yshop.module.system.service.oauth2.OAuth2TokenService oauth2Tokens;
+    @MockBean
     private DeptService deptService;
     @MockBean
     private PostService postService;

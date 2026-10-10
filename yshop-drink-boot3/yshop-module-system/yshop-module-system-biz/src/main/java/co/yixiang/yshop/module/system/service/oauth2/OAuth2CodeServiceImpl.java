@@ -23,6 +23,7 @@ import static co.yixiang.yshop.module.system.enums.ErrorCodeConstants.OAUTH2_COD
 @Service
 @Validated
 public class OAuth2CodeServiceImpl implements OAuth2CodeService {
+    private java.time.Clock clock=java.time.Clock.systemDefaultZone();
 
     /**
      * 授权码的过期时间，默认 5 分钟
@@ -38,7 +39,7 @@ public class OAuth2CodeServiceImpl implements OAuth2CodeService {
         OAuth2CodeDO codeDO = new OAuth2CodeDO().setCode(generateCode())
                 .setUserId(userId).setUserType(userType)
                 .setClientId(clientId).setScopes(scopes)
-                .setExpiresTime(LocalDateTime.now().plusSeconds(TIMEOUT))
+                .setExpiresTime(LocalDateTime.now(clock).withNano(0).plusSeconds(TIMEOUT))
                 .setRedirectUri(redirectUri).setState(state);
         oauth2CodeMapper.insert(codeDO);
         return codeDO;

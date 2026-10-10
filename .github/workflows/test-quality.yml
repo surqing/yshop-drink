@@ -1,0 +1,171 @@
+name: Test quality gate
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      YSHOP_PAY_WECHAT_V3_ENABLED: 'false'
+      YSHOP_PAY_WECHAT_V3_RECONCILIATION_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '8.15.9'
+      - name: Compile all 55 modules (tests run separately with report integrity checks)
+        run: |
+          python3 - <<'PYTHON'
+          import os,sys
+          sys.path.insert(0,'tests/quality')
+          from run import Runner
+          r=Runner(os.environ['RUNNER_TEMP']+'/build')
+          r.backend()
+          sys.exit(0 if r.save()['result']=='PASS' else 1)
+          PYTHON
+      - name: Offline credential diff guard
+        if: ${{ !cancelled() }}
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || 'HEAD^' }}
+        run: python3 tests/quality/secret_guard.py --base "$BASE_REF"
+      - name: Quick tests and deliberate runner failures
+        if: ${{ !cancelled() }}
+        run: python3 tests/quality/run.py QUICK --output "$RUNNER_TEMP/quality"
+      - name: All Java suites, fresh exact-name reports, coverage (including historical failures)
+        if: ${{ !cancelled() }}
+        run: |
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'tests/quality')
+          from run import Runner
+          import os
+          r=Runner(os.environ['RUNNER_TEMP']+'/quality')
+          r.java()
+          sys.exit(0 if r.save()['result']=='PASS' else 1)
+          PY
+      - name: Attributed Java coverage for this checkout
+        if: ${{ !cancelled() }}
+        run: |
+          mvn -B dependency:get -Dartifact=org.jacoco:org.jacoco.cli:0.8.12:jar:nodeps -Dtransitive=false
+          python3 - <<'PYTHON'
+          import json,os,subprocess,sys
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'quality'
+          candidates=[p.parent for p in root.glob('*/report.json') if any(s['name'].startswith('java-') for s in json.loads(p.read_text())['steps'])]
+          if len(candidates)!=1:raise RuntimeError('JAVA_RUN_MISSING_OR_AMBIGUOUS')
+          cli=Path.home()/'.m2/repository/org/jacoco/org.jacoco.cli/0.8.12/org.jacoco.cli-0.8.12-nodeps.jar'
+          subprocess.run([sys.executable,'tests/quality/coverage.py','--run',str(candidates[0]),'--cli',str(cli),'--output',str(root/'coverage')],check=True)
+          PYTHON
+      - name: Vue dependencies
+        if: ${{ !cancelled() }}
+        working-directory: yshop-drink-vue3
+        run: pnpm install --frozen-lockfile
+      - name: Frontend logic, actual coupon component and V8 coverage
+        if: ${{ !cancelled() }}
+        run: python3 tests/quality/run.py frontend --output "$RUNNER_TEMP/frontend"
+      - name: Detect reversed frontend stale-response fix
+        if: ${{ !cancelled() }}
+        run: python3 tests/quality/frontend-mutate.py --output "$RUNNER_TEMP/frontend-mutation"
+      - name: Vue build (generates auto-import declarations from this checkout)
+        if: ${{ !cancelled() }}
+        working-directory: yshop-drink-vue3
+        run: pnpm build:local
+      - name: Vue type check
+        if: ${{ !cancelled() }}
+        working-directory: yshop-drink-vue3
+        run: pnpm ts:check
+      # No pull_request_target, repository secrets, payment endpoints or privileged runners.
+      # Database acceptance and macOS device automation are separate controlled local gates.
+      - name: Upload only machine summaries (raw test output can contain synthetic identities)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-summary
+          path: |
+            ${{ runner.temp }}/quality/**/report.json
+            ${{ runner.temp }}/quality/**/evidence.json
+            ${{ runner.temp }}/quality/**/diagnostics.json
+            ${{ runner.temp }}/quality/**/coverage.json
+            ${{ runner.temp }}/frontend-mutation/report.json
+            ${{ runner.temp }}/frontend/**/report.json
+            ${{ runner.temp }}/frontend/**/coverage.json
+            ${{ runner.temp }}/frontend/**/coverage-summary.json
+            ${{ runner.temp }}/build/**/report.json
+          retention-days: 7
+          if-no-files-found: error
+  controlled-dependencies:
+    # Independent scope: a normal Java/Vue SUCCESS never substitutes for this result.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      YSHOP_PAY_WECHAT_V3_ENABLED: 'false'
+      YSHOP_PAY_WECHAT_V3_RECONCILIATION_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build dedicated Linux test artifacts
+        run: |
+          python3 - <<'PYTHON'
+          import os,sys
+          sys.path.insert(0,'tests/quality')
+          from run import Runner
+          r=Runner(os.environ['RUNNER_TEMP']+'/build')
+          r.backend()
+          sys.exit(0 if r.save()['result']=='PASS' else 1)
+          PYTHON
+      - name: Reproduce original Redis private-file permission failure
+        run: python3 tests/quality/owned_resources.py --redis-permission-probe "$RUNNER_TEMP/redis-permission"
+      - name: Owned MySQL, Redis, authentication and synthetic TLS acceptance
+        if: ${{ !cancelled() }}
+        run: python3 tests/quality/heavy.py --output "$RUNNER_TEMP/controlled"
+      - name: Owned business writes and two-process authentication
+        if: ${{ !cancelled() }}
+        run: |
+          python3 -m pip install -r tests/quality/requirements.txt
+          python3 tests/quality/business-backend.py --output "$RUNNER_TEMP/business" --port 48883 --instances 2
+      - name: Safe controlled-gate diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: controlled-summary
+          path: |
+            ${{ runner.temp }}/controlled/**/report.json
+            ${{ runner.temp }}/controlled/**/evidence.json
+            ${{ runner.temp }}/controlled/**/diagnostics.json
+            ${{ runner.temp }}/business/report.json
+            ${{ runner.temp }}/redis-permission/report.json
+            ${{ runner.temp }}/frontend-mutation/report.json
+            ${{ runner.temp }}/frontend/**/report.json
+            ${{ runner.temp }}/frontend/**/coverage.json
+            ${{ runner.temp }}/frontend/**/coverage-summary.json
+            ${{ runner.temp }}/build/**/report.json
+          retention-days: 7
+          if-no-files-found: error

@@ -83,7 +83,7 @@ public class OAuth2ApproveServiceImplTest extends BaseDbUnitTest {
         // mock 数据
         OAuth2ApproveDO approve = randomPojo(OAuth2ApproveDO.class).setUserId(userId)
                 .setUserType(userType).setClientId(clientId).setScope("read")
-                .setExpiresTime(LocalDateTimeUtil.offset(LocalDateTime.now(), 1L, ChronoUnit.DAYS)).setApproved(true); // 同意
+                .setExpiresTime(LocalDateTimeUtil.offset(LocalDateTime.now().withNano(0), 1L, ChronoUnit.DAYS)).setApproved(true); // 同意
         oauth2ApproveMapper.insert(approve);
 
         // 调用
@@ -106,7 +106,7 @@ public class OAuth2ApproveServiceImplTest extends BaseDbUnitTest {
         // mock 数据
         OAuth2ApproveDO approve = randomPojo(OAuth2ApproveDO.class).setUserId(userId)
                 .setUserType(userType).setClientId(clientId).setScope("read")
-                .setExpiresTime(LocalDateTimeUtil.offset(LocalDateTime.now(), 1L, ChronoUnit.DAYS)).setApproved(false); // 拒绝
+                .setExpiresTime(LocalDateTimeUtil.offset(LocalDateTime.now().withNano(0), 1L, ChronoUnit.DAYS)).setApproved(false); // 拒绝
         oauth2ApproveMapper.insert(approve);
 
         // 调用
@@ -200,10 +200,10 @@ public class OAuth2ApproveServiceImplTest extends BaseDbUnitTest {
         String clientId = randomString();
         // mock 数据
         OAuth2ApproveDO approve = randomPojo(OAuth2ApproveDO.class).setUserId(userId)
-                .setUserType(userType).setClientId(clientId).setExpiresTime(LocalDateTimeUtil.offset(LocalDateTime.now(), 1L, ChronoUnit.DAYS));
+                .setUserType(userType).setClientId(clientId).setExpiresTime(LocalDateTimeUtil.offset(LocalDateTime.now().withNano(0), 1L, ChronoUnit.DAYS));
         oauth2ApproveMapper.insert(approve); // 未过期
         oauth2ApproveMapper.insert(ObjectUtil.clone(approve).setId(null)
-                .setExpiresTime(LocalDateTimeUtil.offset(LocalDateTime.now(), -1L, ChronoUnit.DAYS))); // 已过期
+                .setExpiresTime(LocalDateTimeUtil.offset(LocalDateTime.now().withNano(0), -1L, ChronoUnit.DAYS))); // 已过期
 
         // 调用
         List<OAuth2ApproveDO> result = oauth2ApproveService.getApproveList(userId, userType, clientId);

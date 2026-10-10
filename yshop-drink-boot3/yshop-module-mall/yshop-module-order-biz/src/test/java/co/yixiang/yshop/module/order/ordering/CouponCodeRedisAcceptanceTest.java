@@ -30,7 +30,7 @@ class CouponCodeRedisAcceptanceTest {
     AppCouponController one,two;
     @BeforeAll static void connect() throws Exception {
         var settings=new Properties();try(var reader=java.nio.file.Files.newBufferedReader(java.nio.file.Path.of(System.getenv("YSHOP_COUPON_REDIS_CONFIG")))){settings.load(reader);}
-        if(!"redis://127.0.0.1:6379".equals(settings.getProperty("url")))throw new IllegalArgumentException("LOOPBACK_REDIS_REQUIRED");
+        if(!settings.getProperty("url","").matches("redis://127[.]0[.]0[.]1:[0-9]{2,5}"))throw new IllegalArgumentException("LOOPBACK_REDIS_REQUIRED");
         Config config=new Config();config.useSingleServer().setAddress(settings.getProperty("url")).setPassword(settings.getProperty("password"))
                 .setTimeout(1500).setConnectTimeout(2000).setRetryAttempts(0).setConnectionPoolSize(4).setConnectionMinimumIdleSize(1);
         first=Redisson.create(config);second=Redisson.create(config);
@@ -48,7 +48,7 @@ class CouponCodeRedisAcceptanceTest {
         two=new AppCouponController(mock(AppCouponUserService.class),service,new CouponCodeGuard(b));
     }
     @AfterEach void cleanup() {
-        first.getKeys().deleteByPattern("rate_limiter:"+namespace+"*");SecurityContextHolder.clearContext();
+        try {first.getKeys().deleteByPattern("rate_limiter:"+namespace+"*");assertFalse(first.getKeys().getKeysByPattern("rate_limiter:"+namespace+"*").iterator().hasNext(), "REDIS_NAMESPACE_CLEANUP_INCOMPLETE");} finally {SecurityContextHolder.clearContext();}
     }
     MockHttpServletRequest request() {var r=new MockHttpServletRequest();r.setRemoteAddr("192.0.2.20");return r;}
     List<Integer> concurrent(boolean sameCode, boolean sameMember) throws Exception {
@@ -101,10 +101,26 @@ class CouponCodeRedisAcceptanceTest {
         // New random-code input does not consume the additional legacy-short budget.
         gb.admit(40L,"198.51.100.20",false);
     }
+    @Test void actualClientShutdownFailsClosedWithoutClaim() {
+        RedissonClient lost=Redisson.create(new Config(first.getConfig()));
+        try {
+            var dao=namespaced(lost);
+            var controller=new AppCouponController(mock(AppCouponUserService.class),service,new CouponCodeGuard(dao));
+            lost.shutdown();
+            CouponCodeSecurityTest.login(1L);
+            assertEquals(503,assertThrows(ServiceException.class,()->controller.receive(
+                    CouponCodeSecurityTest.body("synthetic-client-outage-code",UUID.randomUUID().toString()),request())).getCode());
+            verifyNoInteractions(service);
+        } finally { if(!lost.isShutdown())lost.shutdown(); }
+    }
     @Test void naturalWindowExpiryAllowsBoundedRetryAndRejectedCallsDoNotExtendTtl() throws Exception {
         assertTrue(a.tryAcquireFixedWindow("expiry",1,1));long ttl=first.getBucket("rate_limiter:"+namespace+"expiry").remainTimeToLive();
         for(int i=0;i<20;i++)assertFalse(b.tryAcquireFixedWindow("expiry",1,1));
         assertTrue(first.getBucket("rate_limiter:"+namespace+"expiry").remainTimeToLive()<=ttl);
-        Thread.sleep(1200);assertTrue(b.tryAcquireFixedWindow("expiry",1,1));
+        long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);
+        while(first.getBucket("rate_limiter:"+namespace+"expiry").isExists() && System.nanoTime()<deadline)
+            Thread.sleep(20); // Real Redis server TTL cannot be advanced with the application Clock.
+        assertFalse(first.getBucket("rate_limiter:"+namespace+"expiry").isExists());
+        assertTrue(b.tryAcquireFixedWindow("expiry",1,1));
     }
 }

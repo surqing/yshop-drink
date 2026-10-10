@@ -315,12 +315,18 @@ public class MemberAuthServiceImpl implements MemberAuthService {
     }
 
     private AppAuthLoginRespVO createTokenAfterLoginSuccess(MemberUserDO user, String mobile, LoginLogTypeEnum logType) {
+        // All login mechanisms must enforce current server-side member status before issuing
+        // tokens or recording a successful login. Password login also checks this earlier.
+        if (user == null || !Objects.equals(user.getStatus(), CommonStatusEnum.ENABLE.getStatus())) {
+            throw exception(AUTH_LOGIN_USER_DISABLED);
+        }
         // 插入登陆日志
-        createLoginLog(user.getId(), mobile, logType, LoginResultEnum.SUCCESS);
+
         // 创建 Token 令牌
         OAuth2AccessTokenRespDTO accessTokenRespDTO = oauth2TokenApi.createAccessToken(new OAuth2AccessTokenCreateReqDTO()
                 .setUserId(user.getId()).setUserType(getUserType().getValue())
                 .setClientId(OAuth2ClientConstants.CLIENT_ID_DEFAULT));
+        createLoginLog(user.getId(), mobile, logType, LoginResultEnum.SUCCESS);
         // 构建返回结果
         return AuthConvert.INSTANCE.convert(accessTokenRespDTO);
     }
@@ -371,7 +377,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
     @Override
     public void logout(String token) {
         // 删除访问令牌
-        OAuth2AccessTokenRespDTO accessTokenRespDTO = oauth2TokenApi.removeAccessToken(token);
+        OAuth2AccessTokenRespDTO accessTokenRespDTO = oauth2TokenApi.removeAccessToken(token, UserTypeEnum.MEMBER.getValue());
         if (accessTokenRespDTO == null) {
             return;
         }
@@ -412,7 +418,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
 
     @Override
     public AppAuthLoginRespVO refreshToken(String refreshToken) {
-        OAuth2AccessTokenRespDTO accessTokenDO = oauth2TokenApi.refreshAccessToken(refreshToken, OAuth2ClientConstants.CLIENT_ID_DEFAULT);
+        OAuth2AccessTokenRespDTO accessTokenDO = oauth2TokenApi.refreshAccessToken(refreshToken, OAuth2ClientConstants.CLIENT_ID_DEFAULT, UserTypeEnum.MEMBER.getValue());
         return AuthConvert.INSTANCE.convert(accessTokenDO);
     }
 

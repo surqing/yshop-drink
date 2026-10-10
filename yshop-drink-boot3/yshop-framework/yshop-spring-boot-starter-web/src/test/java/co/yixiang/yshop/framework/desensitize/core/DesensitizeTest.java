@@ -42,7 +42,8 @@ public class DesensitizeTest {
         DesensitizeDemo d = JsonUtils.parseObject(JsonUtils.toJsonString(desensitizeDemo), DesensitizeDemo.class);
         // 断言
         assertNotNull(d);
-        assertEquals("芋***", d.getNickname());
+        // Contract: retain one leading character, mask every remaining character.
+        assertEquals("y****", d.getNickname());
         assertEquals("998800********31", d.getBankCard());
         assertEquals("粤A6***6", d.getCarLicense());
         assertEquals("0108*****22", d.getFixedPhone());
@@ -56,6 +57,20 @@ public class DesensitizeTest {
         assertEquals("你好，我是*", d.getRegex());
         assertEquals("北京市海淀区上地十街10号*", d.getAddress());
         assertEquals("yshop", d.getOrigin());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"张三,张*", "李小明,李**", "A,*", "AB,A*", "yshop,y****"})
+    void nicknamePreservesOnlyContractualPrefix(String original, String masked) {
+        DesensitizeDemo input = new DesensitizeDemo();
+        input.setNickname(original);
+        DesensitizeDemo output = JsonUtils.parseObject(JsonUtils.toJsonString(input), DesensitizeDemo.class);
+        assertEquals(masked, output.getNickname());
+    }
+
+    @Test void absentNicknameRemainsNull() {
+        DesensitizeDemo output = JsonUtils.parseObject(JsonUtils.toJsonString(new DesensitizeDemo()), DesensitizeDemo.class);
+        assertEquals(null, output.getNickname());
     }
 
     @Data

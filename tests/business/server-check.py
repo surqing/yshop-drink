@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Aggregate-only read verification for the local unpaid-order UI smoke."""
-import importlib.util,json,re,sys
+import importlib.util,json,re,sys,os
 from pathlib import Path
-root=Path(__file__).resolve().parents[3]
+root=Path(os.environ.get('YSHOP_TEST_WORKSPACE',Path(__file__).resolve().parents[3])).resolve()
 spec=importlib.util.spec_from_file_location('local_database',root/'.local-dev/database.py');db=importlib.util.module_from_spec(spec);spec.loader.exec_module(db)
 try:
     args=json.load(sys.stdin)

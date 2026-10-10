@@ -203,14 +203,14 @@ public class AdminAuthServiceImpl implements AdminAuthService {
 
     @Override
     public AuthLoginRespVO refreshToken(String refreshToken) {
-        OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.refreshAccessToken(refreshToken, OAuth2ClientConstants.CLIENT_ID_DEFAULT);
+        OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.refreshAccessToken(refreshToken, OAuth2ClientConstants.CLIENT_ID_DEFAULT, UserTypeEnum.ADMIN.getValue());
         return AuthConvert.INSTANCE.convert(accessTokenDO);
     }
 
     @Override
     public void logout(String token, Integer logType) {
         // 删除访问令牌
-        OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.removeAccessToken(token);
+        OAuth2AccessTokenDO accessTokenDO = oauth2TokenService.removeAccessToken(token,UserTypeEnum.ADMIN.getValue());
         if (accessTokenDO == null) {
             return;
         }

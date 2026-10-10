@@ -4,7 +4,7 @@ import argparse
 import json
 import re
 import sys
-from private_support import PRIVATE, guarded_main, local_rows, private_json
+from private_support import PRIVATE, guarded_main, local_rows, private_json, report_path
 
 BINDING = ('orderId', 'attemptId', 'providerOrderReference', 'transactionId', 'appid', 'mchId', 'amountCents', 'currency', 'provider')
 
@@ -76,7 +76,7 @@ def run():
         evidence[name] = json.loads(f.read_text())
     database = snapshot(evidence['client']['orderId'])
     report = compare(database, **evidence)
-    private_json(PRIVATE / 'payment-acceptance-report.json', {'database': database, **report})
+    private_json(report_path(folder, 'payment-acceptance-report.json'), {'database': database, **report})
     print(json.dumps(report))
     return 0 if report['consistentObservedEvidence'] else 1
 

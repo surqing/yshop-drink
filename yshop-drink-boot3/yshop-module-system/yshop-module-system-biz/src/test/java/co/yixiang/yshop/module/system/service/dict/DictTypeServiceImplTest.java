@@ -59,8 +59,8 @@ public class DictTypeServiceImplTest extends BaseDbUnitTest {
        dictTypeMapper.insert(cloneIgnoreId(dbDictType, o -> o.setCreateTime(buildTime(2021, 1, 1))));
        // 准备参数
        DictTypePageReqVO reqVO = new DictTypePageReqVO();
-       reqVO.setName("nai");
-       reqVO.setType("艿");
+       reqVO.setName("ysh");
+       reqVO.setType("ysh");
        reqVO.setStatus(CommonStatusEnum.ENABLE.getStatus());
        reqVO.setCreateTime(buildBetweenTime(2021, 1, 10, 2021, 1, 20));
 

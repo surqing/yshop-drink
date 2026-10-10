@@ -1,9 +1,9 @@
 const fs=require('node:fs'),path=require('node:path');
-const root=path.resolve(__dirname,'../../..'),a=require(path.join(root,'.uniapp-dev/automation/node_modules/miniprogram-automator'));
-const fixture=JSON.parse(fs.readFileSync(path.join(root,'.local-dev/private/phase6b/catalog-fixture.json'))),report={checks:[],paymentRequests:0};
+const root=path.resolve(process.env.YSHOP_TEST_WORKSPACE||path.resolve(__dirname,'../../..')),a=require(path.join(root,'.uniapp-dev/automation/node_modules/miniprogram-automator'));
+const fixture=JSON.parse(fs.readFileSync(path.join(root,'.local-dev/private/phase6b/catalog-fixture.json'))),report={checks:[],paymentRequests:{value:0,evidence:"DECLARED_UNINSTRUMENTED_LEGACY_SUITE"}};
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 async function waitElement(page,selector){for(let i=0;i<100;i++){const e=await page.$(selector);if(e)return e;await pause(200)}throw Error('Missing '+selector)}const save=()=>fs.writeFileSync(path.join(root,'.uniapp-dev/logs/phase6c-state-smoke.json'),JSON.stringify(report,null,2),{mode:0o600});
-(async()=>{const m=await a.connect({wsEndpoint:'ws://127.0.0.1:9420'});let p;try{
+(async()=>{const m=await a.connect({wsEndpoint:`ws://127.0.0.1:${process.env.YSHOP_AUTOMATION_PORT||9420}`});let p;try{
 await m.reLaunch('/pages/index/index');await pause(1000);
 const check=(name,ok)=>{report.checks.push({name,ok});save();if(!ok)throw Error(name)};
 p=await m.navigateTo('/pages-checkout/shop/shop');await waitElement(p,'.shop-page__item');for(const card of await p.$$('.shop-page__item'))if((await card.text()).includes(fixture.shops[0].name)){await (await card.$('.shop-page__body')).tap();break;}await pause(1500);
@@ -16,5 +16,5 @@ p=await m.navigateTo('/pages-checkout/shop/shop');await waitElement(p,'.shop-pag
 p=await m.navigateTo('/pages-user/coupons/coupons');await pause(700);text=await (await waitElement(p,'.coupons-page')).text();check('switch B removes A-only rights and keeps global coupon',!text.includes('Phase6C 合成A')&&text.includes('Phase6C 合成公共码通用券'));
 await (await p.$$('.coupons-tab'))[1].tap();await pause(700);text=await (await waitElement(p,'.coupons-page')).text();check('B activity center cannot expose A activity',!text.includes('Phase6C 合成A'));
 p=await m.navigateTo('/pages-checkout/shop/shop');await waitElement(p,'.shop-page__item');for(const card of await p.$$('.shop-page__item'))if((await card.text()).includes(fixture.shops[0].name)){await (await card.$('.shop-page__body')).tap();break;}await pause(500);
-report.ok=true;save();console.log('PASS: coupon snapshots, invalidation, newcomer eligibility, limit and store-switch page checks; paymentRequests=0.');
+report.ok=true;save();console.log('PASS: coupon snapshots, invalidation, newcomer eligibility, limit and store-switch page checks; paymentRequests is DECLARED, not measured.');
 }finally{m.disconnect()}})().catch(e=>{report.ok=false;report.failure=e.message;save();process.exitCode=1});

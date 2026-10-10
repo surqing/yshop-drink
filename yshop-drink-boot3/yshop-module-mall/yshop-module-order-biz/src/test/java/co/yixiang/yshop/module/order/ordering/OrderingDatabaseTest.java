@@ -48,6 +48,23 @@ class OrderingDatabaseTest {
                     "yshop_order_inventory_reservation");
     Path boot;
 
+    private static boolean raceRejection(RuntimeException error, Set<String> allowedReasons) {
+        var denied = assertInstanceOf(co.yixiang.yshop.framework.common.exception.ServiceException.class, error);
+        assertTrue(allowedReasons.contains(denied.getMessage()), "Unexpected race rejection");
+        return false;
+    }
+
+    @Test
+    void unexpectedDatabaseFailuresCannotBecomeNormalRaceLosers() {
+        var allowed = Set.of("PRODUCT_STOCK_INSUFFICIENT");
+        assertThrows(AssertionError.class, () -> raceRejection(
+                new org.springframework.dao.DataAccessResourceFailureException("synthetic database outage"), allowed));
+        assertThrows(AssertionError.class, () -> raceRejection(
+                new co.yixiang.yshop.framework.common.exception.ServiceException(1008003090, "UNEXPECTED_REJECTION"), allowed));
+        assertFalse(raceRejection(new co.yixiang.yshop.framework.common.exception.ServiceException(
+                1008003090, "PRODUCT_STOCK_INSUFFICIENT"), allowed));
+    }
+
     @BeforeEach
     void setup() throws Exception {
         var ds = new DriverManagerDataSource();
@@ -61,7 +78,7 @@ class OrderingDatabaseTest {
             assertTrue(
                     props.getProperty("url")
                             .matches(
-                                    "jdbc:mysql://127[.]0[.]0[.]1:3306/yshop_acceptance_phase6a_[a-f0-9]{8}[?].*"));
+                                    "jdbc:mysql://127[.]0[.]0[.]1:[0-9]{2,5}/yshop_acceptance_phase6a_[a-f0-9]{8}[?].*"));
             assertTrue(props.getProperty("username").matches("accept6a_[a-f0-9]{8}"));
             ds.setDriverClassName("com.mysql.cj.jdbc.Driver");
             ds.setUrl(props.getProperty("url"));
@@ -221,15 +238,18 @@ class OrderingDatabaseTest {
             throws Exception {
         var pool = Executors.newFixedThreadPool(size);
         var start = new CountDownLatch(1);
+        var ready = new CountDownLatch(size);
         List<Future<Boolean>> futures = new ArrayList<>();
         try {
             for (int i = 0; i < size; i++)
                 futures.add(
                         pool.submit(
                                 () -> {
-                                    start.await();
+                                    ready.countDown();
+                                    assertTrue(start.await(30, TimeUnit.SECONDS));
                                     return action.call();
                                 }));
+            assertTrue(ready.await(30, TimeUnit.SECONDS), "All workers must be ready before release");
             start.countDown();
             List<Boolean> result = new ArrayList<>();
             for (var f : futures) result.add(f.get(45, TimeUnit.SECONDS));
@@ -240,9 +260,40 @@ class OrderingDatabaseTest {
         }
     }
 
+    @Test
+    void workersHoldTwentyIndependentTransactionsAndConnections() throws Exception {
+        var connections = java.util.concurrent.ConcurrentHashMap.<Long>newKeySet();
+        var inTransactions = new CountDownLatch(20);
+        var results = parallel(20, () -> new org.springframework.transaction.support.TransactionTemplate(tm)
+                .execute(status -> {
+                    String sql = mysql ? "SELECT CONNECTION_ID()" : "SELECT SESSION_ID()";
+                    Long id = db.queryForObject(sql, Long.class);
+                    assertTrue(connections.add(id), "Workers must not share a connection");
+                    inTransactions.countDown();
+                    try { assertTrue(inTransactions.await(30, TimeUnit.SECONDS)); }
+                    catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new IllegalStateException(error); }
+                    assertEquals(id, db.queryForObject(sql, Long.class), "Connection must stay bound to this transaction");
+                    assertTrue(org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive());
+                    return true;
+                }));
+        assertEquals(20, connections.size());
+        assertEquals(20, Collections.frequency(results, true));
+    }
+
     @AfterEach
     void clearSecurity() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void availableStockConditionalDebitMustSucceed() {
+        String id = assertDoesNotThrow(() -> place(request()));
+        assertNotNull(id);
+        assertEquals(9, count("SELECT stock FROM yshop_store_product WHERE id=1"));
+        assertEquals(9, count("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(10, count("SELECT stock FROM yshop_store_product WHERE id=2"));
+        assertEquals(0, count("SELECT paid FROM yshop_store_order WHERE order_id=?", id));
+        assertEquals(1, count("SELECT COUNT(*) FROM yshop_order_inventory_reservation WHERE order_id=?", id));
     }
 
     @Test
@@ -260,6 +311,18 @@ class OrderingDatabaseTest {
                 1, count("SELECT COUNT(*) FROM yshop_store_order_cart_info WHERE order_id=?", id));
         assertEquals(9, count("SELECT stock FROM yshop_store_product WHERE id=1"));
         assertEquals(10, count("SELECT stock FROM yshop_store_product WHERE id=2"));
+    }
+
+    @Test
+    void differentStoreSkuPriceCannotBecomeThisOrdersPrice() {
+        db.update("UPDATE yshop_store_product_attr_value SET price=9.87 WHERE id=2");
+        String id=place(request());
+        assertEquals(new java.math.BigDecimal("1.23"),db.queryForObject(
+                "SELECT pay_price FROM yshop_store_order WHERE order_id=?",java.math.BigDecimal.class,id));
+        assertEquals(new java.math.BigDecimal("9.87"),db.queryForObject(
+                "SELECT price FROM yshop_store_product_attr_value WHERE id=2",java.math.BigDecimal.class));
+        assertEquals(10,count("SELECT stock FROM yshop_store_product WHERE id=2"));
+        assertEquals(0,count("SELECT paid FROM yshop_store_order WHERE order_id=?",id));
     }
 
     @Test
@@ -474,7 +537,7 @@ class OrderingDatabaseTest {
                                 place(request());
                                 return true;
                             } catch (RuntimeException expected) {
-                                return false;
+                                return raceRejection(expected, Set.of("PRODUCT_STOCK_OR_PRICE_INVALID", "PRODUCT_STOCK_INSUFFICIENT"));
                             }
                         });
         assertEquals(1, results.stream().filter(Boolean::booleanValue).count());
@@ -567,7 +630,7 @@ class OrderingDatabaseTest {
                                 place(p);
                                 return true;
                             } catch (RuntimeException ex) {
-                                return false;
+                                return raceRejection(ex, Set.of("COUPON_NOT_AVAILABLE"));
                             }
                         });
         assertEquals(1, results.stream().filter(Boolean::booleanValue).count());
@@ -676,6 +739,19 @@ class OrderingDatabaseTest {
         var permission = mock(PermissionApi.class);
         when(permission.hasAnyRoles(eq(uid), any(String[].class))).thenReturn(hq);
         return new StoreAccessService(db, permission);
+    }
+
+    @Test
+    void categoryAndOrderAuthorizationUsesDatabaseShopNotTokenHint() {
+        String id=place(request());
+        Long oid=db.queryForObject("SELECT id FROM yshop_store_order WHERE order_id=?",Long.class,id);
+        var own=access(101,false);assertDoesNotThrow(()->own.requireOrder(oid));assertDoesNotThrow(()->own.requireCategory(1L));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,()->own.requireCategory(2L));
+        var other=access(102,false);assertThrows(org.springframework.security.access.AccessDeniedException.class,()->other.requireOrder(oid));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,()->other.requireCategory(1L));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,()->other.requireOrder(Long.MAX_VALUE));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,()->other.requireCategory(Long.MAX_VALUE));
+        var hq=access(999,true);assertDoesNotThrow(()->hq.requireOrder(oid));assertDoesNotThrow(()->hq.requireCategory(2L));
     }
 
     @Test

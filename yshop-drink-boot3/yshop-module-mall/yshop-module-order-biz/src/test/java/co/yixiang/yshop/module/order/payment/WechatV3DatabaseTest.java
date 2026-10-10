@@ -199,15 +199,18 @@ class WechatV3DatabaseTest {
     <T> List<T> concurrent(int n, Callable<T> action) throws Exception {
         var pool = Executors.newFixedThreadPool(n);
         var gate = new CountDownLatch(1);
+        var ready = new CountDownLatch(n);
         try {
             var jobs = new ArrayList<Future<T>>();
             for (int i = 0; i < n; i++)
                 jobs.add(
                         pool.submit(
                                 () -> {
-                                    gate.await();
+                                    ready.countDown();
+                                    assertTrue(gate.await(30, TimeUnit.SECONDS));
                                     return action.call();
                                 }));
+            assertTrue(ready.await(30, TimeUnit.SECONDS), "All workers must be ready before release");
             gate.countDown();
             var result = new ArrayList<T>();
             for (var job : jobs) result.add(job.get(60, TimeUnit.SECONDS));

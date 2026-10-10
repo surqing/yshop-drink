@@ -1,10 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {readFileSync} from 'node:fs'
-const data=source=>'data:text/javascript;base64,'+Buffer.from(source).toString('base64')
-const catalog=data(readFileSync(new URL('../../yshop-drink-uniapp-vue3/utils/catalog-options.js',import.meta.url),'utf8'))
-const source=readFileSync(new URL('../../yshop-drink-uniapp-vue3/utils/coupon-context.js',import.meta.url),'utf8').replace("'./catalog-options.js'",JSON.stringify(catalog))
-const {couponDiscount,couponContextMatches,claimRequestKey,claimSucceeded}=await import(data(source))
+const {couponDiscount,couponContextMatches,claimRequestKey,claimSucceeded}=await import(new URL('../../yshop-drink-uniapp-vue3/utils/coupon-context.js',import.meta.url))
 const coupon={id:1,reservationState:'AVAILABLE',least:30,value:5}
 test('subtotal including customizations crosses threshold',()=>assert.equal(couponDiscount(coupon,34),5))
 test('below threshold never discounts',()=>assert.equal(couponDiscount(coupon,29.99),0))
