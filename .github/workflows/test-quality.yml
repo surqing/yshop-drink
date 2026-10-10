@@ -131,7 +131,10 @@ jobs:
           r.backend()
           sys.exit(0 if r.save()['result']=='PASS' else 1)
           PYTHON
+      - name: Reproduce original Redis private-file permission failure
+        run: python3 tests/quality/owned_resources.py --redis-permission-probe "$RUNNER_TEMP/redis-permission"
       - name: Owned MySQL, Redis, authentication and synthetic TLS acceptance
+        if: ${{ !cancelled() }}
         run: python3 tests/quality/heavy.py --output "$RUNNER_TEMP/controlled"
       - name: Owned business writes and two-process authentication
         if: ${{ !cancelled() }}
@@ -148,6 +151,7 @@ jobs:
             ${{ runner.temp }}/controlled/**/evidence.json
             ${{ runner.temp }}/controlled/**/diagnostics.json
             ${{ runner.temp }}/business/report.json
+            ${{ runner.temp }}/redis-permission/report.json
             ${{ runner.temp }}/build/**/report.json
           retention-days: 7
           if-no-files-found: error

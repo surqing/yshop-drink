@@ -46,6 +46,10 @@ class OwnedCleanupFaults(unittest.TestCase):
         failed_report(report,RuntimeError('sensitive-token-request-body'),'AFTER_HTTP')
         self.assertNotIn('sensitive-token-request-body',json.dumps(report))
         self.assertEqual('RuntimeError',report['reasonType'])
+        failed_report(report,KeyError('private-identity-secret'),'METADATA')
+        self.assertNotIn('private-identity-secret',json.dumps(report))
+        failed_report(report,KeyError('6379/tcp'),'METADATA')
+        self.assertEqual('6379/tcp',report['missingMetadataKey'])
     def test_adapter_refuses_different_owner_before_any_sql(self):
         import tempfile,os
         from pathlib import Path

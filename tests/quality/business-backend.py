@@ -26,6 +26,7 @@ def merge(a,b):
   if isinstance(v,dict) and isinstance(a.get(k),dict):merge(a[k],v)
   else:a[k]=v
 try:
+ if os.getuid()==0:raise RuntimeError('NONROOT_TEST_LAUNCHER_REQUIRED')
  secret=file('root.secret',pw);client=file('client.cnf','[client]\ndefault-character-set=utf8mb4\nuser=root\npassword='+pw+'\n')
  docker('run','-d','--name',mysql,'--label','yshop.quality.owner='+owner,'--cap-drop=NET_RAW','--security-opt','no-new-privileges','-p','127.0.0.1::3306','--mount','type=bind,source='+str(secret)+',target=/run/root.secret,readonly','--mount','type=bind,source='+str(client)+',target=/run/client.cnf,readonly','-e','MYSQL_ROOT_PASSWORD_FILE=/run/root.secret','mysql:8.0')
  for _ in range(100):
@@ -35,7 +36,7 @@ try:
  docker('exec',mysql,'mysql','--defaults-extra-file=/run/client.cnf','-e','CREATE DATABASE '+schema+' CHARACTER SET utf8mb4')
  port=int(json.loads(docker('inspect',mysql))[0]['NetworkSettings']['Ports']['3306/tcp'][0]['HostPort'])
  config=file('redis.conf','bind 0.0.0.0\nprotected-mode yes\nrequirepass '+rpw+'\nsave ""\nappendonly no\n')
- docker('run','-d','--name',redis,'--label','yshop.quality.owner='+owner,'--cap-drop=NET_RAW','-p','127.0.0.1::6379','--mount','type=bind,source='+str(config)+',target=/run/redis.conf,readonly','redis:7.4','redis-server','/run/redis.conf')
+ docker('run','-d','--name',redis,'--label','yshop.quality.owner='+owner,'--user',str(os.getuid())+':'+str(os.getgid()),'--cap-drop=ALL','--security-opt','no-new-privileges','-p','127.0.0.1::6379','--mount','type=bind,source='+str(config)+',target=/run/redis.conf,readonly','redis:7.4','redis-server','/run/redis.conf')
  redisport=int(json.loads(docker('inspect',redis))[0]['NetworkSettings']['Ports']['6379/tcp'][0]['HostPort'])
  seed=(repo/'yshop-drink-boot3/sql/yixiang-drink-open.sql').read_text();ddl=re.findall(r'CREATE TABLE `[^`]+` \(.*?\) ENGINE=.*?;',seed,re.S)
  if not ddl or any('INSERT INTO' in x for x in ddl):raise RuntimeError('SCHEMA_ONLY_REQUIRED')

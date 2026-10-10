@@ -61,6 +61,7 @@ def main():
         if e.get('tests')!=expected or not e.get('exactNamesChecked'):raise RuntimeError('AUTH_TESTS_MISSING')
         return {'tests':expected,'cleanup':'PASS'}
     try:
+        if os.getuid()==0:raise RuntimeError('NONROOT_TEST_LAUNCHER_REQUIRED')
         pw=secrets.token_hex(24);rpw=secrets.token_hex(24)
         secret=private('mysql.secret',pw);client=private('mysql.cnf','[client]\ndefault-character-set=utf8mb4\nuser=root\npassword='+pw+'\n')
         docker('run','-d','--name',mysql,'--label','yshop.quality.owner='+owner,'--cap-drop=NET_RAW','--security-opt','no-new-privileges',
@@ -78,7 +79,7 @@ def main():
                    YSHOP_PAY_WECHAT_V3_ENABLED='false',YSHOP_PAY_WECHAT_V3_RECONCILIATION_ENABLED='false')
         (root/'workspace').mkdir(mode=0o700)
         rc=private('redis.conf','bind 0.0.0.0\nprotected-mode yes\nrequirepass '+rpw+'\nsave ""\nappendonly no\n')
-        docker('run','-d','--name',redis,'--label','yshop.quality.owner='+owner,'--cap-drop=NET_RAW',
+        docker('run','-d','--name',redis,'--label','yshop.quality.owner='+owner,'--user',str(os.getuid())+':'+str(os.getgid()),'--cap-drop=ALL','--security-opt','no-new-privileges',
                '-p','127.0.0.1::6379','--mount','type=bind,source='+str(rc)+',target=/run/redis.conf,readonly','redis:7.4','redis-server','/run/redis.conf')
         rbind=json.loads(docker('inspect',redis))[0]['NetworkSettings']['Ports']['6379/tcp'][0]
         redis_config=private('redis.properties','url=redis://127.0.0.1:'+rbind['HostPort']+'\npassword='+rpw+'\n')
