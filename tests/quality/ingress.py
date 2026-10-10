@@ -12,7 +12,7 @@ import hashlib
 import sys
 import tarfile
 import uuid
-from evidence import workspace
+from evidence import workspace, source_identity
 REPO=Path(__file__).resolve().parents[2]
 IMAGE='nginx@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94'
 
@@ -47,7 +47,8 @@ def main():
         while True:
             state=json.loads(docker('inspect',name))[0]
             if not state['State']['Running']:
-                (folder/'ingress-private.log').write_bytes(docker('logs',name))
+                logs=subprocess.run(['docker','logs',name],capture_output=True,timeout=60)
+                private=folder/'ingress-private.log';private.write_bytes(logs.stdout+logs.stderr);private.chmod(0o600)
                 raise RuntimeError('OWNED_TLS_PROXY_EXITED')
             try:
                 with socket.create_connection(('localhost',48444),timeout=2) as connection:
@@ -78,4 +79,11 @@ def main():
 if __name__=='__main__':
     try:main()
     except Exception as exc:
-        print(json.dumps({'result':'FAIL','errorType':type(exc).__name__}));sys.exit(1)
+        safe={'OWNED_TLS_PROXY_EXITED','OWNED_TLS_PROXY_NOT_READY','OWNED_TLS_CERTIFICATE_MISMATCH','SYNTHETIC_INGRESS_TEST_FAILED'}
+        reason=str(exc) if isinstance(exc,RuntimeError) and str(exc) in safe else 'INGRESS_OPERATION_FAILED'
+        diagnostic={'runId':uuid.uuid4().hex,**source_identity(),'result':'FAIL','reasonCode':reason,
+                    'reports':[],'failures':[{'stage':'SYNTHETIC_TLS','reasonCode':reason,'exceptionTypes':[type(exc).__name__]}],'missingSuites':[]}
+        folder=os.environ.get('YSHOP_SYNTHETIC_TLS_DIR')
+        if folder:
+            path=Path(folder)/'diagnostics.json';path.write_text(json.dumps(diagnostic,indent=2));path.chmod(0o600)
+        print(json.dumps({'result':'FAIL','errorType':type(exc).__name__,'reasonCode':reason}));sys.exit(1)
