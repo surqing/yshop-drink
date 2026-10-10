@@ -65,3 +65,5 @@ QUICK清单为183次：52 Node+95原Python+36新增页面/来源/状态检查。
 因此本文不宣布原Phase6Q质量准入通过：QUALITY_GATE_READY=NO，PHASE_6D_ALLOWED=NO。TEST_FRAMEWORK_UPGRADE_COMPLETE必须在冻结源码的执行与最新CI完成后独立判断。未进行真实支付、退款、充值、生产部署或PR合并。
 
 执行中报告使用 `complete=false` 与 `NOT_READY/INCONCLUSIVE`；仅整轮结束写入 `complete=true`。汇总与覆盖率拒绝缺失完成标志或未完成的报告，写入采用同目录原子替换。新增负例先复现已完成前缀被误接收，再验证修复。
+
+官方工具连接成功后先等待非空页面栈（最多90秒），再执行首次导航；连接成功不能代替开发者工具编译完成。该等待仅属于启动准备，不重试页面断言。保留首次导航失败截图与报告。

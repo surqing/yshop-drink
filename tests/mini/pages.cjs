@@ -7,7 +7,7 @@ const report = { runId: ctx.runId, sourceSha: ctx.sourceSha, sourceDigest: ctx.s
 const save = () => fs.writeFileSync(process.env.YSHOP_MINI_REPORT, JSON.stringify(report, null, 2), { mode: 0o600 })
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 let mini
-async function until(fn) { for (let i = 0; i < 100; i++) { const result = await fn(); if (result) return result; await wait(150) } throw Error('PAGE_CONDITION_TIMEOUT') }
+async function until(fn, timeout = 15000) { for (const deadline = Date.now() + timeout; Date.now() < deadline;) { const result = await fn(); if (result) return result; await wait(150) } throw Error('PAGE_CONDITION_TIMEOUT') }
 async function check(name, fn) { report.stage = name; save(); const ok = !!await fn(); report.checks.push({ name, result: ok ? 'PASS' : 'FAIL', executed: true }); save(); if (!ok) throw Error('PAGE_ASSERTION_FAILED') }
 async function selectStore(name) {
   const page = await mini.navigateTo('/pages-checkout/shop/shop')
@@ -23,6 +23,9 @@ async function add(page) { await (await until(() => page.$('.property_btn'))).ta
   report.stage = 'official-launch'; save()
   mini = await automator.launch({ projectPath: ctx.project, cliPath: ctx.cli, port: ctx.port, timeout: 90000 })
   report.officialConnected = !!mini; save()
+  // The official socket can connect while vendor compilation still has no page metadata.
+  report.stage = 'official-page-ready'; save()
+  await until(async () => (await mini.pageStack()).length > 0, 90000)
   let page = await mini.reLaunch('/pages/index/index')
   await check('current compiled app starts', async () => !!await until(() => page.$('.index-page')))
   page = await mini.navigateTo('/pages-checkout/shop/shop')
