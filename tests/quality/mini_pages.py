@@ -22,7 +22,7 @@ def mini_prerequisite():
     if not (REPO/'tests/mini/node_modules/miniprogram-automator').is_dir():return 'LOCKED_MINI_AUTOMATOR_INSTALL_REQUIRED'
     return None
 
-def run_mini(root,report,fixture):
+def run_mini(root,report,fixture,script=None,checks=None):
     output=root/'mini';output.mkdir(mode=0o700)
     identity={k:report[k] for k in ['sourceSha','sourceDigest']}
     hx=Path(os.environ.get('YSHOP_HBUILDER_CLI','/Applications/HBuilderX.app/Contents/MacOS/cli'))
@@ -83,9 +83,9 @@ def run_mini(root,report,fixture):
     receipt=output/'receipt.json';env.update(YSHOP_MINI_CONTEXT=str(private),YSHOP_MINI_REPORT=str(receipt))
     started=time.time()
     try:
-        code=execute(['node','tests/mini/pages.cjs'],REPO,env,output/'automation-private.log',360)
+        code=execute(['node',script or 'tests/mini/pages.cjs'],REPO,env,output/'automation-private.log',360)
         if code:raise RuntimeError('MINI_PAGE_AUTOMATION_FAILED')
-        expected=json.loads((REPO/'tests/mini/page-manifest.json').read_text())
+        expected=checks if checks is not None else json.loads((REPO/'tests/mini/page-manifest.json').read_text())
         evidence=mini_receipt(receipt,started,identity,report['runId'],expected)
         result=json.loads(receipt.read_text())
         return {'result':'PASSED',**evidence,'orderId':result['orderId'], 'compiledSource':identity,
