@@ -14,6 +14,10 @@ import java.util.List;
  */
 public interface AppUserAddressService extends IService<UserAddressDO> {
 
+    UserAddressDO getOwnedAddress(Long uid, String addressId);
+
+    void deleteOwnedAddress(Long uid, String addressId);
+
     /**
      * 添加或者修改地址
      * @param uid uid

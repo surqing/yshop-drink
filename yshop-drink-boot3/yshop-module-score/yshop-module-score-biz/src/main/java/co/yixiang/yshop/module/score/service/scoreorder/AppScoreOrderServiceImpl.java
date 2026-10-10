@@ -33,6 +33,7 @@ import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.validation.annotation.Validated;
 
 import jakarta.annotation.Resource;
@@ -78,16 +79,13 @@ public class AppScoreOrderServiceImpl extends ServiceImpl<ScoreOrderMapper, Scor
      * @param appScoreOrderParam
      */
     @Override
-    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.REQUIRED, isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public void submit(Long uid,AppScoreOrderParam appScoreOrderParam) {
         ScoreProductDO scoreProductDO = appScoreProductService.getById(appScoreOrderParam.getProductId());
         if(scoreProductDO == null){
             throw exception(PRODUCT_NOT_EXISTS);
         }
-       UserAddressDO userAddressDO =  appUserAddressService.getById(appScoreOrderParam.getAddressId());
-        if(userAddressDO == null){
-            throw exception(USER_ADDRESS_NOT_EXISTS);
-        }
+        UserAddressDO userAddressDO = appUserAddressService.getOwnedAddress(uid, appScoreOrderParam.getAddressId());
         MemberUserDO memberUserDO = userService.getById(uid);
         if(scoreProductDO.getStock() <= 0){
             throw exception(PRODUCT_NOT_STOCK);

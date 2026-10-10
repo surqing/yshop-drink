@@ -21,6 +21,11 @@ import java.util.List;
 @Mapper
 public interface MemberUserMapper extends BaseMapperX<MemberUserDO> {
 
+    default MemberUserDO lockById(Long uid) {
+        return selectOne(new LambdaQueryWrapperX<MemberUserDO>()
+                .eq(MemberUserDO::getId, uid).last("FOR UPDATE"));
+    }
+
     default MemberUserDO selectByMobile(String mobile) {
         return selectOne(MemberUserDO::getMobile, mobile);
     }
