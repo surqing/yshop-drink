@@ -116,16 +116,14 @@ const loginForWechatMini = async (e) => {
 		});
 		return
 	}
-	if (!e.detail.encryptedData || !e.detail.iv) {
+	if (!e.detail.code) {
 		reportAuthError({ errMsg: e.detail.errMsg }, 'phone')
 		return
 	}
 	try {
-		let data = await userLoginForWechatMini({
-			encryptedData: e.detail.encryptedData,
-			iv: e.detail.iv,
-			openid: openid.value
-		});
+        const session = await new Promise((resolve, reject) => uni.login({provider: 'weixin', success: resolve, fail: reject}));
+        if (!session.code) throw new Error('微信登录凭据缺失');
+        let data = await userLoginForWechatMini({phoneCode: e.detail.code, loginCode: session.code});
 		if (data) {
 			main.SET_MEMBER(data.userInfo);
 			main.SET_TOKEN(data.accessToken);
@@ -139,12 +137,7 @@ const loginForWechatMini = async (e) => {
 		}
 	} catch (error) {
 		reportAuthError(error)
-		// An expired session requires new phone authorization: old encrypted data
-		// cannot be replayed with the new session key. Refresh once, then let the
-		// user explicitly retry; never retry the phone request automatically.
-		if (error?.authCode === 1004004002 && await wechatMiniLogin()) {
-			uni.showToast({ title: '微信会话已更新，请重新授权手机号', icon: 'none' })
-		}
+        uni.showToast({title: '登录失败，请重新授权手机号', icon: 'none'});
 	}
 }
 

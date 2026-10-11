@@ -15,21 +15,21 @@ export function smsSend(data) {
 }
 
 /**
- * 小程序 member/auth/auth-miniapp-login         
+ * 小程序 member/auth/weixin-mini-app-login
  */
 export function userLoginForWechatMini(data) {
-  return api.post('/member/auth/auth-miniapp-login', data, { login: false, authError: true })
+  return api.post('/member/auth/weixin-mini-app-login', data, { login: false, authError: true })
 }
 
 /**
- * userAuthSession   
+ * userAuthSession
  */
 export function userAuthSession(data) {
   return api.post('/member/auth/auth-session', data, { login: false, authError: true })
 }
 
 /**
- * wechatAuth   
+ * wechatAuth
  */
 export function wechatAuth(data) {
   return api.get('/member/auth/auth-wechat-login', data, { login: false, authError: true })

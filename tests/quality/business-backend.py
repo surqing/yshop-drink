@@ -56,7 +56,7 @@ try:
  if not ddl or any('INSERT INTO' in x for x in ddl):raise RuntimeError('SCHEMA_ONLY_REQUIRED')
  sql('SET FOREIGN_KEY_CHECKS=0;\n'+'\n'.join(ddl)+'\nSET FOREIGN_KEY_CHECKS=1;');report['seedInsertRowsCopied']=0
  migrations=repo/'yshop-drink-boot3/sql/migrations'
- files=[migrations/n for n in ['payment-credential-columns.sql','2026-10-03-payment-finalization.sql','2026-10-03-wallet-ledger.sql','2026-10-04-payment-attempt.sql','2026-10-04-wechat-v3.sql','2026-10-04-payment-live-readiness.sql','2026-10-08-multistore-ordering.sql','2026-10-08-product-catalog.sql','2026-10-08-coupon-marketing.sql','2026-10-08-coupon-permissions.sql']]
+ files=[migrations/n for n in ['payment-credential-columns.sql','2026-10-03-payment-finalization.sql','2026-10-03-wallet-ledger.sql','2026-10-04-payment-attempt.sql','2026-10-04-wechat-v3.sql','2026-10-04-payment-live-readiness.sql','2026-10-08-multistore-ordering.sql','2026-10-08-product-catalog.sql','2026-10-08-coupon-marketing.sql','2026-10-08-coupon-permissions.sql','2026-10-11-member-identity.sql']]
  for p in files:
   report['stage']='MIGRATION:'+p.name;sql(p.read_text())
  # A dedicated DB account, never reuse developer or merchant credentials.

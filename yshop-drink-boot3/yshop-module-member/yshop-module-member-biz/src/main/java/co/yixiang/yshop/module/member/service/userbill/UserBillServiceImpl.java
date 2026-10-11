@@ -67,7 +67,7 @@ public class UserBillServiceImpl extends ServiceImpl<UserBillMapper, UserBillDO>
     @Override
     public void incomeExact(Long uid,String title,String category,String type,BigDecimal number,BigDecimal balance,String mark,String linkId) {
         UserBillDO bill=UserBillDO.builder().uid(uid).title(title).category(category).type(type).number(number).balance(balance).mark(mark).linkId(linkId).pm(BillEnum.PM_1.getValue()).status(ShopCommonEnum.IS_STATUS_1.getValue()).build();
-        userBillMapper.insert(bill);
+        if (userBillMapper.insert(bill) != 1) throw new IllegalStateException("BILL_INSERT_FAILED");
     }
 
     @Override
@@ -81,7 +81,7 @@ public class UserBillServiceImpl extends ServiceImpl<UserBillMapper, UserBillDO>
                             BigDecimal balance, String mark, String orderId) {
         UserBillDO bill = UserBillDO.builder().uid(uid).title(title).category(category).type(type)
                 .number(number).balance(balance).mark(mark).extendField(orderId).pm(BillEnum.PM_0.getValue()).build();
-        userBillMapper.insert(bill);
+        if (userBillMapper.insert(bill) != 1) throw new IllegalStateException("BILL_INSERT_FAILED");
     }
 
     /**

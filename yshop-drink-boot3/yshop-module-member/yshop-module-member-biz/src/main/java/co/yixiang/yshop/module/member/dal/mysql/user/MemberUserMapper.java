@@ -21,10 +21,25 @@ import java.util.List;
 @Mapper
 public interface MemberUserMapper extends BaseMapperX<MemberUserDO> {
 
+    default MemberUserDO selectByProvider(String identity, boolean mini) {
+        return selectOne(new LambdaQueryWrapperX<MemberUserDO>()
+                .eq(mini ? MemberUserDO::getRoutineOpenid : MemberUserDO::getOpenid, identity));
+    }
+
+    @Update("<script>UPDATE yshop_user SET mobile=#{next} WHERE id=#{uid} AND mobile &lt;=&gt; #{previous} AND deleted=0</script>")
+    int changeMobile(@Param("uid") Long uid, @Param("previous") String previous, @Param("next") String next);
+
+    @Update({"<script>UPDATE yshop_user SET <choose><when test='mini'>routine_openid</when><otherwise>openid</otherwise></choose> = #{next}",
+            "WHERE id=#{uid} AND <choose><when test='mini'>routine_openid</when><otherwise>openid</otherwise></choose> &lt;=&gt; #{previous} AND deleted=0</script>"})
+    int changeProvider(@Param("uid") Long uid, @Param("previous") String previous, @Param("next") String next, @Param("mini") boolean mini);
+
     default MemberUserDO lockById(Long uid) {
         return selectOne(new LambdaQueryWrapperX<MemberUserDO>()
                 .eq(MemberUserDO::getId, uid).last("FOR UPDATE"));
     }
+
+    @Update("UPDATE yshop_user SET integral=#{next},update_time=CURRENT_TIMESTAMP WHERE id=#{uid} AND integral=#{previous} AND deleted=0")
+    int changeIntegral(@Param("uid") Long uid, @Param("previous") BigDecimal previous, @Param("next") BigDecimal next);
 
     default MemberUserDO selectByMobile(String mobile) {
         return selectOne(MemberUserDO::getMobile, mobile);

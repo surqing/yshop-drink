@@ -113,7 +113,7 @@ def discover_quick_suites():
     return paths
 
 
-CONDITIONAL = {'CouponCodeRedisAcceptanceTest','CallbackIngressEndToEndTest','CatalogEditingMysqlAcceptance'}
+CONDITIONAL = {'MemberIdentityMysqlAcceptanceTest','CouponCodeRedisAcceptanceTest','CallbackIngressEndToEndTest','CatalogEditingMysqlAcceptance'}
 
 
 def source_digest():
@@ -140,6 +140,8 @@ class Runner:
         self.steps=[];self.digest=source_digest();self.started=time.time()
         self.source_sha=subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO).decode().strip()
         self.env=os.environ.copy()
+        # Baseline replay may select old page sources; normal certification always tests this checkout.
+        self.env.pop('YSHOP_AUTH_SOURCE',None)
         self.env['YSHOP_TEST_WORKSPACE']=str(workspace(REPO))
         # Real payment flags are never enabled by this dispatcher.
         self.env['YSHOP_PAY_WECHAT_V3_ENABLED']='false'
@@ -282,7 +284,7 @@ class Runner:
         identity={'sourceSha':self.source_sha,'sourceDigest':self.digest}
         def verified(log):
             report=json.loads((output/'report.json').read_text())
-            expected=['mysql-business','mysql-financial','mysql-auth','redis','synthetic-tls']
+            expected=['mysql-business','mysql-financial','mysql-auth','mysql-member-identity','redis','synthetic-tls']
             if (report.get('result')!='PASS' or report.get('cleanup')!='PASS' or not report.get('sourceUnchanged')
                 or any(report.get(k)!=v for k,v in identity.items())
                 or [s.get('name') for s in report.get('steps',[])]!=expected

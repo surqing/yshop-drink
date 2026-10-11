@@ -23,19 +23,21 @@ import static co.yixiang.yshop.framework.security.core.util.SecurityFrameworkUti
 public class AppSocialUserController {
 
     @Resource
-    private SocialUserApi socialUserApi;
+    private co.yixiang.yshop.module.member.service.auth.MemberAuthService authService;
 
+    @co.yixiang.yshop.framework.security.core.annotations.PreAuthenticated
     @PostMapping("/bind")
     @Operation(summary = "社交绑定，使用 code 授权码")
     public CommonResult<Boolean> socialBind(@RequestBody @Valid AppSocialUserBindReqVO reqVO) {
-        socialUserApi.bindSocialUser(SocialUserConvert.INSTANCE.convert(getLoginUserId(), UserTypeEnum.MEMBER.getValue(), reqVO));
+        authService.changeSocialIdentity(getLoginUserId(),reqVO.getType(),reqVO.getCode(),reqVO.getSmsCode(),false);
         return CommonResult.success(true);
     }
 
+    @co.yixiang.yshop.framework.security.core.annotations.PreAuthenticated
     @DeleteMapping("/unbind")
     @Operation(summary = "取消社交绑定")
-    public CommonResult<Boolean> socialUnbind(@RequestBody AppSocialUserUnbindReqVO reqVO) {
-        socialUserApi.unbindSocialUser(SocialUserConvert.INSTANCE.convert(getLoginUserId(), UserTypeEnum.MEMBER.getValue(), reqVO));
+    public CommonResult<Boolean> socialUnbind(@RequestBody @Valid AppSocialUserUnbindReqVO reqVO) {
+        authService.changeSocialIdentity(getLoginUserId(),reqVO.getType(),reqVO.getCode(),reqVO.getSmsCode(),true);
         return CommonResult.success(true);
     }
 

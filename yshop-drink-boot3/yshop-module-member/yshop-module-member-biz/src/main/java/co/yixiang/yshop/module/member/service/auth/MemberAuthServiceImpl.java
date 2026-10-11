@@ -1,9 +1,6 @@
 package co.yixiang.yshop.module.member.service.auth;
 
 import cn.binarywang.wx.miniapp.api.WxMaService;
-import cn.binarywang.wx.miniapp.bean.WxMaJscode2SessionResult;
-import cn.binarywang.wx.miniapp.bean.WxMaPhoneNumberInfo;
-import cn.hutool.core.lang.Assert;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import co.yixiang.yshop.framework.common.enums.CommonStatusEnum;
@@ -15,7 +12,6 @@ import co.yixiang.yshop.module.member.convert.auth.AuthConvert;
 import co.yixiang.yshop.module.member.convert.user.UserConvert;
 import co.yixiang.yshop.module.member.dal.dataobject.user.MemberUserDO;
 import co.yixiang.yshop.module.member.dal.mysql.user.MemberUserMapper;
-import co.yixiang.yshop.module.member.dal.redis.order.MiniRedisDAO;
 import co.yixiang.yshop.module.member.enums.LoginTypeEnum;
 import co.yixiang.yshop.module.member.service.user.MemberUserService;
 import co.yixiang.yshop.module.system.api.logger.LoginLogApi;
@@ -24,24 +20,18 @@ import co.yixiang.yshop.module.system.api.oauth2.OAuth2TokenApi;
 import co.yixiang.yshop.module.system.api.oauth2.dto.OAuth2AccessTokenCreateReqDTO;
 import co.yixiang.yshop.module.system.api.oauth2.dto.OAuth2AccessTokenRespDTO;
 import co.yixiang.yshop.module.system.api.sms.SmsCodeApi;
-import co.yixiang.yshop.module.system.api.social.SocialUserApi;
-import co.yixiang.yshop.module.system.api.social.dto.SocialUserBindReqDTO;
 import co.yixiang.yshop.module.system.enums.logger.LoginLogTypeEnum;
 import co.yixiang.yshop.module.system.enums.logger.LoginResultEnum;
 import co.yixiang.yshop.module.system.enums.oauth2.OAuth2ClientConstants;
 import co.yixiang.yshop.module.system.enums.sms.SmsSceneEnum;
 import co.yixiang.yshop.module.system.enums.social.SocialTypeEnum;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.google.common.annotations.VisibleForTesting;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import me.chanjar.weixin.common.bean.WxOAuth2UserInfo;
-import me.chanjar.weixin.common.bean.oauth2.WxOAuth2AccessToken;
 import me.chanjar.weixin.common.error.WxErrorException;
 import me.chanjar.weixin.mp.api.WxMpService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Objects;
 
@@ -65,8 +55,6 @@ public class MemberAuthServiceImpl implements MemberAuthService {
     @Resource
     private LoginLogApi loginLogApi;
     @Resource
-    private SocialUserApi socialUserApi;
-    @Resource
     private OAuth2TokenApi oauth2TokenApi;
 
     @Resource
@@ -78,240 +66,149 @@ public class MemberAuthServiceImpl implements MemberAuthService {
     private PasswordEncoder passwordEncoder;
     @Resource
     private MemberUserMapper userMapper;
-    @Resource
-    private MiniRedisDAO miniRedisDAO;
 
-    @Override
-    public AppAuthLoginRespVO login(AppAuthLoginReqVO reqVO) {
-        // 使用手机 + 密码，进行登录。
-        MemberUserDO user = login0(reqVO.getMobile(), reqVO.getPassword());
+    @Resource private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
-        // 如果 socialType 非空，说明需要绑定社交用户
-        if (reqVO.getSocialType() != null) {
-            socialUserApi.bindSocialUser(new SocialUserBindReqDTO(user.getId(), getUserType().getValue(),
-                    reqVO.getSocialType(), reqVO.getSocialCode(), reqVO.getSocialState()));
+    private <T> T attempt(java.util.function.Supplier<T> work) {
+        for(int attempt=0;attempt<2;attempt++) {
+            var transaction=new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+            transaction.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            transaction.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
+            try {return transaction.execute(status->work.get());}
+            catch(org.springframework.dao.DuplicateKeyException conflict) {
+                if(!identityUniqueConflict(conflict))throw conflict;
+                // execute has fully rolled back SMS, token SQL and identity before re-reading owners.
+                if(attempt==1)throw MemberIdentityPolicy.conflict();
+            }
         }
-
-        // 创建 Token 令牌，记录登录日志
-        return createTokenAfterLoginSuccess(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_MOBILE);
+        throw MemberIdentityPolicy.conflict();
+    }
+    private boolean identityUniqueConflict(Throwable failure) {
+        for(Throwable cause=failure;cause!=null;cause=cause.getCause()) {
+            if(cause instanceof java.sql.SQLException sql && sql.getErrorCode()==1062) {
+                String text=sql.getMessage();
+                return text!=null && (text.contains("uk_member_mobile")||text.contains("uk_member_openid")||text.contains("uk_member_routine_openid"));
+            }
+        }
+        return false;
     }
 
-    @Override
-    @Transactional
-    public AppAuthLoginRespVO smsLogin(AppAuthSmsLoginReqVO reqVO) {
-        // 校验验证码
-        String userIp = getClientIP();
-        smsCodeApi.useSmsCode(AuthConvert.INSTANCE.convert(reqVO, SmsSceneEnum.MEMBER_LOGIN.getScene(), userIp));
-        MemberUserDO user = null;
-
-        if(StrUtil.isNotBlank(reqVO.getOpenid())){
-            LambdaQueryWrapper<MemberUserDO> lambdaQueryWrapper =  new LambdaQueryWrapper<>();
-            //根据openid查用户是否存在
-            if(LoginTypeEnum.ROUNTINE.getValue().equals(reqVO.getFrom())){
-                lambdaQueryWrapper.eq(MemberUserDO::getRoutineOpenid,reqVO.getOpenid());
-            }else {
-                lambdaQueryWrapper.eq(MemberUserDO::getOpenid,reqVO.getOpenid());
-            }
-
-            user = userMapper.selectOne(lambdaQueryWrapper);
-        }
-
-        if(user == null){
-            // 获得获得注册用户
-            user = userService.createUserIfAbsent(reqVO.getMobile(), userIp,reqVO.getFrom());
-            Assert.notNull(user, "获取用户失败，结果为空");
-
-            if(StrUtil.isNotBlank(reqVO.getOpenid())){
-                if(LoginTypeEnum.ROUNTINE.getValue().equals(reqVO.getFrom())){
-                    user.setRoutineOpenid(reqVO.getOpenid());
-                }else {
-                    user.setOpenid(reqVO.getOpenid());
-                }
-
-                userService.updateById(user);
-            }
-        }else {
-            if(StrUtil.isBlank(user.getMobile())){
-                user.setMobile(reqVO.getMobile());
-                userService.updateById(user);
-            }
-        }
-
-        // 如果 socialType 非空，说明需要绑定社交用户
-        if (reqVO.getSocialType() != null) {
-            socialUserApi.bindSocialUser(new SocialUserBindReqDTO(user.getId(), getUserType().getValue(),
-                    reqVO.getSocialType(), reqVO.getSocialCode(), reqVO.getSocialState()));
-        }
-
-        // 创建 Token 令牌，记录登录日志
-        AppAuthLoginRespVO appAuthLoginRespVO = createTokenAfterLoginSuccess(user, reqVO.getMobile(),
-                LoginLogTypeEnum.LOGIN_SMS);
-
-        appAuthLoginRespVO.setUserInfo(UserConvert.INSTANCE.convert3(user));
-        return appAuthLoginRespVO;
-        // 创建 Token 令牌，记录登录日志
-       // return createTokenAfterLoginSuccess(user, reqVO.getMobile(), LoginLogTypeEnum.LOGIN_SMS);
-    }
-
-   // @Override
-//    public AppAuthLoginRespVO socialLogin(AppAuthSocialLoginReqVO reqVO) {
-//        // 使用 code 授权码，进行登录。然后，获得到绑定的用户编号
-//        Long userId = socialUserApi.getBindUserId(UserTypeEnum.MEMBER.getValue(), reqVO.getType(),
-//                reqVO.getCode(), reqVO.getState());
-//        if (userId == null) {
-//            throw exception(AUTH_THIRD_LOGIN_NOT_BIND);
-//        }
-//
-//        // 自动登录
-//        MemberUserDO user = userService.getUser(userId);
-//        if (user == null) {
-//            throw exception(USER_NOT_EXISTS);
-//        }
-//
-//        // 创建 Token 令牌，记录登录日志
-//        return createTokenAfterLoginSuccess(user, user.getMobile(), LoginLogTypeEnum.LOGIN_SOCIAL);
-//    }
-
-    @Override
-    public AppAuthLoginRespVO weixinMiniAppLogin(AppAuthWeixinMiniAppLoginReqVO reqVO) {
-        // 获得对应的手机号信息
-        WxMaPhoneNumberInfo phoneNumberInfo;
+    @Override public AppAuthLoginRespVO login(AppAuthLoginReqVO request) {
+        String phone=MemberIdentityPolicy.phone(request.getMobile());
         try {
-            phoneNumberInfo = wxMaService.getUserService().getNewPhoneNoInfo(reqVO.getPhoneCode());
-        } catch (Exception exception) {
-            throw exception(AUTH_WEIXIN_MINI_APP_PHONE_CODE_ERROR);
+            return attempt(()->createTokenAfterLoginSuccess(login0(phone,request.getPassword()),phone,LoginLogTypeEnum.LOGIN_MOBILE));
+        } catch (PasswordLoginFailure rejected) {
+            // Authentication has rolled back before the failure audit starts its own transaction.
+            // Successful audits still commit atomically with token SQL and login metadata.
+            attempt(()->{createLoginLog(rejected.userId,phone,LoginLogTypeEnum.LOGIN_MOBILE,rejected.result);return true;});
+            throw rejected.error;
         }
-        // 获得获得注册用户
-        MemberUserDO user = userService.createUserIfAbsent(phoneNumberInfo.getPurePhoneNumber(), getClientIP(),
-                LoginTypeEnum.ROUNTINE.getValue());
-        Assert.notNull(user, "获取用户失败，结果为空");
-
-        // 绑定社交用户
-        socialUserApi.bindSocialUser(new SocialUserBindReqDTO(user.getId(), getUserType().getValue(),
-                SocialTypeEnum.WECHAT_MINI_APP.getType(), reqVO.getLoginCode(), ""));
-
-        // 创建 Token 令牌，记录登录日志
-        return createTokenAfterLoginSuccess(user, user.getMobile(), LoginLogTypeEnum.LOGIN_SOCIAL);
     }
-
-
-    /**
-     * 微信小程序的一键登录
-     *
-     * @param loginVO 登录信息
-     * @return 登录结果
-     */
-    @Override
-    public AppAuthLoginRespVO weixinMiniAppLogin2(AppWeixinMiniLoginVO loginVO){
+    private static final class PasswordLoginFailure extends RuntimeException {
+        final Long userId;
+        final LoginResultEnum result;
+        final co.yixiang.yshop.framework.common.exception.ServiceException error;
+        PasswordLoginFailure(Long userId,LoginResultEnum result) {
+            this.userId=userId;this.result=result;
+            this.error=exception(result==LoginResultEnum.USER_DISABLED?AUTH_LOGIN_USER_DISABLED:AUTH_LOGIN_BAD_CREDENTIALS);
+        }
+    }
+    @Override public AppAuthLoginRespVO smsLogin(AppAuthSmsLoginReqVO request) {
+        String phone=MemberIdentityPolicy.phone(request.getMobile());
+        return attempt(()->{
+            smsCodeApi.useSmsCode(new co.yixiang.yshop.module.system.api.sms.dto.code.SmsCodeUseReqDTO()
+                    .setMobile(phone).setCode(request.getCode()).setScene(1).setUsedIp(getClientIP()));
+            MemberUserDO user=claimMember(phone,null,true);
+            var result=createTokenAfterLoginSuccess(user,phone,LoginLogTypeEnum.LOGIN_SMS);
+            result.setUserInfo(UserConvert.INSTANCE.convert3(user));return result;
+        });
+    }
+    /** Both proofs come from this configured Mini App SDK, before acquiring database locks. */
+    @Override public AppAuthLoginRespVO weixinMiniAppLogin(AppAuthWeixinMiniAppLoginReqVO request) {
+        String phone,identity;
         try {
-            WxMaJscode2SessionResult session = wxMaService.getUserService().getSessionInfo(loginVO.getCode());
-            log.info("[weixinMiniAppLogin2] session established");
-            miniRedisDAO.set(session.getSessionKey(),session.getOpenid());
-            //根据openid查用户是否存在
-            MemberUserDO memberUserDO = userMapper.selectOne(new LambdaQueryWrapper<MemberUserDO>()
-                    .eq(MemberUserDO::getRoutineOpenid,session.getOpenid()));
-            AppAuthLoginRespVO appAuthLoginRespVO = new AppAuthLoginRespVO();
-
-            if(memberUserDO != null) {
-                appAuthLoginRespVO = createTokenAfterLoginSuccess(memberUserDO, memberUserDO.getMobile(),
-                        LoginLogTypeEnum.LOGIN_SOCIAL);
-                appAuthLoginRespVO.setUserInfo(UserConvert.INSTANCE.convert3(memberUserDO));
-                //return appAuthLoginRespVO;
+            phone=MemberIdentityPolicy.phone(wxMaService.getUserService().getNewPhoneNoInfo(request.getPhoneCode()).getPurePhoneNumber());
+            identity=miniIdentity(request.getLoginCode());
+        }catch(WxErrorException failure){throw exception(AUTH_WEIXIN_MINI_APP_PHONE_CODE_ERROR);}
+        return attempt(()->providerLogin(claimMember(phone,identity,true),identity));
+    }
+    @Override public AppAuthLoginRespVO weixinMiniAppLogin2(AppWeixinMiniLoginVO request) {
+        final String identity;
+        try {identity=miniIdentity(request.getCode());}catch(WxErrorException failure){throw exception(MINI_AUTH_LOGIN_BAD);}
+        return attempt(()->{
+            var hint=userMapper.selectByProvider(identity,true);
+            var result=new AppAuthLoginRespVO();
+            if(hint!=null){
+                var current=requireEnabled(userMapper.lockById(hint.getId()));
+                if(!identity.equals(current.getRoutineOpenid()))throw MemberIdentityPolicy.conflict();
+                result=providerLogin(current,identity);
             }
-            appAuthLoginRespVO.setOpenId(session.getOpenid());
-            return appAuthLoginRespVO;
-
-        } catch (WxErrorException e) {
-            log.warn("[weixinMiniAppLogin2] category=wechat code={}", e.getError().getErrorCode());
-            throw exception(MINI_AUTH_LOGIN_BAD);
-        }
+            result.setOpenId(identity);return result;
+        });
     }
-
-
-    /**
-     * 微信小程序的一键登录
-     *
-     * @param encryptedData encryptedData
-     * @param encryptedData encryptedData
-     * @param encryptedData encryptedData
-     * @return 登录结果
-     */
-    @Override
-    public AppAuthLoginRespVO weixinMiniAppLogin3(String encryptedData, String iv, String openid){
-        // 解密用户信息
-        String sessionKey = miniRedisDAO.get(openid);
-        if(StrUtil.isBlank(sessionKey)) {
-            throw exception(MINI_AUTH_LOGIN_BAD2);
-        }
-
-        // 解密
-        WxMaPhoneNumberInfo phoneNoInfo = wxMaService.getUserService().getPhoneNoInfo(sessionKey, encryptedData, iv);
-
-        // 用户已经存在
-        MemberUserDO memberUserDO = userMapper.selectByMobile(phoneNoInfo.getPhoneNumber());
-        if (memberUserDO == null) {
-            // 获得获得注册用户
-            memberUserDO = userService.createUserIfAbsent(phoneNoInfo.getPhoneNumber(), getClientIP(),
-                    LoginTypeEnum.ROUNTINE.getValue());
-
-            memberUserDO.setRoutineOpenid(openid);
-
-            memberUserDO.setNickname("yshop用户_" + memberUserDO.getId());
-            userMapper.updateById(memberUserDO);
-
-        }
-        if(StrUtil.isBlank(memberUserDO.getRoutineOpenid())){
-            memberUserDO.setRoutineOpenid(openid);
-            userMapper.updateById(memberUserDO);
-        }
-
-        // 创建 Token 令牌，记录登录日志
-        AppAuthLoginRespVO appAuthLoginRespVO = createTokenAfterLoginSuccess(memberUserDO, memberUserDO.getMobile(),
-                LoginLogTypeEnum.LOGIN_SOCIAL);
-        appAuthLoginRespVO.setOpenId(openid);
-        appAuthLoginRespVO.setUserInfo(UserConvert.INSTANCE.convert3(memberUserDO));
-        return appAuthLoginRespVO;
+    @Override public AppAuthLoginRespVO wechatAuth(String code) {
+        final String identity;
+        try {identity=MemberIdentityPolicy.providerId(mpService.getOAuth2Service().getAccessToken(code).getOpenId());}
+        catch(WxErrorException failure){throw exception(MINI_AUTH_LOGIN_BAD);}
+        return attempt(()->providerLogin(claimMember(null,identity,false),identity));
     }
-
-    /**
-     * 微信公众号登录
-     * @param code code
-     * @return
-     */
-    @Override
-    public AppAuthLoginRespVO wechatAuth(String code) {
-        WxOAuth2AccessToken wxMpOAuth2AccessToken = null;
-        MemberUserDO memberUserDO = null;
+    private String miniIdentity(String code) throws WxErrorException {
+        if(StrUtil.isBlank(code))throw MemberIdentityPolicy.conflict();
+        return MemberIdentityPolicy.providerId(wxMaService.getUserService().getSessionInfo(code).getOpenid());
+    }
+    private String providerIdentity(int type,String code) {
         try {
-            wxMpOAuth2AccessToken = mpService.getOAuth2Service().getAccessToken(code);
-            WxOAuth2UserInfo wxMpUser = mpService.getOAuth2Service().getUserInfo(wxMpOAuth2AccessToken, null);
-            String openid = wxMpUser.getOpenid();
-            //根据openid查用户是否存在
-            memberUserDO = userMapper.selectOne(new LambdaQueryWrapper<MemberUserDO>()
-                    .eq(MemberUserDO::getOpenid,openid));
-            if (memberUserDO == null) {
-                // 获得获得注册用户
-                memberUserDO = userService.createUserIfAbsent("", getClientIP(),
-                        LoginTypeEnum.WECHAT.getValue());
-                //过滤掉表情
-                String nickname = wxMpUser.getNickname();
-                memberUserDO.setOpenid(openid);
-                memberUserDO.setNickname(nickname);
-                memberUserDO.setAvatar(wxMpUser.getHeadImgUrl());
-                memberUserDO.setUsername(openid);
-                userMapper.updateById(memberUserDO);
+            if(type==34)return miniIdentity(code);
+            if(type==31 && StrUtil.isNotBlank(code))return MemberIdentityPolicy.providerId(mpService.getOAuth2Service().getAccessToken(code).getOpenId());
+            throw MemberIdentityPolicy.conflict();
+        }catch(WxErrorException failure){throw exception(MINI_AUTH_LOGIN_BAD);}
+    }
+    private MemberUserDO requireEnabled(MemberUserDO user) {
+        if(user==null || !Integer.valueOf(0).equals(user.getStatus()))throw exception(AUTH_LOGIN_USER_DISABLED);
+        return user;
+    }
+    private AppAuthLoginRespVO providerLogin(MemberUserDO user,String identity) {
+        var result=createTokenAfterLoginSuccess(requireEnabled(user),user.getMobile(),LoginLogTypeEnum.LOGIN_SOCIAL);
+        result.setOpenId(identity);result.setUserInfo(UserConvert.INSTANCE.convert3(user));return result;
+    }
+    private MemberUserDO claimMember(String phone,String identity,boolean mini) {
+        var phoneOwner=phone==null?null:userMapper.selectByMobile(phone);
+        var providerOwner=identity==null?null:userMapper.selectByProvider(identity,mini);
+        if(phoneOwner!=null && providerOwner!=null && !phoneOwner.getId().equals(providerOwner.getId()))throw MemberIdentityPolicy.conflict();
+        var hint=phoneOwner!=null?phoneOwner:providerOwner;
+        if(hint==null) {
+            if(phone!=null)hint=userService.createUserIfAbsent(phone,getClientIP(),mini&&identity!=null?"routine":"h5");
+            else {
+                hint=new MemberUserDO().setUsername("member_"+cn.hutool.core.util.IdUtil.fastSimpleUUID())
+                        .setNickname("yshop用户").setStatus(0).setPassword(passwordEncoder.encode(cn.hutool.core.util.IdUtil.fastSimpleUUID()))
+                        .setRegisterIp(getClientIP()).setLoginType("wechat").setOpenid(identity);
+                MemberIdentityPolicy.exactlyOne(userMapper.insert(hint));
             }
-        }catch (WxErrorException e) {
-            log.warn("[wechatAuth] category=wechat code={}", e.getError().getErrorCode());
-            throw exception(MINI_AUTH_LOGIN_BAD);
         }
-
-        // 创建 Token 令牌，记录登录日志
-        AppAuthLoginRespVO appAuthLoginRespVO = createTokenAfterLoginSuccess(memberUserDO, memberUserDO.getNickname(),
-                LoginLogTypeEnum.LOGIN_SOCIAL);
-        appAuthLoginRespVO.setOpenId(memberUserDO.getOpenid());
-        appAuthLoginRespVO.setUserInfo(UserConvert.INSTANCE.convert3(memberUserDO));
-        return appAuthLoginRespVO;
+        var user=requireEnabled(userMapper.lockById(hint.getId()));
+        String stored=mini?user.getRoutineOpenid():user.getOpenid();
+        if(phone!=null && user.getMobile()!=null && !phone.equals(user.getMobile()))throw MemberIdentityPolicy.conflict();
+        if(identity!=null && stored!=null && !identity.equals(stored))throw MemberIdentityPolicy.conflict();
+        // The unique indexes arbitrate claims absent from a non-locking owner lookup.
+        if(phone!=null && user.getMobile()==null)MemberIdentityPolicy.exactlyOne(userMapper.changeMobile(user.getId(),null,phone));
+        if(identity!=null && stored==null)MemberIdentityPolicy.exactlyOne(userMapper.changeProvider(user.getId(),null,identity,mini));
+        return userMapper.selectById(user.getId());
+    }
+    @Override public void changeSocialIdentity(Long uid,Integer type,String code,String smsCode,boolean unbind) {
+        if(uid==null || type==null || smsCode==null || !smsCode.matches("[0-9]{4,6}"))throw MemberIdentityPolicy.conflict();
+        String verified=providerIdentity(type,code);
+        attempt(()->{
+            var user=requireEnabled(userMapper.lockById(uid));
+            String phone=MemberIdentityPolicy.phone(user.getMobile());boolean mini=type==34;
+            String stored=mini?user.getRoutineOpenid():user.getOpenid();
+            var owner=userMapper.selectByProvider(verified,mini);
+            if(owner!=null && !uid.equals(owner.getId()))throw MemberIdentityPolicy.conflict();
+            if(unbind ? !verified.equals(stored) : stored!=null && !verified.equals(stored))throw MemberIdentityPolicy.conflict();
+            smsCodeApi.useSmsCode(new co.yixiang.yshop.module.system.api.sms.dto.code.SmsCodeUseReqDTO()
+                    .setMobile(phone).setCode(smsCode).setScene(unbind?6:5).setUsedIp(getClientIP()));
+            if(unbind || stored==null)MemberIdentityPolicy.exactlyOne(userMapper.changeProvider(uid,stored,unbind?null:verified,mini));
+            oauth2TokenApi.revokeUserTokens(uid,1);return true;
+        });
     }
 
     private AppAuthLoginRespVO createTokenAfterLoginSuccess(MemberUserDO user, String mobile, LoginLogTypeEnum logType) {
@@ -337,23 +234,23 @@ public class MemberAuthServiceImpl implements MemberAuthService {
 //    }
 
     private MemberUserDO login0(String mobile, String password) {
-        final LoginLogTypeEnum logTypeEnum = LoginLogTypeEnum.LOGIN_MOBILE;
         // 校验账号是否存在
         MemberUserDO user = userService.getUserByMobile(mobile);
         if (user == null) {
-            createLoginLog(null, mobile, logTypeEnum, LoginResultEnum.BAD_CREDENTIALS);
-            throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
+            throw new PasswordLoginFailure(null,LoginResultEnum.BAD_CREDENTIALS);
         }
         if (!userService.isPasswordMatch(password, user.getPassword())) {
-            createLoginLog(user.getId(), mobile, logTypeEnum, LoginResultEnum.BAD_CREDENTIALS);
-            throw exception(AUTH_LOGIN_BAD_CREDENTIALS);
+            throw new PasswordLoginFailure(user.getId(),LoginResultEnum.BAD_CREDENTIALS);
         }
         // 校验是否禁用
         if (ObjectUtil.notEqual(user.getStatus(), CommonStatusEnum.ENABLE.getStatus())) {
-            createLoginLog(user.getId(), mobile, logTypeEnum, LoginResultEnum.USER_DISABLED);
-            throw exception(AUTH_LOGIN_USER_DISABLED);
+            throw new PasswordLoginFailure(user.getId(),LoginResultEnum.USER_DISABLED);
         }
-        return user;
+        // Lock and recheck the credential snapshot before token family locks.
+        var current=userMapper.lockById(user.getId());
+        if(current==null || !mobile.equals(current.getMobile()) || !Objects.equals(user.getPassword(),current.getPassword()))throw new PasswordLoginFailure(user.getId(),LoginResultEnum.BAD_CREDENTIALS);
+        if(!Objects.equals(current.getStatus(),CommonStatusEnum.ENABLE.getStatus()))throw new PasswordLoginFailure(user.getId(),LoginResultEnum.USER_DISABLED);
+        return current;
     }
 
     private void createLoginLog(Long userId, String mobile, LoginLogTypeEnum logType, LoginResultEnum loginResult) {
@@ -412,8 +309,17 @@ public class MemberAuthServiceImpl implements MemberAuthService {
 
     @Override
     public void sendSmsCode(Long userId, AppAuthSmsSendReqVO reqVO) {
-        // TODO 要根据不同的场景，校验是否有用户
-        smsCodeApi.sendSmsCode(AuthConvert.INSTANCE.convert(reqVO).setCreateIp(getClientIP()));
+        Integer scene=reqVO.getScene();
+        if(scene==null || scene<1 || scene>6)throw MemberIdentityPolicy.conflict();
+        String phone;
+        if(scene==5 || scene==6) {
+            if(userId==null)throw MemberIdentityPolicy.conflict();
+            phone=MemberIdentityPolicy.phone(requireEnabled(userMapper.selectById(userId)).getMobile());
+        }else {
+            if(scene==2 || scene==3) {if(userId==null)throw MemberIdentityPolicy.conflict();requireEnabled(userMapper.selectById(userId));}
+            phone=MemberIdentityPolicy.phone(reqVO.getMobile());
+        }
+        smsCodeApi.sendSmsCode(new co.yixiang.yshop.module.system.api.sms.dto.code.SmsCodeSendReqDTO().setMobile(phone).setScene(scene).setCreateIp(getClientIP()));
     }
 
     @Override
