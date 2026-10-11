@@ -11,6 +11,9 @@ import co.yixiang.yshop.framework.common.pojo.PageResult;
 
 import co.yixiang.yshop.module.member.convert.useraddress.UserAddressConvert;
 import co.yixiang.yshop.module.member.dal.mysql.useraddress.UserAddressMapper;
+import co.yixiang.yshop.module.member.dal.mysql.user.MemberUserMapper;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 import static co.yixiang.yshop.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static co.yixiang.yshop.module.member.enums.ErrorCodeConstants.*;
@@ -27,9 +30,27 @@ public class UserAddressServiceImpl implements UserAddressService {
     @Resource
     private UserAddressMapper userAddressMapper;
 
+    @Resource
+    private MemberUserMapper memberUserMapper;
+
+    private void lockMember(Long uid) {
+        if (uid == null || memberUserMapper.lockById(uid) == null) throw exception(USER_NOT_EXISTS);
+    }
+
+    private UserAddressDO lockOwner(Long addressId) {
+        UserAddressDO address = userAddressMapper.selectById(addressId);
+        if (address == null) throw exception(USER_ADDRESS_NOT_EXISTS);
+        lockMember(address.getUid());
+        address = userAddressMapper.selectOwned(address.getUid(), addressId);
+        if (address == null) throw exception(USER_ADDRESS_NOT_EXISTS);
+        return address;
+    }
+
     @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public Long createUserAddress(UserAddressCreateReqVO createReqVO) {
-        // 插入
+        lockMember(createReqVO.getUid());
+        if (Integer.valueOf(1).equals(createReqVO.getIsDefault())) userAddressMapper.clearDefaults(createReqVO.getUid());
         UserAddressDO userAddress = UserAddressConvert.INSTANCE.convert(createReqVO);
         userAddressMapper.insert(userAddress);
         // 返回
@@ -37,26 +58,21 @@ public class UserAddressServiceImpl implements UserAddressService {
     }
 
     @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public void updateUserAddress(UserAddressUpdateReqVO updateReqVO) {
-        // 校验存在
-        validateUserAddressExists(updateReqVO.getId());
-        // 更新
+        UserAddressDO current = lockOwner(updateReqVO.getId());
+        if (!Objects.equals(current.getUid(), updateReqVO.getUid())) throw exception(USER_ADDRESS_PARAM_NOT_EXISTS);
+        if (Integer.valueOf(1).equals(updateReqVO.getIsDefault())) userAddressMapper.clearDefaults(current.getUid());
         UserAddressDO updateObj = UserAddressConvert.INSTANCE.convert(updateReqVO);
-        userAddressMapper.updateById(updateObj);
+        updateObj.setUid(null);
+        if (userAddressMapper.updateOwned(current.getUid(), current.getId(), updateObj) != 1) throw exception(USER_ADDRESS_NOT_EXISTS);
     }
 
     @Override
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public void deleteUserAddress(Long id) {
-        // 校验存在
-        validateUserAddressExists(id);
-        // 删除
-        userAddressMapper.deleteById(id);
-    }
-
-    private void validateUserAddressExists(Long id) {
-        if (userAddressMapper.selectById(id) == null) {
-            throw exception(USER_ADDRESS_NOT_EXISTS);
-        }
+        UserAddressDO current = lockOwner(id);
+        if (userAddressMapper.deleteOwned(current.getUid(), id) != 1) throw exception(USER_ADDRESS_NOT_EXISTS);
     }
 
     @Override

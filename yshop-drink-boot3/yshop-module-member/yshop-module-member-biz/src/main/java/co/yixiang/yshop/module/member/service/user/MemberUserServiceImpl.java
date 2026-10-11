@@ -197,7 +197,7 @@ public class MemberUserServiceImpl extends ServiceImpl<MemberUserMapper,MemberUs
         userDO.setBirthday(birthday);
         userDO.setGender(gender);
         userDO.setAvatar(avatar);
-        userDO.setMobile(mobile);
+        // Legacy profile payloads contain mobile; identity changes belong to updateUserMobile.
         memberUserMapper.updateById(userDO);
     }
 

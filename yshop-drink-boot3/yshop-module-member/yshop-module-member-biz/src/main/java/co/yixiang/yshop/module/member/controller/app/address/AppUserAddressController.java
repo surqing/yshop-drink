@@ -9,8 +9,6 @@
 package co.yixiang.yshop.module.member.controller.app.address;
 
 import cn.hutool.core.lang.Assert;
-import cn.hutool.core.util.NumberUtil;
-import cn.hutool.core.util.StrUtil;
 import co.yixiang.yshop.framework.common.pojo.CommonResult;
 import co.yixiang.yshop.framework.common.util.yshop.LocationUtils;
 import co.yixiang.yshop.framework.ip.core.Area;
@@ -33,10 +31,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-import static co.yixiang.yshop.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static co.yixiang.yshop.framework.common.pojo.CommonResult.success;
 import static co.yixiang.yshop.framework.security.core.util.SecurityFrameworkUtils.getLoginUserId;
-import static co.yixiang.yshop.module.member.enums.ErrorCodeConstants.USER_ADDRESS_PARAM_NOT_EXISTS;
 
 /**
  * <p>
@@ -98,10 +94,7 @@ public class AppUserAddressController {
     @PostMapping("/del/{id}")
     @Operation(summary = "删除用户地址")
     public CommonResult<Boolean> deleteYxUserAddress(@PathVariable String id){
-        if(StrUtil.isBlank(id) || !NumberUtil.isNumber(id)){
-            throw exception(USER_ADDRESS_PARAM_NOT_EXISTS);
-        }
-        appUserAddressService.removeById(id);
+        appUserAddressService.deleteOwnedAddress(getLoginUserId(), id);
         return success(true);
     }
 
