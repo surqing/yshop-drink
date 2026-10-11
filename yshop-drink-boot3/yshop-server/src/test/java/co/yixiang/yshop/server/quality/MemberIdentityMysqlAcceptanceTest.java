@@ -12,6 +12,148 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class MemberIdentityMysqlAcceptanceTest extends SecurityMysqlTestSupport {
+    // These product assertions catch phone-only grants and incomplete principal eligibility.
+    @Test void unregisteredSmsNeverCreatesMemberTokenOrSuccessLog(){
+        code("13800000001",1,"123456");
+        assertThrows(ServiceException.class,()->auth.smsLogin(login("13800000001",null)));
+        assertEquals(0,count("yshop_user"));assertEquals(0,count("system_oauth2_access_token"));
+        assertEquals(0,count("system_oauth2_refresh_token"));assertEquals(0,count("system_login_log"));
+        assertEquals(0,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code",Integer.class));assertTrue(redis.keys("*").isEmpty());
+    }
+    @Test void phoneOnlySmsCannotGrantToken(){
+        long uid=member("13800000001",null);code("13800000001",1,"123456");
+        assertThrows(ServiceException.class,()->auth.smsLogin(login("13800000001",null)));
+        assertNull(members.selectById(uid).getRoutineOpenid());assertEquals(1,count("yshop_user"));
+        assertEquals(0,count("system_oauth2_access_token"));assertEquals(0,count("system_oauth2_refresh_token"));
+        assertEquals(0,count("system_login_log"));assertEquals(0,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code",Integer.class));
+        assertEquals(new java.math.BigDecimal("50.00"),members.selectById(uid).getNowMoney());
+    }
+    @Test void phoneOnlyPasswordCannotBypassCompletion(){
+        long uid=member("13800000001",null);
+        assertThrows(ServiceException.class,()->auth.login(co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthLoginReqVO.builder().mobile("13800000001").password("synthetic-password").build()));
+        assertEquals(0,count("system_oauth2_access_token"));assertEquals(0,count("system_oauth2_refresh_token"));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM system_login_log WHERE result=0",Integer.class));
+        assertEquals(1,count("system_login_log"));assertEquals(uid,jdbc.queryForObject("SELECT user_id FROM system_login_log",Long.class));
+        assertEquals(new java.math.BigDecimal("100.00"),members.selectById(uid).getIntegral());
+    }
+    @Test void miniOnlySessionCannotGrantToken() throws Exception {
+        long uid=member(null,"synthetic-mini");miniProof("13800000001","synthetic-mini","synthetic-login");
+        var result=auth.weixinMiniAppLogin2(co.yixiang.yshop.module.member.controller.app.auth.vo.AppWeixinMiniLoginVO.builder().code("synthetic-login").build());
+        assertNull(result.getAccessToken());assertNull(result.getRefreshToken());assertNull(result.getUserInfo());assertEquals("synthetic-mini",result.getOpenId());
+        assertNull(phone(uid));assertEquals(0,count("system_oauth2_access_token"));assertEquals(0,count("system_login_log"));
+        assertEquals(new java.math.BigDecimal("50.00"),members.selectById(uid).getNowMoney());
+    }
+    void legacyIncompleteCredentials(boolean missingPhone,boolean refreshFirst){
+        long uid=member("13800000001","synthetic-mini");var old=tokens.createAccessToken(new co.yixiang.yshop.module.system.api.oauth2.dto.OAuth2AccessTokenCreateReqDTO().setUserId(uid).setUserType(1).setClientId("default"));
+        jdbc.update("UPDATE yshop_user SET "+(missingPhone?"mobile":"routine_openid")+"=NULL WHERE id=?",uid);
+        if(refreshFirst)assertThrows(ServiceException.class,()->auth.refreshToken(old.getRefreshToken()));
+        assertThrows(ServiceException.class,()->tokens.checkAccessToken(old.getAccessToken()));
+        if(!refreshFirst)assertThrows(ServiceException.class,()->auth.refreshToken(old.getRefreshToken()));
+        assertEquals(1,count("system_oauth2_refresh_token"));assertEquals(new java.math.BigDecimal("50.00"),members.selectById(uid).getNowMoney());
+        assertDoesNotThrow(()->tokens.removeAccessToken(old.getAccessToken(),1));assertEquals(0,count("system_oauth2_refresh_token"));
+    }
+    @Test void legacyPhoneOnlyTokenCannotValidateOrRefresh(){legacyIncompleteCredentials(false,false);}
+    @Test void legacyMiniOnlyTokenCannotValidateOrRefresh(){legacyIncompleteCredentials(true,false);}
+    @Test void legacyPhoneOnlyRefreshCannotGrantToken(){legacyIncompleteCredentials(false,true);}
+    @Test void legacyMiniOnlyRefreshCannotGrantToken(){legacyIncompleteCredentials(true,true);}
+    void legacyMalformedProvider(boolean refreshFirst){
+        long uid=member("13800000001","synthetic-mini");var old=tokens.createAccessToken(new co.yixiang.yshop.module.system.api.oauth2.dto.OAuth2AccessTokenCreateReqDTO().setUserId(uid).setUserType(1).setClientId("default"));
+        jdbc.update("UPDATE yshop_user SET routine_openid=? WHERE id=?","synthetic-mini\n",uid);
+        if(refreshFirst)assertThrows(ServiceException.class,()->auth.refreshToken(old.getRefreshToken()));
+        else assertThrows(ServiceException.class,()->tokens.checkAccessToken(old.getAccessToken()));
+        assertEquals(1,count("system_oauth2_refresh_token"));assertEquals(new java.math.BigDecimal("50.00"),members.selectById(uid).getNowMoney());
+    }
+    @Test void malformedProviderCannotValidateLegacyToken(){legacyMalformedProvider(false);}
+    @Test void malformedProviderCannotRefreshLegacyToken(){legacyMalformedProvider(true);}
+    @Test void twentyUnknownSmsRequestsNeverRegisterMembers() throws Exception {
+        var pool=Executors.newFixedThreadPool(20);var gate=new CyclicBarrier(20);
+        for(int n=0;n<20;n++)code("13800000001",1,String.valueOf(200000+n));
+        try {var futures=new ArrayList<Future<Boolean>>();for(int n=0;n<20;n++){String proof=String.valueOf(200000+n);futures.add(pool.submit(()->{requestContext();gate.await(20,TimeUnit.SECONDS);try{auth.smsLogin(AppAuthSmsLoginReqVO.builder().mobile("13800000001").code(proof).build());return true;}catch(ServiceException denied){return false;}}));}
+            for(var f:futures)assertFalse(f.get(60,TimeUnit.SECONDS));assertEquals(0,count("yshop_user"));assertEquals(0,count("system_oauth2_access_token"));assertEquals(0,count("system_login_log"));assertEquals(0,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code",Integer.class));
+        }finally{pool.shutdownNow();}
+    }
+    @Test void twentyDistinctUnknownSmsPhonesNeverRegisterMembers() throws Exception {
+        var pool=Executors.newFixedThreadPool(20);var gate=new CyclicBarrier(20);
+        for(int n=0;n<20;n++)code(String.format("13800000%03d",n),1,"123456");
+        try {var futures=new ArrayList<Future<Boolean>>();for(int n=0;n<20;n++){String phone=String.format("13800000%03d",n);futures.add(pool.submit(()->{requestContext();gate.await(20,TimeUnit.SECONDS);try{auth.smsLogin(login(phone,null));return true;}catch(ServiceException denied){return false;}}));}
+            for(var f:futures)assertFalse(f.get(60,TimeUnit.SECONDS));assertEquals(0,count("yshop_user"));assertEquals(0,count("system_oauth2_access_token"));assertEquals(0,count("system_oauth2_refresh_token"));assertEquals(0,count("system_login_log"));assertEquals(0,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code",Integer.class));assertTrue(redis.keys("*").isEmpty());
+        }finally{pool.shutdownNow();}
+    }
+    @Test void twentyDualProofRegistrationsResolveOneUidWithoutReplayingSdkCodes() throws Exception {
+        var wx=mock(cn.binarywang.wx.miniapp.api.WxMaService.class);var provider=mock(cn.binarywang.wx.miniapp.api.WxMaUserService.class);when(wx.getUserService()).thenReturn(provider);set(authTarget,"wxMaService",wx);
+        for(int n=0;n<20;n++){var session=new cn.binarywang.wx.miniapp.bean.WxMaJscode2SessionResult();session.setOpenid("synthetic-shared");when(provider.getSessionInfo("login-"+n)).thenReturn(session);var phone=new cn.binarywang.wx.miniapp.bean.WxMaPhoneNumberInfo();phone.setPurePhoneNumber("13800000001");when(provider.getNewPhoneNoInfo("phone-"+n)).thenReturn(phone);}
+        var mapper=spy(members);var barrier=new CyclicBarrier(20);var first=ThreadLocal.withInitial(()->true);var connections=ConcurrentHashMap.<Long>newKeySet();
+        doAnswer(c->{var value=c.callRealMethod();if(first.get()){first.set(false);connections.add(jdbc.queryForObject("SELECT CONNECTION_ID()",Long.class));barrier.await(20,TimeUnit.SECONDS);}return value;}).when(mapper).selectByMobile("13800000001");set(authTarget,"userMapper",mapper);
+        var pool=Executors.newFixedThreadPool(20);
+        try {var futures=new ArrayList<Future<Long>>();for(int n=0;n<20;n++){int worker=n;futures.add(pool.submit(()->{requestContext();var request=co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthWeixinMiniAppLoginReqVO.builder().phoneCode("phone-"+worker).loginCode("login-"+worker).build();return tokens.checkAccessToken(auth.weixinMiniAppLogin(request).getAccessToken()).getUserId();}));}
+            var uids=new HashSet<Long>();for(var f:futures)uids.add(f.get(60,TimeUnit.SECONDS));assertEquals(1,uids.size());assertEquals(20,connections.size());assertEquals(1,count("yshop_user"));assertEquals(20,count("system_oauth2_refresh_token"));assertEquals("synthetic-shared",members.selectById(uids.iterator().next()).getRoutineOpenid());
+            for(int n=0;n<20;n++){verify(provider,times(1)).getSessionInfo("login-"+n);verify(provider,times(1)).getNewPhoneNoInfo("phone-"+n);}
+        }finally{pool.shutdownNow();}
+    }
+    @Test void completeMemberSmsLoginPreservesUidAndBothIdentities(){
+        long uid=member("13800000001","synthetic-mini");code("13800000001",1,"123456");
+        var result=auth.smsLogin(login("13800000001","synthetic-foreign"));
+        assertEquals(uid,tokens.checkAccessToken(result.getAccessToken()).getUserId());assertEquals(1,count("yshop_user"));
+        assertEquals("synthetic-mini",members.selectById(uid).getRoutineOpenid());assertEquals(1,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code",Integer.class));
+        assertEquals(new java.math.BigDecimal("100.00"),members.selectById(uid).getIntegral());assertEquals(new java.math.BigDecimal("50.00"),members.selectById(uid).getNowMoney());
+        assertEquals(uid,tokens.checkAccessToken(auth.refreshToken(result.getRefreshToken()).getAccessToken()).getUserId());
+    }
+    co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthWeixinMiniAppLoginReqVO miniRequest(){
+        return co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthWeixinMiniAppLoginReqVO.builder().phoneCode("synthetic-phone-code").loginCode("synthetic-login").build();
+    }
+    @Test void freshPhoneAndMiniProofsCreateOneCompleteMember() throws Exception {
+        miniProof("13800000001","synthetic-mini","synthetic-login");var result=auth.weixinMiniAppLogin(miniRequest());
+        long uid=tokens.checkAccessToken(result.getAccessToken()).getUserId();assertEquals(1,count("yshop_user"));
+        assertEquals("13800000001",phone(uid));assertEquals("synthetic-mini",members.selectById(uid).getRoutineOpenid());
+        assertEquals(new java.math.BigDecimal("0.00"),members.selectById(uid).getIntegral());assertEquals(new java.math.BigDecimal("0.00"),members.selectById(uid).getNowMoney());
+    }
+    @Test void freshDualProofCompletesPhoneOnlyMemberWithoutAssetTransfer() throws Exception {
+        long uid=member("13800000001",null);miniProof("13800000001","synthetic-mini","synthetic-login");
+        var result=auth.weixinMiniAppLogin(miniRequest());assertEquals(uid,tokens.checkAccessToken(result.getAccessToken()).getUserId());
+        assertEquals("synthetic-mini",members.selectById(uid).getRoutineOpenid());assertEquals(1,count("yshop_user"));
+        assertEquals(new java.math.BigDecimal("100.00"),members.selectById(uid).getIntegral());assertEquals(new java.math.BigDecimal("50.00"),members.selectById(uid).getNowMoney());
+    }
+    @Test void adminWithoutCustomerProofCannotCreateMember(){
+        var admin=new co.yixiang.yshop.module.member.service.user.UserServiceImpl();set(admin,"userMapper",members);
+        var request=new co.yixiang.yshop.module.member.controller.admin.user.vo.UserCreateReqVO();request.setMobile("13800000001");request.setNickname("synthetic");request.setStatus(0);
+        assertThrows(ServiceException.class,()->admin.createUser(request));assertEquals(0,count("yshop_user"));assertEquals(0,count("system_oauth2_access_token"));
+    }
+    @Test void expiredMiniProofCannotRegisterWithOnlyPhoneProof() throws Exception {
+        miniProof("13800000001","synthetic-mini","synthetic-login");var wx=(cn.binarywang.wx.miniapp.api.WxMaService)org.springframework.test.util.ReflectionTestUtils.getField(authTarget,"wxMaService");
+        when(wx.getUserService().getSessionInfo("synthetic-login")).thenThrow(new me.chanjar.weixin.common.error.WxErrorException(new me.chanjar.weixin.common.error.WxError()));
+        assertThrows(ServiceException.class,()->auth.weixinMiniAppLogin(miniRequest()));assertEquals(0,count("yshop_user"));assertEquals(0,count("system_oauth2_access_token"));assertEquals(0,count("system_login_log"));
+    }
+    @Test void expiredPhoneProofCannotRegisterWithOnlyMiniProof() throws Exception {
+        miniProof("13800000001","synthetic-mini","synthetic-login");var wx=(cn.binarywang.wx.miniapp.api.WxMaService)org.springframework.test.util.ReflectionTestUtils.getField(authTarget,"wxMaService");
+        when(wx.getUserService().getNewPhoneNoInfo("synthetic-phone-code")).thenThrow(new me.chanjar.weixin.common.error.WxErrorException(new me.chanjar.weixin.common.error.WxError()));
+        assertThrows(ServiceException.class,()->auth.weixinMiniAppLogin(miniRequest()));assertEquals(0,count("yshop_user"));assertEquals(0,count("system_oauth2_refresh_token"));assertEquals(0,count("system_login_log"));
+    }
+    @Test void missingMiniProofCannotRegisterWithOnlyPhoneProof() throws Exception {
+        miniProof("13800000001","synthetic-mini","synthetic-login");var request=miniRequest();request.setLoginCode("");
+        assertThrows(ServiceException.class,()->auth.weixinMiniAppLogin(request));assertEquals(0,count("yshop_user"));assertEquals(0,count("system_oauth2_access_token"));
+    }
+    void newRegistrationSqlFault(String table) throws Exception {
+        miniProof("13800000001","synthetic-mini","synthetic-login");
+        jdbc.execute("CREATE TRIGGER quality_fail_dual_registration BEFORE INSERT ON "+table+" FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='SYNTHETIC_REGISTRATION_FAULT'");
+        try{assertThrows(org.springframework.dao.DataAccessException.class,()->auth.weixinMiniAppLogin(miniRequest()));assertEquals(0,count("yshop_user"));assertEquals(0,count("system_oauth2_access_token"));assertEquals(0,count("system_oauth2_refresh_token"));assertEquals(0,count("system_login_log"));assertTrue(redis.keys("*").isEmpty());}
+        finally{jdbc.execute("DROP TRIGGER quality_fail_dual_registration");}
+    }
+    @Test void dualProofTokenSqlFaultRollsBackNewMemberAndCredentials() throws Exception {newRegistrationSqlFault("system_oauth2_access_token");}
+    @Test void dualProofSuccessAuditFaultRollsBackNewMemberAndCredentials() throws Exception {newRegistrationSqlFault("system_login_log");}
+    @Test void smsLoginRechecksPhoneAfterOwnerLookup() throws Exception {
+        long uid=member("13800000001","synthetic-mini");code("13800000001",1,"123456");var selected=new CountDownLatch(1);var changed=new CountDownLatch(1);var mapper=spy(members);
+        doAnswer(c->{var row=c.callRealMethod();selected.countDown();assertTrue(changed.await(15,TimeUnit.SECONDS));return row;}).when(mapper).selectByMobile("13800000001");set(authTarget,"userMapper",mapper);var pool=Executors.newSingleThreadExecutor();
+        try{var request=pool.submit(()->{requestContext();return assertThrows(ServiceException.class,()->auth.smsLogin(login("13800000001",null)));});assertTrue(selected.await(15,TimeUnit.SECONDS));jdbc.update("UPDATE yshop_user SET mobile='13800000002' WHERE id=?",uid);changed.countDown();request.get(30,TimeUnit.SECONDS);assertEquals("13800000002",phone(uid));assertEquals(0,count("system_oauth2_access_token"));assertEquals(0,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code",Integer.class));assertEquals(new java.math.BigDecimal("50.00"),members.selectById(uid).getNowMoney());}
+        finally{changed.countDown();pool.shutdownNow();}
+    }
+    @Test void differentVerifiedPhonesCannotShareOneMiniIdentity() throws Exception {
+        var wx=mock(cn.binarywang.wx.miniapp.api.WxMaService.class);var provider=mock(cn.binarywang.wx.miniapp.api.WxMaUserService.class);when(wx.getUserService()).thenReturn(provider);set(authTarget,"wxMaService",wx);
+        for(int n=0;n<2;n++){var session=new cn.binarywang.wx.miniapp.bean.WxMaJscode2SessionResult();session.setOpenid("synthetic-shared");when(provider.getSessionInfo("login-"+n)).thenReturn(session);var phone=new cn.binarywang.wx.miniapp.bean.WxMaPhoneNumberInfo();phone.setPurePhoneNumber(n==0?"13800000001":"13800000002");when(provider.getNewPhoneNoInfo("phone-"+n)).thenReturn(phone);}
+        var mapper=spy(members);var barrier=new CyclicBarrier(2);var first=ThreadLocal.withInitial(()->true);
+        doAnswer(c->{var row=c.callRealMethod();if(first.get()){first.set(false);barrier.await(15,TimeUnit.SECONDS);}return row;}).when(mapper).selectByProvider("synthetic-shared",true);set(authTarget,"userMapper",mapper);var pool=Executors.newFixedThreadPool(2);
+        try{var futures=new ArrayList<Future<Boolean>>();for(int n=0;n<2;n++){int worker=n;futures.add(pool.submit(()->{requestContext();try{auth.weixinMiniAppLogin(co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthWeixinMiniAppLoginReqVO.builder().phoneCode("phone-"+worker).loginCode("login-"+worker).build());return true;}catch(ServiceException denied){return false;}}));}int accepted=0;for(var f:futures)if(f.get(30,TimeUnit.SECONDS))accepted++;assertEquals(1,accepted);assertEquals(1,count("yshop_user"));assertEquals(1,count("system_oauth2_refresh_token"));assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_user WHERE mobile IS NOT NULL AND routine_openid='synthetic-shared'",Integer.class));assertEquals(new java.math.BigDecimal("0.00"),jdbc.queryForObject("SELECT SUM(now_money) FROM yshop_user",java.math.BigDecimal.class));for(int n=0;n<2;n++){verify(provider,times(1)).getSessionInfo("login-"+n);verify(provider,times(1)).getNewPhoneNoInfo("phone-"+n);}}
+        finally{pool.shutdownNow();}
+    }
     @BeforeEach void setup() throws Exception {setupDatabase();}
     @AfterEach void close(){closeDatabase();}
     AppAuthSmsLoginReqVO login(String phone,String openid){return AppAuthSmsLoginReqVO.builder().mobile(phone).code("123456").from("routine").openid(openid).build();}
@@ -21,9 +163,9 @@ class MemberIdentityMysqlAcceptanceTest extends SecurityMysqlTestSupport {
         assertEquals(a,tokens.checkAccessToken(result.getAccessToken()).getUserId());assertNotEquals(b,result.getUserId());
         assertEquals("13800000002",phone(b));assertEquals(1,count("system_oauth2_refresh_token"));
     }
-    @Test void legitimateSmsLoginCreatesOnlyVerifiedPhoneIdentity(){
-        code("13800000001",1,"123456");var result=auth.smsLogin(login("13800000001",null));
-        long uid=tokens.checkAccessToken(result.getAccessToken()).getUserId();assertEquals("13800000001",phone(uid));assertEquals(1,count("yshop_user"));
+    @Test void legitimateSmsLoginUsesExistingCompleteMember(){
+        long original=member("13800000001","synthetic-a");code("13800000001",1,"123456");var result=auth.smsLogin(login("13800000001",null));
+        long uid=tokens.checkAccessToken(result.getAccessToken()).getUserId();assertEquals(original,uid);assertEquals("13800000001",phone(uid));assertEquals("synthetic-a",members.selectById(uid).getRoutineOpenid());assertEquals(1,count("yshop_user"));
     }
     @Test void staleFullMemberWriteCannotRestoreAnyIdentity(){
         long uid=member("13800000001","synthetic-old");var stale=members.selectById(uid);
@@ -52,8 +194,13 @@ class MemberIdentityMysqlAcceptanceTest extends SecurityMysqlTestSupport {
     }
 
     @Test void phonePrefixesResolveOneCanonicalMember(){
-        long uid=member("13800000001",null);code("13800000001",1,"123456");
+        long uid=member("13800000001","synthetic-a");code("13800000001",1,"123456");
         assertEquals(uid,tokens.checkAccessToken(assertDoesNotThrow(()->auth.smsLogin(login("+8613800000001",null))).getAccessToken()).getUserId());assertEquals(1,count("yshop_user"));
+    }
+    @Test void internationalDialPrefixResolvesExistingCompleteMember(){
+        long uid=member("13800000001","synthetic-a");code("13800000001",1,"123456");
+        var result=auth.smsLogin(login("008613800000001",null));
+        assertEquals(uid,tokens.checkAccessToken(result.getAccessToken()).getUserId());assertEquals(1,count("yshop_user"));assertEquals("13800000001",phone(uid));assertEquals("synthetic-a",members.selectById(uid).getRoutineOpenid());assertEquals(new java.math.BigDecimal("50.00"),members.selectById(uid).getNowMoney());assertEquals(1,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code",Integer.class));
     }
     @Test void twoVerifiedMiniOwnersConflictWithoutAssetOrTokenChanges() throws Exception {
         long a=member("13800000001",null),b=member("13800000002","synthetic-b");miniProof("13800000001","synthetic-b","synthetic-login");cachedSocial("synthetic-b","synthetic-login");
@@ -71,30 +218,30 @@ class MemberIdentityMysqlAcceptanceTest extends SecurityMysqlTestSupport {
         assertEquals("13800000001",phone(uid));assertEquals(new java.math.BigDecimal("100.00"),members.selectById(uid).getIntegral());assertEquals("changed",members.selectById(uid).getNickname());
     }
     @Test void legitimatePhoneChangeRevokesCurrentCredentials(){
-        long uid=member("13800000001",null);code("13800000001",1,"123456");var old=auth.smsLogin(login("13800000001",null));code("13800000001",2,"123456");code("13800000003",2,"234567");
+        long uid=member("13800000001","synthetic-a");code("13800000001",1,"123456");var old=auth.smsLogin(login("13800000001",null));code("13800000001",2,"123456");code("13800000003",2,"234567");
         users.updateUserMobile(uid,change("13800000001","13800000003"));assertEquals("13800000003",phone(uid));assertThrows(ServiceException.class,()->tokens.checkAccessToken(old.getAccessToken()));assertEquals(0,count("system_oauth2_refresh_token"));
     }
-    @Test void parallelSmsRegistrationsAllResolveOneMember() throws Exception {
-        var pool=Executors.newFixedThreadPool(20);var barrier=new CyclicBarrier(20);var mapper=spy(members);var first=ThreadLocal.withInitial(()->true);var connections=ConcurrentHashMap.<Long>newKeySet();
+    @Test void parallelSmsLoginsAllResolveExistingCompleteMember() throws Exception {
+        long original=member("13800000001","synthetic-a");var pool=Executors.newFixedThreadPool(20);var barrier=new CyclicBarrier(20);var mapper=spy(members);var first=ThreadLocal.withInitial(()->true);var connections=ConcurrentHashMap.<Long>newKeySet();
         doAnswer(c->{var value=c.callRealMethod();if(first.get()){first.set(false);connections.add(jdbc.queryForObject("SELECT CONNECTION_ID()",Long.class));barrier.await(20,TimeUnit.SECONDS);}return value;}).when(mapper).selectByMobile("13800000001");
         set(authTarget,"userMapper",mapper);var us=new co.yixiang.yshop.module.member.service.user.MemberUserServiceImpl();set(us,"memberUserMapper",mapper);set(us,"baseMapper",mapper);set(us,"passwordEncoder",encoder);set(authTarget,"userService",proxied(us));
         for(int n=0;n<20;n++)code("13800000001",1,String.valueOf(200000+n));
         try {var futures=new ArrayList<Future<Long>>();for(int n=0;n<20;n++){final String code=String.valueOf(200000+n);futures.add(pool.submit(()->{requestContext();return tokens.checkAccessToken(auth.smsLogin(AppAuthSmsLoginReqVO.builder().mobile("13800000001").code(code).build()).getAccessToken()).getUserId();}));}
-            var uids=new HashSet<Long>();for(var f:futures)uids.add(assertDoesNotThrow(()->f.get(60,TimeUnit.SECONDS)));assertEquals(1,uids.size());assertEquals(1,count("yshop_user"));assertEquals(20,count("system_oauth2_refresh_token"));assertEquals(20,connections.size());
+            var uids=new HashSet<Long>();for(var f:futures)uids.add(assertDoesNotThrow(()->f.get(60,TimeUnit.SECONDS)));assertEquals(Set.of(original),uids);assertEquals(1,count("yshop_user"));assertEquals(20,count("system_oauth2_refresh_token"));assertEquals(20,connections.size());
         }finally{pool.shutdownNow();}
     }
 
     @Test void genericMemberBindingCannotTransferAnotherMembersIdentity() throws Exception {
-        long a=member("13800000001",null),b=member("13800000002","synthetic-b"),social=cachedSocial("synthetic-b","synthetic-login");jdbc.update("INSERT INTO system_social_user_bind(user_id,user_type,social_type,social_user_id) VALUES(?,1,34,?)",b,social);
+        long a=member("13800000001","synthetic-a"),b=member("13800000002","synthetic-b"),social=cachedSocial("synthetic-b","synthetic-login");jdbc.update("INSERT INTO system_social_user_bind(user_id,user_type,social_type,social_user_id) VALUES(?,1,34,?)",b,social);
         miniProof("13800000001","synthetic-b","synthetic-login");code("13800000001",5,"345678");code("13800000001",1,"123456");var req=login("13800000001",null);req.setSocialType(34);req.setSocialCode("synthetic-login");req.setSocialState("");
-        assertEquals(a,tokens.checkAccessToken(auth.smsLogin(req).getAccessToken()).getUserId());assertEquals(b,jdbc.queryForObject("SELECT user_id FROM system_social_user_bind WHERE deleted=0",Long.class));assertNull(members.selectById(a).getRoutineOpenid());assertEquals("synthetic-b",members.selectById(b).getRoutineOpenid());
+        assertEquals(a,tokens.checkAccessToken(auth.smsLogin(req).getAccessToken()).getUserId());assertEquals(b,jdbc.queryForObject("SELECT user_id FROM system_social_user_bind WHERE deleted=0",Long.class));assertEquals("synthetic-a",members.selectById(a).getRoutineOpenid());assertEquals("synthetic-b",members.selectById(b).getRoutineOpenid());
     }
     @Test void legitimateBindingUsesFreshProofAndCanonicalMemberColumn() throws Exception {
-        long uid=member("13800000001",null);code("13800000001",1,"123456");var old=auth.smsLogin(login("13800000001",null));miniProof("13800000001","synthetic-a","synthetic-login");cachedSocial("synthetic-a","synthetic-login");code("13800000001",5,"345678");
+        long uid=member("13800000001","synthetic-a");code("13800000001",1,"123456");var old=auth.smsLogin(login("13800000001",null));miniProof("13800000001","synthetic-a","synthetic-login");cachedSocial("synthetic-a","synthetic-login");code("13800000001",5,"345678");
         var controller=socialController(uid);var req=bindRequest("synthetic-login","345678");assertDoesNotThrow(()->controller.socialBind(req));assertEquals("synthetic-a",members.selectById(uid).getRoutineOpenid());assertThrows(ServiceException.class,()->tokens.checkAccessToken(old.getAccessToken()));assertEquals(0,count("system_oauth2_refresh_token"));
     }
     @Test void passwordLoginCannotTransferOptionalGenericSocialBinding(){
-        long a=member("13800000001",null),b=member("13800000002","synthetic-b"),social=cachedSocial("synthetic-b","synthetic-login");jdbc.update("INSERT INTO system_social_user_bind(user_id,user_type,social_type,social_user_id) VALUES(?,1,34,?)",b,social);
+        long a=member("13800000001","synthetic-a"),b=member("13800000002","synthetic-b"),social=cachedSocial("synthetic-b","synthetic-login");jdbc.update("INSERT INTO system_social_user_bind(user_id,user_type,social_type,social_user_id) VALUES(?,1,34,?)",b,social);
         var req=co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthLoginReqVO.builder().mobile("13800000001").password("synthetic-password").socialType(34).socialCode("synthetic-login").socialState("").build();
         assertEquals(a,tokens.checkAccessToken(auth.login(req).getAccessToken()).getUserId());assertEquals(b,jdbc.queryForObject("SELECT user_id FROM system_social_user_bind WHERE deleted=0",Long.class));
     }
@@ -124,7 +271,7 @@ class MemberIdentityMysqlAcceptanceTest extends SecurityMysqlTestSupport {
         assertEquals(1,members.selectById(uid).getStatus());
     }
     @Test void legitimatePasswordLoginCommitsTokenAndOnlySuccessAudit(){
-        long uid=member("13800000001",null);
+        long uid=member("13800000001","synthetic-a");
         var result=auth.login(co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthLoginReqVO.builder().mobile("13800000001").password("synthetic-password").build());
         assertEquals(uid,tokens.checkAccessToken(result.getAccessToken()).getUserId());
         assertEquals(1,count("system_oauth2_access_token"));assertEquals(1,count("system_oauth2_refresh_token"));
@@ -200,9 +347,9 @@ class MemberIdentityMysqlAcceptanceTest extends SecurityMysqlTestSupport {
         jdbc.execute("ALTER TABLE yshop_user DROP INDEX uk_member_mobile,ADD UNIQUE KEY uk_member_mobile(mobile(3))");long uid=member("13800000001",null);
         assertThrows(org.springframework.dao.DataAccessException.class,()->migration());assertEquals("13800000001",phone(uid));assertEquals(new java.math.BigDecimal("100.00"),members.selectById(uid).getIntegral());
     }
-    @Test void adminMemberCreationUsesCanonicalPhoneAndIndependentUsername(){
+    @Test void dualProofCreationUsesCanonicalPhoneAndIndependentUsername() throws Exception {
         var admin=new co.yixiang.yshop.module.member.service.user.UserServiceImpl();set(admin,"userMapper",members);var request=new co.yixiang.yshop.module.member.controller.admin.user.vo.UserCreateReqVO();request.setMobile("+8613800000001");request.setUsername("13800000001");request.setNickname("synthetic");request.setStatus(0);
-        long uid=assertDoesNotThrow(()->admin.createUser(request));assertEquals("13800000001",phone(uid));assertNotEquals("13800000001",members.selectById(uid).getUsername());
+        miniProof("+8613800000001","synthetic-a","synthetic-login");long uid=assertDoesNotThrow(()->tokens.checkAccessToken(auth.weixinMiniAppLogin(miniRequest()).getAccessToken()).getUserId());assertEquals("13800000001",phone(uid));assertNotEquals("13800000001",members.selectById(uid).getUsername());
     }
 
     @Test void startupGuardAcceptsActualMigrationAndRejectsMissingOrPrefixIndexes(){
@@ -285,24 +432,24 @@ class MemberIdentityMysqlAcceptanceTest extends SecurityMysqlTestSupport {
         try {var futures=new ArrayList<Future<Boolean>>();for(long uid:List.of(a,b))futures.add(pool.submit(()->{requestContext();gate.await(15,TimeUnit.SECONDS);try{auth.changeSocialIdentity(uid,34,"synthetic-login","345678",false);return true;}catch(ServiceException denied){return false;}}));int successes=0;for(var f:futures)if(assertDoesNotThrow(()->f.get(30,TimeUnit.SECONDS)))successes++;assertEquals(1,successes);assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_user WHERE routine_openid='synthetic-shared'",Integer.class));assertEquals(1,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code",Integer.class));assertEquals(new java.math.BigDecimal("100.00"),members.selectById(a).getIntegral());assertEquals(new java.math.BigDecimal("50.00"),members.selectById(b).getNowMoney());}finally{pool.shutdownNow();}
     }
     @Test void tokenSqlFaultRollsBackSmsMemberFamilyAndSuccessLog(){
-        code("13800000001",1,"123456");jdbc.execute("CREATE TRIGGER quality_fail_identity_token BEFORE INSERT ON system_oauth2_access_token FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='SYNTHETIC_TOKEN_FAULT'");
-        try{assertThrows(org.springframework.dao.DataAccessException.class,()->auth.smsLogin(login("13800000001",null)));assertEquals(0,count("yshop_user"));assertEquals(0,count("system_oauth2_refresh_token"));assertEquals(0,count("system_login_log"));assertEquals(0,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code",Integer.class));}finally{jdbc.execute("DROP TRIGGER quality_fail_identity_token");}
+        long original=member("13800000001","synthetic-a");code("13800000001",1,"123456");jdbc.execute("CREATE TRIGGER quality_fail_identity_token BEFORE INSERT ON system_oauth2_access_token FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='SYNTHETIC_TOKEN_FAULT'");
+        try{assertThrows(org.springframework.dao.DataAccessException.class,()->auth.smsLogin(login("13800000001",null)));assertEquals(1,count("yshop_user"));assertEquals("synthetic-a",members.selectById(original).getRoutineOpenid());assertEquals(new java.math.BigDecimal("50.00"),members.selectById(original).getNowMoney());assertEquals(0,count("system_oauth2_refresh_token"));assertEquals(0,count("system_login_log"));assertEquals(0,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code",Integer.class));}finally{jdbc.execute("DROP TRIGGER quality_fail_identity_token");}
         var response=auth.smsLogin(login("13800000001",null));assertEquals("13800000001",phone(tokens.checkAccessToken(response.getAccessToken()).getUserId()));
     }
     @Test void successLogSqlFaultDoesNotPublishCredentialsOrConsumeSms(){
-        code("13800000001",1,"123456");jdbc.execute("CREATE TRIGGER quality_fail_identity_log BEFORE INSERT ON system_login_log FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='SYNTHETIC_LOG_FAULT'");
-        try{assertThrows(org.springframework.dao.DataAccessException.class,()->auth.smsLogin(login("13800000001",null)));assertEquals(0,count("yshop_user"));assertEquals(0,count("system_oauth2_access_token"));assertEquals(0,count("system_oauth2_refresh_token"));assertEquals(0,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code",Integer.class));assertTrue(redis.keys("*").isEmpty());}finally{jdbc.execute("DROP TRIGGER quality_fail_identity_log");}
+        long original=member("13800000001","synthetic-a");code("13800000001",1,"123456");jdbc.execute("CREATE TRIGGER quality_fail_identity_log BEFORE INSERT ON system_login_log FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='SYNTHETIC_LOG_FAULT'");
+        try{assertThrows(org.springframework.dao.DataAccessException.class,()->auth.smsLogin(login("13800000001",null)));assertEquals(1,count("yshop_user"));assertEquals("synthetic-a",members.selectById(original).getRoutineOpenid());assertEquals(new java.math.BigDecimal("50.00"),members.selectById(original).getNowMoney());assertEquals(0,count("system_oauth2_access_token"));assertEquals(0,count("system_oauth2_refresh_token"));assertEquals(0,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code",Integer.class));assertTrue(redis.keys("*").isEmpty());}finally{jdbc.execute("DROP TRIGGER quality_fail_identity_log");}
     }
     @Test void phoneRevocationSqlFaultRollsBackIdentityAndBothProofs(){
-        long uid=member("13800000001",null);code("13800000001",1,"123456");var old=auth.smsLogin(login("13800000001",null));code("13800000001",2,"123456");code("13800000003",2,"234567");jdbc.execute("CREATE TRIGGER quality_fail_identity_revoke BEFORE UPDATE ON system_oauth2_refresh_token FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='SYNTHETIC_REVOKE_FAULT'");
+        long uid=member("13800000001","synthetic-a");code("13800000001",1,"123456");var old=auth.smsLogin(login("13800000001",null));code("13800000001",2,"123456");code("13800000003",2,"234567");jdbc.execute("CREATE TRIGGER quality_fail_identity_revoke BEFORE UPDATE ON system_oauth2_refresh_token FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='SYNTHETIC_REVOKE_FAULT'");
         try{assertThrows(org.springframework.dao.DataAccessException.class,()->users.updateUserMobile(uid,change("13800000001","13800000003")));assertEquals("13800000001",phone(uid));assertEquals(0,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code WHERE scene=2",Integer.class));assertEquals(uid,tokens.checkAccessToken(old.getAccessToken()).getUserId());}finally{jdbc.execute("DROP TRIGGER quality_fail_identity_revoke");}
     }
-    @Test void twentyRoundsOfTwentySmsClaimsRetainOneUidPerPhone() throws Exception {
+    @Test void twentyRoundsOfTwentySmsLoginsRetainExistingCompleteUids() throws Exception {
         var pool=Executors.newFixedThreadPool(20);
         try{for(int round=0;round<20;round++){
-            String phone=String.format("1380000%04d",round+100);var gate=new CyclicBarrier(20);var futures=new ArrayList<Future<Long>>();
+            String phone=String.format("1380000%04d",round+100);long original=member(phone,"synthetic-round-"+round);var gate=new CyclicBarrier(20);var futures=new ArrayList<Future<Long>>();
             for(int worker=0;worker<20;worker++){String proof=String.valueOf(300000+worker);code(phone,1,proof);futures.add(pool.submit(()->{requestContext();gate.await(20,TimeUnit.SECONDS);return tokens.checkAccessToken(auth.smsLogin(AppAuthSmsLoginReqVO.builder().mobile(phone).code(proof).build()).getAccessToken()).getUserId();}));}
-            var uids=new HashSet<Long>();for(var f:futures)uids.add(assertDoesNotThrow(()->f.get(60,TimeUnit.SECONDS)));assertEquals(1,uids.size());assertEquals(round+1,count("yshop_user"));assertEquals(20*(round+1),count("system_oauth2_refresh_token"));
+            var uids=new HashSet<Long>();for(var f:futures)uids.add(assertDoesNotThrow(()->f.get(60,TimeUnit.SECONDS)));assertEquals(Set.of(original),uids);assertEquals(round+1,count("yshop_user"));assertEquals(20*(round+1),count("system_oauth2_refresh_token"));
         }assertEquals(400,jdbc.queryForObject("SELECT SUM(used) FROM system_sms_code",Integer.class));assertEquals(0,count("yshop_user_bill"));}finally{pool.shutdownNow();}
     }
     @Test void migrationRejectsDuplicateProviderBeforeChangingAnyMember() throws Exception {

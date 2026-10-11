@@ -14,6 +14,14 @@ public final class MemberIdentityPolicy {
         if(value==null || !value.matches("[A-Za-z0-9_-]{1,100}")) throw conflict();
         return value;
     }
+    public static boolean complete(co.yixiang.yshop.module.member.dal.dataobject.user.MemberUserDO user) {
+        return user!=null && user.getMobile()!=null && user.getMobile().length()==11
+                && user.getMobile().matches("[0-9]{11}") && ValidationUtils.isMobile(user.getMobile())
+                && user.getRoutineOpenid()!=null && user.getRoutineOpenid().matches("[A-Za-z0-9_-]{1,100}");
+    }
+    public static co.yixiang.yshop.framework.common.exception.ServiceException completionRequired() {
+        return exception0(400,"请前往小程序完成手机号与微信双重验证");
+    }
     public static co.yixiang.yshop.framework.common.exception.ServiceException conflict() {
         return exception0(400,"身份凭据冲突，请使用本人已绑定身份登录");
     }

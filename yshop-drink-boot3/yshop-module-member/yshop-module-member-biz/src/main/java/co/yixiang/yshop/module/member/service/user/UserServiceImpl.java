@@ -39,13 +39,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Long createUser(UserCreateReqVO createReqVO) {
-        // 插入
-        MemberUserDO user = UserConvert.INSTANCE.convert(createReqVO);
-        user.setUsername("member_"+cn.hutool.core.util.IdUtil.fastSimpleUUID());
-        user.setMobile(user.getMobile()==null || user.getMobile().isEmpty()?null:co.yixiang.yshop.module.member.service.auth.MemberIdentityPolicy.phone(user.getMobile()));
-        userMapper.insert(user);
-        // 返回
-        return user.getId();
+        // Administrative permission cannot replace the customer's two identity proofs.
+        throw co.yixiang.yshop.module.member.service.auth.MemberIdentityPolicy.completionRequired();
     }
 
     @Override

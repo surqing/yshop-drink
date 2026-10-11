@@ -45,12 +45,12 @@ class OAuth2LifecycleDatabaseTest {
         } else {ds.setDriverClassName("org.h2.Driver");ds.setUrl("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=MySQL;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=20000");}
         jdbc=new JdbcTemplate(ds);tm=new DataSourceTransactionManager(ds);
         for(String table:List.of("system_oauth2_access_token","system_oauth2_refresh_token","system_users","yshop_user")) jdbc.execute("DROP TABLE IF EXISTS "+table);
-        jdbc.execute("CREATE TABLE yshop_user(id BIGINT PRIMARY KEY,status INT,deleted INT DEFAULT 0)");
+        jdbc.execute("CREATE TABLE yshop_user(id BIGINT PRIMARY KEY,status INT,deleted INT DEFAULT 0,mobile VARCHAR(11),routine_openid VARCHAR(100))");
         jdbc.execute("CREATE TABLE system_users(id BIGINT PRIMARY KEY,status INT,deleted INT DEFAULT 0,username VARCHAR(30),password VARCHAR(100),nickname VARCHAR(30),remark VARCHAR(500),dept_id BIGINT,post_ids VARCHAR(255),email VARCHAR(50),mobile VARCHAR(11),sex INT,avatar VARCHAR(100),login_ip VARCHAR(50),login_date DATETIME,creator VARCHAR(64),updater VARCHAR(64),create_time DATETIME,update_time DATETIME,tenant_id BIGINT DEFAULT 0)");
         String tail=",tenant_id BIGINT DEFAULT 0,shop_id BIGINT,creator VARCHAR(64),updater VARCHAR(64),create_time DATETIME,update_time DATETIME,deleted INT DEFAULT 0";
         jdbc.execute("CREATE TABLE system_oauth2_refresh_token(id BIGINT PRIMARY KEY,refresh_token VARCHAR(64) UNIQUE,user_id BIGINT,user_type INT,client_id VARCHAR(64),scopes VARCHAR(2000),expires_time DATETIME"+tail+")");
         jdbc.execute("CREATE TABLE system_oauth2_access_token(id BIGINT PRIMARY KEY,access_token VARCHAR(64) UNIQUE,refresh_token VARCHAR(64),user_id BIGINT,user_type INT,user_info VARCHAR(2000),client_id VARCHAR(64),scopes VARCHAR(2000),expires_time DATETIME"+tail+")");
-        jdbc.update("INSERT INTO yshop_user VALUES(1,0,0)");jdbc.update("INSERT INTO system_users(id,username,password,nickname,status,deleted) VALUES(1,'synthetic-admin','synthetic-unused','synthetic-admin',0,0)");
+        jdbc.update("INSERT INTO yshop_user VALUES(1,0,0,'13800000001','synthetic-mini')");jdbc.update("INSERT INTO system_users(id,username,password,nickname,status,deleted) VALUES(1,'synthetic-admin','synthetic-unused','synthetic-admin',0,0)");
         var bean=new MybatisSqlSessionFactoryBean();bean.setDataSource(ds);
         var config=new MybatisConfiguration();config.setMapUnderscoreToCamelCase(true);
         var global=com.baomidou.mybatisplus.core.toolkit.GlobalConfigUtils.defaults();

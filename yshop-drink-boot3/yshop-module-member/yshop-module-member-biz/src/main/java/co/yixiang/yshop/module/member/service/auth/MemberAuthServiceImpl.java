@@ -118,7 +118,10 @@ public class MemberAuthServiceImpl implements MemberAuthService {
         return attempt(()->{
             smsCodeApi.useSmsCode(new co.yixiang.yshop.module.system.api.sms.dto.code.SmsCodeUseReqDTO()
                     .setMobile(phone).setCode(request.getCode()).setScene(1).setUsedIp(getClientIP()));
-            MemberUserDO user=claimMember(phone,null,true);
+            var hint=userMapper.selectByMobile(phone);
+            if(hint==null)throw MemberIdentityPolicy.completionRequired();
+            MemberUserDO user=requireEnabled(userMapper.lockById(hint.getId()));
+            if(!phone.equals(user.getMobile()))throw MemberIdentityPolicy.conflict();
             var result=createTokenAfterLoginSuccess(user,phone,LoginLogTypeEnum.LOGIN_SMS);
             result.setUserInfo(UserConvert.INSTANCE.convert3(user));return result;
         });
@@ -141,7 +144,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
             if(hint!=null){
                 var current=requireEnabled(userMapper.lockById(hint.getId()));
                 if(!identity.equals(current.getRoutineOpenid()))throw MemberIdentityPolicy.conflict();
-                result=providerLogin(current,identity);
+                if(MemberIdentityPolicy.complete(current))result=providerLogin(current,identity);
             }
             result.setOpenId(identity);return result;
         });
@@ -177,13 +180,9 @@ public class MemberAuthServiceImpl implements MemberAuthService {
         if(phoneOwner!=null && providerOwner!=null && !phoneOwner.getId().equals(providerOwner.getId()))throw MemberIdentityPolicy.conflict();
         var hint=phoneOwner!=null?phoneOwner:providerOwner;
         if(hint==null) {
-            if(phone!=null)hint=userService.createUserIfAbsent(phone,getClientIP(),mini&&identity!=null?"routine":"h5");
-            else {
-                hint=new MemberUserDO().setUsername("member_"+cn.hutool.core.util.IdUtil.fastSimpleUUID())
-                        .setNickname("yshop用户").setStatus(0).setPassword(passwordEncoder.encode(cn.hutool.core.util.IdUtil.fastSimpleUUID()))
-                        .setRegisterIp(getClientIP()).setLoginType("wechat").setOpenid(identity);
-                MemberIdentityPolicy.exactlyOne(userMapper.insert(hint));
-            }
+            // A new customer requires both proofs from the configured Mini App.
+            if(phone==null || identity==null || !mini)throw MemberIdentityPolicy.completionRequired();
+            hint=userService.createUserIfAbsent(phone,getClientIP(),"routine");
         }
         var user=requireEnabled(userMapper.lockById(hint.getId()));
         String stored=mini?user.getRoutineOpenid():user.getOpenid();
@@ -217,6 +216,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
         if (user == null || !Objects.equals(user.getStatus(), CommonStatusEnum.ENABLE.getStatus())) {
             throw exception(AUTH_LOGIN_USER_DISABLED);
         }
+        if(!MemberIdentityPolicy.complete(user))throw MemberIdentityPolicy.completionRequired();
         // 插入登陆日志
 
         // 创建 Token 令牌
@@ -250,6 +250,7 @@ public class MemberAuthServiceImpl implements MemberAuthService {
         var current=userMapper.lockById(user.getId());
         if(current==null || !mobile.equals(current.getMobile()) || !Objects.equals(user.getPassword(),current.getPassword()))throw new PasswordLoginFailure(user.getId(),LoginResultEnum.BAD_CREDENTIALS);
         if(!Objects.equals(current.getStatus(),CommonStatusEnum.ENABLE.getStatus()))throw new PasswordLoginFailure(user.getId(),LoginResultEnum.USER_DISABLED);
+        if(!MemberIdentityPolicy.complete(current))throw new PasswordLoginFailure(user.getId(),LoginResultEnum.BAD_CREDENTIALS);
         return current;
     }
 

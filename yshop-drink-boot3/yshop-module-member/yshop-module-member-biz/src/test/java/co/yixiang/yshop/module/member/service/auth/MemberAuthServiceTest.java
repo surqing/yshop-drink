@@ -77,7 +77,7 @@ public class MemberAuthServiceTest extends BaseMockitoUnitTest {
         session.setOpenid("synthetic-openid"); session.setSessionKey("synthetic-session-key");
         when(wxMaService.getUserService()).thenReturn(wxMaUserService);
         when(wxMaUserService.getSessionInfo("synthetic-login-code")).thenReturn(session);
-        var member=MemberUserDO.builder().id(7L).status(status).mobile("synthetic-mobile").routineOpenid("synthetic-openid").build();
+        var member=MemberUserDO.builder().id(7L).status(status).mobile("13800000001").routineOpenid("synthetic-openid").build();
         when(userMapper.selectByProvider("synthetic-openid",true)).thenReturn(member);
         when(userMapper.lockById(7L)).thenReturn(member);
     }
@@ -137,7 +137,7 @@ public class MemberAuthServiceTest extends BaseMockitoUnitTest {
 
 
     MemberUserDO activePasswordMember() {
-        return MemberUserDO.builder().id(7L).mobile("13800000001").status(0).password("synthetic-hash").build();
+        return MemberUserDO.builder().id(7L).mobile("13800000001").status(0).routineOpenid("synthetic-openid").password("synthetic-hash").build();
     }
     co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthLoginReqVO passwordLoginRequest() {
         return co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthLoginReqVO.builder()
@@ -204,16 +204,22 @@ public class MemberAuthServiceTest extends BaseMockitoUnitTest {
     }
     @Test void disabledSmsMemberNeverGrantsOrWritesSuccess() {
         var user=activePasswordMember();user.setStatus(1);
-        when(userService.createUserIfAbsent(eq("13800000001"),any(),eq("h5"))).thenReturn(user);
+        when(userMapper.selectByMobile("13800000001")).thenReturn(user);
         when(userMapper.lockById(7L)).thenReturn(user);
         assertThrows(ServiceException.class,()->authService.smsLogin(smsRequest()));
         verifyNoInteractions(oauth2TokenApi,loginLogApi);verify(userService,never()).updateUserLogin(anyLong(),any());
     }
     @Test void enabledSmsUsesVerifiedIdentityAndRecordsSuccessAfterGrant() {
-        var user=activePasswordMember();when(userService.createUserIfAbsent(eq("13800000001"),any(),eq("h5"))).thenReturn(user);when(userMapper.lockById(7L)).thenReturn(user);when(userMapper.selectById(7L)).thenReturn(user);grantResponse();
+        var user=activePasswordMember();when(userMapper.selectByMobile("13800000001")).thenReturn(user);when(userMapper.lockById(7L)).thenReturn(user);grantResponse();
         assertEquals("synthetic-access",authService.smsLogin(smsRequest()).getAccessToken());
         InOrder order=inOrder(smsCodeApi,oauth2TokenApi,loginLogApi);
         order.verify(smsCodeApi).useSmsCode(any());order.verify(oauth2TokenApi).createAccessToken(argThat(v->v.getUserId()==7L && v.getUserType()==1));
         order.verify(loginLogApi).createLoginLog(argThat(v->v.getResult()==0));
+    }
+    @Test void phoneOnlySmsIsRejectedBeforeTokenGrant() {
+        var user=activePasswordMember();user.setRoutineOpenid(null);
+        when(userMapper.selectByMobile("13800000001")).thenReturn(user);when(userMapper.lockById(7L)).thenReturn(user);
+        lenient().when(oauth2TokenApi.createAccessToken(any())).thenReturn(new co.yixiang.yshop.module.system.api.oauth2.dto.OAuth2AccessTokenRespDTO().setUserId(7L).setAccessToken("synthetic-access"));
+        assertThrows(ServiceException.class,()->authService.smsLogin(smsRequest()));verifyNoInteractions(oauth2TokenApi,loginLogApi);
     }
 }
