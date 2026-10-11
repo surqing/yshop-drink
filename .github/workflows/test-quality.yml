@@ -251,12 +251,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Three independent defense mutations on PR; full Java matrix on manual runs
+      - name: Six defense mutations on PR; full matrix on manual runs
         env:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            python3 tests/quality/mutate.py --only inventory-sku-check,cross-store-product,coupon-total-limit --output "$RUNNER_TEMP/mutations"
+            python3 tests/quality/mutate.py --only inventory-sku-check,cross-store-product,coupon-total-limit,member-client-openid-principal,member-stale-mobile-write,receipt-transaction-omission --output "$RUNNER_TEMP/mutations"
           else
             python3 tests/quality/mutate.py --output "$RUNNER_TEMP/mutations"
           fi

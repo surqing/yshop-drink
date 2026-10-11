@@ -77,12 +77,12 @@ public class SmsCodeServiceImpl implements SmsCodeService {
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(rollbackFor=Exception.class)
     public void useSmsCode(SmsCodeUseReqDTO reqDTO) {
         // 检测验证码是否有效
         SmsCodeDO lastSmsCode = validateSmsCode0(reqDTO.getMobile(), reqDTO.getCode(), reqDTO.getScene());
         // 使用验证码
-        smsCodeMapper.updateById(SmsCodeDO.builder().id(lastSmsCode.getId())
-                .used(true).usedTime(LocalDateTime.now()).usedIp(reqDTO.getUsedIp()).build());
+        if(smsCodeMapper.consumeUnused(lastSmsCode.getId(),LocalDateTime.now(),reqDTO.getUsedIp())!=1)throw exception(SMS_CODE_USED);
     }
 
     @Override

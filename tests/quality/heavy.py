@@ -13,7 +13,7 @@ def main():
     owner=uuid.uuid4().hex;mysql='yshop-quality-heavy-'+owner;redis=mysql+'-redis'
     identity=source_identity();env=os.environ.copy();steps=[]
     report={**identity,'runId':owner,'result':'FAIL','cleanup':'NOT_RUN','steps':steps,
-            'selectedScope':a.scope,'notSelected':[] if a.scope=='full' else [{'name':n,'status':'NOT_RUN'} for n in ['mysql-business','mysql-financial','mysql-auth','redis']],
+            'selectedScope':a.scope,'notSelected':[] if a.scope=='full' else [{'name':n,'status':'NOT_RUN'} for n in ['mysql-business','mysql-financial','mysql-auth','mysql-member-identity','redis']],
             'startedAt':time.time(),'scope':'owned Docker MySQL/Redis/auth/synthetic HTTPS; GUI/Mini excluded',
             'paymentRequests':{'value':0,'evidence':'DECLARED_SYNTHETIC_TRANSPORT_ONLY','globalNetworkMeasured':False}}
     def private(name,text):
@@ -62,6 +62,14 @@ def main():
         expected=sum(sum(v.values()) for k,v in manifest(REPO).items() if k.endswith('.OAuth2LifecycleDatabaseTest'))
         if e.get('tests')!=expected or not e.get('exactNamesChecked'):raise RuntimeError('AUTH_TESTS_MISSING')
         return {'tests':expected,'cleanup':'PASS'}
+    def identity_report():
+        r=json.loads((root/'member-identity/report.json').read_text())
+        expected=sum(sum(v.values()) for k,v in manifest(REPO).items() if k.endswith('.MemberIdentityMysqlAcceptanceTest'))
+        if r.get('result')!='PASS' or r.get('cleanup')!='PASS' or any(r.get(k)!=v for k,v in identity.items()) or r.get('testedSourceDigest')!=identity['sourceDigest']:
+            raise RuntimeError('MEMBER_IDENTITY_REPORT_INVALID')
+        e=r.get('evidence',{})
+        if e.get('tests')!=expected or not e.get('exactNamesChecked'):raise RuntimeError('MEMBER_IDENTITY_CASES_MISSING')
+        return {'tests':expected,'cleanup':'PASS','runId':r['runId']}
     try:
         if os.getuid()==0:raise RuntimeError('NONROOT_TEST_LAUNCHER_REQUIRED')
         pw=secrets.token_hex(24);rpw=secrets.token_hex(24)
@@ -90,6 +98,7 @@ def main():
             command('mysql-business',[sys.executable,'tests/business/mysql-acceptance.py','--coupon'],lambda:acceptance_log('mysql-business',{'OrderingDatabaseTest','CatalogDatabaseTest','CatalogEditingMysqlAcceptance','CouponDatabaseTest'}))
             command('mysql-financial',[sys.executable,'tests/payment/mysql-acceptance.py','--coupon'],lambda:acceptance_log('mysql-financial',{'PaymentDatabaseTest','WalletDatabaseTest','PaymentAttemptDatabaseTest','WechatV3DatabaseTest','PaymentLiveReadinessDatabaseTest','LiveMerchantPreflightDatabaseTest','PaymentCancellationDatabaseTest','CouponPaymentDatabaseTest'}))
             command('mysql-auth',[sys.executable,'tests/quality/auth-mysql.py','--output',str(root/'auth')],auth_report)
+            command('mysql-member-identity',[sys.executable,'tests/quality/member-score-mysql.py','--output',str(root/'member-identity')],identity_report)
             ev=Evidence(root/'redis-evidence');selected={k:v for k,v in manifest(REPO).items() if k.endswith('.CouponCodeRedisAcceptanceTest')}
             from acceptance_support import maven_command
             cmd=maven_command(REPO.parent)+['-f','yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/pom.xml','-Pmysql-acceptance','test','-Dtest=CouponCodeRedisAcceptanceTest','-Dsurefire.failIfNoSpecifiedTests=true']+ev.arguments(selected)

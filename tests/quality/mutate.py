@@ -20,6 +20,11 @@ REPO=Path(__file__).resolve().parents[2]
 # Every operator is explicit and must match exactly once. Redundant defence removal can survive;
 # this is reported rather than counted as a kill or hidden from the denominator.
 OPERATORS=[
+ ('member-completion-grant-bypass', 'MemberAuthServiceImpl.java', 'if(!MemberIdentityPolicy.complete(user))throw MemberIdentityPolicy.completionRequired();', '/* mutation: incomplete SMS grants */;', 'MemberAuthServiceTest#phoneOnlySmsIsRejectedBeforeTokenGrant'),
+ ('member-incomplete-token-bypass', 'OAuth2PrincipalMapper.java', 'THEN status ELSE NULL END', 'THEN status ELSE status END', 'MemberIdentityMysqlAcceptanceTest'),
+ ('member-client-openid-principal', 'MemberAuthServiceImpl.java', 'var hint=userMapper.selectByMobile(phone);\n            if(hint==null)throw MemberIdentityPolicy.completionRequired();\n            MemberUserDO user=requireEnabled(userMapper.lockById(hint.getId()));\n            if(!phone.equals(user.getMobile()))throw MemberIdentityPolicy.conflict();', 'var hint=userMapper.selectByProvider(request.getOpenid(),true);\n            if(hint==null)throw MemberIdentityPolicy.completionRequired();\n            MemberUserDO user=requireEnabled(userMapper.lockById(hint.getId()));', 'MemberIdentityMysqlAcceptanceTest'),
+ ('member-stale-mobile-write','MemberUserDO.java','@TableField(updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)\n    private String mobile;','@TableField\n    private String mobile;','MemberIdentityMysqlAcceptanceTest'),
+ ('receipt-transaction-omission','AppStoreOrderServiceImpl.java','@Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, rollbackFor = Exception.class)\n    public void takeOrder','/* mutation: omitted receipt transaction */\n    public void takeOrder','MemberIdentityMysqlAcceptanceTest'),
  ('auth-admin-reenable-revocation','AdminUserServiceImpl.java','oauth2Tokens.revokeUserTokens(id, co.yixiang.yshop.framework.common.enums.UserTypeEnum.ADMIN.getValue());','/* mutation: omitted admin family revocation */;','OAuth2LifecycleDatabaseTest'),
  ('inventory-repeat-release','OrderPlacementService.java','> 0) return;','> 0 && false) return;','OrderingDatabaseTest'),
  ('cross-store-price','OrderPlacementService.java','BigDecimal basePrice=money(sku.get("price"));','BigDecimal basePrice=money(jdbc.queryForObject("SELECT v.price FROM yshop_store_product_attr_value v JOIN yshop_store_product p ON p.id=v.product_id WHERE p.shop_id<>? AND p.deleted=0 ORDER BY v.id LIMIT 1", Object.class, shopId));','OrderingDatabaseTest'),
@@ -54,6 +59,9 @@ OPERATORS=[
 # Narrow attribution is explicit, not an exclusion from the ordinary regression gate.
 # Full-suite operators remain unchanged; these scopes isolate previously mixed runtime errors.
 TARGET_METHODS={
+ 'member-client-openid-principal':'verifiedSmsPhoneNeverSelectsClientSuppliedForeignOpenid',
+ 'member-stale-mobile-write':'staleFullMemberWriteCannotRestoreAnyIdentity',
+ 'receipt-transaction-omission':'receiptBillFailureRollsBackOrderStatusPointsAndLog',
  'auth-admin-reenable-revocation':'adminDisableReenableCannotResurrectOldCredentials',
  'inventory-conditional-update': 'availableStockConditionalDebitMustSucceed',
  'cancel-payment-guard': 'activeOrUncertainBlocksCustomerAndExpiry',
@@ -88,10 +96,36 @@ def run(output, only=None):
     results=[];identity=source_identity();run_id=uuid.uuid4().hex;started=time.time()
     with tempfile.TemporaryDirectory(prefix='yshop-mutation-') as temp:
         copy=Path(temp)/'source'
-        shutil.copytree(REPO,copy,ignore=shutil.ignore_patterns('.git','target','node_modules','unpackage','__pycache__','dist'))
+        shutil.copytree(REPO,copy,ignore=shutil.ignore_patterns('.git','.quality','.superpowers','target','node_modules','unpackage','__pycache__','dist'))
         boot=copy/'yshop-drink-boot3'
         maven=env.get('YSHOP_MAVEN',shutil.which('mvn') or str(workspace(REPO)/'.dev-tools/maven/bin/mvn'))
         def test(suites,folder):
+            if any(s.startswith('MemberIdentityMysqlAcceptanceTest') for s in suites):
+                results=[]
+                for index,selector in enumerate(suites):
+                    if not selector.startswith('MemberIdentityMysqlAcceptanceTest'):
+                        results.append(test([selector],folder/str(index)));continue
+                    selected=scoped_cases(registry,[selector]);owned=folder/str(index)
+                    folder.mkdir(parents=True,exist_ok=True,mode=0o700)
+                    code=execute([sys.executable,str(REPO/'tests/quality/member-score-mysql.py'),'--checkout',str(copy),'--tests',selector,'--output',str(owned)],REPO,env,folder/(str(index)+'.log'),1800)
+                    report=json.loads((owned/'report.json').read_text());diagnostics=report.get('diagnostics',{})
+                    observed=diagnostics.get('reports',[])
+                    valid=report.get('cleanup')=='PASS' and len(observed)==1 and observed[0].get('tests')==sum(sum(c.values()) for c in selected.values()) and observed[0].get('skipped')==0
+                    from collections import Counter
+                    xmls=list((owned/'evidence').glob('*/surefire/TEST-*.xml'))
+                    if len(xmls)!=1:valid=False
+                    else:
+                        xml=ET.parse(xmls[0]).getroot();run=json.loads((xmls[0].parents[1]/'run.json').read_text())
+                        props={p.get('name'):p.get('value') for p in xml.findall('properties/property')}
+                        valid=valid and xml.get('name') in selected and dict(Counter(c.get('name') for c in xml.findall('testcase')))==selected.get(xml.get('name')) and props.get('quality.runId')==run.get('runId') and all(report.get(k)==v for k,v in identity.items())
+                        import importlib.util
+                        spec=importlib.util.spec_from_file_location('member_owned_driver',REPO/'tests/quality/member-score-mysql.py')
+                        driver=importlib.util.module_from_spec(spec);spec.loader.exec_module(driver)
+                        valid=valid and report.get('testedSourceDigest')==driver.checkout_digest(copy)
+                    if valid and code==0 and report.get('result')=='PASS':results.append(('PASS',0))
+                    elif valid:results.append((classify_mutation(observed[0]['failures'],observed[0]['errors']),observed[0]['failures']))
+                    else:results.append(('INCONCLUSIVE',0))
+                return ('PASS' if all(r[0]=='PASS' for r in results) else 'ASSERTION_FAILURE' if all(r[0]!='INCONCLUSIVE' for r in results) and any(r[0]=='ASSERTION_FAILURE' for r in results) else 'INCONCLUSIVE',sum(r[1] for r in results))
             evidence=Evidence(folder)
             selected=scoped_cases(registry,suites)
             owners={str(f.parents[len(Path('src/test/java/'+k.replace('.', '/')+'.java').parts)-1].relative_to(boot)) for k in selected for f in boot.glob('**/src/test/java/'+k.replace('.', '/')+'.java')}

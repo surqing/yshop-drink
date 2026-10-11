@@ -7,6 +7,9 @@ import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
 public interface SmsCodeMapper extends BaseMapperX<SmsCodeDO> {
+    @org.apache.ibatis.annotations.Update("UPDATE system_sms_code SET used=1,used_time=#{time},used_ip=#{ip} WHERE id=#{id} AND used=0 AND deleted=0")
+    int consumeUnused(@org.apache.ibatis.annotations.Param("id") Long id,@org.apache.ibatis.annotations.Param("time") java.time.LocalDateTime time,@org.apache.ibatis.annotations.Param("ip") String ip);
+
 
     /**
      * 获得手机号的最后一个手机验证码

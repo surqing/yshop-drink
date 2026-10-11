@@ -24,7 +24,12 @@ public class AppSocialUserUnbindReqVO {
     private Integer type;
 
     @Schema(description = "社交用户的 openid", required = true, example = "IPRmJ0wvBptiPIlGEZiPewGwiEiE")
-    @NotEmpty(message = "社交用户的 openid 不能为空")
-    private String openid;
 
+    private String openid; // ignored: fresh provider code determines the identity
+    @NotEmpty(message = "授权码不能为空")
+    private String code;
+
+    @NotEmpty(message = "当前绑定手机号的验证码不能为空")
+    @jakarta.validation.constraints.Pattern(regexp="[0-9]{4,6}")
+    private String smsCode;
 }

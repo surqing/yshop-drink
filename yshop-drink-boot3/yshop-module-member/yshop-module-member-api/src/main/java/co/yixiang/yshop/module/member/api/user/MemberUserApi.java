@@ -16,7 +16,6 @@ import static co.yixiang.yshop.framework.common.util.collection.CollectionUtils.
  */
 public interface MemberUserApi {
 
-    void saveWechatMember(WechatUserDto wechatUserDto);
 
     /**
      * 获得会员用户信息

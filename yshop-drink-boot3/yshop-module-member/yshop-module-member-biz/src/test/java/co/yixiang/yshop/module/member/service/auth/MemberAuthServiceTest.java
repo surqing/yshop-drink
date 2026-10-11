@@ -19,6 +19,7 @@ import static org.mockito.Mockito.*;
  */
 public class MemberAuthServiceTest extends BaseMockitoUnitTest {
     @InjectMocks MemberAuthServiceImpl authService;
+    @Mock org.springframework.transaction.PlatformTransactionManager transactionManager;
     @Mock MemberUserMapper userMapper;
     @Mock cn.binarywang.wx.miniapp.api.WxMaService wxMaService;
     @Mock cn.binarywang.wx.miniapp.api.WxMaUserService wxMaUserService;
@@ -28,6 +29,10 @@ public class MemberAuthServiceTest extends BaseMockitoUnitTest {
     @Mock OAuth2TokenApi oauth2TokenApi;
     @Mock LoginLogApi loginLogApi;
     @Mock co.yixiang.yshop.module.system.api.sms.SmsCodeApi smsCodeApi;
+    @org.junit.jupiter.api.BeforeEach void currentPrincipalFixture() {
+        // The original password fixtures also supply the current row under the new lock.
+        lenient().doAnswer(c->userService.getUserByMobile("13800000001")).when(userMapper).lockById(7L);
+    }
     AppAuthUpdatePasswordReqVO request() {
         return AppAuthUpdatePasswordReqVO.builder().oldPassword("synthetic-old-plain")
                 .password("synthetic-new-plain").build();
@@ -72,8 +77,9 @@ public class MemberAuthServiceTest extends BaseMockitoUnitTest {
         session.setOpenid("synthetic-openid"); session.setSessionKey("synthetic-session-key");
         when(wxMaService.getUserService()).thenReturn(wxMaUserService);
         when(wxMaUserService.getSessionInfo("synthetic-login-code")).thenReturn(session);
-        when(userMapper.selectOne(any(com.baomidou.mybatisplus.core.conditions.Wrapper.class)))
-                .thenReturn(MemberUserDO.builder().id(7L).status(status).mobile("synthetic-mobile").build());
+        var member=MemberUserDO.builder().id(7L).status(status).mobile("13800000001").routineOpenid("synthetic-openid").build();
+        when(userMapper.selectByProvider("synthetic-openid",true)).thenReturn(member);
+        when(userMapper.lockById(7L)).thenReturn(member);
     }
     @Test void disabledWechatMemberCannotReceiveToken() throws Exception {
         syntheticWechatMember(1);
@@ -99,12 +105,13 @@ public class MemberAuthServiceTest extends BaseMockitoUnitTest {
         assertEquals("synthetic-access-token",result.getAccessToken());
         assertEquals("synthetic-openid",result.getOpenId());
         verify(oauth2TokenApi).createAccessToken(argThat(v -> v.getUserId()==7L && v.getUserType()==1));
-        verify(miniRedisDAO).set("synthetic-session-key","synthetic-openid");
+        verifyNoInteractions(miniRedisDAO);
     }
-    @Test void expiredWechatSessionNeverDecryptsOrCreatesToken() {
-        when(miniRedisDAO.get("synthetic-openid")).thenReturn(null);
-        assertThrows(ServiceException.class,()->authService.weixinMiniAppLogin3("synthetic-data","synthetic-iv","synthetic-openid"));
-        verifyNoInteractions(wxMaService,oauth2TokenApi,userMapper);
+    @Test void expiredWechatSessionNeverDecryptsOrCreatesToken() throws Exception {
+        when(wxMaService.getUserService()).thenReturn(wxMaUserService);
+        when(wxMaUserService.getSessionInfo("synthetic-expired-code")).thenThrow(new me.chanjar.weixin.common.error.WxErrorException(new me.chanjar.weixin.common.error.WxError()));
+        assertThrows(ServiceException.class,()->authService.weixinMiniAppLogin2(co.yixiang.yshop.module.member.controller.app.auth.vo.AppWeixinMiniLoginVO.builder().code("synthetic-expired-code").build()));
+        verifyNoInteractions(miniRedisDAO,oauth2TokenApi,userMapper);
     }
 
     @Test void refreshIsMemberTypedAndNeverLogsSuccessfulLogin() {
@@ -130,7 +137,7 @@ public class MemberAuthServiceTest extends BaseMockitoUnitTest {
 
 
     MemberUserDO activePasswordMember() {
-        return MemberUserDO.builder().id(7L).mobile("13800000001").status(0).password("synthetic-hash").build();
+        return MemberUserDO.builder().id(7L).mobile("13800000001").status(0).routineOpenid("synthetic-openid").password("synthetic-hash").build();
     }
     co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthLoginReqVO passwordLoginRequest() {
         return co.yixiang.yshop.module.member.controller.app.auth.vo.AppAuthLoginReqVO.builder()
@@ -197,15 +204,22 @@ public class MemberAuthServiceTest extends BaseMockitoUnitTest {
     }
     @Test void disabledSmsMemberNeverGrantsOrWritesSuccess() {
         var user=activePasswordMember();user.setStatus(1);
-        when(userService.createUserIfAbsent(eq("13800000001"),any(),eq("h5"))).thenReturn(user);
+        when(userMapper.selectByMobile("13800000001")).thenReturn(user);
+        when(userMapper.lockById(7L)).thenReturn(user);
         assertThrows(ServiceException.class,()->authService.smsLogin(smsRequest()));
         verifyNoInteractions(oauth2TokenApi,loginLogApi);verify(userService,never()).updateUserLogin(anyLong(),any());
     }
     @Test void enabledSmsUsesVerifiedIdentityAndRecordsSuccessAfterGrant() {
-        when(userService.createUserIfAbsent(eq("13800000001"),any(),eq("h5"))).thenReturn(activePasswordMember());grantResponse();
+        var user=activePasswordMember();when(userMapper.selectByMobile("13800000001")).thenReturn(user);when(userMapper.lockById(7L)).thenReturn(user);grantResponse();
         assertEquals("synthetic-access",authService.smsLogin(smsRequest()).getAccessToken());
         InOrder order=inOrder(smsCodeApi,oauth2TokenApi,loginLogApi);
         order.verify(smsCodeApi).useSmsCode(any());order.verify(oauth2TokenApi).createAccessToken(argThat(v->v.getUserId()==7L && v.getUserType()==1));
         order.verify(loginLogApi).createLoginLog(argThat(v->v.getResult()==0));
+    }
+    @Test void phoneOnlySmsIsRejectedBeforeTokenGrant() {
+        var user=activePasswordMember();user.setRoutineOpenid(null);
+        when(userMapper.selectByMobile("13800000001")).thenReturn(user);when(userMapper.lockById(7L)).thenReturn(user);
+        lenient().when(oauth2TokenApi.createAccessToken(any())).thenReturn(new co.yixiang.yshop.module.system.api.oauth2.dto.OAuth2AccessTokenRespDTO().setUserId(7L).setAccessToken("synthetic-access"));
+        assertThrows(ServiceException.class,()->authService.smsLogin(smsRequest()));verifyNoInteractions(oauth2TokenApi,loginLogApi);
     }
 }

@@ -61,15 +61,7 @@ public interface MemberAuthService {
      */
     AppAuthLoginRespVO weixinMiniAppLogin2(AppWeixinMiniLoginVO loginVO);
 
-    /**
-     * 微信小程序的一键登录
-     *
-     * @param encryptedData encryptedData
-     * @param encryptedData encryptedData
-     * @param encryptedData encryptedData
-     * @return 登录结果
-     */
-    AppAuthLoginRespVO weixinMiniAppLogin3(String encryptedData, String iv, String openid);
+    void changeSocialIdentity(Long uid,Integer type,String code,String smsCode,boolean unbind);
 
     /**
      * 微信公众号的一键登录

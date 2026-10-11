@@ -1,6 +1,5 @@
 package co.yixiang.yshop.module.member.service.user;
 
-import cn.hutool.core.util.NumberUtil;
 import co.yixiang.yshop.framework.common.enums.ShopCommonEnum;
 import co.yixiang.yshop.module.member.enums.BillDetailEnum;
 import co.yixiang.yshop.module.member.service.userbill.UserBillService;
@@ -40,11 +39,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public Long createUser(UserCreateReqVO createReqVO) {
-        // 插入
-        MemberUserDO user = UserConvert.INSTANCE.convert(createReqVO);
-        userMapper.insert(user);
-        // 返回
-        return user.getId();
+        // Administrative permission cannot replace the customer's two identity proofs.
+        throw co.yixiang.yshop.module.member.service.auth.MemberIdentityPolicy.completionRequired();
     }
 
     @Override
@@ -54,6 +50,8 @@ public class UserServiceImpl implements UserService {
         validateUserExists(updateReqVO.getId());
         // 更新
         MemberUserDO updateObj = UserConvert.INSTANCE.convert(updateReqVO);
+        updateObj.setMobile(null);updateObj.setOpenid(null);updateObj.setRoutineOpenid(null);
+        updateObj.setIntegral(null);updateObj.setNowMoney(null);updateObj.setBrokeragePrice(null);
         // The member UPDATE owns the principal row before refresh-family locks.
         userMapper.updateById(updateObj);
         if(updateObj.getStatus()!=null && !Integer.valueOf(0).equals(updateObj.getStatus()))
@@ -66,11 +64,10 @@ public class UserServiceImpl implements UserService {
      * @param updateReqVO 更新信息
      */
     @Override
-    @org.springframework.transaction.annotation.Transactional(rollbackFor=Exception.class)
+    @org.springframework.transaction.annotation.Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED,rollbackFor=Exception.class)
     public void updateMony(UserUpdateMoneyReqVO updateReqVO){
-        MemberUserDO memberUserDO = userMapper.selectById(updateReqVO.getId());
+        MemberUserDO memberUserDO = userMapper.lockById(updateReqVO.getId());
         if (memberUserDO == null) throw exception(USER_NOT_EXISTS);
-        String mark = "";
         var amount = co.yixiang.yshop.module.member.service.wallet.WalletService.money(new BigDecimal(updateReqVO.getMoney()), false);
         if (!Integer.valueOf(1).equals(updateReqVO.getPtype()) && !Integer.valueOf(2).equals(updateReqVO.getPtype()))
             throw new IllegalArgumentException("INVALID_WALLET_DIRECTION");
@@ -82,26 +79,21 @@ public class UserServiceImpl implements UserService {
         if (!movement.first()) return;
         if(Integer.valueOf(1).equals(updateReqVO.getPtype())) userBillService.incomeExact(memberUserDO.getId(),"系统增加余额",BillDetailEnum.CATEGORY_1.getValue(),BillDetailEnum.TYPE_6.getValue(),amount,movement.transaction().getBalanceAfter(),"系统增加余额",reference);
         else userBillService.expendExact(memberUserDO.getId(),"系统减少余额",BillDetailEnum.CATEGORY_1.getValue(),BillDetailEnum.TYPE_7.getValue(),amount,movement.transaction().getBalanceAfter(),"系统减少余额");
-        double newIntegral = 0d;
-        if(ShopCommonEnum.ADD_1.getValue().equals(updateReqVO.getItype())){
-            mark = "系统增加了"+updateReqVO.getIntegral()+"积分";
-            newIntegral = NumberUtil.add(memberUserDO.getIntegral(),new BigDecimal(updateReqVO.getIntegral())).doubleValue();
-            userBillService.income(memberUserDO.getId(),"系统增加积分", BillDetailEnum.CATEGORY_2.getValue(),
-                    BillDetailEnum.TYPE_6.getValue(),Double.valueOf(updateReqVO.getIntegral()),newIntegral, mark,"");
-        }else{
-            mark = "系统扣除了"+updateReqVO.getIntegral()+"积分";
-            newIntegral = NumberUtil.sub(memberUserDO.getIntegral(),new BigDecimal(updateReqVO.getIntegral())).doubleValue();
-            if(newIntegral < 0) {
-                newIntegral = 0d;
-            }
-            userBillService.expend(memberUserDO.getId(), "系统减少积分",
-                    BillDetailEnum.CATEGORY_2.getValue(),
-                    BillDetailEnum.TYPE_7.getValue(),
-                    Double.valueOf(updateReqVO.getIntegral()), newIntegral, mark);
+        BigDecimal before = memberUserDO.getIntegral();
+        BigDecimal requested = new BigDecimal(updateReqVO.getIntegral());
+        BigDecimal after;
+        if (ShopCommonEnum.ADD_1.getValue().equals(updateReqVO.getItype())) {
+            after = before.add(requested);
+            userBillService.incomeExact(memberUserDO.getId(), "系统增加积分", BillDetailEnum.CATEGORY_2.getValue(),
+                    BillDetailEnum.TYPE_6.getValue(), after.subtract(before), after, "系统增加了" + requested + "积分", reference);
+        } else {
+            after = before.subtract(requested).max(BigDecimal.ZERO);
+            BigDecimal actual = before.subtract(after);
+            userBillService.expendExact(memberUserDO.getId(), "系统减少积分", BillDetailEnum.CATEGORY_2.getValue(),
+                    BillDetailEnum.TYPE_7.getValue(), actual, after, "系统扣除了" + actual + "积分", reference);
         }
-        memberUserDO.setIntegral(BigDecimal.valueOf(newIntegral));
-
-        userMapper.updateById(memberUserDO);
+        if (userMapper.changeIntegral(memberUserDO.getId(), before, after) != 1)
+            throw new IllegalStateException("ADMIN_POINTS_UPDATE_FAILED");
 
     }
 

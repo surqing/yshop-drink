@@ -27,7 +27,7 @@ public class AppUserUpdateMobileReqVO {
 
     @Schema(description = "手机号",required = true,example = "15823654487")
     @NotBlank(message = "手机号不能为空")
-    @Length(min = 8, max = 11, message = "手机号码长度为 8-11 位")
+    @Length(min = 11, max = 15, message = "手机号码长度为 11-15 位")
     @Mobile
     private String mobile;
 
@@ -41,7 +41,7 @@ public class AppUserUpdateMobileReqVO {
 
     @Schema(description = "原手机号",required = true,example = "15823654487")
     @NotBlank(message = "手机号不能为空")
-    @Length(min = 8, max = 11, message = "手机号码长度为 8-11 位")
+    @Length(min = 11, max = 15, message = "手机号码长度为 11-15 位")
     @Mobile
     private String oldMobile;
 

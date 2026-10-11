@@ -107,6 +107,8 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
     @Resource
     private MemberUserService userService;
     @Resource
+    private co.yixiang.yshop.module.member.dal.mysql.user.MemberUserMapper memberUserMapper;
+    @Resource
     private AppStoreProductService appStoreProductService;
     @Resource
     private StoreOrderCartInfoService storeOrderCartInfoService;
@@ -510,41 +512,26 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
      * @param uid     uid
      */
     @Override
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public void takeOrder(String orderId, Long uid) {
-        AppStoreOrderQueryVo order = this.getOrderInfo(orderId, uid);
-        if (ObjectUtil.isNull(order)) {
+        if (uid == null) throw exception(STORE_ORDER_NOT_EXISTS);
+        AppStoreOrderQueryVo candidate = this.getOrderInfo(orderId, uid);
+        if (candidate == null) {
             throw exception(STORE_ORDER_NOT_EXISTS);
         }
-
-        if (OrderInfoEnum.PAY_STATUS_0.getValue().equals(order.getPaid())) {
+        // Re-read under the order lock; an earlier lookup is only an owned row hint.
+        StoreOrderDO order = storeOrderMapper.lockReceiptOrder(candidate.getId(), uid);
+        if (order == null) throw exception(STORE_ORDER_NOT_EXISTS);
+        if (!Integer.valueOf(1).equals(order.getPaid()) || !Integer.valueOf(0).equals(order.getRefundStatus())
+                || !Integer.valueOf(0).equals(order.getIsSystemDel())) {
             throw exception(ORDER_STATUS_ERROR);
         }
-
-        if (OrderInfoEnum.STATUS_3.getValue().equals(order.getStatus())){
+        if (OrderInfoEnum.STATUS_3.getValue().equals(order.getStatus())) {
             throw exception(ORDER_STATUS_FINISH);
         }
-        order = handleOrder(order);
-//        if (order.getOrderType().equals(OrderLogEnum.ORDER_TAKE_OUT.getValue())
-//                && !OrderStatusEnum.STATUS_2.getValue().toString().equals(order.get_status().get_type())) {
-//            throw exception(ORDER_STATUS_ERROR);
-//        }
-
-
-
-        StoreOrderDO storeOrder = new StoreOrderDO();
-        storeOrder.setStatus(OrderInfoEnum.STATUS_3.getValue());
-        storeOrder.setId(order.getId());
-        this.updateById(storeOrder);
-
-        //增加状态
+        if (storeOrderMapper.markReceived(order.getId(), uid) != 1) throw exception(ORDER_STATUS_ERROR);
         storeOrderStatusService.create(order.getUid(),order.getId(), OrderLogEnum.TAKE_ORDER_DELIVERY.getValue(), OrderLogEnum.TAKE_ORDER_DELIVERY.getDesc());
-
-        //奖励积分
         this.gainUserIntegral(order);
-
-
-        //分销计算 todo
-
     }
 
     /**
@@ -751,20 +738,18 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
      *
      * @param order 订单
      */
-    private void gainUserIntegral(AppStoreOrderQueryVo order) {
-        if (order.getGainIntegral().compareTo(BigDecimal.ZERO) > 0) {
-            MemberUserDO user = userService.getUser(order.getUid());
-
-            BigDecimal newIntegral = NumberUtil.add(user.getIntegral(), order.getGainIntegral());
-            user.setIntegral(newIntegral);
-            user.setId(order.getUid());
-            userService.updateById(user);
-
-            //增加流水
-            billService.income(user.getId(), "购买商品赠送积分", BillDetailEnum.CATEGORY_2.getValue(),
+    private void gainUserIntegral(StoreOrderDO order) {
+        if (order.getGainIntegral() != null && order.getGainIntegral().signum() > 0) {
+            // All receipt writers lock order -> member, matching payment/cancellation ordering.
+            MemberUserDO user = memberUserMapper.lockById(order.getUid());
+            if (user == null) throw exception(STORE_ORDER_NOT_EXISTS);
+            BigDecimal newIntegral = user.getIntegral().add(order.getGainIntegral());
+            if (memberUserMapper.changeIntegral(user.getId(), user.getIntegral(), newIntegral) != 1)
+                throw new IllegalStateException("RECEIPT_POINTS_UPDATE_FAILED");
+            billService.incomeExact(user.getId(), "购买商品赠送积分", BillDetailEnum.CATEGORY_2.getValue(),
                     BillDetailEnum.TYPE_9.getValue(),
-                    order.getGainIntegral().doubleValue(),
-                    newIntegral.doubleValue(),
+                    order.getGainIntegral(),
+                    newIntegral,
                     "购买商品赠送" + order.getGainIntegral() + "积分", order.getId().toString());
         }
     }
