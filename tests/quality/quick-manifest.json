@@ -10,5 +10,7 @@
   "tests/payment/prepayment-tools-test.py": 26,
   "tests/quality/test_owned_resources.py": 16,
   "tests/quality/test_page_evidence.py": 37,
-  "tests/auth-login.test.mjs": 3
+  "tests/auth-login.test.mjs": 3,
+  "tests/quality/test_e2e_cli.py": 6,
+  "tests/quality/test_e2e_contract.py": 26
 }
