@@ -40,6 +40,21 @@ class E2eCliTest(unittest.TestCase):
         self.assertEqual(0,result.returncode,result.stderr)
         self.assertEqual(['order-retry'],[s['id'] for s in json.loads(result.stdout)['scenarios']])
 
+    def test_missing_official_tools_blocks_local_without_ci_fallback(self):
+        with tempfile.TemporaryDirectory() as folder:
+            env=os.environ.copy();env['YSHOP_HBUILDER_CLI']=str(Path(folder)/'missing-hbuilder')
+            result=subprocess.run([sys.executable,str(REPO/'tests/quality/run.py'),'E2E','--profile','local','--output',folder],
+                                  cwd=REPO,text=True,capture_output=True,env=env,timeout=20)
+            self.assertEqual(1,result.returncode,result.stderr)
+            summary=json.loads(result.stdout)
+            report=json.loads(Path(summary['report']).read_text())
+            self.assertEqual('BLOCKED',report['status'])
+            self.assertEqual('OFFICIAL_TOOL_OR_OWN_APPID_MISSING',report['reasonCode'])
+            self.assertEqual('local',report['profile'])
+            self.assertEqual('PASSED',report['cleanup'])
+            self.assertTrue(report['complete'])
+            self.assertTrue(all(s['status']=='NOT_RUN' for s in report['scenarios']))
+
     def test_profile_is_required(self):
         result=self.invoke('E2E','--list')
         self.assertEqual(2,result.returncode)
