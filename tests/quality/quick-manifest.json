@@ -14,5 +14,5 @@
   "tests/quality/test_e2e_cli.py": 6,
   "tests/quality/test_e2e_contract.py": 26,
   "tests/quality/test_e2e_environment.py": 11,
-  "tests/quality/test_e2e_support.py": 6
+  "tests/quality/test_e2e_support.py": 7
 }

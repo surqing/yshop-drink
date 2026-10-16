@@ -19,6 +19,8 @@ def extract_application(jar, destination):
                 relative=Path('classes')/entry.filename[len('BOOT-INF/classes/'):]
             elif entry.filename.startswith('BOOT-INF/lib/'):
                 relative=Path('lib')/entry.filename[len('BOOT-INF/lib/'):]
+            elif entry.filename.startswith('META-INF/spring/') or entry.filename=='META-INF/spring.factories':
+                relative=Path('classes')/entry.filename
             else:continue
             if '..' in relative.parts or relative.is_absolute():raise ValueError('ARTIFACT_PATH_INVALID')
             if entry.filename.startswith('BOOT-INF/classes/e2esupport/'):

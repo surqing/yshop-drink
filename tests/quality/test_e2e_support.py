@@ -21,6 +21,17 @@ class TestSupportBoundaryTest(unittest.TestCase):
             self.assertEqual(2,len(cp))
             self.assertFalse((root/'extracted/META-INF').exists())
 
+    def test_root_auto_configuration_resources_are_preserved(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);jar=root/'app.jar'
+            with zipfile.ZipFile(jar,'w') as bundle:
+                bundle.writestr('META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports','example.RealConfiguration')
+                bundle.writestr('BOOT-INF/classes/example/Application.class','class')
+            extract_application(jar,root/'extracted')
+            resource=root/'extracted/classes/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports'
+            self.assertTrue(resource.is_file(),'application auto-configuration metadata was dropped')
+            self.assertEqual('example.RealConfiguration',resource.read_text())
+
     def test_zip_traversal_is_rejected_before_writing(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);jar=root/'app.jar'
