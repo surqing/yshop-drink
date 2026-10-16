@@ -11,11 +11,13 @@ class E2eContractTest(unittest.TestCase):
         self.started=time.time()-2
         self.identity={'sourceSha':'current','sourceDigest':'content'}
         self.planned=[{'id':'order-retry','variant':'mini-admin','expectedCheckIds':['page-order','sql-single-order']}]
+        self.mini={'officialConnected':True,'compiledSource':self.identity,'compiledHashesVerified':True,
+                   'compiledFileCount':5,'paymentRequests':0,'blockedExternalRequests':0}
         self.receipt={**self.identity,'runId':'run','owner':'owner','complete':True,'status':'PASSED',
                       'startedAt':self.started+0.1,'endedAt':time.time(),'driversCleanup':'PASSED',
                       'planned':[{'id':'order-retry','variant':'mini-admin'}],
                       'scenarios':[{'id':'order-retry','variant':'mini-admin','status':'PASSED','retry':0,
-                                    'checks':[{'id':'page-order','status':'PASSED','executed':True},
+                                    'miniEvidence':self.mini,'checks':[{'id':'page-order','status':'PASSED','executed':True},
                                               {'id':'sql-single-order','status':'PASSED','executed':True}]}]}
 
     def validate(self):
@@ -77,6 +79,26 @@ class E2eContractTest(unittest.TestCase):
 
     def test_invalid_execution_end_is_rejected(self):
         self.receipt['endedAt']=self.started-10;self.reject()
+
+    def test_local_case_requires_official_compiled_runtime_evidence(self):
+        self.receipt['scenarios'][0].pop('miniEvidence',None);self.reject()
+
+    def test_local_case_rejects_foreign_compilation(self):
+        self.receipt['scenarios'][0]['miniEvidence']={**self.mini,'compiledSource':{'sourceSha':'old','sourceDigest':'old'}};self.reject()
+
+    def test_local_case_rejects_zero_compiled_files(self):
+        self.receipt['scenarios'][0]['miniEvidence']={**self.mini,'compiledFileCount':0};self.reject()
+
+    def test_local_case_rejects_financial_request(self):
+        self.receipt['scenarios'][0]['miniEvidence']={**self.mini,'paymentRequests':1};self.reject()
+
+    def test_local_case_rejects_external_request(self):
+        self.receipt['scenarios'][0]['miniEvidence']={**self.mini,'blockedExternalRequests':1};self.reject()
+
+    def test_api_variant_does_not_fabricate_mini_evidence(self):
+        self.planned[0]['variant']='api-admin';self.receipt['planned'][0]['variant']='api-admin'
+        self.receipt['scenarios'][0]['variant']='api-admin';self.receipt['scenarios'][0].pop('miniEvidence',None)
+        self.assertEqual(2,self.validate()['checks'])
 
     def test_missing_driver_cleanup_is_rejected(self):
         del self.receipt['driversCleanup'];self.reject()

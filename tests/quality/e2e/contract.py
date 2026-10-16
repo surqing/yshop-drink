@@ -41,6 +41,15 @@ def validate_receipt(receipt, planned, identity, run_id, owner, started):
         require(len(set(names))==len(names) and Counter(names)==Counter(plan['expectedCheckIds']),
                 'E2E_CHECKS_MISMATCH')
         require(all(c.get('executed') is True and c.get('status')=='PASSED' for c in checks),'E2E_CHECK_NOT_PASSED')
+        if plan['variant']=='mini-admin':
+            mini=case.get('miniEvidence')
+            require(isinstance(mini,dict),'E2E_MINI_EVIDENCE_REQUIRED')
+            require(mini.get('officialConnected') is True and mini.get('compiledHashesVerified') is True,
+                    'E2E_MINI_RUNTIME_NOT_VERIFIED')
+            require(mini.get('compiledSource')==identity and type(mini.get('compiledFileCount')) is int
+                    and mini['compiledFileCount']>0,'E2E_MINI_COMPILATION_MISMATCH')
+            require(all(type(mini.get(key)) is int and mini[key]==0 for key in ['paymentRequests','blockedExternalRequests']),
+                    'E2E_MINI_EXTERNAL_REQUEST_RECORDED')
         count+=len(checks)
     return {'scenarios':len(cases),'checks':count,'exactNamesChecked':True}
 

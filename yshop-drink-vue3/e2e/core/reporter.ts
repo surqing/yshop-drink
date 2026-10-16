@@ -21,7 +21,7 @@ export default class E2eReporter implements Reporter {
     }))
     this.cases.push({ id: selected.id, variant: selected.variant,
       status: result.status === 'passed' && test.expectedStatus === 'passed' ? 'PASSED' : 'FAILED',
-      retry: result.retry, checks, driversCleanup: receipt.driversCleanup || 'NOT_RUN' })
+      retry: result.retry, checks, miniEvidence: receipt.miniEvidence, stage: receipt.stage, driversCleanup: receipt.driversCleanup || 'NOT_RUN' })
   }
   onEnd(result: FullResult) {
     if (!this.cases.length) return // Discovery has no executed evidence to publish.

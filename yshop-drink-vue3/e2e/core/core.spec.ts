@@ -241,6 +241,13 @@ async function storeIsolation(f: Flow) {
       expect((await f.api('GET', `/admin-api/order/store-order/get?id=${id}`, undefined, token, false)).code).not.toBe(0)
       await f.viewOrder(first.orderId, undefined, page)
     } finally { await staffContext.close() }
+    const storeBContext = await f.browser.newContext({ baseURL: f.baseURL, serviceWorkers: 'block' })
+    try {
+      const page = await storeBContext.newPage(); const token = await f.login(page, context.accounts.staffB)
+      const id = f.oracle('order', { orderId: first.orderId })[0].id
+      expect((await f.api('GET', `/admin-api/order/store-order/get?id=${id}`, undefined, token, false)).code).not.toBe(0)
+      await f.viewOrder(second.orderId, undefined, page)
+    } finally { await storeBContext.close() }
   })
   await f.check('other-member-denied', async () => { expect((await f.api('GET', `/app-api/order/detail/${first.orderId}`, undefined, other, false)).code).not.toBe(0) })
   await f.check('other-member-address-denied', async () => {
@@ -346,7 +353,7 @@ async function couponFlow(f: Flow, complete: boolean) {
     await f.check('synthetic-completion', () => { expect(f.bridge('complete', { orderId: order.orderId }).result).toBe('FIRST_SUCCESS') })
     await f.check('duplicate-completion', () => { expect(f.bridge('complete', { orderId: order.orderId }).result).toBe('IDEMPOTENT_DUPLICATE') })
     await f.check('admin-paid-order', async () => { const row = await f.viewOrder(order.orderId); await expect(row).not.toContainText('未支付'); await expect(row).toContainText('14') })
-    await f.check('coupon-redeemed', () => { expect(f.oracle('coupon-right', { rightId: right.id })[0].status).toBe(2) })
+    await f.check('coupon-redeemed', () => { const row = f.oracle('coupon-right', { rightId: right.id })[0]; expect(row.status).toBe(1); expect(row.redeemedOrderId).toBe(order.orderId); expect(row.redeemedAt).toBeTruthy() })
     if (local) await f.check('mini-redeemed-coupon', async () => { expect(await f.mini.couponText(coupon.title)).toContain('已核销') })
     await f.check('completion-ledger-sql', () => {
       const record = f.oracle('financial-records', { orderId: order.orderId })[0]

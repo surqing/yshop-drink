@@ -15,11 +15,16 @@ class MiniDriver {
     }
     const mini = await automator.launch({ projectPath: context.project, cliPath: context.cli, port: context.port, timeout: 90000 })
     const driver = new MiniDriver(mini, output)
+    driver.evidence = { officialConnected: true, compiledHashesVerified: true, compiledSource: context.compiledSource, compiledFileCount: Object.keys(context.compiledHashes).length }
     try { await until(async () => (await mini.pageStack()).length > 0, 90000); return driver }
     catch (error) { await driver.close(); throw error }
   }
   constructor(mini, output) { this.mini = mini; this.output = output }
-  async state() { return this.mini.evaluate(() => wx.__e2e) }
+  async state() {
+    const state = await this.mini.evaluate(() => wx.getStorageSync('__e2eState'))
+    if (!state) throw Error('MINI_INSTRUMENTATION_NOT_VISIBLE')
+    return state
+  }
   async token() { return this.mini.evaluate(() => wx.getStorageSync('accessToken')) }
   async proof(principal) {
     await this.mini.mockWxMethod('login', { code: `e2e-login-p${principal}-${crypto.randomBytes(16).toString('hex')}` })
@@ -87,7 +92,7 @@ class MiniDriver {
   }
   async amount(page) { return (await (await page.$('.pay-page__footer-amount')).text()) }
   async submit(page, { loseResponse = false } = {}) {
-    if (loseResponse) await this.mini.evaluate(() => { wx.__e2e.dropNextOrderResponse = true })
+    if (loseResponse) await this.mini.evaluate(() => { wx.setStorageSync('__e2eFault', { dropNextOrderResponse: true }) })
     const before = (await this.state()).orderIds.length
     await (await page.$('.pay-page__footer-btn')).tap()
     if (loseResponse) {
@@ -139,7 +144,7 @@ class MiniDriver {
     if (!this.mini) return
     try {
       await this.mini.evaluate(() => {
-        for (const key of ['accessToken', 'userinfo', 'selectedStore', 'cart', 'checkoutSubmission', 'mycoupon']) wx.removeStorageSync(key)
+        for (const key of ['accessToken', 'userinfo', 'selectedStore', 'cart', 'checkoutSubmission', 'mycoupon', '__e2eState', '__e2eFault']) wx.removeStorageSync(key)
       })
       await this.mini.close()
     } finally { this.mini = null }

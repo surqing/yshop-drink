@@ -124,7 +124,8 @@ def run(repo, output, profile, scenario=None):
             context={**environment.context(),**support.context(),'repo':str(repo),'python':sys.executable,
                      'profile':profile,'planned':plan['scenarios'],'output':str(root),
                      'accounts':{'admin':{'username':'qualityadmin','password':'syntheticQA12'},
-                                 'staff':{'username':'qualitystaff','password':'syntheticQA12'}}}
+                                 'staff':{'username':'qualitystaff','password':'syntheticQA12'},
+                                 'staffB':{'username':'qualitystaffb','password':'syntheticQA12'}}}
             if profile=='local':
                 report['stage']='MINI_BUILD';write_reports(root,report)
                 from mini_pages import prepare_mini

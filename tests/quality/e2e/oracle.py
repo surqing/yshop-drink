@@ -27,7 +27,7 @@ def query_for(name, ids):
     if name=='product':
         return "SELECT JSON_OBJECT('id',id,'shopId',shop_id,'version',catalog_version,'name',store_name,'stock',stock) FROM yshop_store_product WHERE id="+number(ids.get('productId'))+';'
     if name=='coupon-right':
-        return "SELECT JSON_OBJECT('id',id,'couponId',coupon_id,'memberId',user_id,'status',status,'reservedOrderId',reserved_order_id) FROM yshop_coupon_user WHERE id="+number(ids.get('rightId'))+';'
+        return "SELECT JSON_OBJECT('id',id,'couponId',coupon_id,'memberId',user_id,'status',status,'reservedOrderId',reserved_order_id,'redeemedOrderId',redeemed_order_id,'redeemedAt',redeemed_at) FROM yshop_coupon_user WHERE id="+number(ids.get('rightId'))+';'
     if name=='coupon-count':
         return "SELECT JSON_OBJECT('count',COUNT(*)) FROM yshop_coupon_user WHERE coupon_id="+number(ids.get('couponId'))+' AND user_id='+number(ids.get('memberId'))+';'
     if name=='coupon-operations':

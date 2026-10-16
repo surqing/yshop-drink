@@ -11,13 +11,15 @@ export class Flow {
   public mini: any = null
   public checks: Array<Record<string, unknown>> = []
   public cleanup = 'NOT_RUN'
+  public stage = 'PREPARE'
+  public miniEvidence: any = undefined
   public selected: any
   constructor(public page: Page, public request: APIRequestContext, public browser: Browser, public baseURL: string, public id: string) {
     this.selected = context.planned.find((s: any) => s.id === id)
     if (!this.selected) throw Error('UNREGISTERED_SCENARIO')
   }
   save() {
-    writeFileSync(join(context.output, `case-${this.id}.json`), JSON.stringify({ checks: this.checks, driversCleanup: this.cleanup }), { mode: 0o600 })
+    writeFileSync(join(context.output, `case-${this.id}.json`), JSON.stringify({ checks: this.checks, driversCleanup: this.cleanup, stage: this.stage, miniEvidence: this.miniEvidence }), { mode: 0o600 })
   }
   async check(id: string, action: () => Promise<unknown> | unknown) {
     if (!this.selected.expectedCheckIds.includes(id) || this.checks.some(c => c.id === id)) throw Error('UNREGISTERED_OR_DUPLICATE_CHECK')
@@ -63,22 +65,31 @@ export class Flow {
   async prepare() {
     const info = await this.request.get(`${context.backend}/actuator/info`)
     expect((await info.json()).qualityOwner).toBe(context.owner)
+    this.stage = 'ADMIN_LOGIN'; this.save()
     this.adminToken = await this.login()
     if (context.profile === 'local') {
       const { MiniDriver } = require(join(context.repo, 'tests/mini/e2e-driver.cjs'))
+      this.stage = 'MINI_LAUNCH'; this.save()
       this.mini = await MiniDriver.launch(context.mini, join(context.output, `mini-${this.id}`))
-      if (this.id !== 'auth-session') await this.mini.login(1)
+      if (this.id !== 'auth-session') { this.stage = 'MINI_LOGIN'; this.save(); await this.mini.login(1) }
     }
   }
   async finish(success: boolean) {
+    let evidenceError: unknown
     try {
       if (this.mini) {
+        try {
+          const state = await this.mini.state()
+          this.miniEvidence = { ...this.mini.evidence, paymentRequests: state.financialRequests, blockedExternalRequests: state.blockedExternalRequests }
+          if (success) { expect(state.financialRequests).toBe(0); expect(state.blockedExternalRequests).toBe(0) }
+        } catch (error) { evidenceError = error }
         if (!success) await this.mini.screenshot().catch(() => {})
         await this.mini.close()
       }
       this.cleanup = 'PASSED'
     } catch (error) { this.cleanup = 'FAILED'; throw error }
     finally { this.save() }
+    if (evidenceError) throw evidenceError
     if (success) expect(this.checks.map(c => c.id).sort()).toEqual([...this.selected.expectedCheckIds].sort())
   }
   async api(method: string, path: string, data?: unknown, token = this.adminToken, success = true) {
@@ -193,7 +204,6 @@ export class Flow {
     await dialog.getByPlaceholder('例如温度、甜度、冰量、加料').fill('E2E 加料')
     await dialog.locator('.el-radio').filter({ hasText: '加料' }).click()
     await expect(dialog.getByRole('radio', { name: '加料', exact: true })).toBeChecked()
-    await dialog.getByRole('button', { name: '添加选项', exact: true }).click()
     const row = dialog.locator('.el-table__body-wrapper .el-table__row').first()
     await row.getByRole('textbox').fill('珍珠')
     await row.getByRole('spinbutton').nth(0).fill('2')
@@ -256,8 +266,16 @@ export const test = base.extend<{ flow: Flow }>({
   flow: async ({ page, request, browser, baseURL }, use, testInfo) => {
     const flow = new Flow(page, request, browser, baseURL!, testInfo.title)
     flow.save()
-    try { await flow.prepare(); await use(flow) }
-    finally { await flow.finish(testInfo.status === 'passed') }
+    let completed = false, setupError: unknown
+    try { await flow.prepare(); flow.stage = 'SCENARIO'; flow.save(); await use(flow); completed = testInfo.status === 'passed' }
+    catch (error) { setupError = error; throw error }
+    finally {
+      try { await flow.finish(completed) }
+      catch (cleanupError) {
+        if (!setupError) throw cleanupError
+        writeFileSync(join(context.output, `cleanup-${flow.id}-private.log`), String(cleanupError), { mode: 0o600 })
+      }
+    }
   }
 })
 export { expect }
