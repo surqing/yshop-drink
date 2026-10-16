@@ -83,7 +83,7 @@ class OwnedEnvironment:
         oracle_user='qa_oracle_'+self.owner[:16];oracle_password=secrets.token_hex(24)
         secret=self.file('root.secret',root_password)
         client=self.file('client.cnf',f'[client]\ndefault-character-set=utf8mb4\nuser=root\npassword={root_password}\n')
-        oracle=self.file('oracle.cnf','[client]\ndefault-character-set=utf8mb4\nuser='+oracle_user+'\npassword='+oracle_password+'\n')
+        oracle=self.file('oracle.cnf',f'[client]\ndefault-character-set=utf8mb4\nuser={oracle_user}\npassword={oracle_password}\n')
         self.docker('run','-d','--name',self.mysql,'--label','yshop.quality.owner='+self.owner,
                     '--cap-drop=NET_RAW','--security-opt','no-new-privileges','-p','127.0.0.1::3306',
                     '--mount','type=bind,source='+str(secret)+',target=/run/root.secret,readonly',
