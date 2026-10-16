@@ -15,12 +15,16 @@ class MiniDriver {
     }
     const mini = await launchOfficial(context, output)
     const driver = new MiniDriver(mini, output)
+    driver.lifecycle('sdk-connected')
     driver.evidence = { officialConnected: true, compiledHashesVerified: true, compiledSource: context.compiledSource, compiledFileCount: Object.keys(context.compiledHashes).length }
     try {
       await until(async () => (await mini.pageStack()).length > 0, 90000)
+      driver.lifecycle('page-stack-ready')
       // The simulator can restore the previous route; each case owns a fresh root stack.
       const page = await mini.reLaunch('/pages/index/index')
+      driver.lifecycle('root-routed')
       await until(() => page.$('.index-page'))
+      driver.lifecycle('root-rendered')
       return driver
     }
     catch (error) {
@@ -29,6 +33,7 @@ class MiniDriver {
     }
   }
   constructor(mini, output) { this.mini = mini; this.output = output }
+  lifecycle(stage) { fs.writeFileSync(path.join(this.output, 'lifecycle-private.json'), JSON.stringify({ stage, at: Date.now() }), { mode: 0o600 }) }
   async state() {
     const state = await this.mini.evaluate(() => wx.getStorageSync('__e2eState'))
     if (!state) throw Error('MINI_INSTRUMENTATION_NOT_VISIBLE')
@@ -41,7 +46,10 @@ class MiniDriver {
   async loginPage(principal = 1) {
     await this.proof(principal)
     const before = (await this.state()).authResponses
-    const page = await this.mini.navigateTo('/pages-user/login/login')
+    const current = await this.mini.currentPage()
+    const page = current?.path === 'pages-user/login/login'
+      ? await this.mini.redirectTo('/pages-user/login/login')
+      : await this.mini.navigateTo('/pages-user/login/login')
     await until(() => page.$('.login-page'))
     await until(async () => (await this.state()).authResponses > before)
     return page

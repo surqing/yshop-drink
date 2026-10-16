@@ -94,6 +94,7 @@ async function authSession(f: Flow) {
     if (local) {
       const before = await f.mini.token()
       await (await page.$('.login-page__input--captcha')).input(smsCode)
+      await (await page.$('radio')).tap()
       await (await page.$('.login-page__btn--submit')).tap()
       await expect.poll(() => f.mini.token()).not.toBe(before)
       smsToken = await f.mini.token()

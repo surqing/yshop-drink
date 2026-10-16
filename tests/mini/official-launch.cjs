@@ -21,7 +21,11 @@ async function toolReady(endpoint) {
     socket.on('message', data => {
       try {
         const response = JSON.parse(data)
-        if (response.id === 1) finish(typeof response.result?.SDKVersion === 'string' && !!response.result.SDKVersion)
+        if (response.id === 1) {
+          if (typeof response.result?.SDKVersion !== 'string' || !response.result.SDKVersion) return finish(false)
+          socket.send(JSON.stringify({ id: 2, method: 'App.getPageStack', params: {} }))
+        }
+        if (response.id === 2) finish(Array.isArray(response.result?.pageStack) && response.result.pageStack.length > 0)
       } catch { finish(false) }
     })
   })
