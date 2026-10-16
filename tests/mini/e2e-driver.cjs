@@ -59,10 +59,15 @@ class MiniDriver {
     await until(async () => (await this.state()).authResponses > before)
     return page
   }
+  async agree(page) {
+    const radio = await page.$('radio')
+    if (![true, 'true'].includes(await radio.property('checked'))) await radio.tap()
+    await until(async () => [true, 'true'].includes(await radio.property('checked')))
+  }
   async authorize(page, principal = 1) {
     this.lifecycle('phone-agreement')
     const before = await this.token()
-    const radio = await page.$('radio'); await radio.tap()
+    await this.agree(page)
     await this.proof(principal)
     const button = await page.$('.login-page__wechat-btn')
     await button.trigger('getphonenumber', { code: `e2e-phone-p${principal}-${crypto.randomBytes(16).toString('hex')}`, errMsg: 'getPhoneNumber:ok' })
