@@ -121,6 +121,8 @@ def run(repo, output, profile, scenario=None):
                 time.sleep(.1)
             ready=json.loads((support.root/'support-ready.json').read_text())
             if ready.get('owner')!=report['owner'] or ready.get('status')!='PASSED':raise RuntimeError('TEST_SUPPORT_OWNER_MISMATCH')
+            if ready.get('unknownProviderOperationsDenied') is not True:raise RuntimeError('TEST_SUPPORT_READINESS_FAILED')
+            report['providerBoundariesVerified']=True
             context={**environment.context(),**support.context(),'repo':str(repo),'python':sys.executable,
                      'profile':profile,'planned':plan['scenarios'],'output':str(root),
                      'accounts':{'admin':{'username':'qualityadmin','password':'syntheticQA12'},

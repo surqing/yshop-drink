@@ -16,6 +16,8 @@ import co.yixiang.yshop.module.system.framework.sms.core.property.SmsChannelProp
 import co.yixiang.yshop.framework.common.core.KeyValue;
 import me.chanjar.weixin.common.error.WxError;
 import me.chanjar.weixin.common.error.WxErrorException;
+import me.chanjar.weixin.mp.api.WxMpService;
+import com.egzosn.pay.spring.boot.core.PayServiceManager;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.SpringApplication;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -51,11 +53,18 @@ public final class OwnedE2eApplication {
            || Boolean.parseBoolean(context.getEnvironment().getProperty("yshop.pay.wechat-v3.reconciliation-enabled","false"))) {
             context.close();throw new IllegalStateException("FINANCIAL_FREEZE_REQUIRED");
         }
+        var mp=context.getBean(WxMpService.class);
+        var payment=context.getBean(PayServiceManager.class);
+        if(!Proxy.isProxyClass(mp.getClass()) || !Proxy.isProxyClass(payment.getClass())) {
+            context.close();throw new IllegalStateException("PROVIDER_BOUNDARIES_NOT_BOUND");
+        }
+        assertDenied(()->mp.getOAuth2Service());
+        assertDenied(()->payment.getOrderInfo(null));
         var executor=Executors.newSingleThreadScheduledExecutor(work -> {var t=new Thread(work,"e2e-command-mailbox");t.setDaemon(true);return t;});
         var events=new ConcurrentHashMap<String,PaymentSuccessEvent>();
         executor.scheduleWithFixedDelay(()->processCommands(context,db,events),0,100,TimeUnit.MILLISECONDS);
         Runtime.getRuntime().addShutdownHook(new Thread(executor::shutdownNow));
-        write(ROOT.resolve("support-ready.json"),Map.of("owner",OWNER,"status","PASSED","substitutes",List.of("mini-provider","sms-transport")));
+        write(ROOT.resolve("support-ready.json"),Map.of("owner",OWNER,"status","PASSED","substitutes",List.of("mini-provider","sms-transport","mp-deny","payment-provider-deny"),"unknownProviderOperationsDenied",true));
     }
 
     @Configuration(proxyBeanMethods=false)
@@ -65,10 +74,24 @@ public final class OwnedE2eApplication {
                 @Override public Object postProcessAfterInitialization(Object bean,String name) {
                     if(bean instanceof WxMaService) return miniProvider();
                     if(bean instanceof SmsClientFactory) return smsFactory();
+                    if(bean instanceof WxMpService) return denyProvider(WxMpService.class,"MP");
+                    if(bean instanceof PayServiceManager) return denyProvider(PayServiceManager.class,"PAYMENT");
                     return bean;
                 }
             };
         }
+    }
+
+    static <T> T denyProvider(Class<T> type,String provider) {
+        return type.cast(Proxy.newProxyInstance(type.getClassLoader(),new Class[]{type},(proxy,method,args)->{
+            if(method.getDeclaringClass()==Object.class)return objectMethod(proxy,method,args);
+            throw new IllegalStateException("UNEXPECTED_"+provider+"_PROVIDER_OPERATION");
+        }));
+    }
+
+    static void assertDenied(Runnable call) {
+        try {call.run();throw new IllegalStateException("PROVIDER_BOUNDARY_ACCEPTED_UNKNOWN_OPERATION");}
+        catch(IllegalStateException expected) {if(!expected.getMessage().startsWith("UNEXPECTED_"))throw expected;}
     }
 
     static WxMaService miniProvider() {

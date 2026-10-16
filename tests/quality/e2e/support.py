@@ -55,7 +55,7 @@ class TestSupport:
                       'sourceHash':hashlib.sha256(source.read_bytes()).hexdigest(),
                       'classes':{str(p.relative_to(classes)):hashlib.sha256(p.read_bytes()).hexdigest() for p in classes.rglob('*.class')},
                       'testSupportExcludedFromProductionJar':True,
-                      'substitutes':['WeChat Mini provider','SMS provider transport'],
+                      'substitutes':['WeChat Mini provider','SMS provider transport','WeChat MP provider deny','payment SDK provider deny'],
                       'businessServices':'real application services, mappers and transactions'}
         return self.receipt
 
