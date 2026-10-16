@@ -3,13 +3,13 @@
   const base = __OWNED_BASE__
   const request = wx.request
   const state = { requests: [], orderIds: [], authResponses: 0, dropNextOrderResponse: false,
-    dropped: false, financialRequests: 0, blockedExternalRequests: 0 }
+    dropped: false, financialRequests: 0, blockedExternalRequests: 0, unpreparedLogins: 0 }
   const save = () => wx.setStorageSync('__e2eState', state)
   wx.__e2e = state
   wx.removeStorageSync('__e2eFault')
   save()
   for (const key of ['accessToken', 'userinfo', 'selectedStore', 'cart', 'checkoutSubmission', 'mycoupon']) wx.removeStorageSync(key)
-  wx.login = function (options) { options.fail && options.fail({ errMsg: 'E2E_PLATFORM_PROOF_NOT_PREPARED' }) }
+  wx.login = function (options) { state.unpreparedLogins++; save(); options.fail && options.fail({ errMsg: 'E2E_PLATFORM_PROOF_NOT_PREPARED' }) }
   wx.requestPayment = function (options) { state.financialRequests++; save(); options.fail && options.fail({ errMsg: 'E2E_FINANCIAL_FROZEN' }) }
   wx.request = function (options) {
     const url = String(options.url || '')

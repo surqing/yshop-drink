@@ -32,7 +32,12 @@ class MiniDriver {
       await driver.close(); throw error
     }
   }
-  constructor(mini, output) { this.mini = mini; this.output = output }
+  constructor(mini, output) {
+    this.mini = mini; this.output = output
+    mini.on('console', message => {
+      fs.appendFileSync(path.join(output, 'console-private.jsonl'), JSON.stringify(message) + '\n', { mode: 0o600 })
+    })
+  }
   lifecycle(stage) { fs.writeFileSync(path.join(this.output, 'lifecycle-private.json'), JSON.stringify({ stage, at: Date.now() }), { mode: 0o600 }) }
   async state() {
     const state = await this.mini.evaluate(() => wx.getStorageSync('__e2eState'))
@@ -55,17 +60,22 @@ class MiniDriver {
     return page
   }
   async authorize(page, principal = 1) {
+    this.lifecycle('phone-agreement')
     const before = await this.token()
     const radio = await page.$('radio'); await radio.tap()
     await this.proof(principal)
     const button = await page.$('.login-page__wechat-btn')
     await button.trigger('getphonenumber', { code: `e2e-phone-p${principal}-${crypto.randomBytes(16).toString('hex')}`, errMsg: 'getPhoneNumber:ok' })
-    return until(async () => { const token = await this.token(); return token && token !== before ? token : null })
+    this.lifecycle('phone-event-triggered')
+    try { return await until(async () => { const token = await this.token(); return token && token !== before ? token : null }) }
+    catch { throw Error('MINI_PHONE_TOKEN_TIMEOUT') }
   }
   async login(principal = 1) {
     const page = await this.loginPage(principal)
     await this.authorize(page, principal)
-    await until(async () => (await this.mini.currentPage()).path !== 'pages-user/login/login')
+    this.lifecycle('phone-token-issued')
+    try { await until(async () => (await this.mini.currentPage()).path !== 'pages-user/login/login') }
+    catch { throw Error('MINI_LOGIN_RETURN_TIMEOUT') }
   }
   async selectStore(name) {
     const page = await this.mini.navigateTo('/pages-checkout/shop/shop')
@@ -162,6 +172,7 @@ class MiniDriver {
     const state = await this.state()
     fs.writeFileSync(path.join(this.output, 'navigation-private.json'), JSON.stringify({
       pages: pages.map(page => page.path), tokenPresent: !!await this.token(),
+      unpreparedLogins: state.unpreparedLogins,
       requests: state.requests.map(({ path, method, responseCode }) => ({ path, method, responseCode }))
     }, null, 2), { mode: 0o600 })
   }
