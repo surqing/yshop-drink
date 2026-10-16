@@ -10,7 +10,6 @@ import subprocess
 import time
 import urllib.request
 import uuid
-import yaml
 from backend_artifact import verify_artifact
 from evidence import source_identity
 from loopback_ports import backend_pair
@@ -120,6 +119,7 @@ class OwnedEnvironment:
         self.settings={'url':'jdbc:mysql://127.0.0.1:'+str(mysql_port)+'/'+self.schema+'?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC',
                        'username':self.db_user,'password':db_password,'driver-class-name':'com.mysql.cj.jdbc.Driver'}
         base={};allowed={'spring','mybatis-plus','mybatis-plus-join','yshop','aj','easy-trans'}
+        import yaml  # Optional owned-runtime dependency; QUICK imports remain standard-library only.
         for doc in yaml.safe_load_all((self.repo/'yshop-drink-boot3/yshop-server/src/main/resources/application.yaml').read_text()):
             if doc:merge(base,{key:value for key,value in doc.items() if key in allowed})
         self.port=self.port or backend_pair()

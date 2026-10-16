@@ -6,6 +6,13 @@ import unittest
 from unittest.mock import patch
 
 class OwnedEnvironmentTest(unittest.TestCase):
+    def test_lightweight_import_does_not_require_optional_yaml(self):
+        import subprocess,sys
+        result=subprocess.run([sys.executable,'-S','-c',
+            'import sys;sys.path.insert(0,"tests/quality");from e2e.environment import OwnedEnvironment'],
+            cwd=Path(__file__).resolve().parents[2],capture_output=True,text=True)
+        self.assertEqual(0,result.returncode,result.stderr)
+
     def setUp(self):
         from e2e.environment import OwnedEnvironment
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
