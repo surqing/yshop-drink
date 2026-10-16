@@ -16,7 +16,13 @@ class MiniDriver {
     const mini = await automator.launch({ projectPath: context.project, cliPath: context.cli, port: context.port, timeout: 90000 })
     const driver = new MiniDriver(mini, output)
     driver.evidence = { officialConnected: true, compiledHashesVerified: true, compiledSource: context.compiledSource, compiledFileCount: Object.keys(context.compiledHashes).length }
-    try { await until(async () => (await mini.pageStack()).length > 0, 90000); return driver }
+    try {
+      await until(async () => (await mini.pageStack()).length > 0, 90000)
+      // The simulator can restore the previous route; each case owns a fresh root stack.
+      const page = await mini.reLaunch('/pages/index/index')
+      await until(() => page.$('.index-page'))
+      return driver
+    }
     catch (error) { await driver.close(); throw error }
   }
   constructor(mini, output) { this.mini = mini; this.output = output }
@@ -140,6 +146,14 @@ class MiniDriver {
     return row.text()
   }
   async screenshot(name = 'failure.png') { await this.mini.screenshot({ path: path.join(this.output, name) }) }
+  async diagnostics() {
+    const pages = await this.mini.pageStack()
+    const state = await this.state()
+    fs.writeFileSync(path.join(this.output, 'navigation-private.json'), JSON.stringify({
+      pages: pages.map(page => page.path), tokenPresent: !!await this.token(),
+      requests: state.requests.map(({ path, method, responseCode }) => ({ path, method, responseCode }))
+    }, null, 2), { mode: 0o600 })
+  }
   async close() {
     if (!this.mini) return
     try {

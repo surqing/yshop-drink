@@ -83,7 +83,10 @@ export class Flow {
           this.miniEvidence = { ...this.mini.evidence, paymentRequests: state.financialRequests, blockedExternalRequests: state.blockedExternalRequests }
           if (success) { expect(state.financialRequests).toBe(0); expect(state.blockedExternalRequests).toBe(0) }
         } catch (error) { evidenceError = error }
-        if (!success) await this.mini.screenshot().catch(() => {})
+        if (!success) {
+          await this.mini.diagnostics().catch(() => {})
+          await this.mini.screenshot().catch(() => {})
+        }
         await this.mini.close()
       }
       this.cleanup = 'PASSED'
