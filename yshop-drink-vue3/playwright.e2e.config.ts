@@ -9,7 +9,7 @@ export default defineConfig({
   expect: { timeout: 15000 }, outputDir: `${context.output}/artifacts`,
   reporter: [['./e2e/core/reporter.ts'], ['line']],
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel: 'chromium' } }],
-  use: { baseURL: `http://127.0.0.1:${port}`, trace: 'retain-on-failure',
+  use: { actionTimeout: 15000, navigationTimeout: 30000, baseURL: `http://127.0.0.1:${port}`, trace: 'retain-on-failure',
     screenshot: 'only-on-failure', video: 'off', serviceWorkers: 'block' },
   webServer: { command: `pnpm exec vite --config vite.core.config.ts --port ${port}`,
     url: `http://127.0.0.1:${port}`, reuseExistingServer: false, timeout: 120000 }

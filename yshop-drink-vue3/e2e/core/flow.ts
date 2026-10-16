@@ -114,7 +114,7 @@ export class Flow {
       description: 'synthetic E2E fixture', unit_name: '杯', is_show: 1, is_integral: 0, spec_type: 0, items: [],
       attrs: [{ price, stock: 10, pic: image, cost: 0, ot_price: price, sku: '默认', detail: {} }] }
     await this.api('POST', '/admin-api/product/store-product/create', data)
-    const products = await this.api('GET', `/admin-api/product/store-product/page?pageNo=1&pageSize=100&shopId=${shopId}&storeName=${encodeURIComponent(data.store_name)}`)
+    const products = await this.api('GET', `/admin-api/product/store-product/page?pageNo=1&pageSize=100&isShow=1&shopId=${shopId}&storeName=${encodeURIComponent(data.store_name)}`)
     const product = products.list.find((p: any) => p.storeName === data.store_name)
     expect(product).toBeTruthy()
     return { ...product, ...(await this.productData(product.id)), name: data.store_name }
@@ -143,7 +143,8 @@ export class Flow {
   async image(container: Locator) {
     await container.locator('.el-upload--picture-card').click()
     const library = this.page.getByRole('dialog', { name: '图片素材库', exact: true })
-    await library.getByRole('checkbox', { name: '选择' }).first().check()
+    await library.locator('.el-checkbox__label', { hasText: '选择' }).first().click()
+    await expect(library.getByRole('checkbox', { name: '选择' }).first()).toBeChecked()
     await library.getByRole('button', { name: '确 定', exact: true }).click()
     await expect(library).toBeHidden()
   }
@@ -169,7 +170,7 @@ export class Flow {
     await dialog.getByRole('button', { name: '保 存', exact: true }).click()
     expect((await (await pending).json()).code).toBe(0)
     await expect(dialog).toBeHidden()
-    const products = await this.api('GET', `/admin-api/product/store-product/page?pageNo=1&pageSize=100&storeName=${encodeURIComponent(this.title())}`)
+    const products = await this.api('GET', `/admin-api/product/store-product/page?pageNo=1&pageSize=100&isShow=1&storeName=${encodeURIComponent(this.title())}`)
     const product = products.list.find((p: any) => p.storeName === this.title())
     expect(product).toBeTruthy()
     return { ...product, ...(await this.productData(product.id)), name: this.title() }
@@ -191,7 +192,7 @@ export class Flow {
     const pending = this.page.waitForResponse(r => r.url().includes('/product/catalog/configuration') && r.request().method() === 'PUT')
     await dialog.getByRole('button', { name: '保存定制与加料', exact: true }).click()
     expect((await (await pending).json()).code).toBe(0)
-    await dialog.getByRole('button', { name: 'Close this dialog', exact: true }).click()
+    await dialog.locator('.el-dialog__headerbtn').click()
     return { ...product, ...(await this.productData(product.id)) }
   }
   async changePriceUI(product: any, price: number) {
@@ -209,7 +210,7 @@ export class Flow {
     const pending = this.page.waitForResponse(r => r.url().includes('/product/catalog/price') && r.request().method() === 'PUT')
     await prompt.getByRole('button', { name: '确定', exact: true }).click()
     expect((await (await pending).json()).code).toBe(0)
-    await dialog.getByRole('button', { name: 'Close this dialog', exact: true }).click()
+    await dialog.locator('.el-dialog__headerbtn').click()
   }
   async createCouponUI(label = this.id) {
     await this.page.goto('/mall/coupons')

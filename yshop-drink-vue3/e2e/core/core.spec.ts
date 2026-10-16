@@ -19,7 +19,7 @@ async function issue(f: Flow, coupon: any, token: string) {
 }
 async function orderFor(f: Flow, product: any, token: string, coupon?: any, extra: any = {}) {
   if (!local) return f.createOrder(product, token, extra)
-  await f.mini.selectStore(product.shopId === 102 ? 'QA Shop B' : 'QA Shop A')
+  await f.mini.selectStore(Number(product.shopId) === 102 ? 'QA Shop B' : 'QA Shop A')
   await f.mini.addProduct(product.name)
   let page = await f.mini.checkout()
   if (coupon) page = await f.mini.selectCoupon(page, coupon.title)
