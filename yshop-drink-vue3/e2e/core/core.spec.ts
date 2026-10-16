@@ -53,6 +53,9 @@ async function authSession(f: Flow) {
   if (local) {
     await f.check('mini-visitor-login', async () => {
       expect(await f.mini.token()).toBeFalsy()
+      await f.mini.mini.navigateTo('/pages-user/address/address')
+      await expect.poll(async () => (await f.mini.mini.currentPage()).path).toBe('pages-user/login/login')
+      expect((await f.mini.state()).requests.some((r: any) => r.path === '/app-api/address/list' && r.responseCode === 401)).toBe(true)
       const page = await f.mini.loginPage(3)
       expect(await page.$('.login-page')).toBeTruthy()
       expect(await f.mini.token()).toBeFalsy()
@@ -107,6 +110,18 @@ async function authSession(f: Flow) {
       const token = await f.member(2)
       expect((await f.api('GET', '/app-api/member/user/get', undefined, token)).id).toBe(102)
       await expect.poll(async () => (await f.api('GET', '/app-api/member/user/get', undefined, token, false)).code).toBe(401)
+    } finally { f.bridge('token-lifetime', { seconds: 3600 }) }
+  })
+  if (local) await f.check('mini-expired-session', async () => {
+    f.bridge('token-lifetime', { seconds: 2 })
+    try {
+      const page = await f.mini.loginPage(1)
+      const token = await f.mini.authorize(page, 1)
+      expect((await f.api('GET', '/app-api/member/user/get', undefined, token)).id).toBe(101)
+      await expect.poll(async () => (await f.api('GET', '/app-api/member/user/get', undefined, token, false)).code).toBe(401)
+      await f.mini.mini.navigateTo('/pages-user/address/address')
+      await expect.poll(async () => (await f.mini.mini.currentPage()).path).toBe('pages-user/login/login')
+      expect((await f.mini.state()).requests.some((r: any) => r.path === '/app-api/address/list' && r.responseCode === 401)).toBe(true)
     } finally { f.bridge('token-lifetime', { seconds: 3600 }) }
   })
   await f.check('logout-revokes-access', async () => {
@@ -170,6 +185,19 @@ async function catalogOrder(f: Flow) {
     expect(Number(f.oracle('order', { orderId: order.orderId })[0].amount)).toBe(42)
     expect(Number(f.oracle('inventory', { skuId: product.skus[0].id })[0].price)).toBe(25)
   })
+  const current = { ...product, ...(await f.productData(product.id)) }
+  const invalidBase = { shopId: '101', mobile: '13800000001', couponId: '0', orderType: 'takein', productId: [String(product.id)],
+    spec: [current.skus[0].sku], number: ['1'], payType: 'weixin', choices: [{ version: current.version, selections: [] }] }
+  await f.check('invalid-sku-denied', async () => {
+    const rejected = await f.api('POST', '/app-api/order/create', { ...invalidBase, spec: ['nonexistent-sku'], idempotencyKey: key() }, token, false)
+    expect(rejected.code).not.toBe(0)
+    expect(f.oracle('inventory', { skuId: product.skus[0].id })[0].stock).toBe(8)
+  })
+  await f.check('insufficient-stock-denied', async () => {
+    const rejected = await f.api('POST', '/app-api/order/create', { ...invalidBase, number: ['100'], idempotencyKey: key() }, token, false)
+    expect(rejected.code).not.toBe(0)
+    expect(f.oracle('inventory', { skuId: product.skus[0].id })[0].stock).toBe(8)
+  })
   await f.check('order-sql', () => {
     const row = f.oracle('order', { orderId: order.orderId })[0]
     expect(row.shopId).toBe(101); expect(row.paid).toBe(0)
@@ -215,6 +243,18 @@ async function storeIsolation(f: Flow) {
     } finally { await staffContext.close() }
   })
   await f.check('other-member-denied', async () => { expect((await f.api('GET', `/app-api/order/detail/${first.orderId}`, undefined, other, false)).code).not.toBe(0) })
+  await f.check('other-member-address-denied', async () => {
+    const address = { realName: 'Synthetic owner', address: 'Synthetic street', detail: 'Synthetic unit', phone: '13800000001', isDefault: 1 }
+    const id = await f.api('POST', '/app-api/address/addAndEdit', address, member)
+    const before = f.oracle('address', { addressId: id })[0]
+    const list = await f.api('GET', '/app-api/address/list?page=1&limit=100', undefined, other)
+    expect(list.some((row: any) => String(row.id) === String(id))).toBe(false)
+    for (const path of [`/app-api/address/default/set/${id}`, `/app-api/address/del/${id}`]) {
+      expect((await f.api('POST', path, undefined, other, false)).code).toBe(1004004000)
+    }
+    expect((await f.api('POST', '/app-api/address/addAndEdit', { ...address, id: String(id), detail: 'forbidden change' }, other, false)).code).toBe(1004004000)
+    expect(f.oracle('address', { addressId: id })[0]).toEqual(before)
+  })
   await f.check('isolation-sql', () => {
     expect(f.oracle('inventory', { skuId: a.skus[0].id })[0].stock).toBe(9)
     expect(f.oracle('inventory', { skuId: b.skus[0].id })[0].stock).toBe(9)
@@ -263,10 +303,19 @@ async function orderCancel(f: Flow) {
   if (local) await f.check('mini-cancel-page', async () => { await f.mini.cancel() })
   await f.check('order-cancelled', async () => {
     if (!local) await f.api('POST', '/app-api/order/cancel', { id: order.orderId }, token)
-    const detail = await f.api('GET', `/app-api/order/detail/${order.orderId}`, undefined, token)
-    expect(Boolean(detail.deleted)).toBe(true)
+    expect(f.oracle('order', { orderId: order.orderId })[0].deleted).toBe(1)
+    const detail = await f.api('GET', `/app-api/order/detail/${order.orderId}`, undefined, token, false)
+    expect(detail.code).toBe(1008007000)
   })
-  await f.check('admin-cancelled-order', async () => { await f.viewOrder(order.orderId, '已取消') })
+  await f.check('admin-cancelled-order', async () => {
+    await f.page.goto('/mall/orders')
+    await f.page.getByPlaceholder('请输入订单号').fill(order.orderId)
+    const pending = f.page.waitForResponse(r => r.url().includes('/admin-api/order/store-order/page') && r.url().includes(order.orderId))
+    await f.page.getByRole('button', { name: '搜索', exact: true }).click()
+    expect((await (await pending).json()).data.list).toEqual([])
+    await expect(f.page.getByRole('cell', { name: `自取 ${order.orderId}`, exact: true })).toHaveCount(0)
+    expect(f.oracle('order', { orderId: order.orderId })[0].deleted).toBe(1)
+  })
   await f.check('repeat-cancel', async () => { await f.api('POST', '/app-api/order/cancel', { id: order.orderId }, token) })
   await f.check('stock-restored-once-sql', () => { expect(f.oracle('inventory', { skuId: product.skus[0].id })[0].stock).toBe(10) })
   await f.check('no-financial-records-sql', () => { expect(f.oracle('financial-records', { orderId: order.orderId })[0]).toEqual({ payments: 0, attempts: 0, bills: 0 }) })

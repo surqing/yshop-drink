@@ -4,9 +4,9 @@ _CHECKS = {
     'auth-session': ['admin-login','invalid-provider-proof','sms-login','sms-invalid-and-reused',
                      'expired-session','logout-revokes-access','identity-sql'],
     'catalog-order': ['admin-create-product','admin-configure-sku','admin-configure-topping',
-                      'order-price-and-choices','admin-order-visible','catalog-edit-keeps-snapshot','order-sql'],
+                      'order-price-and-choices','admin-order-visible','catalog-edit-keeps-snapshot','invalid-sku-denied','insufficient-stock-denied','order-sql'],
     'store-isolation': ['store-a-order','store-b-order','cross-store-product-denied',
-                        'cross-store-coupon-denied','staff-cannot-read-other-store','other-member-denied','isolation-sql'],
+                        'cross-store-coupon-denied','staff-cannot-read-other-store','other-member-denied','other-member-address-denied','isolation-sql'],
     'order-retry': ['first-response-lost','same-key-retry','admin-single-order','single-order-and-stock-sql'],
     'order-cancel': ['order-created','order-cancelled','admin-cancelled-order','repeat-cancel',
                      'stock-restored-once-sql','no-financial-records-sql'],
@@ -16,7 +16,7 @@ _CHECKS = {
                         'duplicate-completion','admin-paid-order','coupon-redeemed','completion-ledger-sql'],
 }
 _LOCAL = {
-    'auth-session': ['mini-visitor-login','mini-phone-authorization','mini-denied-authorization'],
+    'auth-session': ['mini-visitor-login','mini-phone-authorization','mini-denied-authorization','mini-expired-session'],
     'catalog-order': ['mini-sku-and-topping','mini-order-submitted'],
     'store-isolation': ['mini-switch-clears-context'],
     'order-retry': ['mini-retry-state'],

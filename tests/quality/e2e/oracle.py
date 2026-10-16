@@ -21,7 +21,7 @@ def order_id(value):
 
 def query_for(name, ids):
     if name=='order':
-        return "SELECT JSON_OBJECT('id',id,'memberId',uid,'shopId',shop_id,'amount',pay_price,'paid',paid,'status',status,'couponId',coupon_id,'quantity',total_num) FROM yshop_store_order WHERE order_id="+order_id(ids.get('orderId'))+';'
+        return "SELECT JSON_OBJECT('id',id,'memberId',uid,'shopId',shop_id,'amount',pay_price,'paid',paid,'status',status,'deleted',CAST(deleted AS UNSIGNED),'couponId',coupon_id,'quantity',total_num) FROM yshop_store_order WHERE order_id="+order_id(ids.get('orderId'))+';'
     if name=='inventory':
         return "SELECT JSON_OBJECT('stock',stock,'skuId',id,'productId',product_id,'price',price) FROM yshop_store_product_attr_value WHERE id="+number(ids.get('skuId'))+';'
     if name=='product':
@@ -38,6 +38,8 @@ def query_for(name, ids):
     if name=='financial-records':
         oid=order_id(ids.get('orderId'))
         return "SELECT JSON_OBJECT('payments',(SELECT COUNT(*) FROM yshop_order_payment WHERE order_id="+oid+"),'attempts',(SELECT COUNT(*) FROM yshop_order_payment_attempt WHERE order_id="+oid+"),'bills',(SELECT COUNT(*) FROM yshop_user_bill WHERE extend_field="+oid+"));"
+    if name=='address':
+        return "SELECT JSON_OBJECT('id',id,'memberId',uid,'name',real_name,'detail',detail,'isDefault',is_default,'deleted',CAST(deleted AS UNSIGNED)) FROM yshop_user_address WHERE id="+number(ids.get('addressId'))+';'
     if name=='identity':
         return "SELECT JSON_OBJECT('id',id,'mobile',mobile,'providerId',routine_openid,'status',status) FROM yshop_user WHERE id="+number(ids.get('memberId'))+';'
     raise ValueError('ORACLE_UNKNOWN')
