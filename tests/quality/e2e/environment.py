@@ -70,7 +70,7 @@ class OwnedEnvironment:
         self.assert_mysql_owner()
         return self.docker('exec','-i',self.mysql,'mysql','--defaults-extra-file=/run/client.cnf',self.schema,'-N',input=query)
 
-    def start(self, *, instances=1, require_build=True, launcher=None):
+    def start(self, *, instances=1, require_build=True, launcher=None, configure=None):
         if self.ready or self.closed:raise RuntimeError('ENVIRONMENT_ALREADY_USED')
         if instances not in (1,2):raise ValueError('INVALID_BACKEND_INSTANCE_COUNT')
         if os.getuid()==0:raise RuntimeError('NONROOT_TEST_LAUNCHER_REQUIRED')
@@ -138,6 +138,7 @@ class OwnedEnvironment:
         base['logging']['config']='file:'+str(logging)
         from business_http import seed as seed_identities
         seed_identities(self.sql,self.root,self.repo)
+        if configure:configure(self,base)
         config=self.file('application.yaml',yaml.safe_dump(base,allow_unicode=True))
         self.report['backendArtifactHash']=hashlib.sha256(jar.read_bytes()).hexdigest()
         for index in range(instances):
