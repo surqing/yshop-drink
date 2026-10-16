@@ -2,5 +2,5 @@
   "name": "yshop-owned-mini-page-tests",
   "private": true,
   "version": "1.0.0",
-  "dependencies": { "miniprogram-automator": "0.12.1" }
+  "dependencies": { "miniprogram-automator": "0.12.1", "ws": "6.2.6" }
 }

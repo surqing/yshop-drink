@@ -1,5 +1,5 @@
 const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto')
-const automator = require('./node_modules/miniprogram-automator')
+const { launchOfficial } = require('./official-launch.cjs')
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 async function until(read, timeout = 15000) {
   const deadline = Date.now() + timeout
@@ -13,7 +13,7 @@ class MiniDriver {
       if (name.split(/[\\/]/).includes('..')) throw Error('COMPILED_PATH_INVALID')
       if (crypto.createHash('sha256').update(fs.readFileSync(path.join(context.project, name))).digest('hex') !== hash) throw Error('COMPILED_HASH_MISMATCH')
     }
-    const mini = await automator.launch({ projectPath: context.project, cliPath: context.cli, port: context.port, timeout: 90000 })
+    const mini = await launchOfficial(context, output)
     const driver = new MiniDriver(mini, output)
     driver.evidence = { officialConnected: true, compiledHashesVerified: true, compiledSource: context.compiledSource, compiledFileCount: Object.keys(context.compiledHashes).length }
     try {
@@ -23,7 +23,10 @@ class MiniDriver {
       await until(() => page.$('.index-page'))
       return driver
     }
-    catch (error) { await driver.close(); throw error }
+    catch (error) {
+      await driver.diagnostics().catch(() => {})
+      await driver.close(); throw error
+    }
   }
   constructor(mini, output) { this.mini = mini; this.output = output }
   async state() {
