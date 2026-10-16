@@ -56,7 +56,7 @@ def preflight(repo,profile,env,root):
         raise Blocked('LOCKED_BROWSER_DEPENDENCIES_REQUIRED')
     if execute(['docker','info','--format','{{.ServerVersion}}'],repo,env,root/'docker-preflight-private.log',20):
         raise Blocked('DOCKER_UNAVAILABLE')
-    result=subprocess.run(['node','-e',"process.stdout.write(require('playwright').chromium.executablePath())"],
+    result=subprocess.run(['node','-e',"process.stdout.write(require('@playwright/test').chromium.executablePath())"],
                           cwd=repo/'yshop-drink-vue3',env=env,text=True,capture_output=True,timeout=15)
     if result.returncode or not Path(result.stdout).is_file():raise Blocked('PINNED_CHROMIUM_REQUIRED')
 
