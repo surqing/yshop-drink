@@ -20,7 +20,7 @@ from page_evidence import overall_status, status_of, browser_receipt
 
 REPO = Path(__file__).resolve().parents[2]
 BOOT = REPO / 'yshop-drink-boot3'
-MODES = ['QUICK','BUSINESS','INTEGRATION','PAYMENT-SAFETY','MINIPROGRAM','FULL','MUTATION','JAVA','FRONTEND','SECURITY','REPORT','BROWSER','CROSS-END','MINI-PAGES','PERFORMANCE','BUILD']
+MODES = ['QUICK','BUSINESS','INTEGRATION','PAYMENT-SAFETY','MINIPROGRAM','FULL','MUTATION','JAVA','FRONTEND','SECURITY','REPORT','BROWSER','CROSS-END','MINI-PAGES','PERFORMANCE','BUILD','E2E']
 
 def aggregate_reports(paths, identity):
     if not paths: raise RuntimeError('CURRENT_REPORTS_REQUIRED')
@@ -211,7 +211,7 @@ class Runner:
         expected=json.loads((REPO/'tests/quality/quick-manifest.json').read_text())
         files=sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])
         planned=[str(f.relative_to(REPO)) for f in sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])]
-        planned+=['tests/quality/test_evidence.py','tests/quality/test_secret_guard.py','tests/quality/test_owned_resources.py','tests/quality/test_page_evidence.py','tests/smoke/test_secret_scan.py','tests/payment/prepayment-tools-test.py']
+        planned+=['tests/quality/test_e2e_acceptance.py','tests/quality/test_e2e_publish.py','tests/quality/test_e2e_support.py','tests/quality/test_e2e_environment.py','tests/quality/test_e2e_cli.py','tests/quality/test_e2e_contract.py','tests/quality/test_evidence.py','tests/quality/test_secret_guard.py','tests/quality/test_owned_resources.py','tests/quality/test_page_evidence.py','tests/smoke/test_secret_scan.py','tests/payment/prepayment-tools-test.py']
         require_suites(planned,expected,discover_quick_suites())
         for index,file in enumerate(files):
             def node_evidence(log):
@@ -220,7 +220,7 @@ class Runner:
                 require_count(counts['tests'],expected[str(file.relative_to(REPO))])
                 return counts
             self.step('node-'+str(index),[shutil.which('node') or 'node','--experimental-default-type=module','--test','--test-reporter=tap',str(file)],timeout=180,validator=node_evidence)
-        for index,file in enumerate([REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/quality/test_owned_resources.py',REPO/'tests/quality/test_page_evidence.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']):
+        for index,file in enumerate([REPO/'tests/quality/test_e2e_acceptance.py',REPO/'tests/quality/test_e2e_publish.py',REPO/'tests/quality/test_e2e_support.py',REPO/'tests/quality/test_e2e_environment.py',REPO/'tests/quality/test_e2e_cli.py',REPO/'tests/quality/test_e2e_contract.py',REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/quality/test_owned_resources.py',REPO/'tests/quality/test_page_evidence.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']):
             def python_evidence(log):
                 text=log.read_text();match=re.search(r'Ran (\d+) tests? in',text)
                 if not match or int(match[1])==0 or not re.search(r'^OK$',text,re.M):raise RuntimeError('PYTHON_REPORT_INCOMPLETE_OR_SKIPPED')
@@ -342,7 +342,23 @@ class Runner:
 
 def main():
     aliases={'FINANCE':'PAYMENT-SAFETY','MYSQL':'INTEGRATION'}
-    p=argparse.ArgumentParser();p.add_argument('mode',type=lambda s:aliases.get(s.upper(),s.upper()),choices=MODES);p.add_argument('--run-report',action='append',default=[]);p.add_argument('--output',default=os.environ.get('YSHOP_QUALITY_OUTPUT',str(Path(tempfile.gettempdir())/'yshop-quality')));a=p.parse_args()
+    p=argparse.ArgumentParser()
+    p.add_argument('mode',type=lambda s:aliases.get(s.upper(),s.upper()),choices=MODES)
+    p.add_argument('--run-report',action='append',default=[])
+    p.add_argument('--output',default=os.environ.get('YSHOP_QUALITY_OUTPUT',str(Path(tempfile.gettempdir())/'yshop-quality')))
+    p.add_argument('--profile',choices=['local','ci'])
+    p.add_argument('--scenario')
+    p.add_argument('--list',action='store_true',dest='list_scenarios')
+    a=p.parse_args()
+    if a.mode=='E2E':
+        if not a.profile:p.error('E2E requires --profile local|ci')
+        from e2e.registry import listing
+        try:plan=listing(a.profile,a.scenario)
+        except ValueError as exc:p.error(str(exc))
+        if a.list_scenarios:print(json.dumps(plan));return 0
+        from e2e.runner import run
+        return run(REPO,a.output,a.profile,a.scenario)
+    if a.profile or a.scenario or a.list_scenarios:p.error('E2E_OPTIONS_REQUIRE_E2E_MODE')
     if a.mode=='REPORT':
         try:print(json.dumps(aggregate_reports(a.run_report,source_identity())));return 0
         except Exception as e:print(json.dumps({'result':'FAIL','reason':str(e) if isinstance(e,RuntimeError) else type(e).__name__}));return 1

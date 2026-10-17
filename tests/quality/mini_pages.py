@@ -22,17 +22,17 @@ def mini_prerequisite():
     if not (REPO/'tests/mini/node_modules/miniprogram-automator').is_dir():return 'LOCKED_MINI_AUTOMATOR_INSTALL_REQUIRED'
     return None
 
-def run_mini(root,report,fixture,script=None,checks=None):
+def prepare_mini(root,report,fixture,guard_source=None):
     output=root/'mini';output.mkdir(mode=0o700)
     identity={k:report[k] for k in ['sourceSha','sourceDigest']}
     hx=Path(os.environ.get('YSHOP_HBUILDER_CLI','/Applications/HBuilderX.app/Contents/MacOS/cli'))
     wxcli=Path(os.environ.get('YSHOP_WECHAT_CLI','/Applications/wechatwebdevtools.app/Contents/MacOS/cli'))
     appconfig=Path(os.environ.get('YSHOP_MINI_APP_CONFIG',str(workspace(REPO)/'.uniapp-dev/.env')))
     if not hx.is_file() or not wxcli.is_file() or not appconfig.is_file():
-        return {'result':'BLOCKED','reason':'OFFICIAL_TOOL_OR_OWN_APPID_MISSING','checks':0}
+        raise RuntimeError('OFFICIAL_TOOL_OR_OWN_APPID_MISSING')
     values=dict(line.split('=',1) for line in appconfig.read_text().splitlines() if '=' in line and not line.startswith('#'))
     appid=values.get('WECHAT_APP_ID','').strip()
-    if not re.fullmatch(r'wx[0-9a-fA-F]{16}',appid):return {'result':'BLOCKED','reason':'OWN_APPID_REQUIRED','checks':0}
+    if not re.fullmatch(r'wx[0-9a-fA-F]{16}',appid):raise RuntimeError('OWN_APPID_REQUIRED')
     project=output/'project';source=REPO/'yshop-drink-uniapp-vue3'
     shutil.copytree(source,project,ignore=shutil.ignore_patterns('node_modules','unpackage','.git','.hbuilderx'))
     hashes={str(p.relative_to(source)):hashlib.sha256(p.read_bytes()).hexdigest() for p in source.rglob('*') if p.is_file() and not any(part in {'node_modules','unpackage','.git','.hbuilderx'} for part in p.relative_to(source).parts)}
@@ -69,16 +69,31 @@ def run_mini(root,report,fixture,script=None,checks=None):
     if not (dist/'app.js').is_file():raise RuntimeError('MINI_DIST_MISSING')
     compiled=''.join(p.read_text(errors='replace') for p in dist.rglob('*.js'))
     if fixture['backend']+'/app-api' not in compiled:raise RuntimeError('MINI_COMPILED_API_MISMATCH')
-    configpath=dist/'project.config.json';cfg=json.loads(configpath.read_text());cfg['appid']=appid;configpath.write_text(json.dumps(cfg))
+    configpath=dist/'project.config.json';cfg=json.loads(configpath.read_text());cfg['appid']=appid;cfg['projectname']='E2E-'+report['runId'];configpath.write_text(json.dumps(cfg))
     (dist/'project.private.config.json').write_text(json.dumps({'setting':{'urlCheck':False}}))
     # Instrument the disposable compiled app before App.onLaunch. Production pages stay unchanged.
-    guard=(REPO/'tests/mini/cold-guard.js').read_text().replace('__OWNED_BASE__',json.dumps(fixture['backend'])).replace('__MEMBER_TOKEN__',json.dumps(fixture['member']))
+    guard=(guard_source if guard_source is not None else (REPO/'tests/mini/cold-guard.js').read_text())
+    guard=guard.replace('__OWNED_BASE__',json.dumps(fixture['backend']))
+    if guard_source is None:guard=guard.replace('__MEMBER_TOKEN__',json.dumps(fixture['member']))
     app=dist/'app.js';original=app.read_text();app.write_text(guard+'\n'+original);app.chmod(0o600)
     cold_hash=hashlib.sha256(guard.encode()).hexdigest()
     compiled_hashes={str(p.relative_to(dist)):hashlib.sha256(p.read_bytes()).hexdigest() for p in dist.rglob('*') if p.is_file() and p.name!='project.private.config.json'}
     with socket.socket() as probe:probe.bind(('127.0.0.1',0));port=probe.getsockname()[1]
     ctx={**identity,'runId':report['runId'],'project':str(dist),'cli':str(wxcli),'port':port,
-         'compiledHashes':compiled_hashes,'compiledSource':identity,'coldGuardSha256':cold_hash}
+         'compiledHashes':compiled_hashes,'compiledSource':identity,'coldGuardSha256':cold_hash,'nativeAdapter':os.environ.get('YSHOP_E2E_NATIVE_ADAPTER','official')}
+    original_path=output/'app.original.js';original_path.write_text(original);original_path.chmod(0o600)
+    ctx.update(output=str(output),originalApp=str(original_path),coldGuardSha256=cold_hash)
+    return ctx
+
+
+def run_mini(root,report,fixture,script=None,checks=None):
+    reason=mini_prerequisite()
+    if reason:return {'result':'BLOCKED','reason':reason,'checks':0}
+    ctx=prepare_mini(root,report,fixture)
+    output=Path(ctx['output']);dist=Path(ctx['project']);app=dist/'app.js'
+    original=Path(ctx['originalApp']).read_text();cold_hash=ctx['coldGuardSha256']
+    compiled_hashes=ctx['compiledHashes'];wxcli=Path(ctx['cli'])
+    identity={k:report[k] for k in ['sourceSha','sourceDigest']};env=os.environ.copy()
     private=output/'context.json';private.write_text(json.dumps(ctx));private.chmod(0o600)
     receipt=output/'receipt.json';env.update(YSHOP_MINI_CONTEXT=str(private),YSHOP_MINI_REPORT=str(receipt))
     started=time.time()

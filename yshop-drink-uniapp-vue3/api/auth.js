@@ -1,5 +1,9 @@
 import api from './api'
 
+export function userLogout() {
+  return api.post('/member/auth/logout', {}, { login: true })
+}
+
 /**
  * 使用手机 + 验证码登录
  */

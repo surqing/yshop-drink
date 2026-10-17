@@ -8,6 +8,51 @@ concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  core-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      YSHOP_PAY_WECHAT_V3_ENABLED: 'false'
+      YSHOP_PAY_WECHAT_V3_RECONCILIATION_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Certify the PR source itself; other jobs may separately test the merge commit.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '8.15.9'
+      - name: Locked runtime and browser dependencies
+        run: |
+          python3 -m pip install -r tests/quality/requirements.txt
+          pnpm --dir yshop-drink-vue3 install --frozen-lockfile
+          pnpm --dir yshop-drink-vue3 exec playwright install --with-deps chromium
+      - name: Real admin, application API and SQL core scenarios (Mini NOT_RUN)
+        run: python3 tests/quality/run.py E2E --profile ci --output "$RUNNER_TEMP/core-e2e"
+      - name: Inspect and stage only four safe summaries
+        id: safe-summary
+        if: always()
+        run: python3 tests/quality/e2e/publish.py --runs "$RUNNER_TEMP/core-e2e" --output "$RUNNER_TEMP/core-e2e-public"
+      - name: Publish inspected summaries; no context, logs, screenshots or traces
+        if: ${{ always() && steps.safe-summary.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-e2e-summary
+          path: ${{ runner.temp }}/core-e2e-public/*
+          retention-days: 7
+          if-no-files-found: error
   quality:
     runs-on: ubuntu-24.04
     timeout-minutes: 45

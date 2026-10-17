@@ -26,11 +26,13 @@ public interface MemberUserMapper extends BaseMapperX<MemberUserDO> {
                 .eq(mini ? MemberUserDO::getRoutineOpenid : MemberUserDO::getOpenid, identity));
     }
 
-    @Update("<script>UPDATE yshop_user SET mobile=#{next} WHERE id=#{uid} AND mobile &lt;=&gt; #{previous} AND deleted=0</script>")
+    @Update("<script>UPDATE yshop_user SET mobile=#{next} WHERE id=#{uid} AND mobile " +
+            "<choose><when test='previous == null'>IS NULL</when><otherwise>= #{previous}</otherwise></choose> AND deleted=0</script>")
     int changeMobile(@Param("uid") Long uid, @Param("previous") String previous, @Param("next") String next);
 
     @Update({"<script>UPDATE yshop_user SET <choose><when test='mini'>routine_openid</when><otherwise>openid</otherwise></choose> = #{next}",
-            "WHERE id=#{uid} AND <choose><when test='mini'>routine_openid</when><otherwise>openid</otherwise></choose> &lt;=&gt; #{previous} AND deleted=0</script>"})
+            "WHERE id=#{uid} AND <choose><when test='mini'>routine_openid</when><otherwise>openid</otherwise></choose>",
+            "<choose><when test='previous == null'>IS NULL</when><otherwise>= #{previous}</otherwise></choose> AND deleted=0</script>"})
     int changeProvider(@Param("uid") Long uid, @Param("previous") String previous, @Param("next") String next, @Param("mini") boolean mini);
 
     default MemberUserDO lockById(Long uid) {

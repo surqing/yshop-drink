@@ -3,7 +3,7 @@ const port = Number(process.env.YSHOP_BROWSER_PORT || 4173)
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('INVALID_BROWSER_PORT')
 const output = process.env.YSHOP_BROWSER_OUTPUT || '.quality/browser'
 export default defineConfig({
-  testDir: './e2e', forbidOnly: true, fullyParallel: false, workers: 1, retries: 0,
+  testDir: './e2e', testIgnore: '**/core/**', forbidOnly: true, fullyParallel: false, workers: 1, retries: 0,
   timeout: 60000, expect: { timeout: 15000 },
   outputDir: `${output}/artifacts`,
   reporter: [['./e2e/reporter.ts'], ['line']],

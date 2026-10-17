@@ -1457,5 +1457,10 @@
     "migrationKeepsUidAssetsAndOrdersAndSnapshotRestoresOriginalIdentity": 1,
     "twentyDistinctUnknownSmsPhonesNeverRegisterMembers": 1,
     "internationalDialPrefixResolvesExistingCompleteMember": 1
+  },
+  "co.yixiang.yshop.module.member.service.auth.MemberIdentitySqlTest": {
+    "mobileCompareAndSetParsesWithNullAndExistingOwner": 1,
+    "miniCompareAndSetParsesWithNullAndExistingOwner": 1,
+    "mpCompareAndSetParsesWithNullAndExistingOwner": 1
   }
 }
