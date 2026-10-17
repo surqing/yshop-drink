@@ -26,7 +26,7 @@ npm ci --prefix tests/mini --ignore-scripts --no-audit --no-fund
 .quality/venv/bin/python tests/quality/run.py E2E --profile local --scenario order-retry --output /private/tmp/yshop-e2e-retry
 ```
 
-local 还需要 macOS、HBuilderX、已登录且启用服务端口的微信开发者工具，以及工作空间私有 AppID 配置。能力缺失返回 BLOCKED，不自动降级。`YSHOP_TEST_WORKSPACE` 可以显式指定含 `.local-dev` 的工作空间；不会读取 `selected-repo` 选择被测源码。官方工具路径可用 `YSHOP_HBUILDER_CLI`、`YSHOP_WECHAT_CLI` 指定。私有 AppID 的位置和字段由 `mini_pages.mini_prerequisite` 检查。
+local 还需要 macOS、HBuilderX、已登录且启用服务端口的微信开发者工具，以及工作空间私有 AppID 配置。默认读取工作空间 `.uniapp-dev/.env` 中的 `WECHAT_APP_ID`；可用 `YSHOP_MINI_APP_CONFIG` 指定另一个私有文件。不要把它提交到仓库。能力缺失返回 BLOCKED，不自动降级。`YSHOP_TEST_WORKSPACE` 可以显式指定含 `.local-dev` 的工作空间；不会读取 `selected-repo` 选择被测源码。官方工具路径可用 `YSHOP_HBUILDER_CLI`、`YSHOP_WECHAT_CLI` 指定。
 
 运行时不要修改工作树。源码 SHA、内容摘要和产物哈希必须匹配；改变源码会使正在运行的结果无效。构建凭证不匹配时重新构建，不能使用旧 JAR 或旧 Surefire 报告。小程序从当前源码重新生成私有副本并核验编译哈希。
 
@@ -47,6 +47,16 @@ PASSED 要求精确清单中的检查全部真实执行、无重试、证据完�
 先看 `failedStage`、场景 `stage` 和第一个失败 check。私有的 `playwright-private.log`、`case-*.json`、`mini-*/lifecycle-private.json`、导航诊断、截图、trace 和所属后端日志用于定位；不得整目录公开。修复后使用新 runId，保留首次失败。不使用自动测试重试、skip 或扩大等待来隐藏业务缺陷。
 
 GitHub Actions 的 `core-e2e` 检出 PR head 源码，自动运行真实 ci profile。其他作业可能检出测试 merge commit，必须按实际 SHA 分别解释。两个来源只在 SHA 与内容摘要都相同时才能汇总。小程序、会员、商品、订单、券或框架变更还需要同源码的完整 local 证据；最终稳定性验收需要两轮新数据完整 local 运行。
+
+最终汇总复用精确检查合同，要求两个不同 owner/runId 的完整 local 报告和一个实际 Linux ci 报告。它重新核验源码、产物、平台、编译证据和每项检查；本机 ci profile 不能替代 Linux。先将下载的 CI 安全摘要放在私有目录，再在冻结工作树执行：
+
+```sh
+PYTHONPATH=tests/quality .quality/venv/bin/python -m e2e.acceptance \
+  --local /private/tmp/local-a/RUN_A/report.json \
+  --local /private/tmp/local-b/RUN_B/report.json \
+  --ci /private/tmp/linux-ci/report.json \
+  --output /private/tmp/e2e-core-acceptance.json
+```
 
 CI 上传前运行 `publish.py`，只复制检查过的四个摘要；不会复制 context、日志、截图、trace 或发送收件箱。发布检查不把失败结果变成成功。
 
@@ -96,7 +106,7 @@ print(remove_owned(docker, names, owner))
 |---|---|
 | `run.py QUICK` | 框架和轻量业务回归，继续独立保留。 |
 | `run.py CROSS-END` | 旧后台真实页面与 SQL 范围，保留兼容；新核心集合用 `E2E`。 |
-| `run.py MINIPAGES` / `tests/mini/pages.cjs` | 原有页面范围，旧会话夹具不认证新登录；新登录与核心闭环用 local E2E。 |
+| `run.py MINI-PAGES` / `tests/mini/pages.cjs` | 原有页面范围，旧会话夹具不认证新登录；新登录与核心闭环用 local E2E。 |
 | `business-backend.py` | 旧 smoke、双进程和 GUI 兼容包装；环境生命周期由 OwnedEnvironment 共用。 |
 | `tests/defects/coupon_lifecycle.py` | 原专项验收保留；新核心券流程用 coupon-release / coupon-complete。 |
 | `run.py BROWSER` | 明确 API 夹具的浏览器页面范围，不替代真实后端 E2E。 |

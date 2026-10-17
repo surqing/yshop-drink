@@ -104,6 +104,8 @@ def write_reports(root, report):
     atomic_text(root/'junit.xml',ET.tostring(suite,encoding='unicode'))
     title='E2E '+report.get('status','INCONCLUSIVE')
     summary=[f'# {title}', '',f"Run: {report['runId']}",f"Profile: {report['profile']}",
+             f"Platform: {report.get('hostPlatform','unknown')}",f"Source SHA: {report.get('sourceSha','unknown')}",
+             f"Source digest: {report.get('sourceDigest','unknown')}",
              f"Scope: {report.get('scope','unknown')}",f"Mini: {report.get('miniStatus','NOT_RUN')}",
              f"Cleanup: {report.get('cleanup','NOT_RUN')}", '', '| Scenario | Variant | Status |', '|---|---|---|']
     rows=[]
@@ -117,5 +119,7 @@ def write_reports(root, report):
     document='<!doctype html><html lang="zh"><meta charset="utf-8"><title>'+html.escape(title)+\
              '</title><style>body{font:16px system-ui;max-width:1000px;margin:40px auto;padding:0 20px}section{border-top:1px solid #ddd}li{margin:8px 0}</style><h1>'+\
              html.escape(title)+'</h1><p>'+html.escape(report['runId'])+' · '+html.escape(report['profile'])+\
-             ' · mini '+html.escape(report.get('miniStatus','NOT_RUN'))+'</p>'+''.join(rows)+'</html>'
+             ' · '+html.escape(report.get('hostPlatform','unknown'))+' · mini '+html.escape(report.get('miniStatus','NOT_RUN'))+\
+             '</p><p>Source: '+html.escape(report.get('sourceSha','unknown'))+'<br>Digest: '+\
+             html.escape(report.get('sourceDigest','unknown'))+'</p>'+''.join(rows)+'</html>'
     atomic_text(root/'report.html',document)

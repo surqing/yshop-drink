@@ -16,5 +16,6 @@
   "tests/quality/test_e2e_environment.py": 12,
   "tests/quality/test_e2e_support.py": 7,
   "tests/quality/test_e2e_publish.py": 8,
-  "tests/auth-logout.test.mjs": 2
+  "tests/auth-logout.test.mjs": 2,
+  "tests/quality/test_e2e_acceptance.py": 13
 }

@@ -149,8 +149,14 @@ class MiniDriver {
   }
   async cancel() {
     const page = await this.mini.currentPage()
-    await (await until(() => page.$('.order-cancel-button'))).tap()
+    const component = await until(() => page.$('.order-cancel-button'))
+    const button = await until(() => component.$('button'))
+    const offset = await button.offset()
+    await this.mini.pageScrollTo(Number(offset.top))
+    this.lifecycle('cancel-button-visible')
+    await button.tap()
     await this.mini.native().confirmModal()
+    this.lifecycle('cancel-confirmed')
     await until(async () => (await this.mini.currentPage()).path === 'pages/order/order')
   }
   async couponRow(page, title, selector = '.coupons-item') {

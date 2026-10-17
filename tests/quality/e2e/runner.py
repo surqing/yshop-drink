@@ -76,7 +76,7 @@ def run(repo, output, profile, scenario=None):
     identity=source_identity(repo);plan=listing(profile,scenario);workspace=source_workspace(repo)
     env=execution_environment(workspace)
     report={**identity,**plan,'runId':root.name,'owner':uuid.uuid4().hex,'complete':False,
-            'startedAt':time.time(),'status':'INCONCLUSIVE','cleanup':'NOT_RUN','stage':'PREFLIGHT',
+            'startedAt':time.time(),'hostPlatform':sys.platform,'status':'INCONCLUSIVE','cleanup':'NOT_RUN','stage':'PREFLIGHT',
             'planned':plan['scenarios'],
             'scenarios':[{'id':s['id'],'variant':s['variant'],'status':'NOT_RUN','checks':[]} for s in plan['scenarios']],
             'receiptValidated':False,'sourceUnchanged':True,'workspace':str(workspace)}

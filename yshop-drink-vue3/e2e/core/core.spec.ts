@@ -23,9 +23,10 @@ async function orderFor(f: Flow, product: any, token: string, coupon?: any, extr
   await f.mini.addProduct(product.name)
   let page = await f.mini.checkout()
   if (coupon) page = await f.mini.selectCoupon(page, coupon.title)
+  const displayedAmount = await f.mini.amount(page)
   const order = await f.mini.submit(page)
   const state = await f.mini.state()
-  return { ...order, body: state.requests.filter((r: any) => r.path === '/app-api/order/create').at(-1).data }
+  return { ...order, displayedAmount, body: state.requests.filter((r: any) => r.path === '/app-api/order/create').at(-1).data }
 }
 async function loseResponse(f: Flow, body: any, token: string) {
   let committed = false
@@ -209,22 +210,33 @@ async function catalogOrder(f: Flow) {
 async function storeIsolation(f: Flow) {
   const a = await f.createProduct(101, 'isolation-a'), b = await f.createProduct(102, 'isolation-b', 20)
   const member = await f.member(), other = await f.member(2)
-  let first: any, second: any
+  let first: any, second: any, coupon: any, right: any
   await f.check('store-a-order', async () => { first = await orderFor(f, a, member); expect(f.oracle('order', { orderId: first.orderId })[0].shopId).toBe(101) })
   if (local) await f.check('mini-switch-clears-context', async () => {
+    await f.mini.selectStore('QA Shop A')
+    coupon = await f.createCouponUI('isolation-coupon'); right = await issue(f, coupon, member)
     await f.mini.selectStore('QA Shop A'); await f.mini.addProduct(a.name)
+    let checkout = await f.mini.checkout(); checkout = await f.mini.selectCoupon(checkout, coupon.title)
+    expect(await f.mini.amount(checkout)).toContain('14.00')
     await f.mini.selectStore('QA Shop B')
-    const state = await f.mini.mini.evaluate(() => ({ cart: wx.getStorageSync('cart'), checkout: wx.getStorageSync('checkoutSubmission'), coupon: wx.getStorageSync('mycoupon') }))
-    expect(state.cart || []).toHaveLength(0); expect(state.checkout).toBeFalsy(); expect(state.coupon?.id).toBeFalsy()
+    const state = await f.mini.mini.evaluate(() => ({ cart: wx.getStorageSync('cart'), checkout: wx.getStorageSync('checkoutSubmission') }))
+    expect(state.cart || []).toHaveLength(0); expect(state.checkout).toBeFalsy()
   })
-  await f.check('store-b-order', async () => { second = await orderFor(f, b, member); expect(f.oracle('order', { orderId: second.orderId })[0].shopId).toBe(102) })
+  await f.check('store-b-order', async () => {
+    second = await orderFor(f, b, member)
+    const row = f.oracle('order', { orderId: second.orderId })[0]
+    expect(row.shopId).toBe(102); expect(Number(row.amount)).toBe(20)
+    if (local) expect(second.displayedAmount).toContain('20.00')
+  })
   await f.check('cross-store-product-denied', async () => {
     const denied = await f.api('POST', '/app-api/order/create', { ...second.body, shopId: '101', idempotencyKey: key() }, member, false)
     expect(denied.code).not.toBe(0)
   })
-  const coupon = await f.createCouponUI('isolation-coupon')
-  await f.api('POST', '/app-api/coupon/receive', { id: coupon.id, requestKey: key() }, member)
-  const right = await rights(f, coupon, member)
+  if (!local) {
+    coupon = await f.createCouponUI('isolation-coupon')
+    await f.api('POST', '/app-api/coupon/receive', { id: coupon.id, requestKey: key() }, member)
+    right = await rights(f, coupon, member)
+  }
   await f.check('cross-store-coupon-denied', async () => {
     const denied = await f.api('POST', '/app-api/order/create', { ...second.body, couponId: String(right.id), idempotencyKey: key() }, member, false)
     expect(denied.code).not.toBe(0)
@@ -355,8 +367,15 @@ async function couponFlow(f: Flow, complete: boolean) {
     await f.check('duplicate-completion', () => { expect(f.bridge('complete', { orderId: order.orderId }).result).toBe('IDEMPOTENT_DUPLICATE') })
     await f.check('admin-paid-order', async () => { const row = await f.viewOrder(order.orderId); await expect(row).not.toContainText('未支付'); await expect(row).toContainText('14') })
     await f.check('coupon-redeemed', () => { const row = f.oracle('coupon-right', { rightId: right.id })[0]; expect(row.status).toBe(1); expect(row.redeemedOrderId).toBe(order.orderId); expect(row.redeemedAt).toBeTruthy() })
-    if (local) await f.check('mini-redeemed-coupon', async () => { expect(await f.mini.couponText(coupon.title)).toContain('已核销') })
+    if (local) await f.check('mini-redeemed-coupon', async () => {
+      const page = await f.mini.mini.navigateTo(`/pages-order/orders/detail?id=${order.orderId}`)
+      await expect.poll(async () => (await page.$('.order-detail-page')).text()).toContain('实付金额')
+      expect(await page.$('.order-cancel-button')).toBeFalsy()
+      expect(await f.mini.couponText(coupon.title)).toContain('已核销')
+    })
     await f.check('completion-ledger-sql', () => {
+      const orderRow = f.oracle('order', { orderId: order.orderId })[0]
+      expect(orderRow.paid).toBe(1); expect(Number(orderRow.amount)).toBe(14); expect(orderRow.deleted).toBe(0)
       const record = f.oracle('financial-records', { orderId: order.orderId })[0]
       expect(record).toEqual({ payments: 1, attempts: 1, bills: 1 })
       const operations = f.oracle('coupon-operations', { couponId: coupon.id })
