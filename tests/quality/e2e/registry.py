@@ -34,7 +34,8 @@ def select_scenarios(profile, scenario=None):
     ids=[scenario] if scenario is not None else list(_CHECKS)
     return [{'id':name, 'variant':'mini-admin' if profile=='local' else 'api-admin',
              'profiles':['local','ci'],
-             'requiredCapabilities':['docker','backend','browser','test-support'] + (['mini'] if profile=='local' else []),
+             'requiredCapabilities':['docker','backend','browser','test-support'] + (['mini'] if profile=='local' else []) +
+                (['native-confirmation'] if profile=='local' and name in ('order-cancel','coupon-release') else []),
              'expectedCheckIds':_CHECKS[name] + (_LOCAL[name] if profile=='local' else [])}
             for name in ids]
 

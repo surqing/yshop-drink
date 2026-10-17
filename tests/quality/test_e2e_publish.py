@@ -39,6 +39,10 @@ class E2ePublishTest(unittest.TestCase):
         self.report['commandDir']='/private/mailbox';self.write()
         with self.assertRaisesRegex(ValueError,'UNSAFE_PUBLIC_ARTIFACT'):self.publish()
 
+    def test_generic_token_field_rejected(self):
+        self.report['nested']={'token':'synthetic-private-value'};self.write()
+        with self.assertRaisesRegex(ValueError,'UNSAFE_PUBLIC_ARTIFACT'):self.publish()
+
     def test_bearer_value_in_html_rejected(self):
         (self.root/'report.html').write_text('<p>Bearer synthetic-secret</p>')
         with self.assertRaisesRegex(ValueError,'UNSAFE_PUBLIC_ARTIFACT'):self.publish()

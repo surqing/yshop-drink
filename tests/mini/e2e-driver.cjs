@@ -18,6 +18,9 @@ class MiniDriver {
     driver.lifecycle('sdk-connected')
     driver.evidence = { officialConnected: true, compiledHashesVerified: true, compiledSource: context.compiledSource, compiledFileCount: Object.keys(context.compiledHashes).length }
     try {
+      const info = await mini.send('Tool.getInfo')
+      driver.evidence.officialToolVersion = info.version
+      driver.evidence.officialSdkVersion = info.SDKVersion
       await until(async () => (await mini.pageStack()).length > 0, 90000)
       driver.lifecycle('page-stack-ready')
       // The simulator can restore the previous route; each case owns a fresh root stack.
@@ -149,13 +152,17 @@ class MiniDriver {
   }
   async cancel() {
     const page = await this.mini.currentPage()
+    const before = await this.state()
     const component = await until(() => page.$('.order-cancel-button'))
     const button = await until(() => component.$('button'))
     const offset = await button.offset()
     await this.mini.pageScrollTo(Number(offset.top))
     this.lifecycle('cancel-button-visible')
     await button.tap()
+    await until(async () => (await this.state()).nativeModalsOpened > before.nativeModalsOpened)
     await this.mini.native().confirmModal()
+    try { await until(async () => (await this.state()).nativeModalsConfirmed > before.nativeModalsConfirmed) }
+    catch { throw Error('MINI_NATIVE_CONFIRMATION_UNAVAILABLE') }
     this.lifecycle('cancel-confirmed')
     await until(async () => (await this.mini.currentPage()).path === 'pages/order/order')
   }

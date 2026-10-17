@@ -10,6 +10,23 @@ import unittest
 REPO = Path(os.environ.get('YSHOP_E2E_TEST_REPO', Path(__file__).resolve().parents[2]))
 
 class E2eCliTest(unittest.TestCase):
+    def test_complete_capability_blockage_is_not_business_failure(self):
+        from e2e.runner import scenario_failure
+        cases=[{'id':'a','status':'PASSED'},{'id':'b','status':'BLOCKED'}]
+        self.assertEqual('BLOCKED',scenario_failure(cases,[{'id':'a'},{'id':'b'}]))
+
+    def test_business_failure_remains_failed_alongside_blockage(self):
+        from e2e.runner import scenario_failure
+        self.assertEqual('FAILED',scenario_failure([{'id':'a','status':'FAILED'},{'id':'b','status':'BLOCKED'}],[{'id':'a'},{'id':'b'}]))
+
+    def test_incomplete_executor_output_is_inconclusive(self):
+        from e2e.runner import scenario_failure
+        self.assertEqual('INCONCLUSIVE',scenario_failure([{'id':'a','status':'BLOCKED'}],[{'id':'a'},{'id':'b'}]))
+
+    def test_nonzero_executor_cannot_promote_passed_prefix(self):
+        from e2e.runner import scenario_failure
+        self.assertEqual('INCONCLUSIVE',scenario_failure([{'id':'a','status':'PASSED'}],[{'id':'a'}]))
+
     def invoke(self, *arguments):
         return subprocess.run([sys.executable, str(REPO/'tests/quality/run.py'), *arguments],
                               cwd=REPO, text=True, capture_output=True, timeout=20)

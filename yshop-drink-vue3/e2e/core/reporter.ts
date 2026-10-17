@@ -17,10 +17,11 @@ export default class E2eReporter implements Reporter {
     const checks = (receipt.checks || []).map((check: any) => ({
       id: selected.expectedCheckIds.includes(check.id) ? check.id : 'UNREGISTERED',
       status: check.status, executed: check.executed === true,
-      ...(check.reasonCode ? { reasonCode: check.reasonCode === 'INJECTED_ASSERTION' ? 'INJECTED_ASSERTION' : 'E2E_ASSERTION_FAILED' } : {})
+      ...(check.reasonCode ? { reasonCode: ['INJECTED_ASSERTION', 'MINI_NATIVE_CONFIRMATION_UNAVAILABLE'].includes(check.reasonCode) ? check.reasonCode : 'E2E_ASSERTION_FAILED' } : {})
     }))
     this.cases.push({ id: selected.id, variant: selected.variant,
-      status: result.status === 'passed' && test.expectedStatus === 'passed' ? 'PASSED' : 'FAILED',
+      status: receipt.blockedReason === 'MINI_NATIVE_CONFIRMATION_UNAVAILABLE' ? 'BLOCKED' :
+        result.status === 'passed' && test.expectedStatus === 'passed' ? 'PASSED' : 'FAILED',
       retry: result.retry, checks, miniEvidence: receipt.miniEvidence, stage: receipt.stage, driversCleanup: receipt.driversCleanup || 'NOT_RUN' })
   }
   onEnd(result: FullResult) {

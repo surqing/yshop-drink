@@ -3,7 +3,8 @@
   const base = __OWNED_BASE__
   const request = wx.request
   const state = { requests: [], orderIds: [], authResponses: 0, dropNextOrderResponse: false,
-    dropped: false, financialRequests: 0, blockedExternalRequests: 0, unpreparedLogins: 0 }
+    dropped: false, financialRequests: 0, blockedExternalRequests: 0, unpreparedLogins: 0,
+    nativeModalsOpened: 0, nativeModalsConfirmed: 0 }
   const save = () => wx.setStorageSync('__e2eState', state)
   wx.__e2e = state
   wx.removeStorageSync('__e2eFault')
@@ -11,6 +12,16 @@
   for (const key of ['accessToken', 'userinfo', 'selectedStore', 'cart', 'checkoutSubmission', 'mycoupon']) wx.removeStorageSync(key)
   wx.login = function (options) { state.unpreparedLogins++; save(); options.fail && options.fail({ errMsg: 'E2E_PLATFORM_PROOF_NOT_PREPARED' }) }
   wx.requestPayment = function (options) { state.financialRequests++; save(); options.fail && options.fail({ errMsg: 'E2E_FINANCIAL_FROZEN' }) }
+  const showModal = wx.showModal
+  wx.showModal = function (options) {
+    if (options.title !== '取消订单') return showModal.call(wx, options)
+    state.nativeModalsOpened++; save()
+    const success = options.success
+    return showModal.call(wx, { ...options, success(result) {
+      if (result.confirm) state.nativeModalsConfirmed++
+      save(); success && success(result)
+    } })
+  }
   wx.request = function (options) {
     const url = String(options.url || '')
     if (!url.startsWith(base + '/app-api/') || /\/order\/pay|\/pay\/order|\/prepay|\/refund|\/recharge|\/notify|\/wechat-v3\//.test(url)) {

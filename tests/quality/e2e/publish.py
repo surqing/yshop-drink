@@ -6,7 +6,7 @@ import re
 import shutil
 
 FILES=('report.json','report.html','summary.md','junit.xml')
-PRIVATE_KEYS={'accounts','password','secret','accessToken','refreshToken','authorization','headers',
+PRIVATE_KEYS={'accounts','password','secret','token','accessToken','refreshToken','authorization','headers',
               'requestBody','responseBody','loginCode','phoneCode','commandDir','smsOutbox','apiKey','apiSecret'}
 FORBIDDEN={re.sub('[^a-z]','',key.lower()) for key in PRIVATE_KEYS}
 SENSITIVE=re.compile(r'Bearer\s+\S+|-----BEGIN [A-Z ]*PRIVATE KEY-----|\bgh[pousr]_[A-Za-z0-9]+|'

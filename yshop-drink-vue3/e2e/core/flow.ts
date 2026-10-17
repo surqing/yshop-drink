@@ -12,6 +12,7 @@ export class Flow {
   public checks: Array<Record<string, unknown>> = []
   public cleanup = 'NOT_RUN'
   public stage = 'PREPARE'
+  public blockedReason: string | undefined
   public miniEvidence: any = undefined
   public selected: any
   constructor(public page: Page, public request: APIRequestContext, public browser: Browser, public baseURL: string, public id: string) {
@@ -19,7 +20,7 @@ export class Flow {
     if (!this.selected) throw Error('UNREGISTERED_SCENARIO')
   }
   save() {
-    writeFileSync(join(context.output, `case-${this.id}.json`), JSON.stringify({ checks: this.checks, driversCleanup: this.cleanup, stage: this.stage, miniEvidence: this.miniEvidence }), { mode: 0o600 })
+    writeFileSync(join(context.output, `case-${this.id}.json`), JSON.stringify({ checks: this.checks, driversCleanup: this.cleanup, stage: this.stage, miniEvidence: this.miniEvidence, blockedReason: this.blockedReason }), { mode: 0o600 })
   }
   async check(id: string, action: () => Promise<unknown> | unknown) {
     if (!this.selected.expectedCheckIds.includes(id) || this.checks.some(c => c.id === id)) throw Error('UNREGISTERED_OR_DUPLICATE_CHECK')
@@ -34,7 +35,12 @@ export class Flow {
         }
       })
       receipt.status = 'PASSED'
-    } catch (error) { receipt.reasonCode ||= 'E2E_ASSERTION_FAILED'; throw error }
+    } catch (error) {
+      if (error instanceof Error && error.message === 'MINI_NATIVE_CONFIRMATION_UNAVAILABLE') {
+        this.blockedReason = error.message; receipt.status = 'BLOCKED'; receipt.reasonCode = error.message
+      } else receipt.reasonCode ||= 'E2E_ASSERTION_FAILED'
+      throw error
+    }
     finally { this.save() }
   }
   async guard(page: Page) {

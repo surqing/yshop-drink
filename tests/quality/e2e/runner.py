@@ -21,6 +21,17 @@ from .registry import listing
 class Blocked(RuntimeError):pass
 
 
+def scenario_failure(cases,planned):
+    if any(case.get('status')=='FAILED' for case in cases):return 'FAILED'
+    names=[case.get('id') for case in cases]
+    expected=[case['id'] for case in planned]
+    if (len(names)==len(set(names))==len(expected) and set(names)==set(expected)
+        and any(case.get('status')=='BLOCKED' for case in cases)
+        and all(case.get('status') in ('PASSED','BLOCKED') for case in cases)):
+        return 'BLOCKED'
+    return 'INCONCLUSIVE'
+
+
 def source_workspace(repo):
     explicit=os.environ.get('YSHOP_TEST_WORKSPACE')
     if explicit:return Path(explicit).resolve()
@@ -149,9 +160,14 @@ def run(repo, output, profile, scenario=None):
                     # Node reporter publishes only registered names and structural status fields.
                     if receipt.get('runId')==report['runId'] and receipt.get('owner')==report['owner']:
                         report['scenarios']=receipt.get('scenarios',report['scenarios'])
-            if code:raise RuntimeError('E2E_SCENARIOS_FAILED')
-            report['evidence']=validate_receipt(receipt,plan['scenarios'],identity,report['runId'],report['owner'],started)
-            report.update(receiptValidated=True,status='PASSED')
+            if code:
+                status=scenario_failure(report['scenarios'],plan['scenarios'])
+                report.update(status=status,failedStage=report['stage'],
+                              reasonCode='E2E_REQUIRED_CAPABILITY_UNAVAILABLE' if status=='BLOCKED' else
+                              'E2E_SCENARIOS_FAILED' if status=='FAILED' else 'E2E_EXECUTOR_INCOMPLETE')
+            else:
+                report['evidence']=validate_receipt(receipt,plan['scenarios'],identity,report['runId'],report['owner'],started)
+                report.update(receiptValidated=True,status='PASSED')
     except Blocked as error:
         report.update(status='BLOCKED',reasonCode=str(error),failedStage=report['stage'])
     except BaseException as error:
