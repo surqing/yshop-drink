@@ -99,21 +99,28 @@ class MiniDriver {
       for (const item of await page.$$('.good')) if ((await item.text()).includes(name)) return item
       return null
     })
+    this.lifecycle('product-visible')
     await (await row.$('.property_btn')).tap()
-    const modal = await until(() => page.$('.good-detail-modal'))
-    const sku = await until(() => modal.$('.properties .values .value'))
+    await until(() => page.$('.good-detail-modal'))
+    // Slot children belong to the page; querying inside the custom modal misses them.
+    const sku = await until(() => page.$('.properties .values .value'))
     await sku.tap()
+    this.lifecycle('sku-selected')
     if (topping) {
       const option = await until(async () => {
         for (const element of await page.$$('.customization-option')) if ((await element.text()).includes('珍珠')) return element
         return null
       })
       await option.tap()
+      await until(async () => (await option.text()).includes('1'))
+      this.lifecycle('topping-selected')
     }
     for (let i = 1; i < quantity; i++) {
-      const buttons = await modal.$$('.action .btn-group button')
+      const buttons = await page.$$('.action .btn-group button')
       await buttons[1].tap()
+      await until(async () => Number(await (await page.$('.action .number')).text()) === i + 1)
     }
+    this.lifecycle('quantity-selected')
     await (await page.$('.add-to-cart-btn')).tap()
     return until(() => this.mini.evaluate(() => { const cart = wx.getStorageSync('cart'); return cart && cart.length ? cart : null }))
   }
