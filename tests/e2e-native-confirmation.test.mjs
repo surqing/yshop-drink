@@ -32,3 +32,13 @@ test('does not select confirmation text elsewhere in the page', () => {
   wrong[0].tree.children[0].children.push({ role: 'AXLink', text: '确定', id: 'unrelated' })
   assert.throws(() => locateConfirmation(wrong, { runId, project }))
 })
+test('rejects a foreign top WebArea even when an owned nested WebArea matches', () => {
+  const wrong = fixture(), original = wrong[0].tree.children[0]
+  wrong[0].tree.children = [{ role: 'AXWebArea', url: 'file:///official/index.html?projectpath=%2Fforeign', children: [original] }]
+  assert.throws(() => locateConfirmation(wrong, { runId, project }))
+})
+test('rejects a missing top project URL even when a nested WebArea matches', () => {
+  const wrong = fixture(), original = wrong[0].tree.children[0]
+  wrong[0].tree.children = [{ role: 'AXWebArea', children: [original] }]
+  assert.throws(() => locateConfirmation(wrong, { runId, project }))
+})

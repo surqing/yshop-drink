@@ -12,14 +12,17 @@ function locateConfirmation(windows, identity) {
   var owned = windows.filter(function (w) { return w.name === title || w.name.indexOf(title + ' - ') === 0 })
   requireValue(owned.length === 1)
   function flatten(node) { return [node].concat.apply([node], (node.children || []).map(flatten)) }
-  var tree = flatten(owned[0].tree)
-  var areas = tree.filter(function (node) {
-    if (node.role !== 'AXWebArea' || typeof node.url !== 'string') return false
-    var match = node.url.match(/[?&#]projectpath=([^&#]*)/i)
-    if (!match) return false
-    try { return decodeURIComponent(match[1]) === project } catch (_) { return false }
-  })
-  requireValue(areas.length === 1)
+  function topAreas(node) {
+    if (node.role === 'AXWebArea') return [node]
+    return [].concat.apply([], (node.children || []).map(topAreas))
+  }
+  var areas = topAreas(owned[0].tree)
+  requireValue(areas.length === 1 && typeof areas[0].url === 'string')
+  var match = areas[0].url.match(/[?&#]projectpath=([^&#]*)/i)
+  requireValue(match)
+  var decoded
+  try { decoded = decodeURIComponent(match[1]) } catch (_) { requireValue(false) }
+  requireValue(decoded === project)
   var candidates = flatten(areas[0]).filter(function (node) {
     if (node.role !== 'AXGroup') return false
     var children = flatten(node)
