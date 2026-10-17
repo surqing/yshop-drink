@@ -121,6 +121,9 @@ async function authSession(f: Flow) {
       const page = await f.mini.loginPage(1)
       const token = await f.mini.authorize(page, 1)
       expect((await f.api('GET', '/app-api/member/user/get', undefined, token)).id).toBe(101)
+      // Token issuance precedes the login page's delayed navigateBack. Let that
+      // real transition finish before starting a competing protected navigation.
+      await expect.poll(async () => (await f.mini.mini.currentPage()).path).not.toBe('pages-user/login/login')
       await expect.poll(async () => (await f.api('GET', '/app-api/member/user/get', undefined, token, false)).code).toBe(401)
       await f.mini.mini.navigateTo('/pages-user/address/address')
       await expect.poll(async () => (await f.mini.mini.currentPage()).path).toBe('pages-user/login/login')
