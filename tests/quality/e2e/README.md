@@ -28,7 +28,7 @@ npm ci --prefix tests/mini --ignore-scripts --no-audit --no-fund
 
 local 还需要 macOS、HBuilderX、已登录且启用服务端口的微信开发者工具，以及工作空间私有 AppID 配置。默认读取工作空间 `.uniapp-dev/.env` 中的 `WECHAT_APP_ID`；可用 `YSHOP_MINI_APP_CONFIG` 指定另一个私有文件。不要把它提交到仓库。能力缺失返回 BLOCKED，不自动降级。`YSHOP_TEST_WORKSPACE` 可以显式指定含 `.local-dev` 的工作空间；不会读取 `selected-repo` 选择被测源码。官方工具路径可用 `YSHOP_HBUILDER_CLI`、`YSHOP_WECHAT_CLI` 指定。
 
-`order-cancel` 和 `coupon-release` 还需要可工作的原生确认控件接口。已观察到工具 `2.02.2608080` / SDK `3.17.4` 的 `Native.confirmModal()` 静默返回但不点击确认框；本框架通过真实对话框回调确认是否完成，缺失则报告 `MINI_NATIVE_CONFIRMATION_UNAVAILABLE` / BLOCKED。不会替换 `showModal` 的真实响应或直接调用取消业务方法。可用 `YSHOP_WECHAT_CLI` 指向兼容工具；macOS 可显式用 `YSHOP_E2E_NATIVE_ADAPTER=applescript` 启用 AppleScript/JXA 辅助功能适配器（默认关闭）。需要用户事先允许系统脚本及辅助功能权限。它只在官方接口未产生真实确认回调时，对唯一 `E2E-<runId>` 窗口核对顶部 WebArea 的完整私有项目路径、runId、取消文案和唯一确认链接后执行 AXPress；不使用全局键盘、坐标或业务回调替身。报告记录实际适配器使用；真实取消 API、UI 和 SQL 验证仍为必选。若 `osascript` 报“不允许辅助访问”，请由用户在系统设置中授权，不会自动修改系统权限。
+`order-cancel` 和 `coupon-release` 还需要可工作的原生确认控件接口。已观察到工具 `2.02.2608080` / SDK `3.17.4` 的 `Native.confirmModal()` 静默返回但不点击确认框；本框架通过真实对话框回调确认是否完成，缺失则报告 `MINI_NATIVE_CONFIRMATION_UNAVAILABLE` / BLOCKED。不会替换 `showModal` 的真实响应或直接调用取消业务方法。可用 `YSHOP_WECHAT_CLI` 指向兼容工具；macOS 可显式用 `YSHOP_E2E_NATIVE_ADAPTER=applescript` 启用 AppleScript/JXA 辅助功能适配器（默认关闭）。需要用户事先允许系统脚本及辅助功能权限。脚本通过 macOS ApplicationServices 的正式 AX 接口读取树和执行 AXPress，避免 System Events 对 WebArea URL 的转换错误及逐属性 IPC 开销。它只在官方接口未产生真实确认回调时，对唯一 `E2E-<runId>` 窗口核对顶部 WebArea 的完整私有项目路径、runId、取消文案和唯一确认链接后执行 AXPress；不使用全局键盘、坐标或业务回调替身。报告记录实际适配器使用；真实取消 API、UI 和 SQL 验证仍为必选。若 `osascript` 报“不允许辅助访问”，请由用户在系统设置中授权，不会自动修改系统权限。
 
 运行时不要修改工作树。源码 SHA、内容摘要和产物哈希必须匹配；改变源码会使正在运行的结果无效。构建凭证不匹配时重新构建，不能使用旧 JAR 或旧 Surefire 报告。小程序从当前源码重新生成私有副本并核验编译哈希。
 

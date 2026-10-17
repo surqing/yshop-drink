@@ -41,7 +41,7 @@ function locateConfirmation(windows, identity) {
 
 async function confirmWithAccessibility(context, output) {
   if (process.platform !== 'darwin' || context.nativeAdapter !== 'applescript') throw Error('NATIVE_ADAPTER_NOT_ENABLED')
-  // Derive the official main executable from the selected CLI bundle; bind System Events to its exact PID.
+  // Derive the official main executable from the selected CLI bundle; bind the AX application to its exact PID.
   const macOS = path.dirname(fs.realpathSync(context.cli))
   const { stdout: executable } = await exec('/usr/libexec/PlistBuddy', ['-c', 'Print CFBundleExecutable', path.join(macOS, '../Info.plist')], { timeout: 5000 })
   const target = path.join(macOS, executable.trim())
@@ -49,25 +49,25 @@ async function confirmWithAccessibility(context, output) {
   const matches = processes.split('\n').map(line => line.trim().match(/^(\d+)\s+(.+)$/)).filter(match => match && match[2] === target)
   if (matches.length !== 1) throw Error('OFFICIAL_PROCESS_NOT_UNIQUE')
   const script = `${locateConfirmation.toString()}
-function run(argv) {
-  var application = Application('System Events');
-  var processes = application.processes.whose({unixId: Number(argv[0])})();
-  if (processes.length !== 1) throw Error('OFFICIAL_PROCESS_NOT_UNIQUE');
-  var title = 'E2E-' + argv[1], count = 0;
-  var windows = processes[0].windows().filter(function(w) { var name = w.name(); return name === title || name.indexOf(title + ' - ') === 0; });
-  if (windows.length !== 1) throw Error('OWNED_WINDOW_NOT_UNIQUE');
-  function attribute(element, name) { try { var value = element.attributes.byName(name).value(); return typeof value === 'string' ? value : ''; } catch (_) { return ''; } }
-  function read(element, depth) {
-    if (++count > 2000 || depth > 40) throw Error('OWNED_TREE_LIMIT');
-    var node = {role: attribute(element, 'AXRole'), text: attribute(element, 'AXTitle') || attribute(element, 'AXValue') || attribute(element, 'AXDescription'), url: attribute(element, 'AXURL'), ref: element};
-    node.children = element.uiElements().map(function(child) { return read(child, depth + 1); });
-    return node;
-  }
-  var tree = read(windows[0], 0);
-  var selected = locateConfirmation([{name: windows[0].name(), tree: tree}], {runId: argv[1], project: argv[2]});
-  selected.ref.actions.byName('AXPress').perform();
-  return 'OWNED_AXPRESS_COMPLETED';
+ObjC.import('ApplicationServices')
+// AXUIElement and CF values are toll-free bridged. Explicit id* preserves arrays and NSURLs.
+ObjC.bindFunction('AXUIElementCreateApplication',['id',['int']])
+ObjC.bindFunction('AXUIElementCopyAttributeValue',['int',['id','id','id*']])
+ObjC.bindFunction('AXUIElementPerformAction',['int',['id','id']])
+function run(argv){
+var app=$.AXUIElementCreateApplication(Number(argv[0])),count=0;
+function attr(e,n){var out=Ref();return $.AXUIElementCopyAttributeValue(e,$(n),out)===0?out[0]:null;}
+function text(e,n){var v=attr(e,n);if(!v)return '';var u=ObjC.unwrap(v);return typeof u==='string'?u:'';}
+function children(e){var v=attr(e,'AXChildren');return v?ObjC.unwrap(v):[];}
+var winValue=attr(app,'AXWindows'),windows=winValue?ObjC.unwrap(winValue):[];
+windows=windows.filter(function(w){var t=text(w,'AXTitle');return t==='E2E-'+argv[1]||t.indexOf('E2E-'+argv[1]+' - ')===0;});
+if(windows.length!==1)throw Error('OWNED_WINDOW_NOT_UNIQUE');
+function read(e,depth){if(++count>2000||depth>96)throw Error('OWNED_TREE_LIMIT');var role=text(e,'AXRole'),u=role==='AXWebArea'?attr(e,'AXURL'):null;
+return {role:role,text:text(e,'AXTitle')||text(e,'AXValue')||text(e,'AXDescription'),url:u?ObjC.unwrap(u.absoluteString):'',ref:e,children:children(e).map(function(c){return read(c,depth+1)})};}
+var tree=read(windows[0],0);var selected=locateConfirmation([{name:text(windows[0],'AXTitle'),tree:tree}],{runId:argv[1],project:argv[2]});
+var action=$.AXUIElementPerformAction(selected.ref,$('AXPress')); if(action!==0)throw Error('OWNED_AXPRESS_FAILED_'+action); return 'OWNED_AXPRESS_COMPLETED';
 }
+
 `
   const scriptPath = path.join(output, 'native-confirmation-private.js')
   fs.writeFileSync(scriptPath, script, { mode: 0o600 })
