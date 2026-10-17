@@ -5,6 +5,7 @@ import { createServer } from 'node:http'
 import { test, expect, context, Flow } from './flow'
 const key = () => randomBytes(16).toString('hex')
 const local = context.profile === 'local'
+const { assertCatalogSnapshot, assertFinancialDetails } = require(join(context.repo, 'tests/quality/e2e/assertions.cjs'))
 
 async function rights(f: Flow, coupon: any, token: string) {
   const rows = await f.api('GET', '/app-api/coupon/my?shopId=101&type=3&page=1&pagesize=100', undefined, token)
@@ -151,7 +152,7 @@ async function authSession(f: Flow) {
 }
 
 async function catalogOrder(f: Flow) {
-  let product: any, order: any
+  let product: any, order: any, historicalLines: any
   await f.check('admin-create-product', async () => { product = await f.createProductUI(); expect(product.id).toBeTruthy() })
   await f.check('admin-configure-sku', () => { expect(Number(product.skus[0].stock)).toBe(10); expect(Number(product.skus[0].price)).toBe(19) })
   await f.check('admin-configure-topping', async () => {
@@ -180,12 +181,22 @@ async function catalogOrder(f: Flow) {
     const detail = await f.api('GET', `/app-api/order/detail/${order.orderId}`, undefined, token)
     expect(Number(detail.payPrice)).toBe(42)
     expect(f.oracle('order', { orderId: order.orderId })[0].quantity).toBe(2)
+    const group = product.configuration.groups[0], option = group.options[0]
+    const expected = { productId: product.id, shopId: 101, skuId: product.skus[0].id, sku: product.skus[0].sku,
+      title: product.name, catalogVersion: product.version, groupId: group.id, groupName: group.name, optionId: option.id, optionName: option.name }
+    assertCatalogSnapshot(detail.cartInfo, expected)
+    historicalLines = f.oracle('order-lines', { orderId: order.orderId })
+    assertCatalogSnapshot(historicalLines, expected)
+    expect(detail.cartInfo.map((line: any) => JSON.parse(line.cartInfo))).toEqual(historicalLines.map((line: any) => JSON.parse(line.cartInfo)))
   })
   await f.check('admin-order-visible', async () => { await f.viewOrder(order.orderId, '未支付') })
   await f.check('catalog-edit-keeps-snapshot', async () => {
     await f.changePriceUI(product, 25)
     expect(Number(f.oracle('order', { orderId: order.orderId })[0].amount)).toBe(42)
     expect(Number(f.oracle('inventory', { skuId: product.skus[0].id })[0].price)).toBe(25)
+    expect(f.oracle('order-lines', { orderId: order.orderId })).toEqual(historicalLines)
+    const detail = await f.api('GET', `/app-api/order/detail/${order.orderId}`, undefined, token)
+    expect(detail.cartInfo.map((line: any) => JSON.parse(line.cartInfo))).toEqual(historicalLines.map((line: any) => JSON.parse(line.cartInfo)))
   })
   const current = { ...product, ...(await f.productData(product.id)) }
   const invalidBase = { shopId: '101', mobile: '13800000001', couponId: '0', orderType: 'takein', productId: [String(product.id)],
@@ -252,6 +263,12 @@ async function storeIsolation(f: Flow) {
       await expect(page.getByRole('cell', { name: `自取 ${second.orderId}`, exact: true })).toHaveCount(0)
       const id = f.oracle('order', { orderId: second.orderId })[0].id
       expect((await f.api('GET', `/admin-api/order/store-order/get?id=${id}`, undefined, token, false)).code).not.toBe(0)
+      const ownId = f.oracle('order', { orderId: first.orderId })[0].id
+      await f.api('PUT', '/admin-api/order/store-order/update', { id: ownId, updateType: 'remark', remark: 'owned-store-a' }, token)
+      expect(f.oracle('order', { orderId: first.orderId })[0].remark).toBe('owned-store-a')
+      const foreignBefore = f.oracle('order', { orderId: second.orderId })[0]
+      expect((await f.api('PUT', '/admin-api/order/store-order/update', { id, updateType: 'remark', remark: 'forbidden-a-to-b' }, token, false)).code).not.toBe(0)
+      expect(f.oracle('order', { orderId: second.orderId })[0]).toEqual(foreignBefore)
       await f.viewOrder(first.orderId, undefined, page)
     } finally { await staffContext.close() }
     const storeBContext = await f.browser.newContext({ baseURL: f.baseURL, serviceWorkers: 'block' })
@@ -259,6 +276,12 @@ async function storeIsolation(f: Flow) {
       const page = await storeBContext.newPage(); const token = await f.login(page, context.accounts.staffB)
       const id = f.oracle('order', { orderId: first.orderId })[0].id
       expect((await f.api('GET', `/admin-api/order/store-order/get?id=${id}`, undefined, token, false)).code).not.toBe(0)
+      const ownId = f.oracle('order', { orderId: second.orderId })[0].id
+      await f.api('PUT', '/admin-api/order/store-order/update', { id: ownId, updateType: 'remark', remark: 'owned-store-b' }, token)
+      expect(f.oracle('order', { orderId: second.orderId })[0].remark).toBe('owned-store-b')
+      const foreignBefore = f.oracle('order', { orderId: first.orderId })[0]
+      expect((await f.api('PUT', '/admin-api/order/store-order/update', { id, updateType: 'remark', remark: 'forbidden-b-to-a' }, token, false)).code).not.toBe(0)
+      expect(f.oracle('order', { orderId: first.orderId })[0]).toEqual(foreignBefore)
       await f.viewOrder(second.orderId, undefined, page)
     } finally { await storeBContext.close() }
   })
@@ -343,7 +366,7 @@ async function orderCancel(f: Flow) {
 
 async function couponFlow(f: Flow, complete: boolean) {
   const product = await f.createProduct(), token = await f.member()
-  let coupon: any, right: any, order: any
+  let coupon: any, right: any, order: any, firstFinancial: any
   await f.check('admin-create-coupon', async () => { coupon = await f.createCouponUI(); expect(coupon.id).toBeTruthy() })
   if (local) await f.check('mini-claim-and-select', async () => {
     await f.mini.selectStore('QA Shop A'); right = await issue(f, coupon, token)
@@ -363,8 +386,15 @@ async function couponFlow(f: Flow, complete: boolean) {
     expect(Number(f.oracle('order', { orderId: order.orderId })[0].amount)).toBe(14)
   })
   if (complete) {
-    await f.check('synthetic-completion', () => { expect(f.bridge('complete', { orderId: order.orderId }).result).toBe('FIRST_SUCCESS') })
-    await f.check('duplicate-completion', () => { expect(f.bridge('complete', { orderId: order.orderId }).result).toBe('IDEMPOTENT_DUPLICATE') })
+    await f.check('synthetic-completion', () => {
+      expect(f.bridge('complete', { orderId: order.orderId }).result).toBe('FIRST_SUCCESS')
+      firstFinancial = f.oracle('financial-details', { orderId: order.orderId })
+      assertFinancialDetails(firstFinancial, order.orderId, 101, 1400)
+    })
+    await f.check('duplicate-completion', () => {
+      expect(f.bridge('complete', { orderId: order.orderId }).result).toBe('IDEMPOTENT_DUPLICATE')
+      expect(f.oracle('financial-details', { orderId: order.orderId })).toEqual(firstFinancial)
+    })
     await f.check('admin-paid-order', async () => { const row = await f.viewOrder(order.orderId); await expect(row).not.toContainText('未支付'); await expect(row).toContainText('14') })
     await f.check('coupon-redeemed', () => { const row = f.oracle('coupon-right', { rightId: right.id })[0]; expect(row.status).toBe(1); expect(row.redeemedOrderId).toBe(order.orderId); expect(row.redeemedAt).toBeTruthy() })
     if (local) await f.check('mini-redeemed-coupon', async () => {
@@ -378,6 +408,7 @@ async function couponFlow(f: Flow, complete: boolean) {
       expect(orderRow.paid).toBe(1); expect(Number(orderRow.amount)).toBe(14); expect(orderRow.deleted).toBe(0)
       const record = f.oracle('financial-records', { orderId: order.orderId })[0]
       expect(record).toEqual({ payments: 1, attempts: 1, bills: 1 })
+      assertFinancialDetails(f.oracle('financial-details', { orderId: order.orderId }), order.orderId, 101, 1400)
       const operations = f.oracle('coupon-operations', { couponId: coupon.id })
       expect(operations.find((r: any) => r.kind === 'REDEEM').count).toBe(1)
       expect(operations.find((r: any) => r.kind === 'RELEASE')).toBeUndefined()

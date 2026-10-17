@@ -11,12 +11,14 @@
   "tests/quality/test_owned_resources.py": 16,
   "tests/quality/test_page_evidence.py": 37,
   "tests/auth-login.test.mjs": 3,
-  "tests/quality/test_e2e_cli.py": 11,
+  "tests/quality/test_e2e_cli.py": 12,
   "tests/quality/test_e2e_contract.py": 32,
-  "tests/quality/test_e2e_environment.py": 12,
+  "tests/quality/test_e2e_environment.py": 14,
   "tests/quality/test_e2e_support.py": 7,
   "tests/quality/test_e2e_publish.py": 9,
   "tests/auth-logout.test.mjs": 2,
   "tests/quality/test_e2e_acceptance.py": 13,
-  "tests/e2e-mini-guard.test.mjs": 2
+  "tests/e2e-mini-guard.test.mjs": 2,
+  "tests/e2e-assertions.test.mjs": 6,
+  "tests/e2e-native-confirmation.test.mjs": 6
 }

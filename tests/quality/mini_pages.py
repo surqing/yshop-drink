@@ -69,7 +69,7 @@ def prepare_mini(root,report,fixture,guard_source=None):
     if not (dist/'app.js').is_file():raise RuntimeError('MINI_DIST_MISSING')
     compiled=''.join(p.read_text(errors='replace') for p in dist.rglob('*.js'))
     if fixture['backend']+'/app-api' not in compiled:raise RuntimeError('MINI_COMPILED_API_MISMATCH')
-    configpath=dist/'project.config.json';cfg=json.loads(configpath.read_text());cfg['appid']=appid;configpath.write_text(json.dumps(cfg))
+    configpath=dist/'project.config.json';cfg=json.loads(configpath.read_text());cfg['appid']=appid;cfg['projectname']='E2E-'+report['runId'];configpath.write_text(json.dumps(cfg))
     (dist/'project.private.config.json').write_text(json.dumps({'setting':{'urlCheck':False}}))
     # Instrument the disposable compiled app before App.onLaunch. Production pages stay unchanged.
     guard=(guard_source if guard_source is not None else (REPO/'tests/mini/cold-guard.js').read_text())
@@ -80,7 +80,7 @@ def prepare_mini(root,report,fixture,guard_source=None):
     compiled_hashes={str(p.relative_to(dist)):hashlib.sha256(p.read_bytes()).hexdigest() for p in dist.rglob('*') if p.is_file() and p.name!='project.private.config.json'}
     with socket.socket() as probe:probe.bind(('127.0.0.1',0));port=probe.getsockname()[1]
     ctx={**identity,'runId':report['runId'],'project':str(dist),'cli':str(wxcli),'port':port,
-         'compiledHashes':compiled_hashes,'compiledSource':identity,'coldGuardSha256':cold_hash}
+         'compiledHashes':compiled_hashes,'compiledSource':identity,'coldGuardSha256':cold_hash,'nativeAdapter':os.environ.get('YSHOP_E2E_NATIVE_ADAPTER','official')}
     original_path=output/'app.original.js';original_path.write_text(original);original_path.chmod(0o600)
     ctx.update(output=str(output),originalApp=str(original_path),coldGuardSha256=cold_hash)
     return ctx

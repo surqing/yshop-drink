@@ -82,6 +82,28 @@ class ReadOracleTest(unittest.TestCase):
         self.assertIn("WHERE order_id='owned-123'",query)
         self.assertNotIn('UPDATE ',query)
 
+    def test_line_oracle_reads_only_exact_orders_historical_snapshot(self):
+        import sqlite3
+        from e2e.oracle import query_for
+        db=sqlite3.connect(':memory:')
+        db.execute('CREATE TABLE yshop_store_order_cart_info(id INTEGER,order_id TEXT,product_id INTEGER,title TEXT,number INTEGER,spec TEXT,price NUMERIC,cart_info TEXT)')
+        db.executemany('INSERT INTO yshop_store_order_cart_info VALUES(?,?,?,?,?,?,?,?)',[(1,'owned',77,'Synthetic',2,'默认',21,'{"unitPrice":21}'),(2,'foreign',88,'Other',1,'Other',30,'{}')])
+        rows=[json.loads(row[0]) for row in db.execute(query_for('order-lines',{'orderId':'owned'}))]
+        self.assertEqual([{'productId':77,'title':'Synthetic','number':2,'spec':'默认','price':21,'cartInfo':'{"unitPrice":21}'}],rows)
+        db.close()
+
+    def test_financial_details_read_exact_amount_state_and_links_without_other_order(self):
+        import sqlite3
+        from e2e.oracle import query_for
+        db=sqlite3.connect(':memory:')
+        db.executescript("CREATE TABLE yshop_order_payment(id TEXT,order_id TEXT,attempt_id TEXT,amount_cents INTEGER,status TEXT,success_order_id TEXT);CREATE TABLE yshop_order_payment_attempt(attempt_id TEXT,order_id TEXT,uid INTEGER,amount_cents INTEGER,currency TEXT,status TEXT,payment_event_id TEXT);CREATE TABLE yshop_user_bill(id INTEGER,extend_field TEXT,uid INTEGER,number NUMERIC,category TEXT,type TEXT,pm INTEGER);")
+        db.executescript("INSERT INTO yshop_order_payment VALUES('event','owned','attempt',1400,'SUCCESS','owned');INSERT INTO yshop_order_payment_attempt VALUES('attempt','owned',101,1400,'CNY','PAID','event');INSERT INTO yshop_user_bill VALUES(9,'owned',101,14,'now_money','pay_product',0),(10,'foreign',102,99,'now_money','pay_product',0);")
+        rows=[json.loads(row[0]) for row in db.execute(query_for('financial-details',{'orderId':'owned'}))]
+        self.assertEqual(3,len(rows));self.assertEqual(['payment','attempt','bill'],[r['kind'] for r in rows])
+        self.assertEqual(1400,rows[0]['amountCents']);self.assertEqual('SUCCESS',rows[0]['status']);self.assertEqual('attempt',rows[0]['attemptId'])
+        self.assertEqual('event',rows[1]['eventId']);self.assertEqual('PAID',rows[1]['status']);self.assertEqual(101,rows[1]['memberId'])
+        self.assertEqual(14,rows[2]['amount']);self.assertEqual('owned',rows[2]['orderId']);db.close()
+
     def test_oracle_context_rejects_unowned_container(self):
         from e2e.oracle import read_oracle
         with self.assertRaisesRegex(ValueError,'ORACLE_CONTEXT_INVALID'):

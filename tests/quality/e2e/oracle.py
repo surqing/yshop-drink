@@ -21,7 +21,14 @@ def order_id(value):
 
 def query_for(name, ids):
     if name=='order':
-        return "SELECT JSON_OBJECT('id',id,'memberId',uid,'shopId',shop_id,'amount',pay_price,'paid',paid,'status',status,'deleted',CAST(deleted AS UNSIGNED),'couponId',coupon_id,'quantity',total_num) FROM yshop_store_order WHERE order_id="+order_id(ids.get('orderId'))+';'
+        return "SELECT JSON_OBJECT('id',id,'memberId',uid,'shopId',shop_id,'amount',pay_price,'paid',paid,'status',status,'deleted',CAST(deleted AS UNSIGNED),'couponId',coupon_id,'quantity',total_num,'remark',remark) FROM yshop_store_order WHERE order_id="+order_id(ids.get('orderId'))+';'
+    if name=='order-lines':
+        return "SELECT JSON_OBJECT('productId',product_id,'title',title,'number',number,'spec',spec,'price',price,'cartInfo',cart_info) FROM yshop_store_order_cart_info WHERE order_id="+order_id(ids.get('orderId'))+' ORDER BY id;'
+    if name=='financial-details':
+        oid=order_id(ids.get('orderId'))
+        return ("SELECT JSON_OBJECT('kind','payment','id',id,'orderId',order_id,'attemptId',attempt_id,'amountCents',amount_cents,'status',status,'successOrderId',success_order_id) FROM yshop_order_payment WHERE order_id="+oid+
+                " UNION ALL SELECT JSON_OBJECT('kind','attempt','id',attempt_id,'orderId',order_id,'memberId',uid,'amountCents',amount_cents,'currency',currency,'status',status,'eventId',payment_event_id) FROM yshop_order_payment_attempt WHERE order_id="+oid+
+                " UNION ALL SELECT JSON_OBJECT('kind','bill','id',id,'orderId',extend_field,'memberId',uid,'amount',number,'category',category,'type',type,'pm',pm) FROM yshop_user_bill WHERE extend_field="+oid+';')
     if name=='inventory':
         return "SELECT JSON_OBJECT('stock',stock,'skuId',id,'productId',product_id,'price',price) FROM yshop_store_product_attr_value WHERE id="+number(ids.get('skuId'))+';'
     if name=='product':

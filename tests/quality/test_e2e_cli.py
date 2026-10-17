@@ -27,6 +27,35 @@ class E2eCliTest(unittest.TestCase):
         from e2e.runner import scenario_failure
         self.assertEqual('INCONCLUSIVE',scenario_failure([{'id':'a','status':'PASSED'}],[{'id':'a'}]))
 
+    def test_first_and_repeated_signals_during_cleanup_finish_owned_cleanup_and_report(self):
+        import signal
+        from unittest.mock import patch, MagicMock
+        from e2e import runner
+        identity={'sourceSha':'sha','sourceDigest':'digest'}
+        finished=[]
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);support=MagicMock();support.root=root/'support';support.root.mkdir()
+            support.prepare.return_value={};support.context.return_value={}
+            environment=MagicMock();environment.context.return_value={}
+            def construct_support(repo,path,ident,owner):
+                (support.root/'support-ready.json').write_text(json.dumps({'owner':owner,'status':'PASSED','unknownProviderOperationsDenied':True}))
+                return support
+            def close():
+                for _ in range(2):signal.getsignal(signal.SIGTERM)(signal.SIGTERM,None)
+                finished.append(True)
+                return {'status':'PASSED'}
+            environment.close.side_effect=close
+            with patch.object(runner,'source_identity',return_value=identity), patch.object(runner,'preflight'), \
+                 patch.object(runner,'source_workspace',return_value=root),patch.object(runner,'verify_artifact',return_value={}), \
+                 patch('e2e.support.TestSupport',side_effect=construct_support),patch('e2e.environment.OwnedEnvironment',return_value=environment), \
+                 patch.object(runner,'execute',side_effect=RuntimeError('CONTROLLED_SCENARIO_FAILURE')):
+                self.assertEqual(1,runner.run(root/'repo',root/'out','ci'))
+            self.assertEqual([True],finished)
+            report=json.loads(next((root/'out').glob('*/report.json')).read_text())
+            self.assertTrue(report['complete']);self.assertEqual('PASSED',report['cleanup'])
+            self.assertNotEqual('PASSED',report['status'])
+            self.assertEqual('FINISHED',report['stage'])
+
     def invoke(self, *arguments):
         return subprocess.run([sys.executable, str(REPO/'tests/quality/run.py'), *arguments],
                               cwd=REPO, text=True, capture_output=True, timeout=20)

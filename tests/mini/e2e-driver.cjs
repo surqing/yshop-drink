@@ -15,6 +15,7 @@ class MiniDriver {
     }
     const mini = await launchOfficial(context, output)
     const driver = new MiniDriver(mini, output)
+    driver.context = context
     driver.lifecycle('sdk-connected')
     driver.evidence = { officialConnected: true, compiledHashesVerified: true, compiledSource: context.compiledSource, compiledFileCount: Object.keys(context.compiledHashes).length }
     try {
@@ -161,6 +162,15 @@ class MiniDriver {
     await button.tap()
     await until(async () => (await this.state()).nativeModalsOpened > before.nativeModalsOpened)
     await this.mini.native().confirmModal()
+    if (this.context.nativeAdapter === 'applescript') {
+      await sleep(300)
+      if ((await this.state()).nativeModalsConfirmed <= before.nativeModalsConfirmed) {
+        const { confirmWithAccessibility } = require('./native-confirmation.cjs')
+        await confirmWithAccessibility(this.context, this.output)
+        this.evidence.nativeConfirmationAdapter = 'macos-applescript-accessibility'
+        this.evidence.nativeAccessibilityPresses = (this.evidence.nativeAccessibilityPresses || 0) + 1
+      }
+    }
     try { await until(async () => (await this.state()).nativeModalsConfirmed > before.nativeModalsConfirmed) }
     catch { throw Error('MINI_NATIVE_CONFIRMATION_UNAVAILABLE') }
     this.lifecycle('cancel-confirmed')

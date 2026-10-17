@@ -178,6 +178,12 @@ def run(repo, output, profile, scenario=None):
                       reasonType=type(error).__name__,failedStage=report['stage'])
         atomic_text(root/'failure-private.log',traceback.format_exc())
     finally:
+        # A first or repeated signal during teardown must never escape this phase.
+        def cleanup_interrupt(signum,frame):
+            nonlocal interrupted
+            interrupted=True
+            report.update(status='INCONCLUSIVE',reasonCode='E2E_EXECUTION_INTERRUPTED',failedStage='CLEANUP')
+        for sig in previous_signals:signal.signal(sig,cleanup_interrupt)
         report['stage']='CLEANUP'
         cleanup_errors=[]
         if mini_context:
@@ -186,9 +192,12 @@ def run(repo, output, profile, scenario=None):
                 if code:cleanup_errors.append('MINI_PROJECT_CLOSE_FAILED')
             except Exception:cleanup_errors.append('MINI_PROJECT_CLOSE_FAILED')
         if environment:
-            with process_environment(env):cleanup=environment.close()
-            report['cleanupReceipt']=cleanup
-            if cleanup['status']!='PASSED':cleanup_errors.append('OWNED_ENVIRONMENT_CLEANUP_FAILED')
+            try:
+                with process_environment(env):cleanup=environment.close()
+                report['cleanupReceipt']=cleanup
+                if cleanup['status']!='PASSED':cleanup_errors.append('OWNED_ENVIRONMENT_CLEANUP_FAILED')
+            except Exception:
+                cleanup_errors.append('OWNED_ENVIRONMENT_CLEANUP_FAILED')
         context_path.unlink(missing_ok=True)
         if mini_lock:mini_lock.close()
         report.update(cleanup='FAILED' if cleanup_errors else 'PASSED',cleanupErrors=cleanup_errors,
