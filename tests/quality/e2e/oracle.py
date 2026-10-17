@@ -62,7 +62,7 @@ def read_oracle(context, name, ids):
     info=json.loads(inspected.stdout)[0]
     if info['Config'].get('Labels',{}).get('yshop.quality.owner')!=owner:
         raise ValueError('ORACLE_OWNERSHIP_MISMATCH')
-    result=subprocess.run(['docker','exec','-i',container,'mysql','--defaults-extra-file=/run/oracle.cnf',schema,'-N'],
+    result=subprocess.run(['docker','exec','-i',container,'mysql','--defaults-extra-file=/run/oracle.cnf',schema,'-N','--raw'],
                           input=query,text=True,capture_output=True,timeout=30)
     if result.returncode:raise RuntimeError('ORACLE_QUERY_FAILED')
     return [json.loads(line) for line in result.stdout.splitlines() if line.strip()]

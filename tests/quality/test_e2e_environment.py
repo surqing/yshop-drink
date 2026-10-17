@@ -104,6 +104,21 @@ class ReadOracleTest(unittest.TestCase):
         self.assertEqual('event',rows[1]['eventId']);self.assertEqual('PAID',rows[1]['status']);self.assertEqual(101,rows[1]['memberId'])
         self.assertEqual(14,rows[2]['amount']);self.assertEqual('owned',rows[2]['orderId']);db.close()
 
+    def test_nested_json_mysql_output_is_read_without_batch_escape_corruption(self):
+        import subprocess
+        from e2e.oracle import read_oracle
+        owner='a'*32
+        context={'owner':owner,'mysql':'yshop-quality-business-mysql-'+owner,'schema':'yshop_quality_business_'+owner[:16],'oracleConfig':'/run/oracle.cnf'}
+        row={'cartInfo':'{"title":"Synthetic","unitPrice":21}'}
+        raw=json.dumps(row)
+        def boundary(args,**kwargs):
+            if args[1]=='inspect':return subprocess.CompletedProcess(args,0,json.dumps([{'Config':{'Labels':{'yshop.quality.owner':owner}}}]),'')
+            # mysql batch mode doubles backslashes unless --raw is selected.
+            stdout=raw if '--raw' in args else raw.replace('\\','\\\\')
+            return subprocess.CompletedProcess(args,0,stdout+'\n','')
+        with patch('e2e.oracle.subprocess.run',side_effect=boundary):
+            self.assertEqual([row],read_oracle(context,'order-lines',{'orderId':'owned'}))
+
     def test_oracle_context_rejects_unowned_container(self):
         from e2e.oracle import read_oracle
         with self.assertRaisesRegex(ValueError,'ORACLE_CONTEXT_INVALID'):

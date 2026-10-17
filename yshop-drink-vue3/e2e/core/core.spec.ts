@@ -264,10 +264,10 @@ async function storeIsolation(f: Flow) {
       const id = f.oracle('order', { orderId: second.orderId })[0].id
       expect((await f.api('GET', `/admin-api/order/store-order/get?id=${id}`, undefined, token, false)).code).not.toBe(0)
       const ownId = f.oracle('order', { orderId: first.orderId })[0].id
-      await f.api('PUT', '/admin-api/order/store-order/update', { id: ownId, updateType: 'remark', remark: 'owned-store-a' }, token)
+      await f.api('PUT', '/admin-api/order/store-order/update', { id: ownId, orderId: first.orderId, uid: 101, updateType: 'remark', remark: 'owned-store-a' }, token)
       expect(f.oracle('order', { orderId: first.orderId })[0].remark).toBe('owned-store-a')
       const foreignBefore = f.oracle('order', { orderId: second.orderId })[0]
-      expect((await f.api('PUT', '/admin-api/order/store-order/update', { id, updateType: 'remark', remark: 'forbidden-a-to-b' }, token, false)).code).not.toBe(0)
+      expect((await f.api('PUT', '/admin-api/order/store-order/update', { id, orderId: second.orderId, uid: 101, updateType: 'remark', remark: 'forbidden-a-to-b' }, token, false)).code).toBe(403)
       expect(f.oracle('order', { orderId: second.orderId })[0]).toEqual(foreignBefore)
       await f.viewOrder(first.orderId, undefined, page)
     } finally { await staffContext.close() }
@@ -277,10 +277,10 @@ async function storeIsolation(f: Flow) {
       const id = f.oracle('order', { orderId: first.orderId })[0].id
       expect((await f.api('GET', `/admin-api/order/store-order/get?id=${id}`, undefined, token, false)).code).not.toBe(0)
       const ownId = f.oracle('order', { orderId: second.orderId })[0].id
-      await f.api('PUT', '/admin-api/order/store-order/update', { id: ownId, updateType: 'remark', remark: 'owned-store-b' }, token)
+      await f.api('PUT', '/admin-api/order/store-order/update', { id: ownId, orderId: second.orderId, uid: 101, updateType: 'remark', remark: 'owned-store-b' }, token)
       expect(f.oracle('order', { orderId: second.orderId })[0].remark).toBe('owned-store-b')
       const foreignBefore = f.oracle('order', { orderId: first.orderId })[0]
-      expect((await f.api('PUT', '/admin-api/order/store-order/update', { id, updateType: 'remark', remark: 'forbidden-b-to-a' }, token, false)).code).not.toBe(0)
+      expect((await f.api('PUT', '/admin-api/order/store-order/update', { id, orderId: first.orderId, uid: 101, updateType: 'remark', remark: 'forbidden-b-to-a' }, token, false)).code).toBe(403)
       expect(f.oracle('order', { orderId: first.orderId })[0]).toEqual(foreignBefore)
       await f.viewOrder(second.orderId, undefined, page)
     } finally { await storeBContext.close() }
