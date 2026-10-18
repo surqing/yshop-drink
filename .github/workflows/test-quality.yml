@@ -8,6 +8,53 @@ concurrency:
   group: quality-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  regression-scope:
+    # Raw legacy failures stay FAILED; only exact baseline equivalence can pass this job.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      YSHOP_PAY_WECHAT_V3_ENABLED: 'false'
+      YSHOP_PAY_WECHAT_V3_RECONCILIATION_ENABLED: 'false'
+      BASE_REF: ${{ github.event.pull_request.base.sha || 'fa39ef2b854eb21655390866090f61b0c4d52a11' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python3 -m pip install -r tests/quality/requirements.txt
+      - name: Build current production artifact
+        run: python3 tests/quality/run.py BUILD --output "$RUNNER_TEMP/scope-build"
+      - name: Execute baseline and candidate without relabelling raw failures
+        run: |
+          python3 - <<'PY'
+          import os,subprocess,sys
+          root=os.environ['RUNNER_TEMP']
+          for script,output in [('tests/quality/legacy_baseline.py','scope-baseline'),('tests/defects/http_red.py','scope-candidate')]:
+              result=subprocess.run([sys.executable,script,'--output',root+'/'+output])
+              if result.returncode!=1:
+                  raise SystemExit('Expected preserved raw FAILED exit; scope validator must independently certify every case')
+          PY
+      - name: Require exact known failures, unchanged business states and passing security controls
+        run: python3 tests/quality/merge_scope.py --baseline "$RUNNER_TEMP/scope-baseline/report.json" --candidate "$RUNNER_TEMP/scope-candidate/report.json" --base "$BASE_REF" --output "$RUNNER_TEMP/scope-certificate.json"
+      - name: Preserve safe raw statuses and separate scope certificate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-scope-summary
+          path: |
+            ${{ runner.temp }}/scope-baseline/report.json
+            ${{ runner.temp }}/scope-candidate/report.json
+            ${{ runner.temp }}/scope-certificate.json
+          retention-days: 7
+          if-no-files-found: error
   core-e2e:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -197,6 +244,8 @@ jobs:
           python3 -m pip install -r tests/quality/requirements.txt
           python3 tests/quality/termination_probe.py --output "$RUNNER_TEMP/termination/readiness"
           python3 tests/quality/termination_probe.py --phase cleanup --output "$RUNNER_TEMP/termination/cleanup"
+      - name: Legacy data and repeated cumulative migrations reject incomplete prerequisites
+        run: python3 tests/quality/migration_acceptance.py --output "$RUNNER_TEMP/migration"
       - name: Reproduce original Redis private-file permission failure
         run: python3 tests/quality/owned_resources.py --redis-permission-probe "$RUNNER_TEMP/redis-permission"
       - name: Early owned synthetic TLS compatibility check
@@ -234,6 +283,7 @@ jobs:
         with:
           name: controlled-summary
           path: |
+            ${{ runner.temp }}/migration/report.json
             ${{ runner.temp }}/termination/**/report.json
             ${{ runner.temp }}/controlled/**/report.json
             ${{ runner.temp }}/controlled/**/evidence.json
@@ -270,12 +320,15 @@ jobs:
       - run: pnpm --dir yshop-drink-vue3 exec playwright install --with-deps chromium
       - name: Actual application pages with explicit synthetic API fixtures
         run: python3 tests/quality/run.py BROWSER --output "$RUNNER_TEMP/browser"
+      - name: Coupon load failure cannot update the previously opened coupon
+        run: python3 tests/defects/browser_red.py --output "$RUNNER_TEMP/coupon-load-regression"
       - name: Upload safe receipts only; screenshots and traces remain private
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: browser-summary
           path: |
+            ${{ runner.temp }}/coupon-load-regression/report.json
             ${{ runner.temp }}/browser/**/report.json
             ${{ runner.temp }}/browser/**/receipt.json
           retention-days: 7

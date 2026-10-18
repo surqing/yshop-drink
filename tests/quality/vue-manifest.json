@@ -9,6 +9,24 @@
     "generated public code shown once and cleared on close",
     "cancel refusal preserves unsaved activity",
     "stale request completion cannot clear loading for a newer pending request",
-    "stale shop-list response cannot start a coupon request after a newer open"
+    "stale shop-list response cannot start a coupon request after a newer open",
+    "opening another activity immediately clears old fields, shops and validation and blocks saving",
+    "a failed second detail load cannot save the previously viewed activity",
+    "shop-list failure blocks detail loading and saving until an explicit reopen succeeds",
+    "mismatched detail identity never becomes saveable",
+    "edit without a target identity cannot create or update an activity",
+    "dialog close invalidates a pending detail response",
+    "cancel close invalidates a pending detail response",
+    "close then reopen the same identity ignores the earlier response",
+    "pending edit cannot overwrite a newly opened create form or choose its submit API",
+    "pending create cannot overwrite a newly opened edit form or choose its submit API",
+    "duplicate save during validation and submission sends exactly one write",
+    "validation completing after reopen cannot submit the current or old activity",
+    "validation completing after close cannot submit the current or old activity",
+    "rejected validation releases the save lock for an explicit retry",
+    "old successful save cannot close a newer loading form or emit a success for it",
+    "old failed save cannot clear the loading state of a newer form",
+    "old code creation completion cannot expose a code over a newer form",
+    "late cancel confirmation cannot close a newer form"
   ]
 }

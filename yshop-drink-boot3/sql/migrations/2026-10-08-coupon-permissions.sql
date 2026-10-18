@@ -1,3 +1,20 @@
+-- A missing/ambiguous/disabled query descriptor or ancestor is a deployment
+-- error. Reject before INSERT; never manufacture menus or change role grants.
+DROP PROCEDURE IF EXISTS quality_check_coupon_permissions;
+DELIMITER $$
+CREATE PROCEDURE quality_check_coupon_permissions()
+BEGIN
+  IF (SELECT COUNT(*) FROM system_menu WHERE permission='coupon::query' AND deleted=0)<>1
+    OR (SELECT COUNT(*) FROM system_menu query_menu JOIN system_menu ancestor ON ancestor.id=query_menu.parent_id
+      WHERE query_menu.permission='coupon::query' AND query_menu.deleted=0 AND query_menu.status=0 AND query_menu.type IN (2,3)
+        AND ancestor.deleted=0 AND ancestor.status=0 AND ancestor.type IN (1,2))<>1 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='COUPON_PERMISSION_ANCESTOR_REQUIRED';
+  END IF;
+END$$
+DELIMITER ;
+CALL quality_check_coupon_permissions();
+DROP PROCEDURE quality_check_coupon_permissions;
+
 -- Register missing permission descriptors only. Never grant or modify roles/user assignments.
 -- Existing super_admin retains its existing all-permission semantics; ordinary roles require explicit review.
 INSERT INTO system_menu(name,permission,type,sort,parent_id,path,icon,status)

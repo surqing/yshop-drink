@@ -7,12 +7,13 @@ repo=Path(a.repo).resolve();sys.path.insert(0,str(repo/'tests/quality'))
 from evidence import source_identity
 from backend_artifact import verify_artifact
 from loopback_ports import backend_pair
-identity=source_identity(repo);verify_artifact(repo/'yshop-drink-boot3/yshop-server/target/yshop-server.jar',repo/'.quality/backend-build.json',identity)
+identity=source_identity(repo);artifact=verify_artifact(repo/'yshop-drink-boot3/yshop-server/target/yshop-server.jar',repo/'.quality/backend-build.json',identity)
 root=Path(a.output).resolve()
 if root.is_relative_to(repo):raise RuntimeError('PRIVATE_OUTPUT_OUTSIDE_SOURCE_REQUIRED')
 root.mkdir(parents=True,mode=0o700,exist_ok=False);os.umask(0o077)
 runid=uuid.uuid4().hex;port=backend_pair();owned=root/'owned';base='http://127.0.0.1:'+str(port)
 report={**identity,'runId':runid,'startedAt':time.time(),'scope':'real HTTP and owned MySQL; synthetic members/points only','cases':[],'cleanup':'NOT_RUN','status':'INCONCLUSIVE','financialProviderRequests':{'value':0,'scope':'this loopback HTTP harness path guard only','globalNetworkMeasured':False},'testScriptSha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+report['backendArtifactHash']=artifact['artifactHash']
 log=(root/'launcher-private.log').open('w')
 child=subprocess.Popen([sys.executable,'tests/quality/business-backend.py','--output',str(owned),'--port',str(port),'--hold-for-device','900'],cwd=repo,env=os.environ.copy(),stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
 def save(): (root/'report.json').write_text(json.dumps(report,indent=2,ensure_ascii=False))
@@ -41,7 +42,7 @@ try:
   if child.poll() is not None:raise RuntimeError('OWNED_LAUNCHER_EXITED')
   if time.monotonic()>deadline:raise RuntimeError('OWNED_LAUNCHER_TIMEOUT')
   time.sleep(.3)
- ready=json.loads((owned/'gui-ready.json').read_text());owner=ready['owner']
+ ready=json.loads((owned/'gui-ready.json').read_text());owner=ready['owner'];report['owner']=owner
  with urllib.request.urlopen(base+'/actuator/info',timeout=10) as r:assert json.load(r)['qualityOwner']==owner
  mysql='yshop-quality-business-mysql-'+owner;schema='yshop_quality_business_'+owner[:16]
  metadata=json.loads(subprocess.check_output(['docker','inspect',mysql],text=True))[0];assert metadata['Config']['Labels']['yshop.quality.owner']==owner
@@ -128,6 +129,7 @@ finally:
  log.close()
  if (owned/'report.json').exists():
   launch=json.loads((owned/'report.json').read_text());report['cleanup']='PASSED' if launch.get('cleanup')=='PASS' else 'FAILED';report['ownedBaseline']=launch.get('result')
+  report['cleanupReceipt']={'status':report['cleanup'],'runId':runid,'owner':report.get('owner'),**launch.get('resources',{}),'errors':[] if launch.get('cleanup')=='PASS' else ['OWNED_LAUNCHER_CLEANUP_FAILED']}
  report['sourceUnchanged']=source_identity(repo)==identity;report['endedAt']=time.time();report['complete']=True
  if report['cleanup']!='PASSED' or not report['sourceUnchanged']:report['status']='INCONCLUSIVE'
  save()

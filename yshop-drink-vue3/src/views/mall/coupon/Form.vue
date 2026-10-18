@@ -20,7 +20,7 @@
       <el-form-item label="使用说明"><el-input v-model="data.instructions" type="textarea" :rows="3" maxlength="1000" /></el-form-item>
       <el-form-item label="活动启用"><el-switch v-model="enabled" /></el-form-item>
     </el-form>
-    <template #footer><el-button type="primary" :loading="loading" @click="save">保存</el-button><el-button @click="close">取消</el-button></template>
+    <template #footer><el-button type="primary" :loading="loading || submitting" :disabled="!ready || loading || submitting" @click="save">保存</el-button><el-button @click="close">取消</el-button></template>
   </Dialog>
   <Dialog title="公共兑换码已生成" v-model="codeVisible" width="min(560px,95vw)">
     <el-alert title="只显示本次，请复制保存后再关闭。系统仅保存摘要，不提供再次读取。不要将兑换码写入日志。" type="warning" :closable="false" />
@@ -39,44 +39,76 @@ watch(codeVisible, value => { if(!value) generatedCode.value='' })
 const shops = ref<ShopApi.ShopVO[]>([])
 const selectedShops = ref<string[]>([])
 const enabled = computed({get: () => data.value.isSwitch === 1, set: value => {data.value.isSwitch = value ? 1 : 0}})
-watch(selectedShops, value => { data.value.shopId = value.join(',') }, {deep: true})
+watch(selectedShops, value => { data.value.shopId = value.join(',') }, {deep: true, flush: 'sync'})
 const rules = Object.fromEntries(['title','shopId','least','value','claimStartTime','claimEndTime','startTime','endTime','distribute','limit'].map(key => [key,[{required:true,message:'请填写此项',trigger:'change'}]]))
 const emit = defineEmits(['success'])
 let openGeneration = 0
+let targetId: number | undefined
+const ready = ref(false), submitting = ref(false)
+const invalidate = () => {
+  ++openGeneration
+  ready.value = false; submitting.value = false; loading.value = false
+}
+// Dialog emits model updates for its header, Escape and backdrop closing paths.
+watch(visible, value => { if (!value) invalidate() }, {flush: 'sync'})
+onBeforeUnmount(invalidate)
 const open = async (type: string, id?: number) => {
   const generation = ++openGeneration
+  targetId = id
+  ready.value = false; submitting.value = false
+  data.value = {}; selectedShops.value = []; shops.value = []
+  generatedCode.value = ''; codeVisible.value = false
   visible.value = true; formType.value = type; loading.value = true
   try {
+    nextTick(() => { if (generation === openGeneration) formRef.value?.clearValidate() })
+    if (type !== 'create' && id === undefined) return
     const availableShops = await ShopApi.getShopList()
     if (generation !== openGeneration) return
     shops.value = availableShops
     const today = Date.now(), end = today + 30 * 86400000
-    const activity = id ? await Api.getCoupon(id) : {title:'',shopId:'',couponKind:'REGULAR',claimMode:'PUBLIC',type:0,least:30,value:5,distribute:100,limit:1,score:0,isSwitch:1,instructions:'',image:'',startTime:today as unknown as Date,endTime:end as unknown as Date,claimStartTime:today,claimEndTime:end}
-    if (generation !== openGeneration) return
-    data.value = activity
+    const activity = type !== 'create' ? await Api.getCoupon(id!) : {title:'',shopId:'',couponKind:'REGULAR',claimMode:'PUBLIC',type:0,least:30,value:5,distribute:100,limit:1,score:0,isSwitch:1,instructions:'',image:'',startTime:today as unknown as Date,endTime:end as unknown as Date,claimStartTime:today,claimEndTime:end}
+    if (generation !== openGeneration || (type !== 'create' && activity?.id !== id)) return
+    data.value = {...activity}
     data.value.claimStartTime ||= data.value.startTime
     data.value.claimEndTime ||= data.value.endTime
     data.value.couponKind ||= 'REGULAR';data.value.claimMode ||= 'PUBLIC'
     data.value.exchangeCode = ''
     selectedShops.value = data.value.shopId ? String(data.value.shopId).split(',') : []
-    formRef.value?.clearValidate()
+    ready.value = true
   } finally {if (generation === openGeneration) loading.value=false}
 }
-const close = async () => {try {await message.confirm('放弃本次未保存的活动修改？');visible.value=false}catch {}}
-const save = async () => {
-  if(!await formRef.value.validate())return
-  if(selectedShops.value.includes('0') && selectedShops.value.length!==1){message.error('全店通用不能与具体门店混选');return}
-  const begin=Number(data.value.claimStartTime), claimEnd=Number(data.value.claimEndTime), start=Number(data.value.startTime), end=Number(data.value.endTime)
-  if(begin>=claimEnd || start>=end || claimEnd>end){message.error('请检查领取/使用时间，领取截止不能晚于使用截止');return}
-  loading.value=true
+const close = async () => {
+  const generation = openGeneration
   try {
+    await message.confirm('放弃本次未保存的活动修改？')
+    if (generation === openGeneration) visible.value = false
+  } catch {}
+}
+const save = async () => {
+  if (!visible.value || !ready.value || loading.value || submitting.value) return
+  const generation = openGeneration, id = targetId, type = formType.value
+  const isCurrent = () => generation === openGeneration && visible.value && ready.value &&
+    formType.value === type && targetId === id && (type === 'create' ? data.value.id === undefined : data.value.id === id)
+  // Lock before async validation so repeated clicks cannot start parallel writes.
+  submitting.value = true
+  try {
+    if (!await formRef.value.validate() || !isCurrent()) return
+    if(selectedShops.value.includes('0') && selectedShops.value.length!==1){message.error('全店通用不能与具体门店混选');return}
+    const begin=Number(data.value.claimStartTime), claimEnd=Number(data.value.claimEndTime), start=Number(data.value.startTime), end=Number(data.value.endTime)
+    if(begin>=claimEnd || start>=end || claimEnd>end){message.error('请检查领取/使用时间，领取截止不能晚于使用截止');return}
+    loading.value=true
     const payload = {...data.value,shopId:selectedShops.value.join(','),score:0,startTime:start,endTime:end,claimStartTime:begin,claimEndTime:claimEnd} as unknown as Api.VO
-    if(formType.value==='create' && payload.claimMode==='CODE') {
+    let code: string | undefined
+    if(type==='create' && payload.claimMode==='CODE') {
       const result = await Api.createCodeCoupon(payload)
-      generatedCode.value=result.exchangeCode;codeVisible.value=true
-    } else if(formType.value==='create')await Api.createCoupon(payload);else await Api.updateCoupon(payload)
+      code = result.exchangeCode
+    } else if(type==='create')await Api.createCoupon(payload);else await Api.updateCoupon(payload)
+    if (!isCurrent()) return
+    if (code !== undefined) {generatedCode.value=code;codeVisible.value=true}
     message.success('活动已保存，已领取权益保持不变');visible.value=false;emit('success')
-  } finally {loading.value=false}
+  } finally {
+    if (generation === openGeneration) {loading.value=false;submitting.value=false}
+  }
 }
 defineExpose({open})
 </script>

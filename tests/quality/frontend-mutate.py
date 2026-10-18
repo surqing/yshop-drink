@@ -33,8 +33,9 @@ def main():
         if code or failures:raise RuntimeError('BASELINE_FAILED')
         result['originalBaseline']='PASS';result['originalTests']=sum(map(len,expected.values()))
         needle='if (generation !== openGeneration) return'
-        if original.count(needle)!=2:raise RuntimeError('OPERATOR_NOT_FOUND')
-        mutated=original.replace(needle,'/* mutation: accept stale response */').replace('if (generation === openGeneration) loading.value=false','loading.value=false')
+        detail="generation !== openGeneration || (type !== 'create' && activity?.id !== id)"
+        if original.count(needle)!=1 or original.count(detail)!=1:raise RuntimeError('OPERATOR_NOT_FOUND')
+        mutated=original.replace(needle,'/* mutation: accept stale response */').replace(detail,"type !== 'create' && activity?.id !== id").replace('if (generation === openGeneration) loading.value=false','loading.value=false')
         file.write_text(mutated);code, failures=test('mutant')
         result.update(result='KILLED' if code and failures else 'SURVIVED' if not code else 'INCONCLUSIVE',assertionFailures=failures,
                       originalHash=hashlib.sha256(original.encode()).hexdigest(),mutatedHash=hashlib.sha256(mutated.encode()).hexdigest())

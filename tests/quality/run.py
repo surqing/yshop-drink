@@ -211,7 +211,7 @@ class Runner:
         expected=json.loads((REPO/'tests/quality/quick-manifest.json').read_text())
         files=sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])
         planned=[str(f.relative_to(REPO)) for f in sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])]
-        planned+=['tests/quality/test_e2e_acceptance.py','tests/quality/test_e2e_publish.py','tests/quality/test_e2e_support.py','tests/quality/test_e2e_environment.py','tests/quality/test_e2e_cli.py','tests/quality/test_e2e_contract.py','tests/quality/test_evidence.py','tests/quality/test_secret_guard.py','tests/quality/test_owned_resources.py','tests/quality/test_page_evidence.py','tests/smoke/test_secret_scan.py','tests/payment/prepayment-tools-test.py']
+        planned+=['tests/quality/test_merge_scope.py','tests/quality/test_e2e_acceptance.py','tests/quality/test_e2e_publish.py','tests/quality/test_e2e_support.py','tests/quality/test_e2e_environment.py','tests/quality/test_e2e_cli.py','tests/quality/test_e2e_contract.py','tests/quality/test_evidence.py','tests/quality/test_secret_guard.py','tests/quality/test_owned_resources.py','tests/quality/test_page_evidence.py','tests/smoke/test_secret_scan.py','tests/payment/prepayment-tools-test.py']
         require_suites(planned,expected,discover_quick_suites())
         for index,file in enumerate(files):
             def node_evidence(log):
@@ -220,7 +220,7 @@ class Runner:
                 require_count(counts['tests'],expected[str(file.relative_to(REPO))])
                 return counts
             self.step('node-'+str(index),[shutil.which('node') or 'node','--experimental-default-type=module','--test','--test-reporter=tap',str(file)],timeout=180,validator=node_evidence)
-        for index,file in enumerate([REPO/'tests/quality/test_e2e_acceptance.py',REPO/'tests/quality/test_e2e_publish.py',REPO/'tests/quality/test_e2e_support.py',REPO/'tests/quality/test_e2e_environment.py',REPO/'tests/quality/test_e2e_cli.py',REPO/'tests/quality/test_e2e_contract.py',REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/quality/test_owned_resources.py',REPO/'tests/quality/test_page_evidence.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']):
+        for index,file in enumerate([REPO/'tests/quality/test_merge_scope.py',REPO/'tests/quality/test_e2e_acceptance.py',REPO/'tests/quality/test_e2e_publish.py',REPO/'tests/quality/test_e2e_support.py',REPO/'tests/quality/test_e2e_environment.py',REPO/'tests/quality/test_e2e_cli.py',REPO/'tests/quality/test_e2e_contract.py',REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/quality/test_owned_resources.py',REPO/'tests/quality/test_page_evidence.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']):
             def python_evidence(log):
                 text=log.read_text();match=re.search(r'Ran (\d+) tests? in',text)
                 if not match or int(match[1])==0 or not re.search(r'^OK$',text,re.M):raise RuntimeError('PYTHON_REPORT_INCOMPLETE_OR_SKIPPED')

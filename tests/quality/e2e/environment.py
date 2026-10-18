@@ -111,6 +111,9 @@ class OwnedEnvironment:
         self.sql('SET FOREIGN_KEY_CHECKS=0;\n'+'\n'.join(ddl)+'\nSET FOREIGN_KEY_CHECKS=1;')
         self.report['seedInsertRowsCopied']=0
         for name in MIGRATIONS:
+            # Permission descriptors require an actual menu ancestor. Our schema-only
+            # fixture creates that menu below; production migrations reject its absence.
+            if name=='2026-10-08-coupon-permissions.sql':continue
             self.report['stage']='MIGRATION:'+name
             self.sql((self.repo/'yshop-drink-boot3/sql/migrations'/name).read_text())
         self.docker('exec','-i',self.mysql,'mysql','--defaults-extra-file=/run/client.cnf',input=
@@ -138,6 +141,9 @@ class OwnedEnvironment:
         base['logging']['config']='file:'+str(logging)
         from business_http import seed as seed_identities
         seed_identities(self.sql,self.root,self.repo)
+        if '2026-10-08-coupon-permissions.sql' in MIGRATIONS:
+            self.report['stage']='MIGRATION:2026-10-08-coupon-permissions.sql'
+            self.sql((self.repo/'yshop-drink-boot3/sql/migrations/2026-10-08-coupon-permissions.sql').read_text())
         if configure:configure(self,base)
         config=self.file('application.yaml',yaml.safe_dump(base,allow_unicode=True))
         self.report['backendArtifactHash']=hashlib.sha256(jar.read_bytes()).hexdigest()
