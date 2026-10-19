@@ -31,7 +31,15 @@ jobs:
           python-version: '3.11'
       - run: python3 -m pip install -r tests/quality/requirements.txt
       - name: Build current production artifact
-        run: python3 tests/quality/run.py BUILD --output "$RUNNER_TEMP/scope-build"
+        run: |
+          python3 - <<'PY'
+          import os,sys
+          sys.path.insert(0,'tests/quality')
+          from run import Runner
+          r=Runner(os.environ['RUNNER_TEMP']+'/scope-build')
+          r.backend()
+          sys.exit(0 if r.save()['result']=='PASS' else 1)
+          PY
       - name: Execute baseline and candidate without relabelling raw failures
         run: |
           python3 - <<'PY'

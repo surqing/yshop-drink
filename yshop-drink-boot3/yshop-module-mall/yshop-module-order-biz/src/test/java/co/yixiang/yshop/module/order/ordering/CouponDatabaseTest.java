@@ -41,7 +41,7 @@ class CouponDatabaseTest {
             String ddl=m.group();if(!f.mysql)ddl=ddl.replaceAll("ENGINE=InnoDB.*?;",";").replace("bit(1)","BOOLEAN").replace("b'0'","FALSE").replace(" USING BTREE","");f.db.execute(ddl);
         }
         f.db.execute("ALTER TABLE yshop_coupon_user ADD COLUMN reserved_order_id VARCHAR(32)");
-        if(f.mysql) new TransactionTemplate(f.tm).executeWithoutResult(s->{try{for(String p:Files.readString(f.boot.resolve("sql/migrations/2026-10-08-coupon-marketing.sql")).split(";"))if(!p.isBlank())f.db.execute(p);}catch(Exception e){throw new RuntimeException(e);}});
+        if(f.mysql) executeMysqlMigration(Files.readString(f.boot.resolve("sql/migrations/2026-10-08-coupon-marketing.sql")));
         else {
             for(String c:List.of("template_version BIGINT DEFAULT 0","claim_start_time TIMESTAMP","claim_end_time TIMESTAMP","coupon_kind VARCHAR(16) DEFAULT 'REGULAR'","claim_mode VARCHAR(16) DEFAULT 'PUBLIC'","redemption_code_hash CHAR(64) UNIQUE"))f.db.execute("ALTER TABLE yshop_coupon ADD COLUMN "+c);
             for(String c:List.of("template_version BIGINT DEFAULT 0","redeemed_order_id VARCHAR(32)","redeemed_at TIMESTAMP","invalid_reason VARCHAR(200)"))f.db.execute("ALTER TABLE yshop_coupon_user ADD COLUMN "+c);
@@ -66,6 +66,24 @@ class CouponDatabaseTest {
         instances=new CouponUserServiceImpl();field(instances,"mapper",sql.getMapper(CouponUserMapper.class));field(instances,"marketing",marketing);field(instances,"jdbc",f.db);
     }
     @AfterEach void clear(){if(f!=null)f.clearSecurity();}
+    void executeMysqlMigration(String script) {
+        // DELIMITER is a mysql client directive, not SQL. Let Spring parse each
+        // block using its selected separator so routine-body semicolons survive.
+        var directives=java.util.regex.Pattern.compile("(?m)^DELIMITER\\s+(\\S+)\\s*$").matcher(script);
+        try(var connection=f.data.getConnection()) {
+            int start=0;String separator=";";
+            while(directives.find()) {
+                executeMysqlBlock(connection,script.substring(start,directives.start()),separator);
+                separator=directives.group(1);start=directives.end();
+            }
+            executeMysqlBlock(connection,script.substring(start),separator);
+        } catch(java.sql.SQLException e) {throw new RuntimeException(e);}
+    }
+    void executeMysqlBlock(java.sql.Connection connection,String sql,String separator) {
+        var resource=new org.springframework.core.io.support.EncodedResource(
+            new org.springframework.core.io.ByteArrayResource(sql.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        org.springframework.jdbc.datasource.init.ScriptUtils.executeSqlScript(connection,resource,false,false,"--",separator,"/*","*/");
+    }
     void coupon(long id,String shops,int total,int limit){f.db.update("INSERT INTO yshop_coupon(id,shop_id,shop_name,title,is_switch,least,`value`,start_time,end_time,claim_start_time,claim_end_time,create_time,update_time,distribute,`limit`,instructions,coupon_kind,claim_mode,template_version) VALUES(?,?,?,'Synthetic coupon',1,0,0.10,'2020-01-01','2030-01-01','2026-10-08','2030-01-01',?,?,?,?,'Synthetic rights','REGULAR','PUBLIC',1)",id,shops,"Synthetic scope",now.minusHours(1),now,total,limit);}
     String key(){return UUID.randomUUID().toString();}
 
