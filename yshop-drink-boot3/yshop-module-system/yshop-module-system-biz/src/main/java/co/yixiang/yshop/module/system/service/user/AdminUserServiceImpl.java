@@ -87,6 +87,10 @@ public class AdminUserServiceImpl implements AdminUserService {
     @Resource
     private StoreShopMapper storeShopMapper;
 
+    @Resource
+    @Lazy
+    private co.yixiang.yshop.module.system.service.oauth2.OAuth2TokenService oauth2Tokens;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     @LogRecord(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_CREATE_SUB_TYPE, bizNo = "{{#user.id}}",
@@ -213,6 +217,7 @@ public class AdminUserServiceImpl implements AdminUserService {
     }
 
     @Override
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED, rollbackFor=Exception.class)
     public void updateUserStatus(Long id, Integer status) {
         // 校验用户存在
         validateUserExists(id);
@@ -221,10 +226,14 @@ public class AdminUserServiceImpl implements AdminUserService {
         updateObj.setId(id);
         updateObj.setStatus(status);
         userMapper.updateById(updateObj);
+        // Same lock order as refresh/logout: principal UPDATE -> refresh families -> access.
+        // A later re-enable must never make credentials issued before disable usable again.
+        if (!CommonStatusEnum.ENABLE.getStatus().equals(status))
+            oauth2Tokens.revokeUserTokens(id, co.yixiang.yshop.framework.common.enums.UserTypeEnum.ADMIN.getValue());
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED, rollbackFor=Exception.class)
     @LogRecord(type = SYSTEM_USER_TYPE, subType = SYSTEM_USER_DELETE_SUB_TYPE, bizNo = "{{#id}}",
             success = SYSTEM_USER_DELETE_SUCCESS)
     public void deleteUser(Long id) {
@@ -235,6 +244,7 @@ public class AdminUserServiceImpl implements AdminUserService {
 
         // 2.1 删除用户
         userMapper.deleteById(id);
+        oauth2Tokens.revokeUserTokens(id, co.yixiang.yshop.framework.common.enums.UserTypeEnum.ADMIN.getValue());
         // 2.2 删除用户关联数据
         permissionService.processUserDeleted(id);
         // 2.2 删除用户岗位

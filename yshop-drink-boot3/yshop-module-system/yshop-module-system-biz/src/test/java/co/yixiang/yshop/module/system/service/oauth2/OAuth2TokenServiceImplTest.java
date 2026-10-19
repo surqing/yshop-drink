@@ -40,6 +40,8 @@ import static org.mockito.Mockito.when;
  */
 @Import({OAuth2TokenServiceImpl.class, OAuth2AccessTokenRedisDAO.class})
 public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
+    @MockBean
+    private co.yixiang.yshop.module.store.dal.mysql.storeshop.StoreShopMapper storeShopMapper;
 
     @Resource
     private OAuth2TokenServiceImpl oauth2TokenService;
@@ -56,6 +58,57 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
     private OAuth2ClientService oauth2ClientService;
     @MockBean
     private AdminUserService adminUserService;
+    @Resource private javax.sql.DataSource dataSource;
+    @MockBean private co.yixiang.yshop.module.system.dal.mysql.oauth2.OAuth2PrincipalMapper principals;
+    @org.junit.jupiter.api.BeforeEach void principalFixture() {
+        org.mockito.Mockito.when(principals.lockAdminStatus(org.mockito.ArgumentMatchers.anyLong())).thenReturn(0);
+        org.mockito.Mockito.when(principals.lockMemberStatus(org.mockito.ArgumentMatchers.anyLong())).thenAnswer(c -> {
+            var rows=new org.springframework.jdbc.core.JdbcTemplate(dataSource).queryForList(
+                    "SELECT status FROM yshop_user WHERE id=? AND deleted=0",Integer.class,(Object)c.getArgument(0));
+            return rows.isEmpty()?null:rows.get(0);
+        });
+    }
+
+    @Test public void disabledMemberCannotRefreshAnExistingSession() { memberRefreshDenied(1, false); }
+    @Test public void deletedMemberCannotRefreshAnExistingSession() { memberRefreshDenied(0, true); }
+    private void memberRefreshDenied(int status, boolean deleted) {
+        var jdbc=new org.springframework.jdbc.core.JdbcTemplate(dataSource);
+        jdbc.execute("CREATE TABLE IF NOT EXISTS yshop_user(id BIGINT PRIMARY KEY,status INT,deleted BOOLEAN)");
+        jdbc.update("DELETE FROM yshop_user WHERE id=331");
+        jdbc.update("INSERT INTO yshop_user VALUES(331,?,?)",status,deleted);
+        var refresh=randomPojo(OAuth2RefreshTokenDO.class).setUserId(331L).setUserType(1)
+                .setClientId("synthetic-client").setExpiresTime(LocalDateTime.now().withNano(0).plusDays(1));
+        oauth2RefreshTokenMapper.insert(refresh);
+        when(oauth2ClientService.validOAuthClientFromCache("synthetic-client"))
+                .thenReturn(new OAuth2ClientDO().setClientId("synthetic-client").setAccessTokenValiditySeconds(60));
+        assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,
+                () -> oauth2TokenService.refreshAccessToken(refresh.getRefreshToken(),"synthetic-client"));
+        assertTrue(oauth2AccessTokenMapper.selectListByRefreshToken(refresh.getRefreshToken()).isEmpty());
+        jdbc.update("DELETE FROM yshop_user WHERE id=331");
+    }
+
+    @Test
+    public void revokedFamilyCannotBeAuthorizedFromStaleRedis() {
+        var access = randomPojo(OAuth2AccessTokenDO.class).setExpiresTime(LocalDateTime.now().withNano(0).plusDays(1));
+        // A second instance can retain this cache after database revocation.
+        oauth2AccessTokenRedisDAO.set(access);
+        assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,
+                () -> oauth2TokenService.checkAccessToken(access.getAccessToken()));
+    }
+
+    @Test
+    public void logoutRevokesEveryAccessTokenInTheRefreshFamily() {
+        var refresh = randomPojo(OAuth2RefreshTokenDO.class).setUserType(2).setExpiresTime(LocalDateTime.now().withNano(0).plusDays(1));
+        oauth2RefreshTokenMapper.insert(refresh);
+        var first = randomPojo(OAuth2AccessTokenDO.class).setRefreshToken(refresh.getRefreshToken())
+                .setUserId(refresh.getUserId()).setUserType(refresh.getUserType());
+        var second = randomPojo(OAuth2AccessTokenDO.class).setRefreshToken(refresh.getRefreshToken())
+                .setUserId(refresh.getUserId()).setUserType(refresh.getUserType());
+        oauth2AccessTokenMapper.insert(first);oauth2AccessTokenMapper.insert(second);
+        oauth2TokenService.removeAccessToken(first.getAccessToken());
+        assertNull(oauth2AccessTokenMapper.selectByAccessToken(second.getAccessToken()));
+        assertNull(oauth2RefreshTokenMapper.selectByRefreshToken(refresh.getRefreshToken()));
+    }
 
     @Test
     public void testCreateAccessToken() {
@@ -136,13 +189,14 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
         // mock 数据（访问令牌）
         OAuth2RefreshTokenDO refreshTokenDO = randomPojo(OAuth2RefreshTokenDO.class)
                 .setRefreshToken(refreshToken).setClientId(clientId)
-                .setExpiresTime(LocalDateTime.now().minusDays(1));
+                .setExpiresTime(LocalDateTime.now().withNano(0).minusDays(1));
         oauth2RefreshTokenMapper.insert(refreshTokenDO);
 
         // 调用，并断言
         assertServiceException(() -> oauth2TokenService.refreshAccessToken(refreshToken, clientId),
                 new ErrorCode(401, "刷新令牌已过期"));
-        assertEquals(0, oauth2RefreshTokenMapper.selectCount());
+        assertEquals(1, oauth2RefreshTokenMapper.selectCount());
+        assertEquals(refreshTokenDO.getId(),oauth2RefreshTokenMapper.selectByRefreshToken(refreshToken).getId());
     }
 
     @Test
@@ -158,7 +212,7 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
         // mock 数据（访问令牌）
         OAuth2RefreshTokenDO refreshTokenDO = randomPojo(OAuth2RefreshTokenDO.class)
                 .setRefreshToken(refreshToken).setClientId(clientId)
-                .setExpiresTime(LocalDateTime.now().plusDays(1))
+                .setExpiresTime(LocalDateTime.now().withNano(0).plusDays(1))
                 .setUserType(UserTypeEnum.ADMIN.getValue());
         oauth2RefreshTokenMapper.insert(refreshTokenDO);
         // mock 数据（访问令牌）
@@ -190,7 +244,7 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
     public void testGetAccessToken() {
         // mock 数据（访问令牌）
         OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class)
-                .setExpiresTime(LocalDateTime.now().plusDays(1));
+                .setExpiresTime(LocalDateTime.now().withNano(0).plusDays(1));
         oauth2AccessTokenMapper.insert(accessTokenDO);
         // 准备参数
         String accessToken = accessTokenDO.getAccessToken();
@@ -215,7 +269,7 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
     public void testCheckAccessToken_expired() {
         // mock 数据（访问令牌）
         OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class)
-                .setExpiresTime(LocalDateTime.now().minusDays(1));
+                .setExpiresTime(LocalDateTime.now().withNano(0).minusDays(1));
         oauth2AccessTokenMapper.insert(accessTokenDO);
         // 准备参数
         String accessToken = accessTokenDO.getAccessToken();
@@ -229,13 +283,16 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
     public void testCheckAccessToken_success() {
         // mock 数据（访问令牌）
         OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class)
-                .setExpiresTime(LocalDateTime.now().plusDays(1));
+                .setUserType(2).setExpiresTime(LocalDateTime.now().withNano(0).plusDays(1));
         oauth2AccessTokenMapper.insert(accessTokenDO);
+        oauth2RefreshTokenMapper.insert(randomPojo(OAuth2RefreshTokenDO.class)
+                .setRefreshToken(accessTokenDO.getRefreshToken()).setUserId(accessTokenDO.getUserId()).setUserType(2)
+                .setClientId(accessTokenDO.getClientId()).setExpiresTime(LocalDateTime.now().withNano(0).plusDays(2)));
         // 准备参数
         String accessToken = accessTokenDO.getAccessToken();
 
         // 调研，并断言
-        OAuth2AccessTokenDO result = oauth2TokenService.getAccessToken(accessToken);
+        OAuth2AccessTokenDO result = oauth2TokenService.checkAccessToken(accessToken);
         // 断言
         assertPojoEquals(accessTokenDO, result, "createTime", "updateTime", "deleted",
                 "creator", "updater");
@@ -251,10 +308,13 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
     public void testRemoveAccessToken_success() {
         // mock 数据（访问令牌）
         OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class)
-                .setExpiresTime(LocalDateTime.now().plusDays(1));
+                .setExpiresTime(LocalDateTime.now().withNano(0).plusDays(1));
         oauth2AccessTokenMapper.insert(accessTokenDO);
         // mock 数据（刷新令牌）
+        accessTokenDO.setUserType(2);
+        oauth2AccessTokenMapper.updateById(accessTokenDO);
         OAuth2RefreshTokenDO refreshTokenDO = randomPojo(OAuth2RefreshTokenDO.class)
+                .setUserId(accessTokenDO.getUserId()).setUserType(2)
                 .setRefreshToken(accessTokenDO.getRefreshToken());
         oauth2RefreshTokenMapper.insert(refreshTokenDO);
         // 调用
@@ -275,7 +335,7 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
             o.setUserId(10L);
             o.setUserType(1);
             o.setClientId("test_client");
-            o.setExpiresTime(LocalDateTime.now().plusDays(1));
+            o.setExpiresTime(LocalDateTime.now().withNano(0).plusDays(1));
         });
         oauth2AccessTokenMapper.insert(dbAccessToken);
         // 测试 userId 不匹配
@@ -300,4 +360,17 @@ public class OAuth2TokenServiceImplTest extends BaseDbAndRedisUnitTest {
         assertPojoEquals(dbAccessToken, pageResult.getList().get(0));
     }
 
+    @Test public void nanosecondClockHasExactDatabaseRepresentableExpiry() {
+        var fixed=java.time.Clock.fixed(java.time.Instant.parse("2030-01-01T00:00:00.123456789Z"),java.time.ZoneOffset.UTC);
+        org.springframework.test.util.ReflectionTestUtils.setField(oauth2TokenService,"clock",fixed);
+        try {
+            when(oauth2ClientService.validOAuthClientFromCache("synthetic-client"))
+                    .thenReturn(new OAuth2ClientDO().setClientId("synthetic-client").setAccessTokenValiditySeconds(60).setRefreshTokenValiditySeconds(3600));
+            when(adminUserService.getUser(7L)).thenReturn(new AdminUserDO().setNickname("synthetic-admin").setDeptId(1L));
+            var access=oauth2TokenService.createAccessToken(7L,2,"synthetic-client",List.of());
+            assertEquals(LocalDateTime.of(2030,1,1,0,1),access.getExpiresTime());
+            assertEquals(access.getExpiresTime(),oauth2AccessTokenMapper.selectByAccessToken(access.getAccessToken()).getExpiresTime());
+            assertEquals(LocalDateTime.of(2030,1,1,1,0),oauth2RefreshTokenMapper.selectByRefreshToken(access.getRefreshToken()).getExpiresTime());
+        } finally {org.springframework.test.util.ReflectionTestUtils.setField(oauth2TokenService,"clock",java.time.Clock.systemDefaultZone());}
+    }
 }

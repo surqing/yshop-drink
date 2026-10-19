@@ -1,84 +1,33 @@
 package co.yixiang.yshop.module.coupon.service.couponuser;
 
-import org.springframework.stereotype.Service;
-import jakarta.annotation.Resource;
-import org.springframework.validation.annotation.Validated;
-
-import java.util.*;
+import co.yixiang.yshop.framework.common.pojo.PageResult;
+import co.yixiang.yshop.framework.mybatis.core.query.LambdaQueryWrapperX;
 import co.yixiang.yshop.module.coupon.controller.admin.couponuser.vo.*;
 import co.yixiang.yshop.module.coupon.dal.dataobject.couponuser.CouponUserDO;
-import co.yixiang.yshop.framework.common.pojo.PageResult;
-
-import co.yixiang.yshop.module.coupon.convert.couponuser.CouponUserConvert;
 import co.yixiang.yshop.module.coupon.dal.mysql.couponuser.CouponUserMapper;
+import co.yixiang.yshop.module.coupon.service.marketing.*;
+import jakarta.annotation.Resource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import java.util.*;
 
-import static co.yixiang.yshop.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static co.yixiang.yshop.module.coupon.enums.ErrorCodeConstants.*;
-
-/**
- * 用户领的优惠券 Service 实现类
- *
- * @author yshop
- */
 @Service
-@Validated
 public class CouponUserServiceImpl implements CouponUserService {
-
-    @Resource
-    private CouponUserMapper userMapper;
-
-    @Override
-    public Integer createUser(CouponUserCreateReqVO createReqVO) {
-        // 插入
-        CouponUserDO user = CouponUserConvert.INSTANCE.convert(createReqVO);
-        userMapper.insert(user);
-        // 返回
-        return user.getId();
+    @Resource private CouponUserMapper mapper;
+    @Resource private CouponMarketingService marketing;
+    @Resource private JdbcTemplate jdbc;
+    private LambdaQueryWrapperX<CouponUserDO> scoped(){
+        var w=new LambdaQueryWrapperX<CouponUserDO>();String scope=marketing.adminScopeRegex();if(scope!=null)w.apply("shop_id REGEXP {0}",scope);return w;
     }
-
-    @Override
-    public void updateUser(CouponUserUpdateReqVO updateReqVO) {
-        // 校验存在
-        validateUserExists(updateReqVO.getId());
-        // 更新
-        CouponUserDO updateObj = CouponUserConvert.INSTANCE.convert(updateReqVO);
-        userMapper.updateById(updateObj);
+    private CouponUserDO safe(CouponUserDO c){
+        if(c!=null){c.setExchangeCode(null);var row=jdbc.queryForMap("SELECT *, (type+0) AS coupon_type FROM yshop_coupon_user WHERE id=?",c.getId());row.put("type",row.get("coupon_type"));c.setReservationState(marketing.state(row));}return c;
     }
-
-    @Override
-    public void deleteUser(Integer id) {
-        // 校验存在
-        validateUserExists(id);
-        // 删除
-        userMapper.deleteById(id);
-    }
-
-    private void validateUserExists(Integer id) {
-        if (userMapper.selectById(id) == null) {
-            throw exception(COUPON_USER_NOT_EXISTS);
-        }
-    }
-
-    @Override
-    public CouponUserDO getUser(Integer id) {
-        return userMapper.selectById(id);
-    }
-
-    @Override
-    public List<CouponUserDO> getUserList(Integer id) {
-        CouponUserExportReqVO exportReqVO = new CouponUserExportReqVO();
-        exportReqVO.setCouponId(id);
-        return userMapper.selectList(exportReqVO);
-    }
-
-    @Override
-    public PageResult<CouponUserDO> getUserPage(CouponUserPageReqVO pageReqVO) {
-        return userMapper.selectPage(pageReqVO);
-    }
-
-    @Override
-    public List<CouponUserDO> getUserList(CouponUserExportReqVO exportReqVO) {
-        return userMapper.selectList(exportReqVO);
-    }
-
+    // An issued right is not an editable CRUD record. Keep legacy routes fail closed.
+    @Override public Integer createUser(CouponUserCreateReqVO request){throw CouponPolicy.reject("COUPON_RAW_ISSUANCE_DISABLED");}
+    @Override public void updateUser(CouponUserUpdateReqVO request){throw CouponPolicy.reject("COUPON_ISSUED_RIGHT_IMMUTABLE");}
+    @Override public void deleteUser(Integer id){throw CouponPolicy.reject("COUPON_USE_EXPLICIT_INVALIDATION");}
+    @Override public CouponUserDO getUser(Integer id){var c=mapper.selectById(id);if(c==null)throw CouponPolicy.reject("COUPON_NOT_EXISTS");marketing.requireScope(c.getShopId());return safe(c);}
+    @Override public List<CouponUserDO> getUserList(Integer couponId){marketing.requireTemplate(couponId,false);var list=mapper.selectList(scoped().eq(CouponUserDO::getCouponId,couponId).orderByDesc(CouponUserDO::getId));list.forEach(this::safe);return list;}
+    @Override public PageResult<CouponUserDO> getUserPage(CouponUserPageReqVO r){var result=mapper.selectPage(r,scoped().eqIfPresent(CouponUserDO::getCouponId,r.getCouponId()).eqIfPresent(CouponUserDO::getUserId,r.getUserId()).orderByDesc(CouponUserDO::getId));result.getList().forEach(this::safe);return result;}
+    @Override public List<CouponUserDO> getUserList(CouponUserExportReqVO r){var result=mapper.selectList(scoped().eqIfPresent(CouponUserDO::getCouponId,r.getCouponId()).eqIfPresent(CouponUserDO::getUserId,r.getUserId()).orderByDesc(CouponUserDO::getId));result.forEach(this::safe);return result;}
 }

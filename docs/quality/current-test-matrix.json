@@ -1,0 +1,3776 @@
+{
+  "sourceSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+  "sourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+  "matrix": [
+    {
+      "id": "A01",
+      "scope": "总部管理员访问全部门店",
+      "status": "PASSED",
+      "measuredBoundary": "优惠券服务层；HTTP 创建两店商品另有验证",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::headquartersCanReadGlobalAndAllAuthorizedStores",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "A02",
+      "scope": "门店管理员所属门店访问",
+      "status": "PASSED",
+      "measuredBoundary": "真实 HTTP",
+      "executedChecks": [
+        {
+          "kind": "HTTP",
+          "name": "authorized staff reads store A order",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "A03",
+      "scope": "普通员工权限控制",
+      "status": "PASSED",
+      "measuredBoundary": "服务层与实际 Chromium；合成权限响应分别记录",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::staffEndpointsRejectCrossStoreBeforeBusinessCalls",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "BROWSER",
+          "name": "staff page omits unauthorized coupon write controls",
+          "status": "PASSED",
+          "evidence": "baseline-browser/a7b5f42ee94d4158a61d7995f492fa1f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "A04",
+      "scope": "禁用或撤销权限后的访问",
+      "status": "PASSED",
+      "measuredBoundary": "领域/数据库；真实外部身份未执行",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::multiShopManagerAndFreshRevocation",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.system.service.oauth2.OAuth2LifecycleDatabaseTest::adminDisableReenableCannotResurrectOldCredentials",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "A05",
+      "scope": "跨门店商品、订单、优惠券读取",
+      "status": "PASSED",
+      "measuredBoundary": "HTTP + 数据库",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::adminScopeCannotBeForged",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "staff cannot read store B order",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        },
+        {
+          "kind": "HTTP",
+          "name": "staff cannot read store B product",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "A06",
+      "scope": "非法门店 ID",
+      "status": "PASSED",
+      "measuredBoundary": "订单和目录入口",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::catalogRequiresSelectedStoreAndPublishedOwnership",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::missingStore",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "A07",
+      "scope": "篡改请求门店 ID",
+      "status": "PASSED",
+      "measuredBoundary": "持久层拒绝及状态不变量",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::crossStoreProductRejected",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::skuAndAdminCrossStoreAttacksRejected",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "A08",
+      "scope": "越权查询修改删除",
+      "status": "PASSED",
+      "measuredBoundary": "已测入口，不代表全项目接口穷尽",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::staffEndpointsRejectCrossStoreBeforeBusinessCalls",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::rawIssuedCrudCannotGrantOrReactivate",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::batchAllOrNothingOnCrossStore",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "A09",
+      "scope": "多门店身份切换",
+      "status": "PASSED",
+      "measuredBoundary": "成员授权服务与小程序门店切换；后台全部页面切换未穷尽",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::multiShopManagerAndFreshRevocation",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "MINI",
+          "name": "switch to B clears cart and checkout context",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "A10",
+      "scope": "Token 过期刷新撤销",
+      "status": "PASSED",
+      "measuredBoundary": "真实生命周期数据库与 HTTP",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.system.service.oauth2.OAuth2LifecycleDatabaseTest::logoutRevokesStaleRemoteCacheAndBothCredentials",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.system.service.oauth2.OAuth2LifecycleDatabaseTest::invalidExpiredClientAndUserTypeCannotAlterFamily",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "A11",
+      "scope": "同账号多会话并发",
+      "status": "PASSED",
+      "measuredBoundary": "两个 JVM，不是真实多手机",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.system.service.oauth2.OAuth2LifecycleDatabaseTest::twentyRefreshesHaveOnlyOneCurrentAccessAcrossInstances",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "two-process refresh only one current access",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "B01",
+      "scope": "商品创建编辑上下架",
+      "status": "PASSED",
+      "measuredBoundary": "MySQL 集成与领域；全部管理页未穷尽",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::hiddenProduct",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogEditingMysqlAcceptance::editPreservesSkuIdStockSalesAndPendingOrderSnapshot",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogEditingMysqlAcceptance::originalCreateProducesSkuAndInitialInventoryAudit",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "B02",
+      "scope": "SKU 创建编辑删除与状态",
+      "status": "PASSED",
+      "measuredBoundary": "已测保留 SKU/禁用；无预约 SKU 的删除页面未执行",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::productEditCannotDestroyUnpaidSkuReservations",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::stoppedSkuCannotOrder",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogEditingMysqlAcceptance::multiSkuEditReadbackKeepsExactPricesAndSavingDoesNotZeroThem",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "B03",
+      "scope": "规格属性加料组合",
+      "status": "PASSED",
+      "measuredBoundary": "实际配置与校验",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::syntheticConfigCreatesAuthoritativeSnapshotAndCoupon",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::coldNeedsIce",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::requiredCannotBeOmitted",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::hotCannotChooseIce",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "B04",
+      "scope": "商品与 SKU 价格一致",
+      "status": "PASSED",
+      "measuredBoundary": "数据库与 HTTP 金额",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogEditingMysqlAcceptance::multiSkuEditReadbackKeepsExactPricesAndSavingDoesNotZeroThem",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "server price and topping minus coupon unpaid",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "B05",
+      "scope": "编辑后的历史订单快照",
+      "status": "PASSED",
+      "measuredBoundary": "校验订单不被重算",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::priceDoesNotChangeInventoryOrOldSnapshot",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "catalog edit leaves existing order price snapshot unchanged",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "B06",
+      "scope": "同名商品跨店隔离",
+      "status": "PASSED",
+      "measuredBoundary": "数据库 + HTTP",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::twoStoreSameNamedDrinksUseIndependentPrices",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "price edit leaves other store price unchanged",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "B07",
+      "scope": "库存不足",
+      "status": "FAILED",
+      "measuredBoundary": "普通订单覆盖；积分兑换确认失败",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::skuSoldOut",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::availableStockConditionalDebitMustSucceed",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "RED",
+          "name": "D003",
+          "status": "FAILED",
+          "evidence": "current-defect-inventory.json"
+        }
+      ]
+    },
+    {
+      "id": "B08",
+      "scope": "最后一件并发购买",
+      "status": "PASSED",
+      "measuredBoundary": "重复 20 轮不重复算场景",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::lastItemTwentyBuyers",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::twentyBuyersLastUnit",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "B09",
+      "scope": "取消后恢复库存",
+      "status": "PASSED",
+      "measuredBoundary": "数据库最终库存",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::cancellationTwentyExactlyOnce",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "cancel retry restores inventory once",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "B10",
+      "scope": "重复取消不重复加库存",
+      "status": "PASSED",
+      "measuredBoundary": "重试与竞争",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::cancellationTwentyExactlyOnce",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "cancel retry restores inventory once",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "B11",
+      "scope": "SKU 编辑与订单竞争",
+      "status": "PASSED",
+      "measuredBoundary": "真实 MySQL 条件套件",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogEditingMysqlAcceptance::skuEditAndReservationRace",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "B12",
+      "scope": "数据库异常库存事务回滚",
+      "status": "PASSED",
+      "measuredBoundary": "受控写异常；真实数据库进程故障另列",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::snapshotFailureRollsBackEverything",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::inventoryAuditFailureRollsBackSkuAndProduct",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "C01",
+      "scope": "购物车加入商品",
+      "status": "PASSED",
+      "measuredBoundary": "官方模拟器实际点击",
+      "executedChecks": [
+        {
+          "kind": "MINI",
+          "name": "tap adds store A cart",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "C02",
+      "scope": "购物车数量与规格修改",
+      "status": "PASSED",
+      "measuredBoundary": "生产工具逻辑；全部页面编辑交互未验证",
+      "executedChecks": [
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#1",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#2",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#3",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#4",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#5",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#6",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#7",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#8",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#9",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#10",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#11",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#12",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#13",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#14",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#15",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#16",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#17",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#18",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#19",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#20",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#21",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "QUICK",
+          "name": "@QUICK:cart-context-test.mjs#22",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "C03",
+      "scope": "门店切换清理购物车",
+      "status": "PASSED",
+      "measuredBoundary": "官方模拟器页面和本地缓存",
+      "executedChecks": [
+        {
+          "kind": "MINI",
+          "name": "switch to B clears cart and checkout context",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "C04",
+      "scope": "无效或下架商品",
+      "status": "FAILED",
+      "measuredBoundary": "普通商品拒绝；积分商品确认失败",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::hiddenProduct",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::stoppedSkuCannotOrder",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "RED",
+          "name": "D005",
+          "status": "FAILED",
+          "evidence": "current-defect-inventory.json"
+        }
+      ]
+    },
+    {
+      "id": "C05",
+      "scope": "商品价格变化",
+      "status": "PASSED",
+      "measuredBoundary": "历史重试与当前价格竞争",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::retryDoesNotRepriceCommittedOrder",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::priceChangeVersusTwentyOrders",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "C06",
+      "scope": "服务器重算订单金额",
+      "status": "PASSED",
+      "measuredBoundary": "真实 HTTP 与 SQL",
+      "executedChecks": [
+        {
+          "kind": "HTTP",
+          "name": "server price and topping minus coupon unpaid",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "C07",
+      "scope": "重复点击提交订单",
+      "status": "PASSED",
+      "measuredBoundary": "已验证重试；快速连续点击极限时序未穷尽",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::duplicateKeySameRequest",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "MINI",
+          "name": "same key page retry opens unpaid order",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "C08",
+      "scope": "相同幂等键相同内容",
+      "status": "PASSED",
+      "measuredBoundary": "订单数量和金额不变量",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::duplicateKeySameRequest",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "lost response same-key retry keeps one unpaid order",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "C09",
+      "scope": "相同幂等键不同内容",
+      "status": "PASSED",
+      "measuredBoundary": "以匹配到的实际用例为准",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::duplicateKeyConflict",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "C10",
+      "scope": "提交成功但响应丢失",
+      "status": "PASSED",
+      "measuredBoundary": "小程序 + HTTP",
+      "executedChecks": [
+        {
+          "kind": "HTTP",
+          "name": "lost response same-key retry keeps one unpaid order",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        },
+        {
+          "kind": "MINI",
+          "name": "committed response loss preserves checkout",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "C11",
+      "scope": "网络超时后安全重试",
+      "status": "PASSED",
+      "measuredBoundary": "注入响应丢失；真实移动网络另列",
+      "executedChecks": [
+        {
+          "kind": "MINI",
+          "name": "committed response loss preserves checkout",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        },
+        {
+          "kind": "MINI",
+          "name": "same key page retry opens unpaid order",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "C12",
+      "scope": "未支付订单取消",
+      "status": "PASSED",
+      "measuredBoundary": "库存/券/订单共同检查",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::cancellationTwentyExactlyOnce",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "cancel restores coupon once",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "C13",
+      "scope": "订单状态与历史记录",
+      "status": "PASSED",
+      "measuredBoundary": "未付款详情与历史快照；全部履约状态流转未穷尽",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::snapshotFailureRollsBackEverything",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "CROSS-END",
+          "name": "owned Vue sees unpaid order and staff cannot see other store order",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "C14",
+      "scope": "订单库存优惠券一致性",
+      "status": "PASSED",
+      "measuredBoundary": "实际事务失败",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::reservationAuditFailureRollsBackInventoryAndSubmission",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::releaseAuditFailureRollsBackBusinessState",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "D01",
+      "scope": "总部和门店优惠券创建",
+      "status": "PASSED",
+      "measuredBoundary": "后台创建真实 HTTP 夹具；门店权限由服务层验证",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::headquartersCanReadGlobalAndAllAuthorizedStores",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::adminScopeCannotBeForged",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "CROSS-END",
+          "name": "owned Vue coupon edit persists to Spring and MySQL",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "D02",
+      "scope": "优惠券编辑启用停用",
+      "status": "FAILED",
+      "measuredBoundary": "正常权益不被改写；页面读取失败确认误写风险",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::claimVersusActivityDisable",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::issuedSnapshotDoesNotFollowTemplateEditsOrDisable",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "RED",
+          "name": "D009",
+          "status": "FAILED",
+          "evidence": "current-defect-inventory.json"
+        }
+      ]
+    },
+    {
+      "id": "D03",
+      "scope": "新用户优惠券",
+      "status": "PASSED",
+      "measuredBoundary": "数据库规则；真实注册平台身份未执行",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::newUserRequiresRegistrationEvidenceAndOnceAcrossStores",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::oneNewcomerAcrossConcurrentCampaigns",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "D04",
+      "scope": "门店券与全局券",
+      "status": "PASSED",
+      "measuredBoundary": "权限与适用范围",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::couponOtherStore",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::headquartersCanReadGlobalAndAllAuthorizedStores",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "D05",
+      "scope": "兑换码优惠券",
+      "status": "PASSED",
+      "measuredBoundary": "真实 Redis 限速；真实页面全链路未执行",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::publicCodeCannotBeBypassedWithIdAndIsNeverReturned",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponCodeRedisAcceptanceTest::naturalWindowExpiryAllowsBoundedRetryAndRejectedCallsDoNotExtendTtl",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "D06",
+      "scope": "领取和使用时间限制",
+      "status": "PASSED",
+      "measuredBoundary": "参数化分支需分别查看明细",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[5]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[6]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[7]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[8]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[9]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::eligibilityFailClosed(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::eligibilityFailClosed(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::eligibilityFailClosed(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::eligibilityFailClosed(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::eligibilityFailClosed(String)[5]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::eligibilityFailClosed(String)[6]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::eligibilityFailClosed(String)[7]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::eligibilityFailClosed(String)[8]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::eligibilityFailClosed(String)[9]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "D07",
+      "scope": "总发行数量限制",
+      "status": "PASSED",
+      "measuredBoundary": "最终权益及计数",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::twentyMembersClaimLastCoupon",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::issuedTemplateCannotDeleteOrLowerQuotaBelowEvidence",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "D08",
+      "scope": "每用户领取限制",
+      "status": "PASSED",
+      "measuredBoundary": "共享数据库并发",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::sameMemberTwentyKeysLimitThree",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::sameMemberTwentyKeysLimitOne",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "D09",
+      "scope": "最后一张券并发",
+      "status": "PASSED",
+      "measuredBoundary": "重复调用不重复算场景",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::twentyMembersClaimLastCoupon",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "D10",
+      "scope": "多请求重复领取",
+      "status": "PASSED",
+      "measuredBoundary": "幂等权益数量",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::sameClaimRequestTwentyRetries",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "coupon retry grants one right",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "D11",
+      "scope": "优惠券过期",
+      "status": "PASSED",
+      "measuredBoundary": "到期与预留竞争",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::expiredReservationReleaseDoesNotRenewEligibility",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::expiryAndOrderReservationRace",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "D12",
+      "scope": "订单预留优惠券",
+      "status": "PASSED",
+      "measuredBoundary": "SQL 与实际小程序展示",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::sameCouponTwentyOrdersOnlyOneReservation",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "COUPON-MINI",
+          "name": "reserved coupon is shown as awaiting payment",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "D13",
+      "scope": "取消释放优惠券",
+      "status": "PASSED",
+      "measuredBoundary": "只释放一次",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::cancellationAndTimeoutReleaseOnce",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "cancel restores coupon once",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "D14",
+      "scope": "合成支付成功核销",
+      "status": "PASSED",
+      "measuredBoundary": "可信合成事件进入实际 finalization；不是真实支付或验签入口",
+      "executedChecks": [
+        {
+          "kind": "COUPON-MINI",
+          "name": "trusted synthetic completion and duplicate applied",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        },
+        {
+          "kind": "COUPON-MINI",
+          "name": "redeemed coupon is shown as used",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "D15",
+      "scope": "重复支付通知核销",
+      "status": "PASSED",
+      "measuredBoundary": "仅采用报告中实际存在的支付/券用例",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::duplicateKeySameRequest",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::duplicateKeyTwentyConcurrent",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::duplicateKeyConflict",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::duplicateAcknowledged",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::duplicateIdempotency",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::duplicateWalletCreditTwenty",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.system.service.dept.DeptServiceImplTest::testValidateNameUnique_duplicate",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "COUPON-MINI",
+          "name": "trusted synthetic completion and duplicate applied",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        },
+        {
+          "kind": "COUPON-SQL",
+          "name": "synthetic success and duplicate redeem exactly once",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "D16",
+      "scope": "旧优惠券历史权益兼容",
+      "status": "PASSED",
+      "measuredBoundary": "历史不明确状态不冒充已核销",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::historicalShortDigestCodeAndRequestRetryRemainCompatibleWithoutReset",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::historicalAmbiguousStatusIsReviewNotUsed",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::issuedSnapshotDoesNotFollowTemplateEditsOrDisable",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "D17",
+      "scope": "跨门店错误用券",
+      "status": "PASSED",
+      "measuredBoundary": "参数化授权分支",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::couponOtherStore",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[5]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[6]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[7]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[8]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::invalidUseLeavesStockAndCouponUntouched(String)[9]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "D18",
+      "scope": "网络故障及重复操作",
+      "status": "PASSED",
+      "measuredBoundary": "实际小程序页面，合成丢响应",
+      "executedChecks": [
+        {
+          "kind": "COUPON-MINI",
+          "name": "coupon order response loss retains retry identity",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        },
+        {
+          "kind": "COUPON-MINI",
+          "name": "coupon same-key retry opens unpaid order",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "E01",
+      "scope": "会员注册及登录",
+      "status": "PASSED",
+      "measuredBoundary": "密码真实本地 HTTP；短信/微信为测试替身；真实注册 BLOCKED",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.member.service.auth.MemberAuthServiceTest::enabledSmsUsesVerifiedIdentityAndRecordsSuccessAfterGrant",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "actual admin/member password login",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "E02",
+      "scope": "禁用会员重新登录",
+      "status": "PASSED",
+      "measuredBoundary": "真实 HTTP 与服务",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.member.service.auth.MemberAuthServiceTest::disabledPasswordMemberNeverGrantsOrRecordsSuccess",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "disabled member login denied",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "E03",
+      "scope": "Token 刷新撤销",
+      "status": "PASSED",
+      "measuredBoundary": "两个进程状态与凭证",
+      "executedChecks": [
+        {
+          "kind": "HTTP",
+          "name": "HTTP logout revokes refresh",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        },
+        {
+          "kind": "HTTP",
+          "name": "two-process logout revokes final family",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "E04",
+      "scope": "会员资料修改",
+      "status": "FAILED",
+      "measuredBoundary": "真实手机号完整性缺陷；普通字段未穷尽",
+      "executedChecks": [
+        {
+          "kind": "RED",
+          "name": "D001",
+          "status": "FAILED",
+          "evidence": "current-defect-inventory.json"
+        }
+      ]
+    },
+    {
+      "id": "E05",
+      "scope": "余额积分记录读取权限隔离",
+      "status": "NOT_RUN",
+      "measuredBoundary": "未全面运行所有遗留流水/余额查询入口的所有权测试",
+      "executedChecks": []
+    },
+    {
+      "id": "E06",
+      "scope": "账务记录一致性",
+      "status": "FAILED",
+      "measuredBoundary": "积分已发现缺陷，合成支付核对流水",
+      "executedChecks": [
+        {
+          "kind": "COUPON-SQL",
+          "name": "one financial receipt and one matching business ledger",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/report.json"
+        },
+        {
+          "kind": "RED",
+          "name": "D007",
+          "status": "FAILED",
+          "evidence": "current-defect-inventory.json"
+        }
+      ]
+    },
+    {
+      "id": "E07",
+      "scope": "重复事件处理",
+      "status": "PASSED",
+      "measuredBoundary": "以已执行支付数据库用例及独立 SQL 为证据",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::duplicateKeySameRequest",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::duplicateKeyTwentyConcurrent",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::duplicateKeyConflict",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::duplicateAcknowledged",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::duplicateIdempotency",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::duplicateWalletCreditTwenty",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.system.service.dept.DeptServiceImplTest::testValidateNameUnique_duplicate",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "COUPON-MINI",
+          "name": "trusted synthetic completion and duplicate applied",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        },
+        {
+          "kind": "COUPON-SQL",
+          "name": "synthetic success and duplicate redeem exactly once",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/report.json"
+        },
+        {
+          "kind": "COUPON-SQL",
+          "name": "one financial receipt and one matching business ledger",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "E08",
+      "scope": "支付状态变更",
+      "status": "PASSED",
+      "measuredBoundary": "隔离数据库，不调用真实 provider",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::expiryUsesSameAdmissionAndCanRetryAfterProof",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::repeatableReadCallerIsRejectedBeforeAnyWrites",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::cancellationAndAttemptCreationRace",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::noAttemptCancelsAndRetryReleasesExactlyOnce",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::expiryAndAttemptCreationRace",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::lateSuccessAfterProofRacesCancelWithoutFulfillment",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::trustedRemoteTerminalAllowsCancel(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::trustedRemoteTerminalAllowsCancel(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::trustedRemoteTerminalAllowsCancel(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::currentReadSeesReceiptCommittedAfterEarlierCallerRead",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::paidOrderCannotCancelOrExpire",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::legacyConflictBlocksEvenRemoteClosedAttempt",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::localTerminalCannotProveRequestedPaymentSafe(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::localTerminalCannotProveRequestedPaymentSafe(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::localTerminalCannotProveRequestedPaymentSafe(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::receiptLockIsNeverAcquiredAfterOrderLock",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::independentConflictEvidenceBlocksWithoutActiveAttempt",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::missingFinancialSchemaFailsClosed",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::activeOrUncertainBlocksCustomerAndExpiry(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::activeOrUncertainBlocksCustomerAndExpiry(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::activeOrUncertainBlocksCustomerAndExpiry(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::lateSuccessAfterRemoteCloseBlocksCancellation",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::legacyCancellationAlsoBlocksActiveAttempt",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::prepayClaimAndCancelRaceNeverReleasesInventory",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::blockedThenRemoteConfirmedRetryWorks",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::callbackAndCancelRaceDoesNotDeadlock",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::explicitlyTerminatedNeverRequestedAttemptAllowsCancel(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::explicitlyTerminatedNeverRequestedAttemptAllowsCancel(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::explicitlyTerminatedNeverRequestedAttemptAllowsCancel(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::receivedSuccessIsNotCanceledBeforeProcessing",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::remoteProofAndCancelRaceReleasesOnlyAfterConfirmation",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::oldUnsafeAttemptNotHiddenByNewerSafeHistory",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::twentyConcurrentCreatesOneActiveRecord",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::receiptCannotInvertCallerLockOrder",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::terminateThenNewKeyRetriesWithoutReactivation(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::terminateThenNewKeyRetriesWithoutReactivation(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::terminateThenNewKeyRetriesWithoutReactivation(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::merchantSnapshotChangeConflicts(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::merchantSnapshotChangeConflicts(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::lateSuccessRequiresReconciliation(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::lateSuccessRequiresReconciliation(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::lateSuccessRequiresReconciliation(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::wrongOwnerCannotReadOrChange",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::directSqlSnapshotTamperingRejectedOnMysql(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::directSqlSnapshotTamperingRejectedOnMysql(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::directSqlSnapshotTamperingRejectedOnMysql(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::directSqlSnapshotTamperingRejectedOnMysql(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::directSqlSnapshotTamperingRejectedOnMysql(String)[5]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::directSqlSnapshotTamperingRejectedOnMysql(String)[6]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::directSqlSnapshotTamperingRejectedOnMysql(String)[7]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::directSqlSnapshotTamperingRejectedOnMysql(String)[8]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::directSqlSnapshotTamperingRejectedOnMysql(String)[9]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::directSqlSnapshotTamperingRejectedOnMysql(String)[10]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::prepayReferenceCannotBindTwoAttempts",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::sameKeyReturnsOriginal",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::unknownReferenceDoesNotGuessOrderBinding",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::orderAmountChangeCannotComplete",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::invalidMerchantMetadataRejected(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::invalidMerchantMetadataRejected(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::invalidMerchantMetadataRejected(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::invalidMerchantMetadataRejected(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::legacyCannotCompleteWechatAttemptOrder",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::wrongBindingDurablyRejected(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::wrongBindingDurablyRejected(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::wrongBindingDurablyRejected(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::wrongBindingDurablyRejected(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::wrongBindingDurablyRejected(String)[5]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::amountChangedCannotReuseOrRecordPrepay",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::createdSnapshotAndReference",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::twoTransactionsRaceOneAttempt",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::differentKeysConcurrentStillOneActive",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::terminatedAttemptSuccessCannotFulfillReplacement",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::transactionCannotBindTwoAttempts",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::directSqlReferenceOverwriteDeleteAndReactivationRejectedOnMysql",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::twentyConcurrentCompletionsOneFulfillment",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::invalidTerminationDoesNotReleaseSlot",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::unknownOrderRejected",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::internalProviderRejected",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::boundSuccessAndReplay(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::boundSuccessAndReplay(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::activeBindingConflict(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::activeBindingConflict(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::activeBindingConflict(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::absentOrWrongProviderMerchantRejected(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::absentOrWrongProviderMerchantRejected(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::migrationRerunPreservesAttemptAndHistoricalNull",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::differentKeyCannotSilentlySwitchMerchant",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::alipayBoundSuccessUsesSellerSnapshot",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::prepayCanReplayButNotOverwriteOrTerminate",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::unpayableOrderRejected(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::unpayableOrderRejected(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::unpayableOrderRejected(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::unpayableOrderRejected(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::unpayableOrderRejected(String)[5]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::unpayableOrderRejected(String)[6]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::unpayableOrderRejected(String)[7]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::unpayableOrderRejected(String)[8]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::unpayableOrderRejected(String)[9]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "E09",
+      "scope": "成功失败取消超时竞争",
+      "status": "PASSED",
+      "measuredBoundary": "最终账务/订单不变量",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::cancellationAndAttemptCreationRace",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::expiryAndAttemptCreationRace",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::callbackAndCancelRaceDoesNotDeadlock",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "E10",
+      "scope": "重复及乱序通知",
+      "status": "PASSED",
+      "measuredBoundary": "只认实际匹配用例；合成事件/签名",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::duplicateKeySameRequest",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::duplicateKeyTwentyConcurrent",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::duplicateKeyConflict",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::currencyRejected",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::alipayUsesActualSdkSignatureAndMerchantBinding",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::alteredAmountRejected",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::actualSdkHmacSignatureAccepted",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::noSandboxKeyHttpRequest",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::invalidSignatureRejected",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::actualSdkValidSignatureAndSafeEvent",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::nonSuccessRejected(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::nonSuccessRejected(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::exactMoneyNoRoundingOrOverflow",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::invalidCents(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::invalidCents(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::invalidCents(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::invalidCents(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::invalidCents(String)[5]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::legacySdkHandlerFailsClosed",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::duplicateAcknowledged",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::unsignedRejected",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::xmlCannotLoadEntitiesOrDuplicateFields",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::wrongMerchantOrApp(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::wrongMerchantOrApp(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::actualSdkReqInfoBypassIsBlocked",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::gatewayNeverLogsRawInvalidCallbackEvenAtDebug",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.service.payment.CallbackVerificationTest::retryRequiresProviderFail",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::lateSuccessAfterProofRacesCancelWithoutFulfillment",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::lateSuccessAfterRemoteCloseBlocksCancellation",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentLiveReadinessDatabaseTest::staleLeaseCannotTerminateOrReleaseNewOwner",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::lateSuccessRequiresReconciliation(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::lateSuccessRequiresReconciliation(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::lateSuccessRequiresReconciliation(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::duplicateIdempotency",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::duplicateWalletCreditTwenty",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.system.service.dept.DeptServiceImplTest::testValidateNameUnique_duplicate",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "VTU",
+          "name": "stale request completion cannot clear loading for a newer pending request",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "VTU",
+          "name": "stale shop-list response cannot start a coupon request after a newer open",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "COUPON-MINI",
+          "name": "trusted synthetic completion and duplicate applied",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        },
+        {
+          "kind": "COUPON-SQL",
+          "name": "synthetic success and duplicate redeem exactly once",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/report.json"
+        }
+      ]
+    },
+    {
+      "id": "E11",
+      "scope": "回调与取消并发",
+      "status": "PASSED",
+      "measuredBoundary": "并发数据库验收",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::callbackAndCancelRaceDoesNotDeadlock",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "E12",
+      "scope": "事务失败异常恢复",
+      "status": "PASSED",
+      "measuredBoundary": "注入事务异常；进程级恢复另列",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.pay.credential.PaymentCredentialDatabaseTest::migrationRollsBackOnMalformedLaterRecord",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::snapshotFailureRollsBackEverything",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::cancelCouponFailureRollsBackStockAndMarker",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::databaseLockFailureRollsBackSubmissionAndInventory",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::zeroOrderRejectedAndReservationRollsBack",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::reservationAuditFailureRollsBackInventoryAndSubmission",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::claimAuditFailureRollsBackCountersInstanceAndNewUser",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::releaseAuditFailureRollsBackBusinessState",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::priceAuditFailureRollsBackPriceAndVersion",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::inventoryAuditFailureRollsBackSkuAndProduct",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::malformedConfigurationRollsBack",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::batchWrongCategoryRollsBack",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.CouponPaymentDatabaseTest::redemptionFailureRollsBackFinancialEffectsThenRecoverySucceeds",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.CouponPaymentDatabaseTest::wrongCouponReservationMakesFinalizationRollback",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentLiveReadinessDatabaseTest::successfulQueryRollbackAndRecovery",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WechatV3DatabaseTest::callbackFinalizationRollbackRecovers",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::cancellationRestorationFailureRollsBackDeletionAndInventory",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::notificationFailureDoesNotRollbackPaymentOrRepeat",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::rollbackAndRecovery(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::rollbackAndRecovery(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::rollbackAndRecovery(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::rollbackAndRecovery(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::rollbackAndRecovery(String)[5]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::balanceAdapterRollsBackDebitOnFinalizationFailure",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::ledgerInsertFailureRollsBackBalance",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::finalizationFailureRollsBackWallet",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::balanceRefundPostCreditFailureRollsBackEverything(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::balanceRefundPostCreditFailureRollsBackEverything(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::balanceRefundPostCreditFailureRollsBackEverything(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::balanceRefundPostCreditFailureRollsBackEverything(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::rechargeStatusFailureRollsBackCredit",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::debitThenExceptionRollsBack",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.system.service.oauth2.OAuth2LifecycleDatabaseTest::adminRevocationFailureRollsBackStatusAndCredentials",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.system.service.oauth2.OAuth2LifecycleDatabaseTest::issuanceAndCacheDoNotEscapeDatabaseRollback",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "F01",
+      "scope": "后台登录状态及权限",
+      "status": "PASSED",
+      "measuredBoundary": "实际 Chromium；权限 API 为合成响应",
+      "executedChecks": [
+        {
+          "kind": "BROWSER",
+          "name": "anonymous protected page redirects to actual login",
+          "status": "PASSED",
+          "evidence": "baseline-browser/a7b5f42ee94d4158a61d7995f492fa1f/report.json"
+        },
+        {
+          "kind": "BROWSER",
+          "name": "staff page omits unauthorized coupon write controls",
+          "status": "PASSED",
+          "evidence": "baseline-browser/a7b5f42ee94d4158a61d7995f492fa1f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "F02",
+      "scope": "商品经营实际页面",
+      "status": "NOT_RUN",
+      "measuredBoundary": "当前本轮真实页面未覆盖商品全流程；HTTP/SQL 不能代替页面",
+      "executedChecks": []
+    },
+    {
+      "id": "F03",
+      "scope": "SKU 库存编辑实际页面",
+      "status": "NOT_RUN",
+      "measuredBoundary": "已测服务及 MySQL，页面交互未执行",
+      "executedChecks": []
+    },
+    {
+      "id": "F04",
+      "scope": "优惠券创建修改管理页面",
+      "status": "FAILED",
+      "measuredBoundary": "真实页面；创建成功 HTTP 夹具与页面创建校验分别记录",
+      "executedChecks": [
+        {
+          "kind": "BROWSER",
+          "name": "coupon edit survives reload with actual Element Plus form",
+          "status": "PASSED",
+          "evidence": "baseline-browser/a7b5f42ee94d4158a61d7995f492fa1f/report.json"
+        },
+        {
+          "kind": "BROWSER",
+          "name": "required fields prevent coupon creation request",
+          "status": "PASSED",
+          "evidence": "baseline-browser/a7b5f42ee94d4158a61d7995f492fa1f/report.json"
+        },
+        {
+          "kind": "CROSS-END",
+          "name": "owned Vue coupon edit persists to Spring and MySQL",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        },
+        {
+          "kind": "RED",
+          "name": "D009",
+          "status": "FAILED",
+          "evidence": "current-defect-inventory.json"
+        }
+      ]
+    },
+    {
+      "id": "F05",
+      "scope": "订单查询与操作页面",
+      "status": "PASSED",
+      "measuredBoundary": "查询可见性已测；全履约操作未执行",
+      "executedChecks": [
+        {
+          "kind": "CROSS-END",
+          "name": "owned Vue sees unpaid order and staff cannot see other store order",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "F06",
+      "scope": "后台总部与门店切换页面",
+      "status": "NOT_RUN",
+      "measuredBoundary": "服务权限与小程序切店不能替代后台切店",
+      "executedChecks": []
+    },
+    {
+      "id": "F07",
+      "scope": "表单输入校验",
+      "status": "PASSED",
+      "measuredBoundary": "真实页面 + VTU 两个边界",
+      "executedChecks": [
+        {
+          "kind": "VTU",
+          "name": "invalid claim/use windows cannot submit",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "BROWSER",
+          "name": "required fields prevent coupon creation request",
+          "status": "PASSED",
+          "evidence": "baseline-browser/a7b5f42ee94d4158a61d7995f492fa1f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "F08",
+      "scope": "请求失败后的恢复",
+      "status": "FAILED",
+      "measuredBoundary": "保存失败保留正常；加载失败误写已确认",
+      "executedChecks": [
+        {
+          "kind": "BROWSER",
+          "name": "403 retains coupon edit and retry sends unchanged business fields",
+          "status": "PASSED",
+          "evidence": "baseline-browser/a7b5f42ee94d4158a61d7995f492fa1f/report.json"
+        },
+        {
+          "kind": "RED",
+          "name": "D009",
+          "status": "FAILED",
+          "evidence": "current-defect-inventory.json"
+        }
+      ]
+    },
+    {
+      "id": "F09",
+      "scope": "401 响应自动刷新与恢复页面",
+      "status": "NOT_RUN",
+      "measuredBoundary": "Token HTTP 测试不等于页面响应恢复",
+      "executedChecks": []
+    },
+    {
+      "id": "F10",
+      "scope": "403 响应页面",
+      "status": "PASSED",
+      "measuredBoundary": "实际 Element Plus",
+      "executedChecks": [
+        {
+          "kind": "BROWSER",
+          "name": "403 retains coupon edit and retry sends unchanged business fields",
+          "status": "PASSED",
+          "evidence": "baseline-browser/a7b5f42ee94d4158a61d7995f492fa1f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "F11",
+      "scope": "500 读取失败页面",
+      "status": "FAILED",
+      "measuredBoundary": "独立 RED",
+      "executedChecks": [
+        {
+          "kind": "RED",
+          "name": "D009",
+          "status": "FAILED",
+          "evidence": "current-defect-inventory.json"
+        }
+      ]
+    },
+    {
+      "id": "F12",
+      "scope": "多次快速操作及异步乱序",
+      "status": "PASSED",
+      "measuredBoundary": "VTU 真实 Form 组件；全部 Playwright 时序未执行",
+      "executedChecks": [
+        {
+          "kind": "VTU",
+          "name": "latest open wins when earlier network response arrives last",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "VTU",
+          "name": "stale request completion cannot clear loading for a newer pending request",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        },
+        {
+          "kind": "VTU",
+          "name": "stale shop-list response cannot start a coupon request after a newer open",
+          "status": "PASSED",
+          "evidence": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "F13",
+      "scope": "浏览器网络超时",
+      "status": "NOT_RUN",
+      "measuredBoundary": "未单独运行实际浏览器超时恢复",
+      "executedChecks": []
+    },
+    {
+      "id": "F14",
+      "scope": "页面刷新",
+      "status": "PASSED",
+      "measuredBoundary": "真实 Chromium",
+      "executedChecks": [
+        {
+          "kind": "BROWSER",
+          "name": "coupon edit survives reload with actual Element Plus form",
+          "status": "PASSED",
+          "evidence": "baseline-browser/a7b5f42ee94d4158a61d7995f492fa1f/report.json"
+        }
+      ]
+    },
+    {
+      "id": "F15",
+      "scope": "不同浏览器兼容性",
+      "status": "NOT_RUN",
+      "measuredBoundary": "仅 Chromium，Firefox/WebKit NOT_RUN",
+      "executedChecks": []
+    },
+    {
+      "id": "G01",
+      "scope": "小程序门店选择",
+      "status": "PASSED",
+      "measuredBoundary": "官方工具当前编译产物",
+      "executedChecks": [
+        {
+          "kind": "MINI",
+          "name": "actual store page loads",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        },
+        {
+          "kind": "COUPON-MINI",
+          "name": "coupon lifecycle real store selected",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "G02",
+      "scope": "小程序商品列表",
+      "status": "PASSED",
+      "measuredBoundary": "真实 local API",
+      "executedChecks": [
+        {
+          "kind": "MINI",
+          "name": "store A actual product and SKU render",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "G03",
+      "scope": "小程序 SKU 选择",
+      "status": "PASSED",
+      "measuredBoundary": "当前默认 SKU；复杂多规格页面未穷尽",
+      "executedChecks": [
+        {
+          "kind": "MINI",
+          "name": "store A actual product and SKU render",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        },
+        {
+          "kind": "MINI",
+          "name": "tap adds store A cart",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "G04",
+      "scope": "小程序购物车",
+      "status": "PASSED",
+      "measuredBoundary": "真实页面与缓存",
+      "executedChecks": [
+        {
+          "kind": "MINI",
+          "name": "tap adds store A cart",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        },
+        {
+          "kind": "MINI",
+          "name": "switch to B clears cart and checkout context",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "G05",
+      "scope": "小程序优惠券完整链路",
+      "status": "PASSED",
+      "measuredBoundary": "领取、预留、合成核销、重进页面",
+      "executedChecks": [
+        {
+          "kind": "COUPON-MINI",
+          "name": "coupon claimed through actual page",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        },
+        {
+          "kind": "COUPON-MINI",
+          "name": "reserved coupon is shown as awaiting payment",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        },
+        {
+          "kind": "COUPON-MINI",
+          "name": "redeemed coupon is shown as used",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "G06",
+      "scope": "小程序订单提交",
+      "status": "PASSED",
+      "measuredBoundary": "金额与页面",
+      "executedChecks": [
+        {
+          "kind": "MINI",
+          "name": "checkout actual page and amount",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        },
+        {
+          "kind": "COUPON-MINI",
+          "name": "coupon selection reduces checkout to fourteen",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "G07",
+      "scope": "小程序订单详情",
+      "status": "PASSED",
+      "measuredBoundary": "未付详情",
+      "executedChecks": [
+        {
+          "kind": "MINI",
+          "name": "same key page retry opens unpaid order",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        },
+        {
+          "kind": "COUPON-MINI",
+          "name": "coupon same-key retry opens unpaid order",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "G08",
+      "scope": "小程序重复请求",
+      "status": "PASSED",
+      "measuredBoundary": "同键订单数不增加",
+      "executedChecks": [
+        {
+          "kind": "COUPON-MINI",
+          "name": "coupon same-key retry opens unpaid order",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "G09",
+      "scope": "小程序异常响应",
+      "status": "PASSED",
+      "measuredBoundary": "合成失败返回；401/403/500 全分支未穷尽",
+      "executedChecks": [
+        {
+          "kind": "MINI",
+          "name": "committed response loss preserves checkout",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "G10",
+      "scope": "小程序网络中断",
+      "status": "PASSED",
+      "measuredBoundary": "合成丢响应；物理移动网络中断 BLOCKED",
+      "executedChecks": [
+        {
+          "kind": "MINI",
+          "name": "committed response loss preserves checkout",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "G11",
+      "scope": "小程序页面重新进入",
+      "status": "PASSED",
+      "measuredBoundary": "重新请求真实服务状态",
+      "executedChecks": [
+        {
+          "kind": "COUPON-MINI",
+          "name": "page reentry retains redeemed server state",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "G12",
+      "scope": "小程序缓存与服务端一致性",
+      "status": "PASSED",
+      "measuredBoundary": "门店、购物车、券状态；所有缓存键未穷尽",
+      "executedChecks": [
+        {
+          "kind": "MINI",
+          "name": "switch to B clears cart and checkout context",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        },
+        {
+          "kind": "COUPON-MINI",
+          "name": "page reentry retains redeemed server state",
+          "status": "PASSED",
+          "evidence": "coupon-pages-pilot-7/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "H01",
+      "scope": "数据库连接失败",
+      "status": "NOT_RUN",
+      "measuredBoundary": "真实数据库断连/重启未单独注入",
+      "executedChecks": []
+    },
+    {
+      "id": "H02",
+      "scope": "数据库事务回滚",
+      "status": "PASSED",
+      "measuredBoundary": "已有多业务注入失败，用例明细列出",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.pay.credential.PaymentCredentialDatabaseTest::migrationRollsBackOnMalformedLaterRecord",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::snapshotFailureRollsBackEverything",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::cancelCouponFailureRollsBackStockAndMarker",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::databaseLockFailureRollsBackSubmissionAndInventory",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::zeroOrderRejectedAndReservationRollsBack",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::reservationAuditFailureRollsBackInventoryAndSubmission",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::claimAuditFailureRollsBackCountersInstanceAndNewUser",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponDatabaseTest::releaseAuditFailureRollsBackBusinessState",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::priceAuditFailureRollsBackPriceAndVersion",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::inventoryAuditFailureRollsBackSkuAndProduct",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::malformedConfigurationRollsBack",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CatalogDatabaseTest::batchWrongCategoryRollsBack",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.CouponPaymentDatabaseTest::redemptionFailureRollsBackFinancialEffectsThenRecoverySucceeds",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.CouponPaymentDatabaseTest::wrongCouponReservationMakesFinalizationRollback",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentLiveReadinessDatabaseTest::successfulQueryRollbackAndRecovery",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WechatV3DatabaseTest::callbackFinalizationRollbackRecovers",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::cancellationRestorationFailureRollsBackDeletionAndInventory",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::notificationFailureDoesNotRollbackPaymentOrRepeat",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::rollbackAndRecovery(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::rollbackAndRecovery(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::rollbackAndRecovery(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::rollbackAndRecovery(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::rollbackAndRecovery(String)[5]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentDatabaseTest::balanceAdapterRollsBackDebitOnFinalizationFailure",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentAttemptDatabaseTest::completionFaultRollsBackAttemptAndEffectsThenRecovers(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::ledgerInsertFailureRollsBackBalance",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::finalizationFailureRollsBackWallet",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::balanceRefundPostCreditFailureRollsBackEverything(String)[1]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::balanceRefundPostCreditFailureRollsBackEverything(String)[2]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::balanceRefundPostCreditFailureRollsBackEverything(String)[3]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::balanceRefundPostCreditFailureRollsBackEverything(String)[4]",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::rechargeStatusFailureRollsBackCredit",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.WalletDatabaseTest::debitThenExceptionRollsBack",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.system.service.oauth2.OAuth2LifecycleDatabaseTest::adminRevocationFailureRollsBackStatusAndCredentials",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.system.service.oauth2.OAuth2LifecycleDatabaseTest::issuanceAndCacheDoNotEscapeDatabaseRollback",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "H03",
+      "scope": "Redis 不可用",
+      "status": "PASSED",
+      "measuredBoundary": "实际客户端关闭与受控故障；不是全服务 Redis 宕机恢复",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest::redisFailureCannotSkipInventory",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.ordering.CouponCodeRedisAcceptanceTest::actualClientShutdownFailsClosedWithoutClaim",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "H04",
+      "scope": "请求超时后安全重试",
+      "status": "PASSED",
+      "measuredBoundary": "响应丢失与重试；所有 HTTP 超时点未穷尽",
+      "executedChecks": [
+        {
+          "kind": "HTTP",
+          "name": "lost response same-key retry keeps one unpaid order",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        },
+        {
+          "kind": "MINI",
+          "name": "committed response loss preserves checkout",
+          "status": "PASSED",
+          "evidence": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/cross-end/mini/receipt.json"
+        }
+      ]
+    },
+    {
+      "id": "H05",
+      "scope": "数据库锁等待或死锁",
+      "status": "PASSED",
+      "measuredBoundary": "只验证既有竞争用例；主动制造死锁及数据库重试恢复未执行",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.order.payment.PaymentCancellationDatabaseTest::callbackAndCancelRaceDoesNotDeadlock",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        }
+      ]
+    },
+    {
+      "id": "H06",
+      "scope": "进程异常终止",
+      "status": "NOT_RUN",
+      "measuredBoundary": "尚无业务事务窗口 kill 实验；启动器清理测试不是业务崩溃恢复",
+      "executedChecks": []
+    },
+    {
+      "id": "H07",
+      "scope": "重启后的业务恢复",
+      "status": "NOT_RUN",
+      "measuredBoundary": "NOT_RUN，不以静态代码推断",
+      "executedChecks": []
+    },
+    {
+      "id": "I01",
+      "scope": "同账号并发认证",
+      "status": "PASSED",
+      "measuredBoundary": "两个 JVM，120 请求，12 worker",
+      "executedChecks": [
+        {
+          "kind": "PERFORMANCE",
+          "name": "@PERF:same-member-auth",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/performance.json"
+        }
+      ]
+    },
+    {
+      "id": "I02",
+      "scope": "不同账号并发认证性能",
+      "status": "NOT_RUN",
+      "measuredBoundary": "未执行多身份持续负载",
+      "executedChecks": []
+    },
+    {
+      "id": "I03",
+      "scope": "刷新注销竞争",
+      "status": "PASSED",
+      "measuredBoundary": "最终无可用凭证",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.system.service.oauth2.OAuth2LifecycleDatabaseTest::logoutAndRefreshRaceEndsWithNoUsableCredentials",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "two-process logout revokes final family",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "I04",
+      "scope": "禁用与认证竞争",
+      "status": "PASSED",
+      "measuredBoundary": "最终不可刷新；未证明所有 read/disable 窗口",
+      "executedChecks": [
+        {
+          "kind": "JAVA",
+          "name": "co.yixiang.yshop.module.system.service.oauth2.OAuth2LifecycleDatabaseTest::disableAndRefreshRaceEndsWithNoUsableCredentials",
+          "status": "PASSED",
+          "evidence": "JAVA + INTEGRATION current certificates"
+        },
+        {
+          "kind": "HTTP",
+          "name": "two-process disable revokes final family",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json"
+        }
+      ]
+    },
+    {
+      "id": "I05",
+      "scope": "认证数据库锁因果分析",
+      "status": "NOT_RUN",
+      "measuredBoundary": "观察到锁等待，未完成独立因果实验，不能判性能 Bug",
+      "executedChecks": []
+    },
+    {
+      "id": "I06",
+      "scope": "P95 P99 吞吐错误率",
+      "status": "PASSED",
+      "measuredBoundary": "本机 240 请求参考值，非生产 SLO",
+      "executedChecks": [
+        {
+          "kind": "PERFORMANCE",
+          "name": "@PERF:catalog",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/performance.json"
+        },
+        {
+          "kind": "PERFORMANCE",
+          "name": "@PERF:same-member-auth",
+          "status": "PASSED",
+          "evidence": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/performance.json"
+        }
+      ]
+    },
+    {
+      "id": "J01",
+      "scope": "30 项原有变异完整执行",
+      "status": "PASSED",
+      "measuredBoundary": "保留所有算子与原始 KILLED/SURVIVED；不混入普通测试数",
+      "executedChecks": [
+        {
+          "name": "auth-admin-reenable-revocation",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "inventory-repeat-release",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "cross-store-price",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "coupon-double-reservation",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "duplicate-fulfillment-complete",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "auth-refresh-disable-bypass",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "auth-cache-revocation-bypass",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "payment-freeze-bypass",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "late-success-terminal",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "duplicate-event-result",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "inventory-wrong-debit",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "cross-store-all-defences",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "coupon-total-all-defences",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "coupon-reuse-state",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "coupon-use-expired",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "inventory-sku-check",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "inventory-conditional-update",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "cross-store-product",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "employee-store-scope",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "cancel-payment-guard",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "cancel-uncertain-safe",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "cancel-remote-proof",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "coupon-member-limit",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "coupon-total-limit",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "coupon-expiration",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "coupon-claim-rate",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "coupon-redis-fail-open",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "payment-amount",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "coupon-form-stale-response",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        },
+        {
+          "name": "cart-null-store-retains-context",
+          "status": "PASSED",
+          "kind": "MUTATION",
+          "evidence": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json"
+        }
+      ]
+    },
+    {
+      "id": "G13",
+      "scope": "物理手机与真实移动网络",
+      "status": "BLOCKED",
+      "measuredBoundary": "本轮没有受控真实设备；官方模拟器不等价",
+      "executedChecks": []
+    },
+    {
+      "id": "E12",
+      "scope": "真实微信身份、短信和交互验证码",
+      "status": "BLOCKED",
+      "measuredBoundary": "只执行合成身份/替身；不绕过真实验证、不调用外部付费平台",
+      "executedChecks": []
+    }
+  ]
+}

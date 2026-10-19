@@ -1,0 +1,457 @@
+{
+  "task": "PHASE6Q-DEFECT-DISCOVERY",
+  "baselineSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+  "baselineSourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+  "evidenceRoot": "PRIVATE: defect-discovery-results (outside repository; original logs/screenshots/tokens not published)",
+  "severityPolicy": "只对已观察到的影响定级；9 个确认项含 4 个 P1、5 个 P2；未确认 P0 不代表不存在 P0。",
+  "productionCodeModified": false,
+  "bugs": [
+    {
+      "id": "D001",
+      "category": "CONFIRMED_PRODUCT_BUG",
+      "title": "资料编辑可改为他人已绑定手机号并破坏其登录",
+      "module": "会员身份",
+      "severity": "P1",
+      "status": "CONFIRMED_OPEN",
+      "businessImpact": "已登录会员可直接改变认证手机号，产生重复手机号；本轮证实另一合成会员密码登录返回 500。未进行真实短信或账户接管测试。",
+      "preconditions": "当前 PR14 生产源码；专属隔离测试数据；支付/对账开关 false。真实 HTTP + MySQL，合成登录身份。",
+      "reproductionSteps": [
+        "隔离环境存在手机号不同的会员 A、B；正常登录 A。",
+        "A 调用 update-nickname，mobile 填 B 的号码。",
+        "读取两会员手机号，并尝试 B 的正常密码登录。"
+      ],
+      "expected": "普通资料修改不改变已验证手机号；绑定仍唯一；B 仍可登录。",
+      "actual": "接口 code=0；两个账号占用相同手机号；B 密码登录 code=500。",
+      "independentReproduction": {
+        "verifiedInvocations": 3,
+        "independentFixtures": 2,
+        "result": "FAILED",
+        "note": "HTTP 初次新环境重复两次，再创建独立环境一次。"
+      },
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ],
+      "sourceLocations": [
+        {
+          "path": "yshop-drink-boot3/yshop-module-member/yshop-module-member-biz/src/main/java/co/yixiang/yshop/module/member/service/user/MemberUserServiceImpl.java",
+          "line": 186
+        }
+      ],
+      "redTest": "tests/defects/http_red.py::D001"
+    },
+    {
+      "id": "D002",
+      "category": "CONFIRMED_PRODUCT_BUG",
+      "title": "积分兑换多件商品只扣单件积分",
+      "module": "积分兑换",
+      "severity": "P1",
+      "status": "CONFIRMED_OPEN",
+      "businessImpact": "两件兑换成本被低估，积分订单金额与实际商品数量不一致。",
+      "preconditions": "当前 PR14 生产源码；专属隔离测试数据；支付/对账开关 false。真实 HTTP + MySQL，合成登录身份。",
+      "reproductionSteps": [
+        "合成会员有 1000 积分，商品单价 100 积分、库存 10。",
+        "通过实际兑换接口提交数量 2。",
+        "核对订单数量、总积分、会员积分与库存。"
+      ],
+      "expected": "总积分 200、会员剩余 800、库存 8。",
+      "actual": "数量 2、库存 8，但总积分 100、会员剩余 900。",
+      "independentReproduction": {
+        "verifiedInvocations": 3,
+        "independentFixtures": 2,
+        "result": "FAILED",
+        "note": "HTTP 初次新环境重复两次，再创建独立环境一次。"
+      },
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ],
+      "sourceLocations": [
+        {
+          "path": "yshop-drink-boot3/yshop-module-score/yshop-module-score-biz/src/main/java/co/yixiang/yshop/module/score/service/scoreorder/AppScoreOrderServiceImpl.java",
+          "line": 109
+        }
+      ],
+      "redTest": "tests/defects/http_red.py::D002"
+    },
+    {
+      "id": "D003",
+      "category": "CONFIRMED_PRODUCT_BUG",
+      "title": "兑换库存不足仍生成已付积分订单",
+      "module": "积分库存",
+      "severity": "P1",
+      "status": "CONFIRMED_OPEN",
+      "businessImpact": "库存 1 可接受数量 2 的兑换，扣积分但库存不变；无法按账面库存履约。",
+      "preconditions": "当前 PR14 生产源码；专属隔离测试数据；支付/对账开关 false。真实 HTTP + MySQL，合成登录身份。",
+      "reproductionSteps": [
+        "合成会员 1000 积分；兑换商品库存 1。",
+        "提交兑换数量 2。",
+        "核对返回、兑换订单、库存及积分。"
+      ],
+      "expected": "拒绝兑换，库存 1、积分 1000、订单 0。",
+      "actual": "code=0、订单 1、积分 900；条件库存更新未成功，库存仍为 1。",
+      "independentReproduction": {
+        "verifiedInvocations": 3,
+        "independentFixtures": 2,
+        "result": "FAILED",
+        "note": "HTTP 初次新环境重复两次，再创建独立环境一次。"
+      },
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ],
+      "sourceLocations": [
+        {
+          "path": "yshop-drink-boot3/yshop-module-score/yshop-module-score-biz/src/main/java/co/yixiang/yshop/module/score/service/scoreorder/AppScoreOrderServiceImpl.java",
+          "line": 239
+        }
+      ],
+      "redTest": "tests/defects/http_red.py::D003"
+    },
+    {
+      "id": "D004",
+      "category": "CONFIRMED_PRODUCT_BUG",
+      "title": "积分兑换可复制并读取他人的收货地址",
+      "module": "会员数据隔离",
+      "severity": "P1",
+      "status": "CONFIRMED_OPEN",
+      "businessImpact": "已登录 A 可用 B 的地址 ID 兑换，将 B 的姓名、电话、地址复制进 A 可读的订单。",
+      "preconditions": "当前 PR14 生产源码；专属隔离测试数据；支付/对账开关 false。真实 HTTP + MySQL，合成登录身份。",
+      "reproductionSteps": [
+        "两个合成会员各有地址；A 不拥有 B 的地址。",
+        "A 提交兑换并填 B 的 addressId。",
+        "用 A 的令牌读取生成的积分订单详情。"
+      ],
+      "expected": "在写入前拒绝非本人地址，订单及积分无副作用。",
+      "actual": "code=0；生成的 A 订单含 B 的合成电话，A 的详情接口可读。",
+      "independentReproduction": {
+        "verifiedInvocations": 3,
+        "independentFixtures": 2,
+        "result": "FAILED",
+        "note": "HTTP 初次新环境重复两次，再创建独立环境一次。"
+      },
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ],
+      "sourceLocations": [
+        {
+          "path": "yshop-drink-boot3/yshop-module-score/yshop-module-score-biz/src/main/java/co/yixiang/yshop/module/score/service/scoreorder/AppScoreOrderServiceImpl.java",
+          "line": 87
+        }
+      ],
+      "redTest": "tests/defects/http_red.py::D004"
+    },
+    {
+      "id": "D005",
+      "category": "CONFIRMED_PRODUCT_BUG",
+      "title": "下架积分商品仍可兑换",
+      "module": "积分商品",
+      "severity": "P2",
+      "status": "CONFIRMED_OPEN",
+      "businessImpact": "持有商品 ID 的客户端可兑换已停止提供的商品。",
+      "preconditions": "当前 PR14 生产源码；专属隔离测试数据；支付/对账开关 false。真实 HTTP + MySQL，合成登录身份。",
+      "reproductionSteps": [
+        "合成积分商品 is_switch=0、库存充足、会员积分充足。",
+        "直接提交该商品兑换。",
+        "核对订单、积分和库存。"
+      ],
+      "expected": "拒绝下架商品，所有业务状态不变。",
+      "actual": "code=0；订单 1、库存从 10 到 9、积分从 1000 到 900。",
+      "independentReproduction": {
+        "verifiedInvocations": 3,
+        "independentFixtures": 2,
+        "result": "FAILED",
+        "note": "HTTP 初次新环境重复两次，再创建独立环境一次。"
+      },
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ],
+      "sourceLocations": [
+        {
+          "path": "yshop-drink-boot3/yshop-module-score/yshop-module-score-biz/src/main/java/co/yixiang/yshop/module/score/service/scoreorder/AppScoreOrderServiceImpl.java",
+          "line": 83
+        }
+      ],
+      "redTest": "tests/defects/http_red.py::D005"
+    },
+    {
+      "id": "D006",
+      "category": "CONFIRMED_PRODUCT_BUG",
+      "title": "零数量兑换也会扣积分并创建订单",
+      "module": "积分输入校验",
+      "severity": "P2",
+      "status": "CONFIRMED_OPEN",
+      "businessImpact": "客户端提交数量 0 会产生无商品但消耗积分的订单。",
+      "preconditions": "当前 PR14 生产源码；专属隔离测试数据；支付/对账开关 false。真实 HTTP + MySQL，合成登录身份。",
+      "reproductionSteps": [
+        "合成会员积分 1000、商品单价 100、库存 10。",
+        "兑换 num=0。",
+        "核对订单、积分、库存。"
+      ],
+      "expected": "正整数数量校验拒绝 0，所有状态不变。",
+      "actual": "code=0、订单 1、库存仍 10、积分减少 100。",
+      "independentReproduction": {
+        "verifiedInvocations": 3,
+        "independentFixtures": 2,
+        "result": "FAILED",
+        "note": "HTTP 初次新环境重复两次，再创建独立环境一次。"
+      },
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ],
+      "sourceLocations": [
+        {
+          "path": "yshop-drink-boot3/yshop-module-score/yshop-module-score-biz/src/main/java/co/yixiang/yshop/module/score/service/scoreorder/AppScoreOrderServiceImpl.java",
+          "line": 109
+        }
+      ],
+      "redTest": "tests/defects/http_red.py::D006"
+    },
+    {
+      "id": "D007",
+      "category": "CONFIRMED_PRODUCT_BUG",
+      "title": "积分兑换流水余额记录为扣减前余额",
+      "module": "积分账务",
+      "severity": "P2",
+      "status": "CONFIRMED_OPEN",
+      "businessImpact": "用户积分与账务流水剩余余额不一致，影响对账和用户理解。",
+      "preconditions": "当前 PR14 生产源码；专属隔离测试数据；支付/对账开关 false。真实 HTTP + MySQL，合成登录身份。",
+      "reproductionSteps": [
+        "合成会员 1000 积分；单件兑换需 100。",
+        "完成单件兑换。",
+        "比较最新积分支出流水余额与会员积分。"
+      ],
+      "expected": "会员与流水剩余余额均为 900，支出 100。",
+      "actual": "会员积分 900、支出 100，但流水 balance=1000。",
+      "independentReproduction": {
+        "verifiedInvocations": 3,
+        "independentFixtures": 2,
+        "result": "FAILED",
+        "note": "HTTP 初次新环境重复两次，再创建独立环境一次。"
+      },
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ],
+      "sourceLocations": [
+        {
+          "path": "yshop-drink-boot3/yshop-module-score/yshop-module-score-biz/src/main/java/co/yixiang/yshop/module/score/service/scoreorder/AppScoreOrderServiceImpl.java",
+          "line": 123
+        }
+      ],
+      "redTest": "tests/defects/http_red.py::D007"
+    },
+    {
+      "id": "D008",
+      "category": "CONFIRMED_PRODUCT_BUG",
+      "title": "自取订单丢失提交的联系电话",
+      "module": "订单履约",
+      "severity": "P2",
+      "status": "CONFIRMED_OPEN",
+      "businessImpact": "商家无法从自取订单联系方式字段联系用户。",
+      "preconditions": "当前 PR14 生产源码；专属隔离测试数据；支付/对账开关 false。真实 HTTP + MySQL，合成登录身份。",
+      "reproductionSteps": [
+        "已登录合成会员，正常门店与商品。",
+        "提交 takein 订单，并携带合法 mobile。",
+        "查询订单 user_phone；随后取消并核对清理。"
+      ],
+      "expected": "订单保存提交并校验后的联系电话。",
+      "actual": "下单成功但 user_phone 为空。",
+      "independentReproduction": {
+        "verifiedInvocations": 3,
+        "independentFixtures": 2,
+        "result": "FAILED",
+        "note": "HTTP 初次新环境重复两次，再创建独立环境一次。"
+      },
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ],
+      "sourceLocations": [
+        {
+          "path": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java",
+          "line": 277
+        }
+      ],
+      "redTest": "tests/defects/http_red.py::D008"
+    },
+    {
+      "id": "D009",
+      "category": "CONFIRMED_PRODUCT_BUG",
+      "title": "优惠券详情读取失败后保存误改上一张券",
+      "module": "Vue 优惠券后台",
+      "severity": "P2",
+      "status": "CONFIRMED_OPEN",
+      "businessImpact": "编辑另一券失败时仍可保存旧对象，可能改错优惠活动。证据为真实页面发出的错误目标写请求；该探索使用合成 API。",
+      "preconditions": "当前 PR14 生产源码；专属隔离测试数据；支付/对账开关 false。实际 Vue/Element Plus + Chromium，显式合成接口。",
+      "reproductionSteps": [
+        "真实 Chromium 打开实际优惠券页面，合成 API 有 A、B 两张券。",
+        "打开 A 后取消，再打开 B；B 详情响应业务 code=500。",
+        "修改仍可编辑的名称并保存，检查请求目标 ID。"
+      ],
+      "expected": "B 加载失败时不能把修改提交给 A；关闭、清空或禁止保存均可。",
+      "actual": "向 coupon/update 发出 id=A 的请求，名称为用户在 B 操作中输入的内容。",
+      "independentReproduction": {
+        "verifiedInvocations": 2,
+        "independentFixtures": 2,
+        "result": "FAILED",
+        "note": "两个独立浏览器上下文；早期定位器失败不计入产品复现。"
+      },
+      "evidence": [
+        "browser-red/result-attempt-3.json"
+      ],
+      "sourceLocations": [
+        {
+          "path": "yshop-drink-vue3/src/views/mall/coupon/Form.vue",
+          "line": 46
+        }
+      ],
+      "redTest": "tests/defects/browser/dialog.spec.ts::D009"
+    }
+  ],
+  "otherFindings": [
+    {
+      "id": "R001",
+      "category": "SUSPECTED_RISK",
+      "severity": "P1",
+      "status": "SUSPECTED",
+      "title": "积分兑换锁竞争及积分并发扣减",
+      "evidence": [
+        "yshop-drink-boot3/yshop-module-score/yshop-module-score-biz/src/main/java/co/yixiang/yshop/module/score/service/scoreorder/AppScoreOrderServiceImpl.java:239"
+      ]
+    },
+    {
+      "id": "R002",
+      "category": "SUSPECTED_RISK",
+      "severity": "P2",
+      "status": "SUSPECTED",
+      "title": "外卖配送距离未见服务端实际距离校验",
+      "evidence": [
+        "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java:280"
+      ]
+    },
+    {
+      "id": "R003",
+      "category": "SUSPECTED_RISK",
+      "severity": "P2",
+      "status": "SUSPECTED",
+      "title": "小程序自取联系电话编辑可能不进入请求",
+      "evidence": [
+        "yshop-drink-uniapp-vue3/pages-checkout/pay/pay.vue:69"
+      ]
+    },
+    {
+      "id": "TF001",
+      "category": "TEST_FRAMEWORK_BUG",
+      "severity": "P3",
+      "status": "RESOLVED_IN_EXPLORATION",
+      "title": "新增浏览器复现脚本使用错误关闭定位器和错误提示假设",
+      "evidence": [
+        "browser-red/result.json",
+        "browser-red/result-attempt-2.json"
+      ]
+    },
+    {
+      "id": "TF002",
+      "category": "TEST_FRAMEWORK_BUG",
+      "severity": "P3",
+      "status": "RESOLVED_IN_EXPLORATION",
+      "title": "新增小程序链路的夹具定位与页面等待不准确",
+      "evidence": [
+        "coupon-pages-pilot-1/report.json",
+        "coupon-pages-pilot-2/report.json",
+        "coupon-pages-pilot-3/report.json",
+        "coupon-pages-pilot-4/report.json",
+        "coupon-pages-pilot-5/report.json",
+        "coupon-pages-pilot-6/report.json"
+      ]
+    },
+    {
+      "id": "ENV001",
+      "category": "ENVIRONMENT_ISSUE",
+      "severity": "P3",
+      "status": "RESOLVED",
+      "title": "默认 Maven 缓存位于本轮不可写路径",
+      "evidence": [
+        "baseline-build/4a2f15d9e2344e9c838c53e4a4196403/report.json"
+      ]
+    },
+    {
+      "id": "ENV002",
+      "category": "ENVIRONMENT_ISSUE",
+      "severity": "P3",
+      "status": "RESOLVED",
+      "title": "沙箱限制本机端口探测",
+      "evidence": [
+        "baseline-quick/b1e7634f921441dbb717aadbe69df28e/report.json"
+      ]
+    },
+    {
+      "id": "BL001",
+      "category": "BLOCKED_TEST",
+      "severity": "P1",
+      "status": "BLOCKED",
+      "title": "真实微信身份、短信及交互验证码端到端"
+    },
+    {
+      "id": "BL002",
+      "category": "BLOCKED_TEST",
+      "severity": "P1",
+      "status": "BLOCKED",
+      "title": "物理设备及真实移动网络验证"
+    },
+    {
+      "id": "CG001",
+      "category": "COVERAGE_GAP",
+      "severity": "P1",
+      "status": "OPEN",
+      "title": "关键业务覆盖率门槛"
+    },
+    {
+      "id": "CG002",
+      "category": "COVERAGE_GAP",
+      "severity": "P1",
+      "status": "OPEN",
+      "title": "进程崩溃与重启恢复"
+    },
+    {
+      "id": "CG003",
+      "category": "COVERAGE_GAP",
+      "severity": "P1",
+      "status": "OPEN",
+      "title": "持续负载与认证锁因果实验"
+    },
+    {
+      "id": "CG004",
+      "category": "COVERAGE_GAP",
+      "severity": "P2",
+      "status": "OPEN",
+      "title": "后台浏览器异常及兼容性矩阵"
+    },
+    {
+      "id": "CG005",
+      "category": "COVERAGE_GAP",
+      "severity": "P1",
+      "status": "OPEN",
+      "title": "会员余额积分页面与遗留接口权限"
+    },
+    {
+      "id": "CG006",
+      "category": "COVERAGE_GAP",
+      "severity": "P1",
+      "status": "OPEN",
+      "title": "变异覆盖未涵盖新增缺陷模块"
+    },
+    {
+      "id": "CG007",
+      "category": "COVERAGE_GAP",
+      "severity": "P2",
+      "status": "OPEN",
+      "title": "小程序优惠券扩展页面分支"
+    }
+  ],
+  "deliveryScope": "按用户最新说明：测试结构、实际执行、未通过清单；本轮不继续原因分析或业务修复。"
+}

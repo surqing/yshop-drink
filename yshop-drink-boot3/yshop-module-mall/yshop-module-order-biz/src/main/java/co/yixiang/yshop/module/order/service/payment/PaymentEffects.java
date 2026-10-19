@@ -23,6 +23,8 @@ import java.util.stream.Collectors;
 @Service
 @Slf4j
 public class PaymentEffects {
+    @jakarta.annotation.Resource
+    private org.springframework.jdbc.core.JdbcTemplate couponJdbc;
     private final MemberUserService users;
     private final UserBillService bills;
     private final StoreOrderStatusService statuses;
@@ -66,6 +68,8 @@ public class PaymentEffects {
                 user.getNowMoney(),
                 PayTypeEnum.toType(payType).getDesc() + order.getPayPrice() + "元购买商品",
                 order.getOrderId());
+        new co.yixiang.yshop.module.coupon.service.marketing.CouponLifecycle(couponJdbc)
+            .redeem(order.getOrderId(), order.getUid());
     }
 
     public void afterCommit(PaymentOrder order) {

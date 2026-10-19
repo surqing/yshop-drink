@@ -38,7 +38,7 @@ public class AppUserNickVO {
      */
     private Integer gender;
     /**
-     * mobile
+     * Legacy request field. Profile updates ignore it; it is not an identity change.
      */
     private String mobile;
 

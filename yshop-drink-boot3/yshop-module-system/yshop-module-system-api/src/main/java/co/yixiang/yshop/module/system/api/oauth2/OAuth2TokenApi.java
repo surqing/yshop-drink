@@ -36,6 +36,8 @@ public interface OAuth2TokenApi {
      * @return 访问令牌的信息
      */
     OAuth2AccessTokenRespDTO removeAccessToken(String accessToken);
+    OAuth2AccessTokenRespDTO removeAccessToken(String accessToken,Integer expectedType);
+    void revokeUserTokens(Long userId,Integer userType);
 
     /**
      * 刷新访问令牌
@@ -45,5 +47,6 @@ public interface OAuth2TokenApi {
      * @return 访问令牌的信息
      */
     OAuth2AccessTokenRespDTO refreshAccessToken(String refreshToken, String clientId);
+    OAuth2AccessTokenRespDTO refreshAccessToken(String refreshToken,String clientId,Integer expectedType);
 
 }

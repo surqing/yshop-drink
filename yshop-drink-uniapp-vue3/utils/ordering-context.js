@@ -1,7 +1,7 @@
 // Store selection is a business context, not an authorization credential.
 import { preview } from './catalog-options.js'
 export function switchStore(state, storage, next) {
-  if (String(state.store?.id || '') !== String(next?.id || '')) {
+  if (!next?.id || String(state.store?.id || '') !== String(next.id)) {
     state.cart = []
     state.mycoupon = {}
     storage.removeStorageSync('cart')

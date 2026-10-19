@@ -1,0 +1,78 @@
+{
+  "scripts/payment/build-verified-backend.py": {
+    "status": "CONDITIONAL",
+    "reason": "Documented operator run; only explicitly invoked pure functions/CLI paths covered by prepayment-tools-test.py or synthetic ingress. Live/deployment/NTP/operator entry not executed or implied by partial unit coverage."
+  },
+  "scripts/payment/clock-evidence.py": {
+    "status": "CONDITIONAL",
+    "reason": "Documented operator run; only explicitly invoked pure functions/CLI paths covered by prepayment-tools-test.py or synthetic ingress. Live/deployment/NTP/operator entry not executed or implied by partial unit coverage."
+  },
+  "scripts/payment/local-ingress.py": {
+    "status": "CONDITIONAL",
+    "reason": "Documented operator run; only explicitly invoked pure functions/CLI paths covered by prepayment-tools-test.py or synthetic ingress. Live/deployment/NTP/operator entry not executed or implied by partial unit coverage."
+  },
+  "scripts/payment/match-history-export.py": {
+    "status": "CONDITIONAL",
+    "reason": "Documented operator run; only explicitly invoked pure functions/CLI paths covered by prepayment-tools-test.py or synthetic ingress. Live/deployment/NTP/operator entry not executed or implied by partial unit coverage."
+  },
+  "scripts/payment/review-local-history.py": {
+    "status": "CONDITIONAL",
+    "reason": "Documented operator run; only explicitly invoked pure functions/CLI paths covered by prepayment-tools-test.py or synthetic ingress. Live/deployment/NTP/operator entry not executed or implied by partial unit coverage."
+  },
+  "scripts/payment/test-order-plan.py": {
+    "status": "CONDITIONAL",
+    "reason": "Documented operator run; only explicitly invoked pure functions/CLI paths covered by prepayment-tools-test.py or synthetic ingress. Live/deployment/NTP/operator entry not executed or implied by partial unit coverage."
+  },
+  "scripts/payment/verify-callback-ingress.py": {
+    "status": "CONDITIONAL",
+    "reason": "Documented operator run; only explicitly invoked pure functions/CLI paths covered by prepayment-tools-test.py or synthetic ingress. Live/deployment/NTP/operator entry not executed or implied by partial unit coverage."
+  },
+  "scripts/payment/verify-deployment.py": {
+    "status": "CONDITIONAL",
+    "reason": "Documented operator run; only explicitly invoked pure functions/CLI paths covered by prepayment-tools-test.py or synthetic ingress. Live/deployment/NTP/operator entry not executed or implied by partial unit coverage."
+  },
+  "tests/business/catalog-mini-program.cjs": {
+    "status": "CONDITIONAL",
+    "reason": "Requires explicit official tool, fresh compiled artifact, local authorized synthetic fixture/token/ports. Legacy shared-session scripts not run against current/shared merchant data. R1 owned Mini receipt does not certify this script."
+  },
+  "tests/business/coupon-mini-program.cjs": {
+    "status": "CONDITIONAL",
+    "reason": "Requires explicit official tool, fresh compiled artifact, local authorized synthetic fixture/token/ports. Legacy shared-session scripts not run against current/shared merchant data. R1 owned Mini receipt does not certify this script."
+  },
+  "tests/business/coupon-state-mini-program.cjs": {
+    "status": "CONDITIONAL",
+    "reason": "Requires explicit official tool, fresh compiled artifact, local authorized synthetic fixture/token/ports. Legacy shared-session scripts not run against current/shared merchant data. R1 owned Mini receipt does not certify this script."
+  },
+  "tests/business/mini-program.cjs": {
+    "status": "CONDITIONAL",
+    "reason": "Requires explicit official tool, fresh compiled artifact, local authorized synthetic fixture/token/ports. Legacy shared-session scripts not run against current/shared merchant data. R1 owned Mini receipt does not certify this script."
+  },
+  "tests/business/run-smoke.sh": {
+    "status": "CONDITIONAL",
+    "reason": "Manual YSHOP_ALLOW_DEV_BUSINESS_SMOKE wrapper has documented callers and seed/shared-port assumptions. Preserve entry; requires owned fixture compatibility, not just CI absence."
+  },
+  "tests/quality/mini-readonly.cjs": {
+    "status": "CONDITIONAL",
+    "reason": "Requires explicit official tool, fresh compiled artifact, local authorized synthetic fixture/token/ports. Legacy shared-session scripts not run against current/shared merchant data. R1 owned Mini receipt does not certify this script."
+  },
+  "tests/smoke/mini-program.cjs": {
+    "status": "CONDITIONAL",
+    "reason": "Requires explicit official tool, fresh compiled artifact, local authorized synthetic fixture/token/ports. Legacy shared-session scripts not run against current/shared merchant data. R1 owned Mini receipt does not certify this script."
+  },
+  "tests/smoke/run.sh": {
+    "status": "CONDITIONAL",
+    "reason": "Manual YSHOP_ALLOW_DEV_BUSINESS_SMOKE wrapper has documented callers and seed/shared-port assumptions. Preserve entry; requires owned fixture compatibility, not just CI absence."
+  },
+  "yshop-drink-boot3/script/shell/deploy.sh": {
+    "status": "BLOCKED_EXTERNAL",
+    "reason": "Deployment script affects operational service; no production host/authorization in this synthetic task. Syntax check only, no deployment attempted."
+  },
+  "yshop-drink-boot3/yshop-framework/yshop-spring-boot-starter-test/src/main/java/co/yixiang/yshop/framework/test/core/ut/BaseRedisUnitTest.java": {
+    "status": "CONDITIONAL",
+    "reason": "Library base fixture for Redis-only subclasses; current source has no subclass. Shared test-library extension surface preserved, not counted as executed."
+  },
+  "yshop-drink-boot3/yshop-server/src/test/java/co/yixiang/yshop/ProjectReactor.java": {
+    "status": "OBSOLETE",
+    "reason": "Source rewrite utility; inventory excludes execution. Preserved: no proof that all external/manual dependents are retired."
+  }
+}

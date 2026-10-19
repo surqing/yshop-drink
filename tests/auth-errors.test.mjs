@@ -1,9 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
 
-const source = await readFile(new URL('../yshop-drink-uniapp-vue3/utils/auth-errors.js', import.meta.url), 'utf8')
-const { describeAuthError, reportAuthError } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
+const { describeAuthError, reportAuthError } = await import(new URL('../yshop-drink-uniapp-vue3/utils/auth-errors.js', import.meta.url))
 
 test('distinguishes cancellation, WeChat, exchange and network failures', () => {
   assert.equal(describeAuthError({ errMsg: 'getPhoneNumber:fail user deny' }, 'phone').category, 'cancelled')

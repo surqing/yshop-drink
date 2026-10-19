@@ -25,6 +25,19 @@ public class RateLimiterRedisDAO {
 
     private final RedissonClient redissonClient;
 
+    /** Atomic, bounded fixed-window counter. TTL is never extended by rejected attempts. */
+    public boolean tryAcquireFixedWindow(String key, int count, int seconds) {
+        if (count < 1 || seconds < 1) throw new IllegalArgumentException("INVALID_RATE_POLICY");
+        Long accepted = redissonClient.getScript(org.redisson.client.codec.StringCodec.INSTANCE).eval(
+                RScript.Mode.READ_WRITE,
+                "local n=tonumber(redis.call('GET',KEYS[1]) or '0'); " +
+                "if n>=tonumber(ARGV[1]) then return 0 end; " +
+                "n=redis.call('INCR',KEYS[1]); " +
+                "if n==1 then redis.call('EXPIRE',KEYS[1],ARGV[2]) end; return 1",
+                RScript.ReturnType.INTEGER, java.util.List.of(formatKey(key)), count, seconds);
+        return Long.valueOf(1).equals(accepted);
+    }
+
     public Boolean tryAcquire(String key, int count, int time, TimeUnit timeUnit) {
         // 1. 获得 RRateLimiter，并设置 rate 速率
         RRateLimiter rateLimiter = getRRateLimiter(key, count, time, timeUnit);

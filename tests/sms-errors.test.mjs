@@ -3,8 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
 
-const source = await readFile(new URL('../yshop-drink-uniapp-vue3/utils/sms-errors.js', import.meta.url), 'utf8')
-const { normalizeSmsError, describeSmsError, reportSmsError } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
+const { normalizeSmsError, describeSmsError, reportSmsError } = await import(new URL('../yshop-drink-uniapp-vue3/utils/sms-errors.js', import.meta.url))
 const apiSource = await readFile(new URL('../yshop-drink-uniapp-vue3/api/api.js', import.meta.url), 'utf8')
 
 function transport(response, transportError) {

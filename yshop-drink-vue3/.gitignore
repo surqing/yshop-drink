@@ -8,3 +8,6 @@ pnpm-debug
 auto-*.d.ts
 .idea
 .history
+
+# Local test reports
+.quality/

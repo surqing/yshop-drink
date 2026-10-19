@@ -54,6 +54,7 @@ public class MemberUserDO extends TenantBaseDO {
     /**
      * 手机
      */
+    @TableField(updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)
     private String mobile;
     /**
      * 加密后的密码
@@ -172,9 +173,11 @@ public class MemberUserDO extends TenantBaseDO {
     private String loginType;
 
     //公众号openid
+    @TableField(updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)
     private String openid;
 
     //小程序openid
+    @TableField(updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)
     private String routineOpenid;
     //性别
     private Integer gender;

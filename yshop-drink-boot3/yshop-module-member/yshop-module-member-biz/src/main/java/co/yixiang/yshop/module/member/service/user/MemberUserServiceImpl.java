@@ -55,6 +55,7 @@ public class MemberUserServiceImpl extends ServiceImpl<MemberUserMapper,MemberUs
     @Resource
     private MemberUserMapper memberUserMapper;
 
+    @Resource private co.yixiang.yshop.module.system.api.oauth2.OAuth2TokenApi oauth2Tokens;
     @Resource
     private FileApi fileApi;
     @Resource
@@ -74,7 +75,7 @@ public class MemberUserServiceImpl extends ServiceImpl<MemberUserMapper,MemberUs
 
     @Override
     public MemberUserDO getUserByMobile(String mobile) {
-        return memberUserMapper.selectByMobile(mobile);
+        return memberUserMapper.selectByMobile(co.yixiang.yshop.module.member.service.auth.MemberIdentityPolicy.phone(mobile));
     }
 
     @Override
@@ -84,6 +85,7 @@ public class MemberUserServiceImpl extends ServiceImpl<MemberUserMapper,MemberUs
 
     @Override
     public MemberUserDO createUserIfAbsent(String mobile, String registerIp,String from) {
+        mobile=co.yixiang.yshop.module.member.service.auth.MemberIdentityPolicy.phone(mobile);
         // 用户已经存在
         if(StrUtil.isNotEmpty(mobile)){
             MemberUserDO user = memberUserMapper.selectByMobile(mobile);
@@ -102,7 +104,7 @@ public class MemberUserServiceImpl extends ServiceImpl<MemberUserMapper,MemberUs
         // 插入用户
         MemberUserDO user = new MemberUserDO();
         user.setNickname(mobile);
-        user.setUsername(mobile);
+        user.setUsername("member_"+IdUtil.fastSimpleUUID());
         user.setMobile(mobile);
         user.setStatus(CommonStatusEnum.ENABLE.getStatus()); // 默认开启
         user.setPassword(encodePassword(password)); // 加密密码
@@ -197,7 +199,7 @@ public class MemberUserServiceImpl extends ServiceImpl<MemberUserMapper,MemberUs
         userDO.setBirthday(birthday);
         userDO.setGender(gender);
         userDO.setAvatar(avatar);
-        userDO.setMobile(mobile);
+        // Legacy profile payloads contain mobile; identity changes belong to updateUserMobile.
         memberUserMapper.updateById(userDO);
     }
 
@@ -212,21 +214,20 @@ public class MemberUserServiceImpl extends ServiceImpl<MemberUserMapper,MemberUs
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED,rollbackFor = Exception.class)
     public void updateUserMobile(Long userId, AppUserUpdateMobileReqVO reqVO) {
-        // 检测用户是否存在
-        checkUserExists(userId);
-        // TODO yshop：oldMobile 应该不用传递
-
-        // 校验旧手机和旧验证码
-        smsCodeApi.useSmsCode(new SmsCodeUseReqDTO().setMobile(reqVO.getOldMobile()).setCode(reqVO.getOldCode())
-                .setScene(SmsSceneEnum.MEMBER_UPDATE_MOBILE.getScene()).setUsedIp(getClientIP()));
-        // 使用新验证码
-        smsCodeApi.useSmsCode(new SmsCodeUseReqDTO().setMobile(reqVO.getMobile()).setCode(reqVO.getCode())
-                .setScene(SmsSceneEnum.MEMBER_UPDATE_MOBILE.getScene()).setUsedIp(getClientIP()));
-
-        // 更新用户手机
-        memberUserMapper.updateById(MemberUserDO.builder().id(userId).mobile(reqVO.getMobile()).build());
+        String oldPhone=co.yixiang.yshop.module.member.service.auth.MemberIdentityPolicy.phone(reqVO.getOldMobile());
+        String newPhone=co.yixiang.yshop.module.member.service.auth.MemberIdentityPolicy.phone(reqVO.getMobile());
+        MemberUserDO current=memberUserMapper.lockById(userId);
+        if(current==null || !Integer.valueOf(0).equals(current.getStatus()) || !java.util.Objects.equals(oldPhone,current.getMobile()) || oldPhone.equals(newPhone))
+            throw co.yixiang.yshop.module.member.service.auth.MemberIdentityPolicy.conflict();
+        var owner=memberUserMapper.selectByMobile(newPhone);
+        if(owner!=null)throw co.yixiang.yshop.module.member.service.auth.MemberIdentityPolicy.conflict();
+        smsCodeApi.useSmsCode(new SmsCodeUseReqDTO().setMobile(oldPhone).setCode(reqVO.getOldCode()).setScene(2).setUsedIp(getClientIP()));
+        smsCodeApi.useSmsCode(new SmsCodeUseReqDTO().setMobile(newPhone).setCode(reqVO.getCode()).setScene(2).setUsedIp(getClientIP()));
+        try {co.yixiang.yshop.module.member.service.auth.MemberIdentityPolicy.exactlyOne(memberUserMapper.changeMobile(userId,oldPhone,newPhone));}
+        catch(org.springframework.dao.DuplicateKeyException conflict){throw co.yixiang.yshop.module.member.service.auth.MemberIdentityPolicy.conflict();}
+        oauth2Tokens.revokeUserTokens(userId,1);
     }
 
     @Override

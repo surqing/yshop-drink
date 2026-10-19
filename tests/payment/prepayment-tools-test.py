@@ -47,6 +47,28 @@ class Evidence(unittest.TestCase):
         data.update(kwargs)
         return harness.compare(**data)
 
+    def test_dedicated_qa_ingress_only_allowed_in_verified_isolation(self):
+        self.assertFalse(provision.allowed_admin_origin('https://localhost:48444'))
+        self.assertTrue(provision.allowed_admin_origin('https://localhost:48444',synthetic=True))
+        self.assertTrue(provision.allowed_admin_origin('https://localhost:48443'))
+
+    def test_synthetic_origin_does_not_allow_public_or_unsafe_urls(self):
+        for url in ['http://localhost:48444','https://example.invalid:48444','https://user@localhost:48444','https://localhost:48444?x=1','https://localhost:48444/#fragment','https://localhost:48445']:
+            with self.subTest(url=url):self.assertFalse(provision.allowed_admin_origin(url,synthetic=True))
+
+    def test_isolated_report_cannot_replace_operator_report(self):
+        import private_support
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp);owned=root/'owned';owned.mkdir()
+            shared=root/'payment-acceptance-report.json';shared.write_text('preserved-operator-evidence')
+            with patch.object(private_support,'PRIVATE',root),patch.object(private_support,'isolated_schema',return_value='yshop_acceptance_phase5h_01234567'):
+                dest=private_support.report_path(owned,shared.name)
+                private_support.private_json(dest,{'synthetic':True})
+            self.assertEqual('preserved-operator-evidence',shared.read_text())
+            self.assertEqual(owned/shared.name,dest)
+            self.assertEqual(0,dest.stat().st_mode & 0o077)
+
     def test_complete_synthetic_evidence(self):
         r = self.compare()
         self.assertTrue(r['consistentObservedEvidence'])

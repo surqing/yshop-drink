@@ -1,0 +1,124 @@
+{
+  "task": "PHASE6Q-DEFECT-DISCOVERY",
+  "baselineSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+  "sourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+  "scope": "按用户最新说明：测试结构、实际执行、未通过清单；本轮不继续原因分析或业务修复。",
+  "failures": [
+    {
+      "id": "D001",
+      "module": "会员身份",
+      "name": "资料编辑可改为他人已绑定手机号并破坏其登录",
+      "status": "FAILED",
+      "expected": "普通资料修改不改变已验证手机号；绑定仍唯一；B 仍可登录。",
+      "actual": "接口 code=0；两个账号占用相同手机号；B 密码登录 code=500。",
+      "test": "tests/defects/http_red.py::D001",
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ]
+    },
+    {
+      "id": "D002",
+      "module": "积分兑换",
+      "name": "积分兑换多件商品只扣单件积分",
+      "status": "FAILED",
+      "expected": "总积分 200、会员剩余 800、库存 8。",
+      "actual": "数量 2、库存 8，但总积分 100、会员剩余 900。",
+      "test": "tests/defects/http_red.py::D002",
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ]
+    },
+    {
+      "id": "D003",
+      "module": "积分库存",
+      "name": "兑换库存不足仍生成已付积分订单",
+      "status": "FAILED",
+      "expected": "拒绝兑换，库存 1、积分 1000、订单 0。",
+      "actual": "code=0、订单 1、积分 900；条件库存更新未成功，库存仍为 1。",
+      "test": "tests/defects/http_red.py::D003",
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ]
+    },
+    {
+      "id": "D004",
+      "module": "会员数据隔离",
+      "name": "积分兑换可复制并读取他人的收货地址",
+      "status": "FAILED",
+      "expected": "在写入前拒绝非本人地址，订单及积分无副作用。",
+      "actual": "code=0；生成的 A 订单含 B 的合成电话，A 的详情接口可读。",
+      "test": "tests/defects/http_red.py::D004",
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ]
+    },
+    {
+      "id": "D005",
+      "module": "积分商品",
+      "name": "下架积分商品仍可兑换",
+      "status": "FAILED",
+      "expected": "拒绝下架商品，所有业务状态不变。",
+      "actual": "code=0；订单 1、库存从 10 到 9、积分从 1000 到 900。",
+      "test": "tests/defects/http_red.py::D005",
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ]
+    },
+    {
+      "id": "D006",
+      "module": "积分输入校验",
+      "name": "零数量兑换也会扣积分并创建订单",
+      "status": "FAILED",
+      "expected": "正整数数量校验拒绝 0，所有状态不变。",
+      "actual": "code=0、订单 1、库存仍 10、积分减少 100。",
+      "test": "tests/defects/http_red.py::D006",
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ]
+    },
+    {
+      "id": "D007",
+      "module": "积分账务",
+      "name": "积分兑换流水余额记录为扣减前余额",
+      "status": "FAILED",
+      "expected": "会员与流水剩余余额均为 900，支出 100。",
+      "actual": "会员积分 900、支出 100，但流水 balance=1000。",
+      "test": "tests/defects/http_red.py::D007",
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ]
+    },
+    {
+      "id": "D008",
+      "module": "订单履约",
+      "name": "自取订单丢失提交的联系电话",
+      "status": "FAILED",
+      "expected": "订单保存提交并校验后的联系电话。",
+      "actual": "下单成功但 user_phone 为空。",
+      "test": "tests/defects/http_red.py::D008",
+      "evidence": [
+        "exploration-http-1/report.json",
+        "independent-http-2/report.json"
+      ]
+    },
+    {
+      "id": "D009",
+      "module": "Vue 优惠券后台",
+      "name": "优惠券详情读取失败后保存误改上一张券",
+      "status": "FAILED",
+      "expected": "B 加载失败时不能把修改提交给 A；关闭、清空或禁止保存均可。",
+      "actual": "向 coupon/update 发出 id=A 的请求，名称为用户在 B 操作中输入的内容。",
+      "test": "tests/defects/browser/dialog.spec.ts::D009",
+      "evidence": [
+        "browser-red/result-attempt-3.json"
+      ]
+    }
+  ]
+}

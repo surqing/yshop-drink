@@ -82,7 +82,7 @@ public class DictDataServiceImplTest extends BaseDbUnitTest {
         dictDataMapper.insert(cloneIgnoreId(dbDictData, o -> o.setStatus(CommonStatusEnum.DISABLE.getStatus())));
         // 准备参数
         DictDataPageReqVO reqVO = new DictDataPageReqVO();
-        reqVO.setLabel("芋");
+        reqVO.setLabel("ysh");
         reqVO.setDictType("yshop");
         reqVO.setStatus(CommonStatusEnum.ENABLE.getStatus());
 

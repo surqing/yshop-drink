@@ -2,7 +2,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const workspace = path.resolve(__dirname, '../../..');
+const workspace = path.resolve(process.env.YSHOP_TEST_WORKSPACE || path.resolve(__dirname, '../../..'));
 const privateDev = path.join(workspace, '.uniapp-dev');
 const automator = require(path.join(privateDev, 'automation/node_modules/miniprogram-automator'));
 const reportPath = path.join(privateDev, 'logs/baseline-smoke.json');
@@ -49,7 +49,7 @@ async function run() {
   let mini;
   const connectDeadline = Date.now() + 15000;
   while (!mini) {
-    try { mini = await automator.connect({ wsEndpoint: 'ws://127.0.0.1:9420' }); }
+    try { mini = await automator.connect({ wsEndpoint: `ws://127.0.0.1:${process.env.YSHOP_AUTOMATION_PORT||9420}` }); }
     catch (error) {
       if (Date.now() >= connectDeadline) throw error;
       await new Promise(resolve => setTimeout(resolve, 500));

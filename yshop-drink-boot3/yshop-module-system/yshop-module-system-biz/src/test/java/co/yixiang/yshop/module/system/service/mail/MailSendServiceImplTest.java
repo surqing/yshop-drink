@@ -52,16 +52,11 @@ public class MailSendServiceImplTest extends BaseMockitoUnitTest {
     /**
      * 用于快速测试你的邮箱账号是否正常
      */
-    @Test
-    @Disabled
+    @Deprecated
     public void testDemo() {
-        MailAccount mailAccount = new MailAccount()
-//                .setFrom("奥特曼 <ydym_test@163.com>")
-                .setFrom("ydym_test@163.com") // 邮箱地址
-                .setHost("smtp.163.com").setPort(465).setSslEnable(true) // SMTP 服务器
-                .setAuth(true).setUser("ydym_test@163.com").setPass("WBZTEINMIFVRYSOE".toCharArray()); // 登录账号密码
-        String messageId = MailUtil.send(mailAccount, "7685413@qq.com", "主题", "内容", false);
-        System.out.println("发送结果：" + messageId);
+        // Retired live SMTP diagnostic. Historical embedded credentials were removed during
+        // Phase 6Q. Kept disabled and fail-closed even if invoked directly; this is not a unit test.
+        throw new IllegalStateException("LIVE_SMTP_DEMO_RETIRED_USE_AUTHORIZED_MANUAL_DIAGNOSTIC");
     }
 
     @Test

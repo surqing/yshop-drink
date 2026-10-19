@@ -60,7 +60,7 @@ public class CouponBaseVO {
     private Integer type;
 
     @Schema(description = "兑换码")
-    private String exchangeCode;
+    @ToString.Exclude private String exchangeCode;
 
     @Schema(description = "已领取", required = true)
     private Integer receive;
@@ -81,5 +81,13 @@ public class CouponBaseVO {
     @Schema(description = "限领数量")
     @NotNull(message = "限领数量不能为空")
     private Integer limit;
+
+
+    /** Claim window; legacy NULL falls back to the original usage window. */
+    private LocalDateTime claimStartTime;
+    private LocalDateTime claimEndTime;
+    private Long templateVersion;
+    private String couponKind;
+    private String claimMode;
 
 }

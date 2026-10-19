@@ -76,15 +76,18 @@ class PaymentAttemptDatabaseTest {
     <T> List<T> concurrent(int n, Callable<T> action) throws Exception {
         var pool = Executors.newFixedThreadPool(n);
         var gate = new CountDownLatch(1);
+        var ready = new CountDownLatch(n);
         try {
             List<Future<T>> futures = new ArrayList<>();
             for (int i = 0; i < n; i++)
                 futures.add(
                         pool.submit(
                                 () -> {
-                                    gate.await();
+                                    ready.countDown();
+                                    assertTrue(gate.await(30, TimeUnit.SECONDS));
                                     return action.call();
                                 }));
+            assertTrue(ready.await(30, TimeUnit.SECONDS), "All workers must be ready before release");
             gate.countDown();
             List<T> result = new ArrayList<>();
             for (var future : futures) result.add(future.get(60, TimeUnit.SECONDS));

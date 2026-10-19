@@ -21,6 +21,12 @@ public interface CouponService {
      */
     Long create(@Valid CouponCreateReqVO createReqVO);
 
+    /** Authenticated admin creation; generated public code is returned only once after commit. */
+    CodeCreation createCode(@Valid CouponCreateReqVO createReqVO);
+    record CodeCreation(Long id, String exchangeCode) {
+        @Override public String toString() { return "CodeCreation[id="+id+", exchangeCode=REDACTED]"; }
+    }
+
     /**
      * 更新优惠券
      *

@@ -1,0 +1,463 @@
+{
+  "counts": {
+    "KILLED": 27,
+    "SURVIVED": 3
+  },
+  "mutations": [
+    {
+      "mutation": "auth-admin-reenable-revocation",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "OAuth2LifecycleDatabaseTest#adminDisableReenableCannotResurrectOldCredentials",
+      "source": "yshop-drink-boot3/yshop-module-system/yshop-module-system-biz/src/main/java/co/yixiang/yshop/module/system/service/user/AdminUserServiceImpl.java",
+      "originalBaseline": "PASS",
+      "originalHash": "24d16fc43ec74ff421171daa985df6e1b626326e8972f4f3a58a209fa2165771",
+      "mutatedHash": "aa8c7e8237ea5670f74726ab3865a27233e85a6769cecdaf7e9d67aef255d162",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "7d4e568b4740415f87ae35d2fa065040"
+      }
+    },
+    {
+      "mutation": "inventory-repeat-release",
+      "result": "KILLED",
+      "assertionFailures": 3,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java",
+      "originalBaseline": "PASS",
+      "originalHash": "944cd3b83b649999e95d006bd5d1a0fcb17f3d1193ebae3c5337ba153be4fd6f",
+      "mutatedHash": "9ad35b0cddf699648ba6438aba392b7680994040d8d28f8fe0eb9a28f68d5178",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "9c18e5bea04e469aba85b22870b2a311"
+      }
+    },
+    {
+      "mutation": "cross-store-price",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java",
+      "originalBaseline": "PASS",
+      "originalHash": "944cd3b83b649999e95d006bd5d1a0fcb17f3d1193ebae3c5337ba153be4fd6f",
+      "mutatedHash": "0c316ae73348a574a74ee527c1c622eb26df731fd4346f5151f7668d3e1dd4b4",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "8045a66bba1e4d24a60bef78476af6b0"
+      }
+    },
+    {
+      "mutation": "coupon-double-reservation",
+      "result": "KILLED",
+      "assertionFailures": 21,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponLifecycle.java",
+      "originalBaseline": "PASS",
+      "originalHash": "5c0ff95a9de7f33994635f5e8ff4c5dc555b3ecdea860d2419f78325e800d0f5",
+      "mutatedHash": "a4176848903a8d779ff8529b67f15dbaa1977fd6714e49679a3239a9aec4fb3e",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "74fe6a945f8b4ef6946a6c08e6f19892"
+      }
+    },
+    {
+      "mutation": "duplicate-fulfillment-complete",
+      "result": "KILLED",
+      "assertionFailures": 12,
+      "suite": "PaymentDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/PaymentProcessor.java",
+      "originalBaseline": "PASS",
+      "originalHash": "0bfecf042456a0feb4a11a7584fbb95313c4b2915c7ac5ceded475a249d9fecd",
+      "mutatedHash": "c86b3d1523490d4b3577f71bb154fc1023c463446f91c234924a056423edc86a",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "6d9291bed253449b935d34ec6375477b"
+      }
+    },
+    {
+      "mutation": "auth-refresh-disable-bypass",
+      "result": "KILLED",
+      "assertionFailures": 2,
+      "suite": "OAuth2LifecycleDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-system/yshop-module-system-biz/src/main/java/co/yixiang/yshop/module/system/service/oauth2/OAuth2TokenServiceImpl.java",
+      "originalBaseline": "PASS",
+      "originalHash": "9fe9dbb0b22aa1294e2b1100754b7f8c12d37d22c9729b590b2266960524ad15",
+      "mutatedHash": "c0479d01138846860cf385f5aeaf6509a074f8c8aad9666e7346821a26a50a7e",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "db8da5814b464b49b154b108fe5439a1"
+      }
+    },
+    {
+      "mutation": "auth-cache-revocation-bypass",
+      "result": "KILLED",
+      "assertionFailures": 23,
+      "suite": "OAuth2LifecycleDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-system/yshop-module-system-biz/src/main/java/co/yixiang/yshop/module/system/service/oauth2/OAuth2TokenServiceImpl.java",
+      "originalBaseline": "PASS",
+      "originalHash": "9fe9dbb0b22aa1294e2b1100754b7f8c12d37d22c9729b590b2266960524ad15",
+      "mutatedHash": "4e4e5b1a26d851e4fcd30111117d823e18e99a0f48ee502f19073fdf328dd455",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "908932fb22c344c2b338500390852d8d"
+      }
+    },
+    {
+      "mutation": "payment-freeze-bypass",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "PaymentCredentialDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-pay/yshop-module-pay-biz/src/main/java/co/yixiang/yshop/module/pay/v3/EncryptedWechatV3ClientFactory.java",
+      "originalBaseline": "PASS",
+      "originalHash": "8ddcfa833e3262bdf551577e4524cabd61a6345e21594a44a8d89d772ae51281",
+      "mutatedHash": "2c8de9aa968b1dd517131eaa3164ec2f68c4bbf75a1e7e99f8caec36ef9df66e",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "b0e13377cf134f229db0869f8e89d869"
+      }
+    },
+    {
+      "mutation": "late-success-terminal",
+      "result": "KILLED",
+      "assertionFailures": 4,
+      "suite": "PaymentAttemptDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/PaymentProcessor.java",
+      "originalBaseline": "PASS",
+      "originalHash": "0bfecf042456a0feb4a11a7584fbb95313c4b2915c7ac5ceded475a249d9fecd",
+      "mutatedHash": "bb4fb2ab4a6b0ae438ed0a41c08afc8dffb4a79bd5330609bf317b382c404a90",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "12a46ce9a4ce41fc94d7ee6c1ab07fd6"
+      }
+    },
+    {
+      "mutation": "duplicate-event-result",
+      "result": "KILLED",
+      "assertionFailures": 10,
+      "suite": "PaymentDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/PaymentProcessor.java",
+      "originalBaseline": "PASS",
+      "originalHash": "0bfecf042456a0feb4a11a7584fbb95313c4b2915c7ac5ceded475a249d9fecd",
+      "mutatedHash": "bd050fc105af99c53f2a97ced6b70957e604232220fa1beb0ecf211420b43411",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "c0c8693f0d6844b38c3226c942d0d220"
+      }
+    },
+    {
+      "mutation": "inventory-wrong-debit",
+      "result": "KILLED",
+      "assertionFailures": 34,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java",
+      "originalBaseline": "PASS",
+      "originalHash": "944cd3b83b649999e95d006bd5d1a0fcb17f3d1193ebae3c5337ba153be4fd6f",
+      "mutatedHash": "f77dd47b4b469e0af2d9c97b32e95a429640bc4ae241e4702c7a025b0f93a788",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "6faf13a16bc24ad5912a6bad7e86e6d2"
+      }
+    },
+    {
+      "mutation": "cross-store-all-defences",
+      "result": "KILLED",
+      "assertionFailures": 4,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java",
+      "originalBaseline": "PASS",
+      "originalHash": "944cd3b83b649999e95d006bd5d1a0fcb17f3d1193ebae3c5337ba153be4fd6f",
+      "mutatedHash": "ee69c59faad5b52ec9ccc162c0450f6226c6aac640ba56014d52203fc2d981ff",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "ac47bfbef5a54ace9b01d74086312edd"
+      }
+    },
+    {
+      "mutation": "coupon-total-all-defences",
+      "result": "KILLED",
+      "assertionFailures": 36,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService.java",
+      "originalBaseline": "PASS",
+      "originalHash": "5b996997784a73bf0be0da920b4a80523654183b6a190fb1af894d626ace9254",
+      "mutatedHash": "795ad16a0f9ffbe54156e756b580b052304288bce81608e5d0187b703fdb8ea2",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "02b729ad91d6461f871a67e78f8762bc"
+      }
+    },
+    {
+      "mutation": "coupon-reuse-state",
+      "result": "KILLED",
+      "assertionFailures": 3,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponPolicy.java",
+      "originalBaseline": "PASS",
+      "originalHash": "c412bd6e6edc9590e506e2e94597b1e952f4369dfe3dc6e9ef3cce48599b27da",
+      "mutatedHash": "b0982ead94b1f49b48fff8eaee56a76997272358e53bb28bf734806090174c14",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "d5200b9bc19d420fa18967bcf6773014"
+      }
+    },
+    {
+      "mutation": "coupon-use-expired",
+      "result": "KILLED",
+      "assertionFailures": 22,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponPolicy.java",
+      "originalBaseline": "PASS",
+      "originalHash": "c412bd6e6edc9590e506e2e94597b1e952f4369dfe3dc6e9ef3cce48599b27da",
+      "mutatedHash": "5a9da7d0579b3aa876ada59d6b51a5e311cf02c9342f59455b1154577072419a",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "81bf4692eafa444c94e7a85d8734288d"
+      }
+    },
+    {
+      "mutation": "inventory-sku-check",
+      "result": "SURVIVED",
+      "assertionFailures": 0,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java",
+      "originalBaseline": "PASS",
+      "originalHash": "944cd3b83b649999e95d006bd5d1a0fcb17f3d1193ebae3c5337ba153be4fd6f",
+      "mutatedHash": "7536d93b9c57bb6351633f32f7f90d57b7f2518ffee02c9fa6276d624b6a1b45",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "3926fe1be58b48dd9b67ba70f32a9868"
+      }
+    },
+    {
+      "mutation": "inventory-conditional-update",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "OrderingDatabaseTest#availableStockConditionalDebitMustSucceed",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java",
+      "originalBaseline": "PASS",
+      "originalHash": "944cd3b83b649999e95d006bd5d1a0fcb17f3d1193ebae3c5337ba153be4fd6f",
+      "mutatedHash": "9cf9dc0069bd340d6c9d2af31295e086612385eadf25cb939973b9d0bb7f2fc6",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "5cb4d5e9438c45b4b6ddae705330cf08"
+      }
+    },
+    {
+      "mutation": "cross-store-product",
+      "result": "SURVIVED",
+      "assertionFailures": 0,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java",
+      "originalBaseline": "PASS",
+      "originalHash": "944cd3b83b649999e95d006bd5d1a0fcb17f3d1193ebae3c5337ba153be4fd6f",
+      "mutatedHash": "f748855fc7b08927e3d28d06820c6b429d939e2b8f992197153e41a3c4de7a7b",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "026a4b2ed09548c48e25e5262ef850b6"
+      }
+    },
+    {
+      "mutation": "employee-store-scope",
+      "result": "KILLED",
+      "assertionFailures": 4,
+      "suite": "OrderingDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-store-biz/src/main/java/co/yixiang/yshop/module/store/service/storeshop/StoreAccessService.java",
+      "originalBaseline": "PASS",
+      "originalHash": "1c454caf4f8cfe4c8663ab03d763dd6628a8626569eacd99597b2c2a8e82e93c",
+      "mutatedHash": "f7e308ea265dc529afb66357dcf1be3886fd44fc7ea0fa3e975b477361e12573",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "f58f5fd46217468bbc4631099db5aafc"
+      }
+    },
+    {
+      "mutation": "cancel-payment-guard",
+      "result": "KILLED",
+      "assertionFailures": 3,
+      "suite": "PaymentCancellationDatabaseTest#activeOrUncertainBlocksCustomerAndExpiry",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/ordering/OrderPlacementService.java",
+      "originalBaseline": "PASS",
+      "originalHash": "944cd3b83b649999e95d006bd5d1a0fcb17f3d1193ebae3c5337ba153be4fd6f",
+      "mutatedHash": "e2668a54f0a00df3d985f0fbfcbfc06edff7575fb3b67453bffe5d9d1c2f36bf",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "e55ccdcaa5424908b67cf0eb27ba97e6"
+      }
+    },
+    {
+      "mutation": "cancel-uncertain-safe",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "PaymentCancellationDatabaseTest#activeOrUncertainBlocksCustomerAndExpiry",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/attempt/PaymentCancellationGuard.java",
+      "originalBaseline": "PASS",
+      "originalHash": "ab95936463363f49b230a9543571122ca06c9de3091797cb9a1f2fe9fa334fa4",
+      "mutatedHash": "a66d2b22dbd8aae36c596e0ff006579ae0fcd7f0fc9b8cebcf5c381b9487c2a5",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "7f8d37d93f52420fabf709636de2d5dd"
+      }
+    },
+    {
+      "mutation": "cancel-remote-proof",
+      "result": "KILLED",
+      "assertionFailures": 4,
+      "suite": "PaymentCancellationDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/attempt/PaymentCancellationGuard.java",
+      "originalBaseline": "PASS",
+      "originalHash": "ab95936463363f49b230a9543571122ca06c9de3091797cb9a1f2fe9fa334fa4",
+      "mutatedHash": "0e0810d4d97586ef2e6c5ad6ef83352f8cbe63ee0a7af85cd7c142f520183b9b",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "070b22621ba74f24a35fb9bb3694f636"
+      }
+    },
+    {
+      "mutation": "coupon-member-limit",
+      "result": "KILLED",
+      "assertionFailures": 42,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService.java",
+      "originalBaseline": "PASS",
+      "originalHash": "5b996997784a73bf0be0da920b4a80523654183b6a190fb1af894d626ace9254",
+      "mutatedHash": "9e72e670d4876436b6edca751cd8ce84ad1951c6f3fb6de1c55e36c01e3b3e8b",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "c8035abd21dc46eba8f7daf90f5d99d8"
+      }
+    },
+    {
+      "mutation": "coupon-total-limit",
+      "result": "SURVIVED",
+      "assertionFailures": 0,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService.java",
+      "originalBaseline": "PASS",
+      "originalHash": "5b996997784a73bf0be0da920b4a80523654183b6a190fb1af894d626ace9254",
+      "mutatedHash": "1313f2a9d09480bac729d7a17b2ff203e31ce273822bb5c74a2af9a96e748898",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "48530f32144041f6b46407d0b28328ef"
+      }
+    },
+    {
+      "mutation": "coupon-expiration",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "CouponDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponMarketingService.java",
+      "originalBaseline": "PASS",
+      "originalHash": "5b996997784a73bf0be0da920b4a80523654183b6a190fb1af894d626ace9254",
+      "mutatedHash": "9863e779b73cf83250c6899270c4d228d8b399bcd06095be1fdd1e397f3742a6",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "57ba4b2d3cc04454bd18c73052469743"
+      }
+    },
+    {
+      "mutation": "coupon-claim-rate",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "CouponCodeSecurityTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponCodeGuard.java",
+      "originalBaseline": "PASS",
+      "originalHash": "f132b03f3042923d5f15a9fedfabed18ba9d71fbfced53a628c77c324a2f9019",
+      "mutatedHash": "f42cc2d23ae23de805ef446b1b873a6f1b7d737ece55484aeeee6195b9e43224",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "370ad6df70d94501a40fac60628180ef"
+      }
+    },
+    {
+      "mutation": "coupon-redis-fail-open",
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "suite": "CouponCodeSecurityTest",
+      "source": "yshop-drink-boot3/yshop-module-marketing/yshop-module-coupon-biz/src/main/java/co/yixiang/yshop/module/coupon/service/marketing/CouponCodeGuard.java",
+      "originalBaseline": "PASS",
+      "originalHash": "f132b03f3042923d5f15a9fedfabed18ba9d71fbfced53a628c77c324a2f9019",
+      "mutatedHash": "8d539a2dcd2b918e8ae151490931d048c30b5ec0c58b06b6f8df5f2bdfc5f1f1",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "353eb4e304f441cabc88e794be702a1c"
+      }
+    },
+    {
+      "mutation": "payment-amount",
+      "result": "KILLED",
+      "assertionFailures": 2,
+      "suite": "PaymentDatabaseTest",
+      "source": "yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/src/main/java/co/yixiang/yshop/module/order/service/payment/PaymentProcessor.java",
+      "originalBaseline": "PASS",
+      "originalHash": "0bfecf042456a0feb4a11a7584fbb95313c4b2915c7ac5ceded475a249d9fecd",
+      "mutatedHash": "ebed8c2ea2fe1083c4200e0955deff0f58373992b0063785e2a45b3f82e31b2d",
+      "executionIdentity": {
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "c37ea441f30f5710700d67c86b283f33b2749fc31ba42ce0a71dbabb399807db",
+        "runId": "dc6f6cf29ac94c3babf62a1f19aa246a"
+      }
+    },
+    {
+      "mutation": "coupon-form-stale-response",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "originalTests": 10,
+      "assertionFailures": 3,
+      "originalHash": "43efe2016d4ef4d9f2ef7c90993cd847b95ef720d3bc5fe2f4de20c15276b2a8",
+      "mutatedHash": "015217018d6abc95d6f837f86eb95376a493d3931cad2bad665d231b0967c43e",
+      "executionIdentity": {
+        "runId": "00e025daa04949f3a70abbef78d3c5c6",
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "428d6627b4d4011619548db1ab461b17a4b7c4ad3f8d5f7e9172c549235eb0e6"
+      }
+    },
+    {
+      "mutation": "cart-null-store-retains-context",
+      "originalBaseline": "PASS",
+      "originalTests": 22,
+      "result": "KILLED",
+      "assertionFailures": 1,
+      "originalHash": "40e64cadcf4a421826ef4476be314e64fc1539955aed552150373fd71123b5fc",
+      "mutatedHash": "581a7329341bb2c59d17cb51a3e5f08e37ba419f78268b65216caa7936e73e82",
+      "executionIdentity": {
+        "runId": "00e025daa04949f3a70abbef78d3c5c6",
+        "sourceSha": "bd76df6ed2838b40c5f66ca157cf88c21a780927",
+        "sourceDigest": "428d6627b4d4011619548db1ab461b17a4b7c4ad3f8d5f7e9172c549235eb0e6"
+      }
+    }
+  ],
+  "coreJavaScore": 89.29,
+  "combinedScore": 90.0,
+  "highRiskSurvivors": [
+    "inventory-sku-check",
+    "cross-store-product",
+    "coupon-total-limit"
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "issues": [
+    {
+      "privatePath": "baseline-build/4a2f15d9e2344e9c838c53e4a4196403/report.json",
+      "name": "首次构建缓存权限",
+      "category": "ENVIRONMENT_ISSUE",
+      "status": "FAILED",
+      "complete": true,
+      "cleanup": null
+    },
+    {
+      "privatePath": "baseline-quick/b1e7634f921441dbb717aadbe69df28e/report.json",
+      "name": "首次端口探测受限",
+      "category": "ENVIRONMENT_ISSUE",
+      "status": "FAILED",
+      "complete": true,
+      "cleanup": null
+    },
+    {
+      "privatePath": "coupon-pages-pilot-5/report.json",
+      "name": "页面链路脚本调试记录",
+      "category": "TEST_FRAMEWORK_ISSUE",
+      "status": "INCONCLUSIVE",
+      "complete": true,
+      "cleanup": "PASSED"
+    },
+    {
+      "privatePath": "coupon-pages-pilot-2/report.json",
+      "name": "页面链路脚本调试记录",
+      "category": "TEST_FRAMEWORK_ISSUE",
+      "status": "INCONCLUSIVE",
+      "complete": true,
+      "cleanup": "PASSED"
+    },
+    {
+      "privatePath": "coupon-pages-pilot-3/report.json",
+      "name": "页面链路脚本调试记录",
+      "category": "TEST_FRAMEWORK_ISSUE",
+      "status": "INCONCLUSIVE",
+      "complete": true,
+      "cleanup": "PASSED"
+    },
+    {
+      "privatePath": "coupon-pages-pilot-4/report.json",
+      "name": "页面链路脚本调试记录",
+      "category": "TEST_FRAMEWORK_ISSUE",
+      "status": "INCONCLUSIVE",
+      "complete": true,
+      "cleanup": "PASSED"
+    },
+    {
+      "privatePath": "coupon-pages-pilot-1/report.json",
+      "name": "页面链路脚本调试记录",
+      "category": "TEST_FRAMEWORK_ISSUE",
+      "status": "FAILED",
+      "complete": true,
+      "cleanup": "PASSED"
+    },
+    {
+      "privatePath": "coupon-pages-pilot-6/report.json",
+      "name": "页面链路脚本调试记录",
+      "category": "TEST_FRAMEWORK_ISSUE",
+      "status": "INCONCLUSIVE",
+      "complete": true,
+      "cleanup": "PASSED"
+    },
+    {
+      "privatePath": "fault-recovery-1/report.json",
+      "name": "补充实验未完整完成",
+      "category": "INCONCLUSIVE",
+      "status": "INCONCLUSIVE",
+      "complete": true,
+      "cleanup": "PASSED"
+    },
+    {
+      "privatePath": "browser-red/result.json",
+      "name": "浏览器用例编写阶段记录",
+      "category": "TEST_FRAMEWORK_ISSUE",
+      "status": "FAILED",
+      "failedInvocations": 2
+    },
+    {
+      "privatePath": "browser-red/result-attempt-2.json",
+      "name": "浏览器用例编写阶段记录",
+      "category": "TEST_FRAMEWORK_ISSUE",
+      "status": "FAILED",
+      "failedInvocations": 2
+    }
+  ],
+  "furtherFaultExperiments": "NOT_RUN: 用户最新范围；自动审批拒绝追加实验，已停止。"
+}

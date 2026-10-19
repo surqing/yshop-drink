@@ -43,6 +43,8 @@
         <spring.boot.version>3.2.2</spring.boot.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <surefire.reportsDirectory>${project.build.directory}/surefire-reports</surefire.reportsDirectory>
+        <quality.runId>UNATTRIBUTED</quality.runId>
     </properties>
 
     <dependencyManagement>
@@ -66,6 +68,11 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>${maven-surefire-plugin.version}</version>
+                    <configuration>
+                        <reportsDirectory>${surefire.reportsDirectory}</reportsDirectory>
+                        <systemPropertyVariables><quality.runId>${quality.runId}</quality.runId></systemPropertyVariables>
+                        <includes><include>**/*Test.java</include><include>**/*Tests.java</include><include>**/*Test2.java</include></includes>
+                    </configuration>
                 </plugin>
                 <!-- maven-compiler-plugin 插件，解决 spring-boot-configuration-processor + Lombok + MapStruct 组合 -->
                 <!-- https://stackoverflow.com/questions/33483697/re-run-spring-boot-configuration-annotation-processor-to-update-generated-metada -->
@@ -92,7 +99,7 @@
                             </path>
                         </annotationProcessorPaths>
                         <!-- 编译参数写在 arg 内，解决 Spring Boot 3.2 的 Parameter Name Discovery 问题 -->
-                        <debug>false</debug>
+                        <debug>true</debug>
                         <compilerArgs>
                             <arg>-parameters</arg>
                         </compilerArgs>
@@ -149,4 +156,16 @@
         </repository>
     </repositories>
 
+    <profiles>
+        <profile>
+            <id>quality-coverage</id>
+            <build><plugins><plugin>
+                <groupId>org.jacoco</groupId><artifactId>jacoco-maven-plugin</artifactId><version>0.8.12</version>
+                <executions>
+                    <execution><id>quality-agent</id><goals><goal>prepare-agent</goal></goals></execution>
+                    <execution><id>quality-report</id><phase>verify</phase><goals><goal>report</goal></goals></execution>
+                </executions>
+            </plugin></plugins></build>
+        </profile>
+    </profiles>
 </project>

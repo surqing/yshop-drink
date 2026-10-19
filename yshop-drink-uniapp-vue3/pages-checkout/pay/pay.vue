@@ -126,7 +126,7 @@
 						<view>
 							总计￥{{ total }}
 							<text v-if="orderType == 'takeout'">,配送费￥{{ store.deliveryPrice }}</text>
-							<text v-if="coupon.value">,￥-{{ coupon.value }}</text>
+							<text v-if="coupon.value">,￥-{{ couponDiscount(main.mycoupon,total).toFixed(2) }}</text>
 							,实付
 						</view>
 						<view class="font-size-extra-lg font-weight-bold">￥{{ amount }}</view>
@@ -222,7 +222,9 @@ import {
   nextTick
 } from 'vue'
 import { useMainStore } from '@/store/store'
-import { PAYMENT_FROZEN } from '@/utils/ordering-context'
+import { PAYMENT_FROZEN, eligibleCoupons } from '@/utils/ordering-context'
+import { cents } from '@/utils/catalog-options'
+import { couponDiscount, couponContextMatches } from '@/utils/coupon-context'
 import { storeToRefs } from 'pinia'
 import { onLoad,onShow ,onPullDownRefresh,onHide} from '@dcloudio/uni-app'
 import { formatDateTime,isWeixin } from '@/utils/util'
@@ -234,7 +236,7 @@ import {
   getWechatConfig
 } from '@/api/order'
 import {
-  couponCount
+  couponMine
 } from '@/api/coupon'
 // #ifdef H5
 import * as jweixin from 'weixin-js-sdk'
@@ -298,26 +300,13 @@ const subscribeMss = ref({
 })// 微信订阅信息
 const uToast = ref()
 
-const total = computed(() =>{
-	return cart.value.reduce((acc, cur) => acc + cur.number * cur.price, 0);
+const total = computed(() => cart.value.reduce((sum,item)=>sum + cents(item.price) * item.number,0) / 100)
+const amount = computed(() => {
+    const subtotal = cents(total.value)
+    const delivery = orderType.value === 'takeout' && store.value.distance > 0 ? cents(store.value.deliveryPrice) : 0
+    return ((subtotal - cents(couponDiscount(main.mycoupon,total.value)) + delivery) / 100).toFixed(2)
 })
-const amount = computed(() =>{
-	let amount = cart.value.reduce((acc, cur) => acc + cur.number * cur.price, 0);
-	// 加配送费
-	if (store.value.distance > 0 && orderType.value == 'takeout') {
-		amount += parseFloat(store.value.deliveryPrice);
-	}
-
-	
-	// 减去优惠券
-	if (main.mycoupon.hasOwnProperty('id')) {
-		amount -= parseFloat(main.mycoupon.value);
-	}
-	if(amount < 0){
-		amount = 0
-	}
-	return amount.toFixed(2);
-})
+let couponGeneration = 0
 
 onShow(() => {
 	coupon.value = main.mycoupon
@@ -373,15 +362,15 @@ const setPayType = (paytype) => {
 	})
 }
 const getCoupons = async() => {
-	//0=通用,1=自取,2=外卖
-	let type = orderType.value == 'takein' ? 1 : 2;
-	let data = await couponCount({
-		shop_id: store.value.id ? store.value.id : 0,
-		type: type
-	});
-	if (data) {
-		coupons.value = data;
-	}
+    const generation=++couponGeneration, shop=store.value.id, type=orderType.value
+    try {
+        const data=await couponMine({shopId:shop,type:0,page:1,pagesize:100})
+        if(generation!==couponGeneration || !couponContextMatches(shop,store.value.id,type,orderType.value))return
+        const valid=eligibleCoupons(data,shop,type,total.value)
+        coupons.value=valid.length
+        if(main.mycoupon.id && !valid.some(c=>c.id===main.mycoupon.id)){main.DEL_COUPON();coupon.value={}}
+        else if(main.mycoupon.id){main.SET_COUPON(valid.find(c=>c.id===main.mycoupon.id));coupon.value=main.mycoupon}
+    }catch { /* Network failure retains the last selection and checkout retry identity. */ }
 }
 // 选择时间
 const choiceTime = (value) => {
@@ -434,9 +423,11 @@ const takout = (value) => {
 		if (coupon.value.type != 0) {
 			if (coupon.value.type == 1 && orderType.value == 'takeout') {
 				coupon.value = {};
+                main.DEL_COUPON();
 			}
 			if (coupon.value.type == 2 && orderType.value == 'takein') {
 				coupon.value = {};
+                main.DEL_COUPON();
 			}
 		}
 	}
@@ -455,7 +446,7 @@ const chooseAddress = () => {
 	});
 }
 const goToPackages = () => {
-	let newamount = amount.value;
+	let newamount = total.value;
 	let coupon_id = coupon.value.id ? coupon.value.id : 0;
 	let type = orderType.value == 'takein' ? 1 : 2;
 	let shop_id = store.value.id;

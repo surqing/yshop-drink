@@ -1,0 +1,2 @@
+# Optional Docker-backed actual HTTP write acceptance only
+PyYAML==6.0.2

@@ -39,6 +39,8 @@ public interface OAuth2TokenService {
      * @return 访问令牌的信息
      */
     OAuth2AccessTokenDO refreshAccessToken(String refreshToken, String clientId);
+    OAuth2AccessTokenDO refreshAccessToken(String token,String clientId,Integer expectedType);
+    void revokeUserTokens(Long userId,Integer userType);
 
     /**
      * 获得访问令牌
@@ -68,6 +70,7 @@ public interface OAuth2TokenService {
      * @return 访问令牌的信息
      */
     OAuth2AccessTokenDO removeAccessToken(String accessToken);
+    OAuth2AccessTokenDO removeAccessToken(String token,Integer expectedType);
 
     /**
      * 获得访问令牌分页

@@ -153,7 +153,7 @@ public class MenuServiceImplTest extends BaseDbUnitTest {
         // 测试 name 不匹配
         menuMapper.insert(cloneIgnoreId(menuDO, o -> o.setName("艿")));
         // 准备参数
-        MenuListReqVO reqVO = new MenuListReqVO().setName("芋").setStatus(CommonStatusEnum.ENABLE.getStatus());
+        MenuListReqVO reqVO = new MenuListReqVO().setName("ysh").setStatus(CommonStatusEnum.ENABLE.getStatus());
 
         // 调用
         List<MenuDO> result = menuService.getMenuList(reqVO);

@@ -28,7 +28,10 @@ public class AppSocialUserBindReqVO {
     private String code;
 
     @Schema(description = "state", required = true, example = "9b2ffbc1-7425-4155-9894-9d5c08541d62")
-    @NotEmpty(message = "state 不能为空")
+
     private String state;
 
+    @NotEmpty(message = "当前绑定手机号的验证码不能为空")
+    @jakarta.validation.constraints.Pattern(regexp="[0-9]{4,6}")
+    private String smsCode;
 }

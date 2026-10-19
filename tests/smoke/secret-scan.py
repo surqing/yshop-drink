@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exact-value regression scan of committed PR changes, working changes and runtime."""
+import os
 import argparse
 import json
 import io
@@ -56,7 +57,7 @@ def artifact_contains_private(data, values, depth=0):
 
 def main():
     repo = Path(__file__).resolve().parents[2]
-    workspace = repo.parent
+    workspace = Path(os.environ.get('YSHOP_TEST_WORKSPACE', repo.parent)).resolve()
     parser = argparse.ArgumentParser()
     parser.add_argument('--base', default=DEFAULT_BASE, help='PR base ref; scan from its merge-base with HEAD')
     parser.add_argument('--runtime', action='append', default=[])

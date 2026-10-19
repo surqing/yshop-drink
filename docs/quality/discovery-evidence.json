@@ -1,0 +1,735 @@
+{
+  "task": "PHASE6Q-DEFECT-DISCOVERY",
+  "baselineSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+  "baselineSourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+  "rawEvidenceVisibility": "PRIVATE; hashes identify original files, no raw logs/screenshots/identities published",
+  "runs": {
+    "BUILD": {
+      "privatePath": "current-build/a91165144941477a862c34f948d2e280/report.json",
+      "sha256": "514afe5285f9d5e18aedcbfe2845aa5d994ed09c4ed1021b0e1040016812354d",
+      "runId": "a91165144941477a862c34f948d2e280",
+      "sourceSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+      "sourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+      "status": "PASSED",
+      "complete": true,
+      "sourceUnchanged": true,
+      "startedAt": 1791631017.4569778,
+      "endedAt": 1791631165.924895,
+      "steps": [
+        {
+          "name": "backend-build",
+          "status": "PASSED",
+          "tests": null
+        },
+        {
+          "name": "vue-build",
+          "status": "PASSED",
+          "tests": null
+        },
+        {
+          "name": "vue-types",
+          "status": "PASSED",
+          "tests": null
+        }
+      ]
+    },
+    "JAVA": {
+      "privatePath": "baseline-java/ddd94ba4cf6a4475879835b3e5ebdc16/report.json",
+      "sha256": "b5841c049609f4ced763e47664225f8dd873f9be2f2e7191c20416b24ec744c6",
+      "runId": "ddd94ba4cf6a4475879835b3e5ebdc16",
+      "sourceSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+      "sourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+      "status": "PASSED",
+      "complete": true,
+      "sourceUnchanged": true,
+      "startedAt": 1791631090.22812,
+      "endedAt": 1791633271.4075441,
+      "steps": [
+        {
+          "name": "java-yshop-common",
+          "status": "PASSED",
+          "tests": 1
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-biz-data-permission",
+          "status": "PASSED",
+          "tests": 48
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-biz-ip",
+          "status": "PASSED",
+          "tests": 6
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-excel",
+          "status": "PASSED",
+          "tests": 2
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-mybatis",
+          "status": "PASSED",
+          "tests": 3
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-test",
+          "status": "PASSED",
+          "tests": 3
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-web",
+          "status": "PASSED",
+          "tests": 20
+        },
+        {
+          "name": "java-yshop-module-order-biz",
+          "status": "PASSED",
+          "tests": 1015
+        },
+        {
+          "name": "java-yshop-module-shop-biz",
+          "status": "PASSED",
+          "tests": 7
+        },
+        {
+          "name": "java-yshop-module-member-biz",
+          "status": "PASSED",
+          "tests": 23
+        },
+        {
+          "name": "java-yshop-module-pay-biz",
+          "status": "PASSED",
+          "tests": 81
+        },
+        {
+          "name": "java-yshop-module-system-biz",
+          "status": "PASSED",
+          "tests": 512
+        }
+      ]
+    },
+    "FRONTEND": {
+      "privatePath": "baseline-frontend/9e06cc584fff4e4eb5921973a380ea6f/report.json",
+      "sha256": "24f1961958d0ba77372b5c2064a3bb7ee0c971b4502381e49a001ad62cf87547",
+      "runId": "9e06cc584fff4e4eb5921973a380ea6f",
+      "sourceSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+      "sourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+      "status": "PASSED",
+      "complete": true,
+      "sourceUnchanged": true,
+      "startedAt": 1791631003.9283378,
+      "endedAt": 1791631056.175781,
+      "steps": [
+        {
+          "name": "node-0",
+          "status": "PASSED",
+          "tests": 2
+        },
+        {
+          "name": "node-1",
+          "status": "PASSED",
+          "tests": 22
+        },
+        {
+          "name": "node-2",
+          "status": "PASSED",
+          "tests": 11
+        },
+        {
+          "name": "node-3",
+          "status": "PASSED",
+          "tests": 13
+        },
+        {
+          "name": "node-4",
+          "status": "PASSED",
+          "tests": 4
+        },
+        {
+          "name": "python-0",
+          "status": "PASSED",
+          "tests": 46
+        },
+        {
+          "name": "python-1",
+          "status": "PASSED",
+          "tests": 3
+        },
+        {
+          "name": "python-2",
+          "status": "PASSED",
+          "tests": 16
+        },
+        {
+          "name": "python-3",
+          "status": "PASSED",
+          "tests": 37
+        },
+        {
+          "name": "python-4",
+          "status": "PASSED",
+          "tests": 4
+        },
+        {
+          "name": "python-5",
+          "status": "PASSED",
+          "tests": 26
+        },
+        {
+          "name": "vue-components",
+          "status": "PASSED",
+          "tests": 10
+        },
+        {
+          "name": "uniapp-v8-coverage",
+          "status": "PASSED",
+          "tests": null
+        }
+      ]
+    },
+    "BROWSER": {
+      "privatePath": "baseline-browser/a7b5f42ee94d4158a61d7995f492fa1f/report.json",
+      "sha256": "0b2008903da64ceb8010874f9f7cc2626e6e615a2dfff2fe6d531209662e1d37",
+      "runId": "a7b5f42ee94d4158a61d7995f492fa1f",
+      "sourceSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+      "sourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+      "status": "PASSED",
+      "complete": true,
+      "sourceUnchanged": true,
+      "startedAt": 1791631007.558971,
+      "endedAt": 1791631046.377506,
+      "steps": [
+        {
+          "name": "browser-pages",
+          "status": "PASSED",
+          "tests": 5
+        }
+      ]
+    },
+    "MINI-PAGES": {
+      "privatePath": "baseline-mini/79ee2f67c53d4064b639df5dae37265f/report.json",
+      "sha256": "6c2623bf50cb6a2cf53b4d311136e2cb55c1ec9d6d72ac47fb448fb56e4a0c0b",
+      "runId": "79ee2f67c53d4064b639df5dae37265f",
+      "sourceSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+      "sourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+      "status": "PASSED",
+      "complete": true,
+      "sourceUnchanged": true,
+      "startedAt": 1791631320.5169868,
+      "endedAt": 1791631495.540698,
+      "steps": [
+        {
+          "name": "cross-end-owned",
+          "status": "PASSED",
+          "tests": 7
+        }
+      ]
+    },
+    "PERFORMANCE": {
+      "privatePath": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/report.json",
+      "sha256": "83ea1c7b4064e431cda0ed3beb1b15997d341657e540e182803b6bbf571eda36",
+      "runId": "05ac8dc8dfb144619573e2471dbb44f1",
+      "sourceSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+      "sourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+      "status": "PASSED",
+      "complete": true,
+      "sourceUnchanged": true,
+      "startedAt": 1791631152.094035,
+      "endedAt": 1791631286.686441,
+      "steps": [
+        {
+          "name": "cross-end-owned",
+          "status": "PASSED",
+          "tests": 7
+        }
+      ]
+    },
+    "INTEGRATION": {
+      "privatePath": "baseline-integration/74a4bb845ba4416abea73f8543be22aa/report.json",
+      "sha256": "4663d5788086bdfa8b5fb3f064f9262554c878fac7309b362642299b462b7f04",
+      "runId": "74a4bb845ba4416abea73f8543be22aa",
+      "sourceSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+      "sourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+      "status": "PASSED",
+      "complete": true,
+      "sourceUnchanged": true,
+      "startedAt": 1791631148.875356,
+      "endedAt": 1791633281.489624,
+      "steps": [
+        {
+          "name": "owned-controlled-dependencies",
+          "status": "PASSED",
+          "tests": null
+        }
+      ]
+    },
+    "MUTATION": {
+      "privatePath": "baseline-mutation/ce99980b5c1f4205953dcd4f5bc6b13d/report.json",
+      "sha256": "bcc2c73b0f01b2c8a2604bb8096844596b99b4b619fa2edffc9cb55283b5ea4d",
+      "runId": "ce99980b5c1f4205953dcd4f5bc6b13d",
+      "sourceSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+      "sourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+      "status": "PASSED",
+      "complete": true,
+      "sourceUnchanged": true,
+      "startedAt": 1791631094.188237,
+      "endedAt": 1791632535.41395,
+      "steps": [
+        {
+          "name": "mutation",
+          "status": "PASSED",
+          "tests": null
+        },
+        {
+          "name": "frontend-mutation",
+          "status": "PASSED",
+          "tests": null
+        }
+      ]
+    },
+    "SECURITY": {
+      "privatePath": "baseline-security/c248c6e16b514a2399dc402c5efc66fe/report.json",
+      "sha256": "d51df17b16d4f6a3aad16bad546e9f37ddcb1326eee88aafb0317566a8e8a017",
+      "runId": "c248c6e16b514a2399dc402c5efc66fe",
+      "sourceSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+      "sourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+      "status": "PASSED",
+      "complete": true,
+      "sourceUnchanged": true,
+      "startedAt": 1791631586.259795,
+      "endedAt": 1791633290.92577,
+      "steps": [
+        {
+          "name": "node-0",
+          "status": "PASSED",
+          "tests": 2
+        },
+        {
+          "name": "node-1",
+          "status": "PASSED",
+          "tests": 22
+        },
+        {
+          "name": "node-2",
+          "status": "PASSED",
+          "tests": 11
+        },
+        {
+          "name": "node-3",
+          "status": "PASSED",
+          "tests": 13
+        },
+        {
+          "name": "node-4",
+          "status": "PASSED",
+          "tests": 4
+        },
+        {
+          "name": "python-0",
+          "status": "PASSED",
+          "tests": 46
+        },
+        {
+          "name": "python-1",
+          "status": "PASSED",
+          "tests": 3
+        },
+        {
+          "name": "python-2",
+          "status": "PASSED",
+          "tests": 16
+        },
+        {
+          "name": "python-3",
+          "status": "PASSED",
+          "tests": 37
+        },
+        {
+          "name": "python-4",
+          "status": "PASSED",
+          "tests": 4
+        },
+        {
+          "name": "python-5",
+          "status": "PASSED",
+          "tests": 26
+        },
+        {
+          "name": "java-yshop-spring-boot-starter-web",
+          "status": "PASSED",
+          "tests": 7
+        },
+        {
+          "name": "java-yshop-module-order-biz",
+          "status": "PASSED",
+          "tests": 18
+        },
+        {
+          "name": "java-yshop-module-system-biz",
+          "status": "PASSED",
+          "tests": 72
+        },
+        {
+          "name": "offline-credential-guard",
+          "status": "PASSED",
+          "tests": null
+        }
+      ]
+    }
+  },
+  "javaCertificates": [
+    {
+      "privatePath": "baseline-java/ddd94ba4cf6a4475879835b3e5ebdc16/java-evidence/cc50361861c34ce58c7f08e834c2c4ba/evidence.json",
+      "sha256": "20951f7488ffe8471e03a9bad2e302ff498dd2ccd62f0b35317851421ffbbad0"
+    },
+    {
+      "privatePath": "baseline-java/ddd94ba4cf6a4475879835b3e5ebdc16/java-evidence/e3b57b781a724721bf032d4203644c79/evidence.json",
+      "sha256": "973d94609017eb3eae3a202c205a8bbceb75224a0452e955aa3eb4c4610f6173"
+    },
+    {
+      "privatePath": "baseline-java/ddd94ba4cf6a4475879835b3e5ebdc16/java-evidence/332a27e75ff94830904346021bd2515a/evidence.json",
+      "sha256": "59e4a47d0db7270e76b71af23a169cdfd1b87e7d4e5e381222db206a0f462ddd"
+    },
+    {
+      "privatePath": "baseline-java/ddd94ba4cf6a4475879835b3e5ebdc16/java-evidence/79e4548986174679b6edc60b17eeaddb/evidence.json",
+      "sha256": "de9072430e65014789b5cb514cd349a12bcac3878f42d85396a9aff2945ab6a7"
+    },
+    {
+      "privatePath": "baseline-java/ddd94ba4cf6a4475879835b3e5ebdc16/java-evidence/c3b1e1b043e44a28b2767a5289e2a68c/evidence.json",
+      "sha256": "e172d9428c5a0612595e6f0b5a03ca24715ad747e12f45733695a490b430817b"
+    },
+    {
+      "privatePath": "baseline-java/ddd94ba4cf6a4475879835b3e5ebdc16/java-evidence/827ca7f38fa444dbacc19e5a67aa9963/evidence.json",
+      "sha256": "26b61573c827484e9aab83f78b0cce4f13bcad6593a876855fa25be001e2460b"
+    },
+    {
+      "privatePath": "baseline-java/ddd94ba4cf6a4475879835b3e5ebdc16/java-evidence/97791b14f0f044f89609754e01631159/evidence.json",
+      "sha256": "2e0613d56c4a880d47db51f88d908d6d979d70b7dff0b9696015bc213121440d"
+    },
+    {
+      "privatePath": "baseline-java/ddd94ba4cf6a4475879835b3e5ebdc16/java-evidence/9ac58821a6224c05a74c827d7bae68f4/evidence.json",
+      "sha256": "f5cc68c92348df622fe8f3126f776fd74c1d4e28967dd6ba45ee0cca8b0d948b"
+    },
+    {
+      "privatePath": "baseline-java/ddd94ba4cf6a4475879835b3e5ebdc16/java-evidence/f9634448d42a4695a716ec9e73ffecda/evidence.json",
+      "sha256": "26c93bcf4a585b739a4ed4c2a63e745824e1a3e20c3a00c37e662a79d3a30b25"
+    },
+    {
+      "privatePath": "baseline-java/ddd94ba4cf6a4475879835b3e5ebdc16/java-evidence/0b1751a2b3744a5bbe00526682417e2e/evidence.json",
+      "sha256": "a178b942b04cac4dcb8c19a4a26d6b0d353a967e0d8a634b43bcbab8107a9fd0"
+    },
+    {
+      "privatePath": "baseline-java/ddd94ba4cf6a4475879835b3e5ebdc16/java-evidence/5e1da88d8e304a71867cb0d48e525ff1/evidence.json",
+      "sha256": "de738e077d3b7c87e9ef6e12f1f433c3a76132f7127d15e8f74edfdc2eabb16c"
+    },
+    {
+      "privatePath": "baseline-java/ddd94ba4cf6a4475879835b3e5ebdc16/java-evidence/27f3c73144984149b7b472092f681fca/evidence.json",
+      "sha256": "30a176e1951a48ebe4cc375a9e7a55e2ef800534fe858764ce66e09baa866a59"
+    },
+    {
+      "privatePath": "baseline-integration/74a4bb845ba4416abea73f8543be22aa/controlled/redis-evidence/eef4292a02f04da089b2f0993075e8da/evidence.json",
+      "sha256": "6e6bb280c9ee172c070cf0af2067a508a3ecf03dcfb8fa774751de128a0bb5cd"
+    },
+    {
+      "privatePath": "baseline-integration/74a4bb845ba4416abea73f8543be22aa/controlled/auth/evidence/1c2cc7ae535c4438952b772ed80e0169/evidence.json",
+      "sha256": "b2fc4cef482ddb83bc6f1b02896ca72f3dc54afd8b751fed910cdc3d12556feb"
+    },
+    {
+      "privatePath": "baseline-integration/74a4bb845ba4416abea73f8543be22aa/controlled/acceptance/quality/77a11b4fd5a7407a9abbe3462e6a526a/evidence.json",
+      "sha256": "fcc2032ee1e164c61272cd4374aa7b5c4e4741daaa38bb083eaeb1dff3d392cd"
+    },
+    {
+      "privatePath": "baseline-integration/74a4bb845ba4416abea73f8543be22aa/controlled/acceptance/quality/9c777a6fa1364866a50d5ebea565f376/evidence.json",
+      "sha256": "6c435cd3ce754ba91b6923d6221f73116194e86e0813513520f6f3f364d37286"
+    },
+    {
+      "privatePath": "baseline-integration/74a4bb845ba4416abea73f8543be22aa/controlled/acceptance/quality/5e4635eb6deb4a9d92c6a206a74f25d0/evidence.json",
+      "sha256": "21d671fed277c0db6838abe36b672ae1d611586da311999ce79a2cb9a768a989"
+    }
+  ],
+  "javaUniqueCases": 1214,
+  "javaDistinctInvocations": 1822,
+  "countingRule": "Java parameter variants counted separately; repeated iterations and H2/MySQL reruns deduplicated. QUICK retains validated per-file case counts. SQL oracles are checks, not full user journeys. 240 load requests and 30 mutation experiments reported separately.",
+  "automatedChecks": {
+    "JAVA": 1214,
+    "QUICK": 184,
+    "VTU": 10,
+    "BROWSER": 5,
+    "HTTP": 29,
+    "CROSS-END": 2,
+    "CROSS-SQL": 5,
+    "MINI": 10,
+    "COUPON-MINI": 12,
+    "COUPON-SQL": 5,
+    "PERFORMANCE": 2,
+    "RED": 9
+  },
+  "totalUniqueChecks": 1487,
+  "checkStatuses": {
+    "PASSED": 1478,
+    "FAILED": 9
+  },
+  "matrixStatuses": {
+    "PASSED": 88,
+    "FAILED": 8,
+    "NOT_RUN": 12,
+    "BLOCKED": 2
+  },
+  "crossEnd": {
+    "privatePath": "baseline-performance/05ac8dc8dfb144619573e2471dbb44f1/cross-end/report.json",
+    "sha256": "291da86da20380a79548b5de5ae985d13e0dd1f2231d814d4d476a805d4456f3",
+    "httpNamedChecks": 45,
+    "uniqueAfterRoundDedup": 29,
+    "cleanup": "PASS"
+  },
+  "couponLifecycle": {
+    "privatePath": "coupon-pages-pilot-7/report.json",
+    "sha256": "f003dc3e4404e890eba3ab8a53a62c7ea6f9afdf60f346b989a4af3f7b6a3abf",
+    "sourceSha": "c4a180833acbfa943dc99348d304dff8bd4fed83",
+    "sourceDigest": "b3192ff7645d4f02062b94c764fed54cd43e2b3074da50112de37bc220308717",
+    "runId": "8142febf7a5d4dd8977b2f8df820de32",
+    "status": "PASSED",
+    "cleanup": "PASSED",
+    "pageChecks": 12,
+    "sqlChecks": 5,
+    "syntheticCompletion": {
+      "first": "FIRST_SUCCESS",
+      "duplicate": "IDEMPOTENT_DUPLICATE",
+      "providerRequests": 0
+    }
+  },
+  "performance": {
+    "result": "PASSED",
+    "scenarios": [
+      {
+        "scenario": "catalog",
+        "requests": 120,
+        "workers": 12,
+        "instances": 2,
+        "seconds": 0.82,
+        "throughputPerSecond": 146.408,
+        "p95Ms": 169.635,
+        "p99Ms": 240.858,
+        "errorRate": 0.0,
+        "result": "PASSED"
+      },
+      {
+        "scenario": "same-member-auth",
+        "requests": 120,
+        "workers": 12,
+        "instances": 2,
+        "seconds": 0.797,
+        "throughputPerSecond": 150.61,
+        "p95Ms": 124.804,
+        "p99Ms": 141.414,
+        "errorRate": 0.0,
+        "result": "PASSED"
+      }
+    ],
+    "mysqlLockDelta": {
+      "Innodb_row_lock_time": 5330,
+      "Innodb_row_lock_waits": 119
+    },
+    "scope": "bounded 240 requests; same identity authorization and catalog reads across two processes; no production SLO or causal lock diagnosis",
+    "releaseLoad": "NOT_RUN",
+    "crashRecovery": "NOT_RUN"
+  },
+  "mutations": [
+    {
+      "mutation": "auth-admin-reenable-revocation",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 1
+    },
+    {
+      "mutation": "inventory-repeat-release",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 3
+    },
+    {
+      "mutation": "cross-store-price",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 1
+    },
+    {
+      "mutation": "coupon-double-reservation",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 21
+    },
+    {
+      "mutation": "duplicate-fulfillment-complete",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 12
+    },
+    {
+      "mutation": "auth-refresh-disable-bypass",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 2
+    },
+    {
+      "mutation": "auth-cache-revocation-bypass",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 23
+    },
+    {
+      "mutation": "payment-freeze-bypass",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 1
+    },
+    {
+      "mutation": "late-success-terminal",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 4
+    },
+    {
+      "mutation": "duplicate-event-result",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 10
+    },
+    {
+      "mutation": "inventory-wrong-debit",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 34
+    },
+    {
+      "mutation": "cross-store-all-defences",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 5
+    },
+    {
+      "mutation": "coupon-total-all-defences",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 36
+    },
+    {
+      "mutation": "coupon-reuse-state",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 3
+    },
+    {
+      "mutation": "coupon-use-expired",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 22
+    },
+    {
+      "mutation": "inventory-sku-check",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 1
+    },
+    {
+      "mutation": "inventory-conditional-update",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 1
+    },
+    {
+      "mutation": "cross-store-product",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 1
+    },
+    {
+      "mutation": "employee-store-scope",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 4
+    },
+    {
+      "mutation": "cancel-payment-guard",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 3
+    },
+    {
+      "mutation": "cancel-uncertain-safe",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 1
+    },
+    {
+      "mutation": "cancel-remote-proof",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 4
+    },
+    {
+      "mutation": "coupon-member-limit",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 43
+    },
+    {
+      "mutation": "coupon-total-limit",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 1
+    },
+    {
+      "mutation": "coupon-expiration",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 1
+    },
+    {
+      "mutation": "coupon-claim-rate",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 1
+    },
+    {
+      "mutation": "coupon-redis-fail-open",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 1
+    },
+    {
+      "mutation": "payment-amount",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 2
+    },
+    {
+      "mutation": "coupon-form-stale-response",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 3
+    },
+    {
+      "mutation": "cart-null-store-retains-context",
+      "result": "KILLED",
+      "originalBaseline": "PASS",
+      "assertionFailures": 1
+    }
+  ],
+  "mutationResultCounts": {
+    "KILLED": 30
+  },
+  "baselineFindings": [
+    {
+      "privatePath": "exploration-http-1/report.json",
+      "sha256": "37a9b156523aa37cd4ebc219b1e9a87279bfa76ab7dd3e13fc20e850b75c2e10"
+    },
+    {
+      "privatePath": "independent-http-2/report.json",
+      "sha256": "f4e02965d9497bd0fcac669d12244a6dc8c554056968d5f80fd443af1fb28b39"
+    },
+    {
+      "privatePath": "browser-red/result-attempt-3.json",
+      "sha256": "f6372590c3bc0a3ace57cd25320003c082e22485f9d04fb66e2b2302e22fe176"
+    }
+  ]
+}

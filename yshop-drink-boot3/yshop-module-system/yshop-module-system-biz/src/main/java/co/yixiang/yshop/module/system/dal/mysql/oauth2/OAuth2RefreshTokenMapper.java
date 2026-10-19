@@ -17,4 +17,15 @@ public interface OAuth2RefreshTokenMapper extends BaseMapperX<OAuth2RefreshToken
         return selectOne(OAuth2RefreshTokenDO::getRefreshToken, refreshToken);
     }
 
+    default OAuth2RefreshTokenDO lockByRefreshToken(String token) {
+        return selectOne(new LambdaQueryWrapperX<OAuth2RefreshTokenDO>()
+                .eq(OAuth2RefreshTokenDO::getRefreshToken, token).last("FOR UPDATE"));
+    }
+
+    default java.util.List<OAuth2RefreshTokenDO> lockByUser(Long id, Integer type) {
+        return selectList(new LambdaQueryWrapperX<OAuth2RefreshTokenDO>()
+                .eq(OAuth2RefreshTokenDO::getUserId,id).eq(OAuth2RefreshTokenDO::getUserType,type)
+                .orderByAsc(OAuth2RefreshTokenDO::getId).last("FOR UPDATE"));
+    }
+
 }

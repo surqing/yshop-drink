@@ -17,6 +17,26 @@ import co.yixiang.yshop.module.member.controller.admin.useraddress.vo.*;
 @Mapper
 public interface UserAddressMapper extends BaseMapperX<UserAddressDO> {
 
+    default UserAddressDO selectOwned(Long uid, Long addressId) {
+        return selectOne(new LambdaQueryWrapperX<UserAddressDO>()
+                .eq(UserAddressDO::getId, addressId).eq(UserAddressDO::getUid, uid));
+    }
+
+    default int updateOwned(Long uid, Long addressId, UserAddressDO update) {
+        return update(update, new LambdaQueryWrapperX<UserAddressDO>()
+                .eq(UserAddressDO::getId, addressId).eq(UserAddressDO::getUid, uid));
+    }
+
+    default int deleteOwned(Long uid, Long addressId) {
+        return delete(new LambdaQueryWrapperX<UserAddressDO>()
+                .eq(UserAddressDO::getId, addressId).eq(UserAddressDO::getUid, uid));
+    }
+
+    default void clearDefaults(Long uid) {
+        update(UserAddressDO.builder().isDefault(0).build(),
+                new LambdaQueryWrapperX<UserAddressDO>().eq(UserAddressDO::getUid, uid));
+    }
+
     default PageResult<UserAddressDO> selectPage(UserAddressPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<UserAddressDO>()
                 .eqIfPresent(UserAddressDO::getUid, reqVO.getUid())

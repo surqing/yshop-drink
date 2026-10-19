@@ -328,7 +328,7 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
         String refreshToken = randomString();
         // mock 方法
         OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class);
-        when(oauth2TokenService.refreshAccessToken(eq(refreshToken), eq("default")))
+        when(oauth2TokenService.refreshAccessToken(eq(refreshToken), eq("default"), eq(2)))
                 .thenReturn(accessTokenDO);
 
         // 调用
@@ -344,7 +344,7 @@ public class AdminAuthServiceImplTest extends BaseDbUnitTest {
         // mock
         OAuth2AccessTokenDO accessTokenDO = randomPojo(OAuth2AccessTokenDO.class, o -> o.setUserId(1L)
                 .setUserType(UserTypeEnum.ADMIN.getValue()));
-        when(oauth2TokenService.removeAccessToken(eq(token))).thenReturn(accessTokenDO);
+        when(oauth2TokenService.removeAccessToken(eq(token),eq(2))).thenReturn(accessTokenDO);
 
         // 调用
         authService.logout(token, LoginLogTypeEnum.LOGOUT_SELF.getType());

@@ -19,6 +19,7 @@ export interface UserVO {
   status: boolean
   couponId: number
   exchangeCode: string
+  reservationState: string
 }
 export const getUserList = async (id) => {
   return await request.get({ url: `/coupon/user/list?couponId=`+id })
@@ -52,3 +53,5 @@ export const deleteUser = async (id: number) => {
 export const exportUser = async (params) => {
   return await request.download({ url: `/coupon/user/export-excel`, params })
 }
+
+export const invalidateUser = (id: number, reason: string) => request.post({url: `/coupon/user/invalidate`, data: {id,reason}})

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 """Read-only checks against the established local dev database; no credentials in output."""
 import importlib.util
 import json
@@ -6,7 +7,7 @@ from pathlib import Path
 import re
 import sys
 
-workspace = Path(__file__).resolve().parents[3]
+workspace = Path(os.environ.get('YSHOP_TEST_WORKSPACE',Path(__file__).resolve().parents[3])).resolve()
 spec = importlib.util.spec_from_file_location('local_database', workspace / '.local-dev/database.py')
 db = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(db)

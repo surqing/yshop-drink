@@ -18,6 +18,7 @@ import jakarta.annotation.Resource;
  */
 @Service
 @Validated
+@lombok.extern.slf4j.Slf4j
 public class StoreOrderStatusServiceImpl extends ServiceImpl<StoreOrderStatusMapper, StoreOrderStatusDO> implements StoreOrderStatusService {
 
     @Resource
@@ -37,11 +38,17 @@ public class StoreOrderStatusServiceImpl extends ServiceImpl<StoreOrderStatusMap
         storeOrderStatus.setOid(oid);
         storeOrderStatus.setChangeType(changetype);
         storeOrderStatus.setChangeMessage(changeMessage);
-        this.baseMapper.insert(storeOrderStatus);
+        if (this.baseMapper.insert(storeOrderStatus) != 1) throw new IllegalStateException("ORDER_STATUS_INSERT_FAILED");
 
         //异步统计
         if (!co.yixiang.yshop.module.order.enums.OrderLogEnum.PAY_ORDER_SUCCESS.getValue().equals(changetype)) {
-            asyncStoreOrderService.orderData(uid);
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override public void afterCommit() {
+                            try { asyncStoreOrderService.orderData(uid); }
+                            catch (RuntimeException failure) { log.warn("order statistics deferred category={}", failure.getClass().getSimpleName()); }
+                        }
+                    });
         } // Payment statistics are triggered by PaymentEffects after commit.
 
     }
