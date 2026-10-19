@@ -1,18 +1,14 @@
 package co.yixiang.yshop.module.score.service.scoreorder;
 
 import cn.hutool.core.util.IdUtil;
-import cn.hutool.core.util.NumberUtil;
-import cn.hutool.core.util.StrUtil;
-import co.yixiang.yshop.framework.common.constant.ShopConstants;
 import co.yixiang.yshop.framework.common.enums.OrderInfoEnum;
 import co.yixiang.yshop.framework.common.enums.ShopCommonEnum;
-import co.yixiang.yshop.framework.common.exception.ErrorCode;
 import co.yixiang.yshop.framework.common.util.servlet.ServletUtils;
-import co.yixiang.yshop.framework.ip.core.utils.IPUtils;
 import co.yixiang.yshop.module.member.dal.dataobject.user.MemberUserDO;
+import co.yixiang.yshop.module.member.dal.mysql.user.MemberUserMapper;
+import java.math.BigDecimal;
 import co.yixiang.yshop.module.member.dal.dataobject.useraddress.UserAddressDO;
 import co.yixiang.yshop.module.member.enums.BillDetailEnum;
-import co.yixiang.yshop.module.member.service.user.MemberUserService;
 import co.yixiang.yshop.module.member.service.useraddress.AppUserAddressService;
 import co.yixiang.yshop.module.member.service.userbill.UserBillService;
 import co.yixiang.yshop.module.score.controller.app.order.param.AppScoreOrderParam;
@@ -28,8 +24,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,12 +32,11 @@ import org.springframework.validation.annotation.Validated;
 
 import jakarta.annotation.Resource;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import static co.yixiang.yshop.framework.common.exception.util.ServiceExceptionUtil.exception;
-import static co.yixiang.yshop.module.member.enums.ErrorCodeConstants.USER_ADDRESS_NOT_EXISTS;
+import static co.yixiang.yshop.module.member.enums.ErrorCodeConstants.USER_NOT_EXISTS;
 import static co.yixiang.yshop.module.score.enums.ErrorCodeConstants.*;
 
 /**
@@ -62,15 +55,12 @@ public class AppScoreOrderServiceImpl extends ServiceImpl<ScoreOrderMapper, Scor
     @Resource
     private AppScoreProductService appScoreProductService;
     @Resource
-    private MemberUserService userService;
-    @Resource
-    private RedissonClient redissonClient;
+    private MemberUserMapper memberUserMapper;
     @Resource
     private UserBillService billService;
     @Resource
     private  AppUserAddressService appUserAddressService;
 
-    private static final String STOCK_LOCK_KEY = "score:order:stock:lock";
 
 
     /**
@@ -81,18 +71,32 @@ public class AppScoreOrderServiceImpl extends ServiceImpl<ScoreOrderMapper, Scor
     @Override
     @Transactional(propagation = Propagation.REQUIRED, isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public void submit(Long uid,AppScoreOrderParam appScoreOrderParam) {
-        ScoreProductDO scoreProductDO = appScoreProductService.getById(appScoreOrderParam.getProductId());
-        if(scoreProductDO == null){
+        if (uid == null) throw exception(USER_NOT_EXISTS);
+        if (appScoreOrderParam == null) throw exception(ORDER_PARAM_INVALID);
+        int quantity = positiveInteger(appScoreOrderParam.getNum());
+        long productId = positiveProductId(appScoreOrderParam.getProductId());
+        // Lock product -> member, matching all integral writers' member row lock.
+        ScoreProductDO scoreProductDO = scoreProductMapper.lockById(productId);
+        if (scoreProductDO == null || !Integer.valueOf(1).equals(scoreProductDO.getIsSwitch())
+                || scoreProductDO.getScore() == null || scoreProductDO.getScore() <= 0) {
             throw exception(PRODUCT_NOT_EXISTS);
         }
-        UserAddressDO userAddressDO = appUserAddressService.getOwnedAddress(uid, appScoreOrderParam.getAddressId());
-        MemberUserDO memberUserDO = userService.getById(uid);
-        if(scoreProductDO.getStock() <= 0){
+        if (scoreProductDO.getStock() == null || scoreProductDO.getStock() < quantity) {
             throw exception(PRODUCT_NOT_STOCK);
         }
-        if(NumberUtil.compare(memberUserDO.getIntegral().intValue(),scoreProductDO.getScore()) < 0){
-            throw exception(SCORE_NOT);
+        final int totalScore;
+        try {
+            totalScore = Math.multiplyExact(scoreProductDO.getScore(), quantity);
+        } catch (ArithmeticException overflow) {
+            throw exception(ORDER_PARAM_INVALID);
         }
+        MemberUserDO memberUserDO = memberUserMapper.lockById(uid);
+        if (memberUserDO == null) throw exception(USER_NOT_EXISTS);
+        UserAddressDO userAddressDO = appUserAddressService.getOwnedAddress(uid, appScoreOrderParam.getAddressId());
+        BigDecimal cost = BigDecimal.valueOf(totalScore);
+        BigDecimal before = memberUserDO.getIntegral();
+        if (before == null || before.compareTo(cost) < 0) throw exception(SCORE_NOT);
+        BigDecimal after = before.subtract(cost);
 
         //生成分布式唯一值
         String orderSn = IdUtil.getSnowflake(0, 0).nextIdStr();
@@ -104,26 +108,36 @@ public class AppScoreOrderServiceImpl extends ServiceImpl<ScoreOrderMapper, Scor
                 .ip(ServletUtils.getClientIP())
                 .orderId(orderSn)
                 .productId(scoreProductDO.getId())
-                .number(Integer.valueOf(appScoreOrderParam.getNum()))
+                .number(quantity)
                 .score(scoreProductDO.getScore())
-                .totalScore(scoreProductDO.getScore())
+                .totalScore(totalScore)
                 .uid(uid)
                 .build();
-        //保存
-        this.save(scoreOrderDO);
+        if (orderMapper.insert(scoreOrderDO) != 1) throw new IllegalStateException("SCORE_ORDER_INSERT_FAILED");
+        if (scoreProductMapper.decStockIncSales(quantity, productId) != 1)
+            throw new IllegalStateException("SCORE_STOCK_UPDATE_FAILED");
+        if (memberUserMapper.changeIntegral(uid, before, after) != 1)
+            throw new IllegalStateException("SCORE_INTEGRAL_UPDATE_FAILED");
+        billService.expendExact(uid, "积分兑换", BillDetailEnum.CATEGORY_2.getValue(),
+                BillDetailEnum.TYPE_3.getValue(), cost, after, totalScore + "积分兑换商品", orderSn);
+    }
 
-        //减去积分
-        userService.decScore(uid,scoreOrderDO.getScore());
+    private int positiveInteger(String number) {
+        if (number == null || !number.matches("[0-9]+")) throw exception(ORDER_PARAM_INVALID);
+        try {
+            int value = Integer.parseInt(number);
+            if (value <= 0) throw exception(ORDER_PARAM_INVALID);
+            return value;
+        } catch (NumberFormatException overflow) { throw exception(ORDER_PARAM_INVALID); }
+    }
 
-        this.deStockIncSale(scoreProductDO.getId(),Integer.valueOf(appScoreOrderParam.getNum()));
-
-        //增加流水
-        billService.expend(uid, "积分兑换",
-                BillDetailEnum.CATEGORY_2.getValue(),
-                BillDetailEnum.TYPE_3.getValue(),
-                scoreProductDO.getScore().doubleValue(), memberUserDO.getIntegral().doubleValue(),
-                scoreProductDO.getScore() + "积分兑换商品");
-
+    private long positiveProductId(String productId) {
+        if (productId == null || !productId.matches("[0-9]+")) throw exception(ORDER_PARAM_INVALID);
+        try {
+            long value = Long.parseLong(productId);
+            if (value <= 0) throw exception(ORDER_PARAM_INVALID);
+            return value;
+        } catch (NumberFormatException overflow) { throw exception(ORDER_PARAM_INVALID); }
     }
 
 
@@ -227,27 +241,5 @@ public class AppScoreOrderServiceImpl extends ServiceImpl<ScoreOrderMapper, Scor
     }
 
 
-
-    /**
-     * 减库存增加销量
-     *
-     * @param productId 商品id
-     * @param number 商品数量
-     */
-    private void deStockIncSale(Long productId, Integer number) {
-
-        //对库存加锁
-        RLock lock = redissonClient.getLock(STOCK_LOCK_KEY);
-        if (lock.tryLock()) {
-            try {
-                scoreProductMapper.decStockIncSales(number,productId);
-            }catch (Exception ex) {
-                log.error("[deStockIncSale][执行异常]", ex);
-                throw exception(new ErrorCode(999999,ex.getMessage()));
-            } finally {
-                lock.unlock();
-            }
-        }
-    }
 
 }

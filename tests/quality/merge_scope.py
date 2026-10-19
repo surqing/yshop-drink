@@ -11,18 +11,26 @@ import tarfile
 import time
 from evidence import source_identity
 from e2e.contract import atomic_text, require
-LEGACY_IDS = ('D002','D003','D005','D006','D007','D008')
+from defect_contract import LEGACY_IDS, ASSERTION_FINGERPRINTS, OPEN_FAILURES, load_contract, validate_contract
 SECURITY_IDS = ('D001','D004',*('D004-'+x for x in (
     'foreign-edit','foreign-default','foreign-delete','invalid-ids','missing-deleted',
     'own-crud','checkout-controls','admin-owner','concurrent-defaults','admin-races')),
     *('D001-'+x for x in ('foreign-phone','own-phone','empty-phone','concurrent-profile')))
 
-def compare_defects(baseline,candidate,baseline_identity,identity):
-    for report,expected in [(baseline,baseline_identity),(candidate,identity)]:
+def compare_defects(baseline,candidate,baseline_identity,identity,baseline_contract,candidate_contract):
+    contracts=[validate_contract(value) for value in (baseline_contract,candidate_contract)]
+    old_states,new_states=[contract['defects'] for contract in contracts]
+    require(all(old_states[name]!='FIXED' or new_states[name]=='FIXED' for name in LEGACY_IDS),
+            'FIXED_DEFECT_EXCEPTION_REINTRODUCED')
+    for report,expected,contract in [(baseline,baseline_identity,contracts[0]),(candidate,identity,contracts[1])]:
         require(all(report.get(k)==v for k,v in expected.items()),'REGRESSION_SOURCE_MISMATCH')
         require(report.get('complete') is True and report.get('sourceUnchanged') is True,
                 'REGRESSION_INCOMPLETE_OR_CHANGED')
-        require(report.get('status')=='FAILED','RAW_FAILURE_STATUS_REQUIRED')
+        raw='FAILED' if 'OPEN' in contract['defects'].values() else 'PASSED'
+        require(report.get('status')==raw and type(report.get('exitCode')) is int
+                and report['exitCode']==(1 if raw=='FAILED' else 0),'RAW_STATUS_OR_EXIT_CODE_INVALID')
+        require(report.get('defectContract')==contract,'REGRESSION_DEFECT_CONTRACT_MISMATCH')
+        require(report.get('assertionFingerprints')==ASSERTION_FINGERPRINTS,'ORIGINAL_BUSINESS_ASSERTION_CHANGED')
         require(report.get('cleanup')=='PASSED','REGRESSION_CLEANUP_REQUIRED')
         receipt=report.get('cleanupReceipt',{})
         require(receipt.get('status')=='PASSED' and receipt.get('ownershipChecked') is True
@@ -52,19 +60,27 @@ def compare_defects(baseline,candidate,baseline_identity,identity):
     for name in LEGACY_IDS:
         for n in (1,2):
             before,after=old[name,n],new[name,n]
-            require(before.get('status')==after.get('status')=='FAILED','LEGACY_FAILURE_STATUS_CHANGED')
-            require(isinstance(before.get('actual'),dict) and bool(before['actual'])
-                    and before['actual']==after.get('actual'),'LEGACY_BUSINESS_STATE_CHANGED')
-            require(isinstance(before.get('assertion'),str) and bool(before['assertion'])
-                    and before['assertion']==after.get('assertion'),'LEGACY_EXPECTATION_CHANGED')
+            for row,state in ((before,old_states[name]),(after,new_states[name])):
+                require(row.get('status')==('FAILED' if state=='OPEN' else 'PASSED'), 'DEFECT_STATE_NOT_SATISFIED')
+                require(isinstance(row.get('actual'),dict) and bool(row['actual']),'DEFECT_OBSERVATIONS_REQUIRED')
+                if state=='OPEN':
+                    require(isinstance(row.get('assertion'),str) and bool(row['assertion']), 'LEGACY_EXPECTATION_REQUIRED')
+                    assertion,actual=OPEN_FAILURES[name]
+                    require(row['assertion']==assertion and row['actual']==actual,'LEGACY_FAILURE_NOT_ORIGINAL_BUSINESS_DEFECT')
+            if old_states[name]==new_states[name]=='OPEN':
+                require(before['actual']==after['actual'],'LEGACY_BUSINESS_STATE_CHANGED')
+                require(before['assertion']==after['assertion'],'LEGACY_EXPECTATION_CHANGED')
     for name in SECURITY_IDS:
         for n in (1,2):
             require(new[name,n].get('status')=='PASSED' and bool(new[name,n].get('actual')),
                     'SECURITY_REGRESSION_NOT_PASSED')
-    return {**identity,'regressionScopeStatus':'PASSED','rawCandidateStatus':'FAILED',
-            'rawBaselineStatus':'FAILED','baselineSource':baseline_identity,
-            'runIds':[baseline['runId'],candidate['runId']], 'retainedFailures':list(LEGACY_IDS),
-            'legacyComparisons':12,'securityChecks':32,'qualityGateReady':False,'phase6DAllowed':False}
+    return {**identity,'regressionScopeStatus':'PASSED','rawCandidateStatus':candidate['status'],
+            'rawBaselineStatus':baseline['status'],'baselineSource':baseline_identity,
+            'runIds':[baseline['runId'],candidate['runId']],
+            'retainedFailures':[name for name in LEGACY_IDS if new_states[name]=='OPEN'],
+            'fixedDefects':[name for name in LEGACY_IDS if new_states[name]=='FIXED'],
+            'legacyComparisons':2*sum(old_states[name]==new_states[name]=='OPEN' for name in LEGACY_IDS),
+            'defectChecks':12,'securityChecks':32,'qualityGateReady':False,'phase6DAllowed':False}
 
 
 def git_identity(repo,revision):
@@ -84,7 +100,9 @@ def main():
     for name in ('baseline','candidate','base','output'):parser.add_argument('--'+name,required=True)
     args=parser.parse_args();repo=Path(__file__).resolve().parents[2]
     paths=[Path(args.baseline),Path(args.candidate)]
-    result=compare_defects(*(json.loads(p.read_text()) for p in paths),git_identity(repo,args.base),source_identity(repo))
+    base_identity=git_identity(repo,args.base);identity=source_identity(repo)
+    result=compare_defects(*(json.loads(p.read_text()) for p in paths),base_identity,identity,
+                           load_contract(repo,base_identity,args.base),load_contract(repo,identity))
     result['reports']=[{'path':str(p.resolve()),'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in paths]
     atomic_text(args.output,json.dumps(result,indent=2)+'\n')
     print(json.dumps({k:result[k] for k in ('regressionScopeStatus','rawCandidateStatus','retainedFailures')}))

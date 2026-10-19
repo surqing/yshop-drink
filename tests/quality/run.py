@@ -203,8 +203,13 @@ class Runner:
             ev=Evidence(self.root/'java-evidence')
             cmd=[self.maven,'-Pquality-coverage','test','-Dtest='+','.join(k.rsplit('.',1)[-1] for k in expected),'-Dsurefire.failIfNoSpecifiedTests=true']
             if self.env.get('YSHOP_MAVEN_REPOSITORY'):cmd+=['-Dmaven.repo.local='+self.env['YSHOP_MAVEN_REPOSITORY']]
+            cwd=mod
+            if mod==BOOT/'yshop-server':
+                cmd[1:1]=['-pl','yshop-server','-am']
+                cmd=[arg.replace('-Dsurefire.failIfNoSpecifiedTests=true','-Dsurefire.failIfNoSpecifiedTests=false') for arg in cmd]
+                cwd=BOOT
             cmd+=ev.arguments(expected)+['-Djacoco.destFile='+str(ev.root/'coverage.exec')]
-            self.step('java-'+mod.name,cmd,mod,validator=lambda log,ev=ev:ev.validate(),diagnostic=ev.diagnostics)
+            self.step('java-'+mod.name,cmd,cwd,validator=lambda log,ev=ev:ev.validate(),diagnostic=ev.diagnostics)
 
     def quick(self):
         self.env['NODE_V8_COVERAGE']=str(self.root/'node-v8')
@@ -284,7 +289,7 @@ class Runner:
         identity={'sourceSha':self.source_sha,'sourceDigest':self.digest}
         def verified(log):
             report=json.loads((output/'report.json').read_text())
-            expected=['mysql-business','mysql-financial','mysql-auth','mysql-member-identity','redis','synthetic-tls']
+            expected=['mysql-business','mysql-financial','mysql-auth','mysql-member-identity','mysql-score','redis','synthetic-tls']
             if (report.get('result')!='PASS' or report.get('cleanup')!='PASS' or not report.get('sourceUnchanged')
                 or any(report.get(k)!=v for k,v in identity.items())
                 or [s.get('name') for s in report.get('steps',[])]!=expected

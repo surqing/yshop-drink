@@ -1462,5 +1462,41 @@
     "mobileCompareAndSetParsesWithNullAndExistingOwner": 1,
     "miniCompareAndSetParsesWithNullAndExistingOwner": 1,
     "mpCompareAndSetParsesWithNullAndExistingOwner": 1
+  },
+  "co.yixiang.yshop.score.ScoreReceiptConcurrencyDatabaseTest": {
+    "redemptionVersusActualReceiptKeepsBothMovements": 10
+  },
+  "co.yixiang.yshop.module.score.order.ScoreOrderDatabaseTest": {
+    "quantityTwoChargesTotalAndRecordsPostDebitBalance": 1,
+    "zeroAffectedRowsAtEveryWriteRollBackEverything(String)[1]": 1,
+    "zeroAffectedRowsAtEveryWriteRollBackEverything(String)[2]": 1,
+    "zeroAffectedRowsAtEveryWriteRollBackEverything(String)[3]": 1,
+    "zeroAffectedRowsAtEveryWriteRollBackEverything(String)[4]": 1,
+    "twoMembersCompetingForLastUnitCommitOnce": 1,
+    "totalCostOverflowRejectsWithoutEffects": 1,
+    "invalidQuantitiesRejectWithoutEffects(String)[1]": 1,
+    "invalidQuantitiesRejectWithoutEffects(String)[2]": 1,
+    "invalidQuantitiesRejectWithoutEffects(String)[3]": 1,
+    "invalidQuantitiesRejectWithoutEffects(String)[4]": 1,
+    "invalidQuantitiesRejectWithoutEffects(String)[5]": 1,
+    "invalidQuantitiesRejectWithoutEffects(String)[6]": 1,
+    "invalidQuantitiesRejectWithoutEffects(String)[7]": 1,
+    "invalidQuantitiesRejectWithoutEffects(String)[8]": 1,
+    "invalidQuantitiesRejectWithoutEffects(String)[9]": 1,
+    "invalidQuantitiesRejectWithoutEffects(String)[10]": 1,
+    "invalidQuantitiesRejectWithoutEffects(String)[11]": 1,
+    "invalidQuantitiesRejectWithoutEffects(String)[12]": 1,
+    "singleUnitBillUsesPostDebitBalance": 1,
+    "totalCostBeyondBalanceRejectsBeforeWrites": 1,
+    "insufficientStockRejectsWithoutEffects": 1,
+    "twoOrdersWithBalanceForOneCommitOnce": 1,
+    "unavailableProductRejectsWithoutEffects(String)[1]": 1,
+    "unavailableProductRejectsWithoutEffects(String)[2]": 1,
+    "databaseFailureAtEveryWriteRollsBackEverything(String)[1]": 1,
+    "databaseFailureAtEveryWriteRollsBackEverything(String)[2]": 1,
+    "databaseFailureAtEveryWriteRollsBackEverything(String)[3]": 1,
+    "databaseFailureAtEveryWriteRollsBackEverything(String)[4]": 1,
+    "foreignAddressRejectsWithoutEffects": 1,
+    "fractionalBalanceIsRetainedExactly": 1
   }
 }

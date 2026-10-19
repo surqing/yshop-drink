@@ -22,5 +22,5 @@
   "tests/e2e-assertions.test.mjs": 6,
   "tests/e2e-native-confirmation.test.mjs": 8,
   "tests/e2e-expiry-navigation.test.mjs": 3,
-  "tests/quality/test_merge_scope.py": 29
+  "tests/quality/test_merge_scope.py": 48
 }
