@@ -22,6 +22,9 @@ class E2eAcceptanceTest(unittest.TestCase):
             'hostPlatform':'darwin' if profile=='local' else 'linux','miniStatus':'PASSED' if profile=='local' else 'NOT_RUN',
             'threeEndCorePassed':profile=='local','status':'PASSED','result':'PASS','complete':True,
             'receiptValidated':True,'sourceUnchanged':True,'cleanup':'PASSED',
+            'cleanupErrors':[],
+            'cleanupReceipt':{'status':'PASSED','owner':owner*32,'runId':run*32,
+                'ownershipChecked':True,'containersRemoved':2,'anonymousVolumesRemoved':2,'errors':[]},
             'startedAt':time.time()-2,'endedAt':time.time()-1,
             'backendArtifact':{**self.identity,'artifactHash':'a'*64,'result':'PASS'},
             'testSupport':{**self.identity,'productionArtifactHash':'a'*64,'testSupportExcludedFromProductionJar':True},
@@ -73,5 +76,29 @@ class E2eAcceptanceTest(unittest.TestCase):
 
     def test_foreign_mini_compilation_rejected(self):
         self.reports[0]['scenarios'][0]['miniEvidence']['compiledSource']={'sourceSha':'old','sourceDigest':'old'};self.reject()
+
+    def test_missing_resource_cleanup_receipt_rejected(self):
+        del self.reports[0]['cleanupReceipt'];self.reject()
+
+    def test_contradictory_resource_cleanup_rejected(self):
+        self.reports[0]['cleanupReceipt']['status']='FAILED';self.reject()
+
+    def test_missing_ownership_verification_rejected(self):
+        self.reports[0]['cleanupReceipt']['ownershipChecked']=False;self.reject()
+
+    def test_foreign_cleanup_receipt_rejected(self):
+        self.reports[0]['cleanupReceipt']['owner']='f'*32;self.reject()
+
+    def test_wrong_cleanup_run_rejected(self):
+        self.reports[0]['cleanupReceipt']['runId']='f'*32;self.reject()
+
+    def test_incomplete_resource_removal_rejected(self):
+        self.reports[0]['cleanupReceipt']['containersRemoved']=0;self.reject()
+
+    def test_underlying_cleanup_error_rejected(self):
+        self.reports[0]['cleanupReceipt']['errors']=['RESOURCE_CLEANUP_FAILED'];self.reject()
+
+    def test_outer_cleanup_error_rejected(self):
+        self.reports[0]['cleanupErrors']=['MINI_PROJECT_CLOSE_FAILED'];self.reject()
 
 if __name__=='__main__':unittest.main()

@@ -21,6 +21,12 @@ def certify(reports,identity):
         require(report.get('status')=='PASSED' and report.get('result')=='PASS'
                 and all(report.get(key) is True for key in ['complete','receiptValidated','sourceUnchanged','providerBoundariesVerified'])
                 and report.get('cleanup')=='PASSED','ACCEPTANCE_INCOMPLETE_RUN')
+        cleanup=report.get('cleanupReceipt',{})
+        require(cleanup.get('status')=='PASSED' and cleanup.get('ownershipChecked') is True
+                and cleanup.get('owner')==report['owner'] and cleanup.get('runId')==report['runId']
+                and cleanup.get('containersRemoved')==2 and cleanup.get('anonymousVolumesRemoved')==2
+                and cleanup.get('errors')==[] and report.get('cleanupErrors')==[],
+                'ACCEPTANCE_RESOURCE_CLEANUP_REQUIRED')
         profile=report['profile'];plan=listing(profile)
         require(report.get('planned')==plan['scenarios'],'ACCEPTANCE_PLAN_MISMATCH')
         require(report.get('selection')=='core' and report.get('scope')==plan['scope'],'ACCEPTANCE_CORE_REQUIRED')

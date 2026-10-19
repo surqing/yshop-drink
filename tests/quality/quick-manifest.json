@@ -17,7 +17,7 @@
   "tests/quality/test_e2e_support.py": 7,
   "tests/quality/test_e2e_publish.py": 9,
   "tests/auth-logout.test.mjs": 2,
-  "tests/quality/test_e2e_acceptance.py": 13,
+  "tests/quality/test_e2e_acceptance.py": 21,
   "tests/e2e-mini-guard.test.mjs": 2,
   "tests/e2e-assertions.test.mjs": 6,
   "tests/e2e-native-confirmation.test.mjs": 8,

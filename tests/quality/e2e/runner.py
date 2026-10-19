@@ -194,7 +194,7 @@ def run(repo, output, profile, scenario=None):
         if environment:
             try:
                 with process_environment(env):cleanup=environment.close()
-                report['cleanupReceipt']=cleanup
+                report['cleanupReceipt']={**cleanup,'owner':report['owner'],'runId':report['runId']}
                 if cleanup['status']!='PASSED':cleanup_errors.append('OWNED_ENVIRONMENT_CLEANUP_FAILED')
             except Exception:
                 cleanup_errors.append('OWNED_ENVIRONMENT_CLEANUP_FAILED')
