@@ -33,9 +33,9 @@
             </router-link>
           </el-card>
         </el-col>
-        <el-col v-bind="grid" class="ivu-mb">
+        <el-col v-bind="grid" class="ivu-mb" v-if="canOpenPrinter">
           <el-card :bordered="false">
-            <router-link :to="{ path: '/shop/web-print' }">
+            <router-link :to="{ path: '/mall/web-print' }">
                <Icon icon="ep:postcard" style="color: #ffd666" :size="35" />
               <p>打印机管理</p>
             </router-link>
@@ -70,8 +70,14 @@
 </template>
 <script setup lang="ts">
 import { CACHE_KEY, useCache } from '@/hooks/web/useCache'
+import { canManagePrinters } from '@/utils/printerRoute'
+import { useUserStore } from '@/store/modules/user'
 
 const { wsCache } = useCache()
+const router = useRouter()
+const userStore = useUserStore()
+const canOpenPrinter = computed(() => canManagePrinters(wsCache.get(CACHE_KEY.USER)?.user?.shopId,
+  userStore.getPermissions) && router.hasRoute('StorePrinter'))
 
 
 const grid =ref({

@@ -145,6 +145,12 @@ spring:
 --- #################### yshop相关配置 ####################
 
 yshop:
+  printer:
+    encryption-key: ${YSHOP_PRINTER_ENCRYPTION_KEY:}
+    yilianyun:
+      enabled: ${YSHOP_PRINTER_ENABLED:false}
+      client-id: ${YILIAN_YUN_CLIENT_ID:}
+      client-secret: ${YILIAN_YUN_CLIENT_SECRET:}
   info:
     version: 3.0.0
     base-package: co.yixiang.yshop

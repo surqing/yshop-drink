@@ -1,0 +1,15 @@
+[
+  "unconfigured-service-local-management",
+  "create-real-form",
+  "unconfigured-connect-disabled",
+  "edit-real-form",
+  "binding-while-service-disabled",
+  "explicit-authorization",
+  "reconnect-keeps-binding",
+  "status-paper-out",
+  "unknown-retains-request",
+  "unknown-lookup-readonly",
+  "unknown-history-and-no-paper-claim",
+  "deleted-device-has-history-only",
+  "deleted-device-history-remains-readable"
+]

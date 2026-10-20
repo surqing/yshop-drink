@@ -16,6 +16,8 @@ import co.yixiang.yshop.framework.common.pojo.PageResult;
 
 import co.yixiang.yshop.module.store.convert.storeshop.StoreShopConvert;
 import co.yixiang.yshop.module.store.dal.mysql.storeshop.StoreShopMapper;
+import co.yixiang.yshop.module.store.dal.mysql.printer.PrinterRepository;
+import org.springframework.transaction.annotation.Transactional;
 
 import static co.yixiang.yshop.framework.common.exception.util.ServiceExceptionUtil.exception;
 import static co.yixiang.yshop.module.store.enums.ErrorCodeConstants.*;
@@ -34,6 +36,9 @@ public class StoreShopServiceImpl implements StoreShopService {
 
     @Resource
     private StoreShopMapper shopMapper;
+
+    @Resource
+    private PrinterRepository printerRepository;
 
     @Override
     public Long createShop(StoreShopCreateReqVO createReqVO) {
@@ -73,12 +78,20 @@ public class StoreShopServiceImpl implements StoreShopService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void deleteShop(Long id) {
-        // 校验存在
         storeAccess.requireHeadquarters();
+        // Serialize against printer binding creation; existing shop fields remain untouched.
+        if (!printerRepository.lockShop(id)) {
+            throw exception(SHOP_NOT_EXISTS);
+        }
+        // 校验存在
         validateShopExists(id);
         // 删除
-        shopMapper.deleteById(id);
+        if (shopMapper.deleteById(id) != 1) {
+            throw new IllegalStateException("SHOP_DELETE_WRITE_FAILED");
+        }
+        printerRepository.shopDeleted(id);
     }
 
     private void validateShopExists(Long id) {

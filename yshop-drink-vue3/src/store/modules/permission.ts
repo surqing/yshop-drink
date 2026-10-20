@@ -4,6 +4,7 @@ import { cloneDeep } from 'lodash-es'
 import remainingRouter from '@/router/modules/remaining'
 import { flatMultiLevelRoutes, generateRoute } from '@/utils/routerHelper'
 import { CACHE_KEY, useCache } from '@/hooks/web/useCache'
+import { canManagePrinters, filterPrinterMenus, hasPrinterMenu } from '@/utils/printerRoute'
 
 const { wsCache } = useCache()
 
@@ -38,9 +39,23 @@ export const usePermissionStore = defineStore('permission', {
         if (wsCache.get(CACHE_KEY.ROLE_ROUTERS)) {
           res = wsCache.get(CACHE_KEY.ROLE_ROUTERS) as AppCustomRouteRecordRaw[]
         }
+        const user = wsCache.get(CACHE_KEY.USER)
+        const printerAllowed = canManagePrinters(user?.user?.shopId, user?.permissions || [])
+        res = filterPrinterMenus(res, printerAllowed)
         const routerMap: AppRouteRecordRaw[] = generateRoute(res)
+        const printerAliases: AppRouteRecordRaw[] =
+          printerAllowed && hasPrinterMenu(res)
+            ? [
+                {
+                  path: '/shop/web-print',
+                  name: 'LegacyStorePrinter',
+                  redirect: '/mall/web-print',
+                  meta: { hidden: true, breadcrumb: false }
+                }
+              ]
+            : []
         // 动态路由，404一定要放到最后面
-        this.addRouters = routerMap.concat([
+        this.addRouters = routerMap.concat(printerAliases, [
           {
             path: '/:path(.*)*',
             redirect: '/404',
