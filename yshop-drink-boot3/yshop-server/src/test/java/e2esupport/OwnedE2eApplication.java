@@ -38,6 +38,8 @@ public final class OwnedE2eApplication {
     static final String OWNER=System.getProperty("e2e.owner","");
     static final Path ROOT=Path.of(System.getProperty("e2e.root",""));
     static final Set<String> CODES=ConcurrentHashMap.newKeySet();
+    static final java.util.concurrent.atomic.AtomicInteger PRINT_CALLS=new java.util.concurrent.atomic.AtomicInteger();
+    static final java.util.concurrent.atomic.AtomicInteger STATUS_CALLS=new java.util.concurrent.atomic.AtomicInteger();
 
     public static void main(String[] args) throws Exception {
         if(!OWNER.matches("[a-f0-9]{32}") || !ROOT.resolve("commands-"+OWNER).toFile().isDirectory())
@@ -69,6 +71,9 @@ public final class OwnedE2eApplication {
 
     @Configuration(proxyBeanMethods=false)
     public static class ExternalBoundaries {
+        @Bean co.yixiang.yshop.module.store.service.printer.PrinterProvider ownedPrinterProvider() {
+            return new OwnedPrinter();
+        }
         @Bean static BeanPostProcessor providerBoundaries() {
             return new BeanPostProcessor() {
                 @Override public Object postProcessAfterInitialization(Object bean,String name) {
@@ -79,6 +84,31 @@ public final class OwnedE2eApplication {
                     return bean;
                 }
             };
+        }
+    }
+
+    /** Test-classpath-only transport; never opens a socket or accepts real credentials. */
+    static final class OwnedPrinter implements co.yixiang.yshop.module.store.service.printer.PrinterProvider,
+            co.yixiang.yshop.module.store.service.printer.PrinterSession {
+        public co.yixiang.yshop.module.store.service.printer.PrinterModels.ProviderInfo info() {
+            return new co.yixiang.yshop.module.store.service.printer.PrinterModels.ProviderInfo("OWNED_TEST","Owned synthetic printer",
+                List.of("LAN"),List.of(),new co.yixiang.yshop.module.store.service.printer.PrinterModels.Capabilities(false,false,true,true),true,false);
+        }
+        public void validate(String id,String type,Map<String,String> configuration) {
+            if(!"LAN".equals(type) || !configuration.isEmpty())throw new IllegalArgumentException("OWNED_PRINTER_ONLY");
+        }
+        public co.yixiang.yshop.module.store.service.printer.PrinterSession openSession() {
+            co.yixiang.yshop.module.store.service.printer.PrinterProvider.assertOutsideTransaction();return this;
+        }
+        public void authorize(String id,String name,Map<String,String> configuration) {throw new IllegalStateException("OWNED_PRINTER_NO_AUTH");}
+        public void deauthorize(String id) {throw new IllegalStateException("OWNED_PRINTER_NO_AUTH");}
+        public co.yixiang.yshop.module.store.service.printer.PrinterModels.DeviceState status(String id) {
+            STATUS_CALLS.incrementAndGet();return co.yixiang.yshop.module.store.service.printer.PrinterModels.DeviceState.ONLINE;
+        }
+        public co.yixiang.yshop.module.store.service.printer.PrinterModels.PrintResult print(String id,String request,
+                co.yixiang.yshop.module.store.service.printer.PrinterModels.Receipt receipt) {
+            PRINT_CALLS.incrementAndGet();
+            throw new co.yixiang.yshop.module.store.service.printer.PrinterFailure("PROVIDER_TIMEOUT",true);
         }
     }
 
@@ -159,7 +189,9 @@ public final class OwnedE2eApplication {
                     JsonNode command=JSON.readTree(request.toFile());
                     if(!OWNER.equals(command.path("owner").asText()) || !id.equals(command.path("commandId").asText()))throw new IllegalArgumentException("FOREIGN_COMMAND");
                     String action=command.path("action").asText();
-                    if(action.equals("token-lifetime")) {
+                    if(action.equals("printer-counters")) {
+                        reply.put("printCalls",PRINT_CALLS.get());reply.put("statusCalls",STATUS_CALLS.get());
+                    } else if(action.equals("token-lifetime")) {
                         int seconds=command.path("seconds").asInt();
                         if(seconds!=2 && seconds!=3600)throw new IllegalArgumentException("INVALID_TEST_TOKEN_LIFETIME");
                         db.update("UPDATE system_oauth2_client SET access_token_validity_seconds=? WHERE client_id='default'",seconds);

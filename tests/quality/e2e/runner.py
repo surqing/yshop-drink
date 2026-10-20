@@ -54,8 +54,8 @@ def execution_environment(workspace):
     return env
 
 
-def preflight(repo,profile,env,root):
-    if profile=='local':
+def preflight(repo,needs_mini,env,root):
+    if needs_mini:
         from mini_pages import mini_prerequisite
         reason=mini_prerequisite()
         if reason:raise Blocked(reason)
@@ -85,6 +85,7 @@ def run(repo, output, profile, scenario=None):
         raise ValueError('PRIVATE_OUTPUT_REQUIRED')
     root=parent/uuid.uuid4().hex;root.mkdir(parents=True,mode=0o700,exist_ok=False);os.chmod(root,0o700)
     identity=source_identity(repo);plan=listing(profile,scenario);workspace=source_workspace(repo)
+    needs_mini=any('mini' in item['requiredCapabilities'] for item in plan['scenarios'])
     env=execution_environment(workspace)
     report={**identity,**plan,'runId':root.name,'owner':uuid.uuid4().hex,'complete':False,
             'startedAt':time.time(),'hostPlatform':sys.platform,'status':'INCONCLUSIVE','cleanup':'NOT_RUN','stage':'PREFLIGHT',
@@ -103,8 +104,8 @@ def run(repo, output, profile, scenario=None):
     old_umask=os.umask(0o077)
     try:
         with process_environment(env):
-            preflight(repo,profile,env,root)
-            if profile=='local':
+            preflight(repo,needs_mini,env,root)
+            if needs_mini:
                 lockdir=workspace/'.local-dev/quality';lockdir.mkdir(parents=True,mode=0o700,exist_ok=True)
                 mini_lock=(lockdir/'three-end-mini.lock').open('a');os.chmod(mini_lock.name,0o600)
                 try:fcntl.flock(mini_lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
@@ -139,7 +140,7 @@ def run(repo, output, profile, scenario=None):
                      'accounts':{'admin':{'username':'qualityadmin','password':'syntheticQA12'},
                                  'staff':{'username':'qualitystaff','password':'syntheticQA12'},
                                  'staffB':{'username':'qualitystaffb','password':'syntheticQA12'}}}
-            if profile=='local':
+            if needs_mini:
                 report['stage']='MINI_BUILD';write_reports(root,report)
                 from mini_pages import prepare_mini
                 mini_context=prepare_mini(root,report,{'backend':context['backend']},
@@ -204,9 +205,10 @@ def run(repo, output, profile, scenario=None):
                       complete=True,endedAt=time.time())
         current=source_identity(repo);report['sourceUnchanged']=identity==current
         report['status']=final_status(report,current)
-        if profile=='local':report['miniStatus']=report['status'] if report.get('receiptValidated') else 'NOT_RUN' if all(s.get('status')=='NOT_RUN' for s in report['scenarios']) else report['status']
+        if needs_mini:report['miniStatus']=report['status'] if report.get('receiptValidated') else 'NOT_RUN' if all(s.get('status')=='NOT_RUN' for s in report['scenarios']) else report['status']
+        else:report['miniStatus']='NOT_RUN'
         report['result']='PASS' if report['status']=='PASSED' else 'NOT_READY'
-        report['threeEndCorePassed']=bool(profile=='local' and not scenario and report['status']=='PASSED')
+        report['threeEndCorePassed']=bool(profile=='local' and needs_mini and not scenario and report['status']=='PASSED')
         report['stage']='FINISHED';write_reports(root,report)
         for sig,handler in previous_signals.items():signal.signal(sig,handler)
         os.umask(old_umask)

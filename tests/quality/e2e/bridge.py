@@ -22,7 +22,7 @@ def validate_context(context):
 
 def invoke(context, action, ids, timeout=60):
     mailbox=validate_context(context)
-    if action not in ('complete','token-lifetime'):
+    if action not in ('complete','token-lifetime','printer-counters'):
         raise ValueError('BRIDGE_ACTION_UNKNOWN')
     if action=='complete' and not re.fullmatch(r'[A-Za-z0-9_-]{1,64}',str(ids.get('orderId',''))):
         raise ValueError('ENTITY_ID_INVALID')

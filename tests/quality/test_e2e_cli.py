@@ -67,10 +67,16 @@ class E2eCliTest(unittest.TestCase):
             self.assertEqual(0,result.returncode,result.stderr)
             report=json.loads(result.stdout)
             self.assertEqual('local',report['profile'])
-            self.assertEqual(['pickup-contact','auth-session','catalog-order','store-isolation','order-retry',
+            self.assertEqual(['score-redemption','score-retry','printer-unknown','pickup-contact','auth-session','catalog-order','store-isolation','order-retry',
                               'order-cancel','coupon-release','coupon-complete'],
                              [s['id'] for s in report['scenarios']])
-            self.assertTrue(all(s['variant']=='mini-admin' for s in report['scenarios']))
+            for scenario in report['scenarios']:
+                if scenario['id']=='printer-unknown':
+                    self.assertEqual('api-admin',scenario['variant'])
+                    self.assertNotIn('mini',scenario['requiredCapabilities'])
+                else:
+                    self.assertEqual('mini-admin',scenario['variant'])
+                    self.assertIn('mini',scenario['requiredCapabilities'])
             self.assertFalse(output.exists())
 
     def test_ci_lists_api_variants_and_marks_mini_not_run(self):
@@ -78,13 +84,19 @@ class E2eCliTest(unittest.TestCase):
         self.assertEqual(0,result.returncode,result.stderr)
         report=json.loads(result.stdout)
         self.assertEqual('NOT_RUN',report['miniStatus'])
-        self.assertEqual(8,len(report['scenarios']))
+        self.assertEqual(11,len(report['scenarios']))
         self.assertTrue(all(s['variant']=='api-admin' for s in report['scenarios']))
 
     def test_filtered_list_contains_only_requested_scenario(self):
         result=self.invoke('E2E','--profile','local','--scenario','order-retry','--list')
         self.assertEqual(0,result.returncode,result.stderr)
         self.assertEqual(['order-retry'],[s['id'] for s in json.loads(result.stdout)['scenarios']])
+        printer=self.invoke('E2E','--profile','local','--scenario','printer-unknown','--list')
+        self.assertEqual(0,printer.returncode,printer.stderr)
+        plan=json.loads(printer.stdout)
+        self.assertEqual('NOT_RUN',plan['miniStatus'])
+        self.assertEqual('backend-admin-subset',plan['scope'])
+        self.assertEqual('api-admin',plan['scenarios'][0]['variant'])
 
     def test_missing_official_tools_blocks_local_without_ci_fallback(self):
         with tempfile.TemporaryDirectory() as folder:

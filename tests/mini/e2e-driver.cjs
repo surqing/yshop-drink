@@ -86,6 +86,36 @@ class MiniDriver {
     try { await until(async () => (await this.mini.currentPage()).path !== 'pages-user/login/login') }
     catch { throw Error('MINI_LOGIN_RETURN_TIMEOUT') }
   }
+  async scoreCheckout(product, address) {
+    const detail = await this.mini.navigateTo(`/pages-score/scoreproduct/detail?id=${product.id}`)
+    await until(async () => (await (await detail.$('.score-product-detail__title'))?.text()) === product.title)
+    await (await detail.$('.score-product-detail__btn')).tap()
+    let page = await until(async () => { const value=await this.mini.currentPage(); return value.path==='pages-score/scoreproduct/confirm'?value:null })
+    await until(() => page.$('.score-product-confirm'))
+    const addresses = await this.mini.navigateTo('/pages-user/address/address?is_choose=true&scene=scoreShop')
+    const card = await until(async () => {
+      for (const value of await addresses.$$('.address-page__card')) if ((await value.text()).includes(address.detail)) return value
+      return null
+    })
+    await card.tap()
+    page=await until(async () => {const value=await this.mini.currentPage();return value.path==='pages-score/scoreproduct/confirm'?value:null})
+    await until(async () => (await (await page.$('.score-product-confirm')).text()).includes(address.phone))
+    return page
+  }
+  async scoreSubmit(page, { loseResponse=false }={}) {
+    if(loseResponse) await this.mini.evaluate(()=>wx.setStorageSync('__e2eFault',{dropNextScoreResponse:true}))
+    const before=(await this.state()).requests.filter(r=>r.path==='/app-api/score-order/submit').length
+    const component=await until(()=>page.$('uv-button'))
+    const button=await until(()=>component.$('button'))
+    await button.tap()
+    const request=await until(async()=>{
+      const rows=(await this.state()).requests.filter(r=>r.path==='/app-api/score-order/submit')
+      return rows.length>before && rows.at(-1).responseCode!==undefined?rows.at(-1):null
+    })
+    if(loseResponse) await until(async()=>(await this.state()).scoreDropped)
+    else if(request.responseCode===0) await until(async()=>(await this.mini.currentPage()).path==='pages-score/scoreproduct/order')
+    return request
+  }
   async selectStore(name) {
     const page = await this.mini.navigateTo('/pages-checkout/shop/shop')
     const items = await until(async () => { const values = await page.$$('.shop-page__item'); return values.length ? values : null })
@@ -215,7 +245,8 @@ class MiniDriver {
     if (!this.mini) return
     try {
       await this.mini.evaluate(() => {
-        for (const key of ['accessToken', 'userinfo', 'selectedStore', 'cart', 'checkoutSubmission', 'mycoupon', '__e2eState', '__e2eFault']) wx.removeStorageSync(key)
+        for (const key of ['accessToken', 'userinfo', 'selectedStore', 'cart', 'checkoutSubmission', 'checkoutSubmissionByMember', 'checkoutLegacySubmission', 'mycoupon', 'score_product', '__e2eState', '__e2eFault']) wx.removeStorageSync(key)
+        for (const key of wx.getStorageInfoSync().keys) if (key.startsWith('scoreSubmission:v1:')) wx.removeStorageSync(key)
       })
       await this.mini.close()
     } finally { this.mini = null }

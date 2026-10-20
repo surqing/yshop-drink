@@ -29,12 +29,12 @@ async function orderFor(f: Flow, product: any, token: string, coupon?: any, extr
   const state = await f.mini.state()
   return { ...order, displayedAmount, body: state.requests.filter((r: any) => r.path === '/app-api/order/create').at(-1).data }
 }
-async function loseResponse(f: Flow, body: any, token: string) {
+async function loseResponse(f: Flow, body: any, token: string, path = '/app-api/order/create') {
   let committed = false
   const server = createServer(async (request, response) => {
     if (request.method !== 'POST' || request.url !== '/owned-order') { response.writeHead(404); response.end(); return }
     try {
-      const result = await fetch(`${context.backend}/app-api/order/create`, { method: 'POST',
+      const result = await fetch(`${context.backend}${path}`, { method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
       const data: any = await result.json(); expect(data.code).toBe(0); committed = true
     } finally { response.destroy() }
@@ -491,7 +491,141 @@ async function pickupContact(f: Flow) {
   })
 }
 
+async function scoreFixture(f: Flow, score = 100) {
+  const token = await f.member()
+  const address = { realName: 'Synthetic score', phone: '13800000001', address: 'Owned score street', detail: f.title('address'), isDefault: 1, latitude: '33', longitude: '114' }
+  const addressId = await f.api('POST', '/app-api/address/addAndEdit', address, token)
+  const product = { title: f.title(`score-${score}`), image: 'data:image/svg+xml;base64,PHN2Zy8+', images: ['data:image/svg+xml;base64,PHN2Zy8+'], desc: 'Owned synthetic redemption', score, weigh: 0, stock: 10, sales: 0, isSwitch: 1 }
+  const productId = await f.api('POST', '/admin-api/score/product/create', product)
+  return { token, address: { ...address, id: addressId }, product: { ...product, id: productId }, body: { productId: String(productId), addressId: String(addressId), num: '1', idempotencyKey: key() } }
+}
+function scoreState(f: Flow, productId: number) { return f.oracle('score-state', { memberId: 101, productId })[0] }
+function assertScoreOnce(before: any, after: any) {
+  expect(after.orders).toBe(1); expect(after.submissions).toBe(1)
+  expect(after.stock).toBe(9); expect(after.sales).toBe(1)
+  expect(Number(after.points)).toBe(Number(before.points) - 100)
+  expect(Number(after.debit)).toBe(100); expect(Number(after.totalScore)).toBe(100)
+  expect(Number(after.ledgerBalance)).toBe(Number(after.points))
+}
+async function scoreRedemption(f: Flow) {
+  let fixture: any, body: any, before: any, page: any
+  await f.check('score-fixture', async () => { fixture = await scoreFixture(f); before = scoreState(f, fixture.product.id); expect(before.orders).toBe(0) })
+  if (local) await f.check('mini-score-page', async () => {
+    page = await f.mini.scoreCheckout(fixture.product, fixture.address)
+    const text = await (await page.$('.score-product-confirm')).text()
+    expect(text).toContain('本次消耗'); expect(text).toContain('100'); expect(text).not.toContain('￥')
+  })
+  await f.check('score-submitted', async () => {
+    if (local) { const request = await f.mini.scoreSubmit(page); expect(request.responseCode).toBe(0); body = request.data }
+    else { body = fixture.body; expect(await f.api('POST', '/app-api/score-order/submit', body, fixture.token)).toBe(true) }
+    expect(String(body.num)).toBe('1'); expect(body.idempotencyKey).toMatch(/^[A-Za-z0-9_-]{16,64}$/)
+  })
+  await f.check('score-ledger-sql', async () => {
+    const state = scoreState(f, fixture.product.id); assertScoreOnce(before, state)
+    await f.page.goto('/mall/score-orders')
+    await f.page.getByPlaceholder('请输入订单号').fill(state.orderId)
+    await f.page.getByRole('button', { name: '搜索', exact: true }).click()
+    await expect(f.page.getByRole('row').filter({ hasText: state.orderId })).toContainText('100')
+  })
+  await f.check('same-key-replay', async () => { expect(await f.api('POST', '/app-api/score-order/submit', body, fixture.token)).toBe(true) })
+  await f.check('different-content-conflict', async () => {
+    expect((await f.api('POST', '/app-api/score-order/submit', { ...body, num: '2' }, fixture.token, false)).code).toBe(1008018005)
+  })
+  await f.check('insufficient-points', async () => {
+    const expensive = await scoreFixture(f, 2000), unchanged = scoreState(f, expensive.product.id)
+    if (local) {
+      const refusalPage = await f.mini.scoreCheckout(expensive.product, expensive.address)
+      const request = await f.mini.scoreSubmit(refusalPage); expect(request.responseCode).toBe(1008018002)
+    } else expect((await f.api('POST', '/app-api/score-order/submit', expensive.body, expensive.token, false)).msg).toBe('积分不足')
+    expect(scoreState(f, expensive.product.id)).toEqual(unchanged)
+    expect((await f.api('POST', '/app-api/score-order/submit', { ...body, num: '10', idempotencyKey: key() }, fixture.token, false)).msg).toBe('库存不足')
+  })
+  await f.check('exactly-once-sql', () => { assertScoreOnce(before, scoreState(f, fixture.product.id)) })
+}
+async function scoreRetry(f: Flow) {
+  let fixture: any, before: any, body: any, page: any
+  await f.check('score-fixture', async () => { fixture = await scoreFixture(f); before = scoreState(f, fixture.product.id) })
+  await f.check('committed-score-response-lost', async () => {
+    if (local) {
+      page = await f.mini.scoreCheckout(fixture.product, fixture.address)
+      body = (await f.mini.scoreSubmit(page, { loseResponse: true })).data
+      expect((await f.mini.state()).scoreDropped).toBe(true)
+    } else { body = fixture.body; await loseResponse(f, body, fixture.token, '/app-api/score-order/submit') }
+    assertScoreOnce(before, scoreState(f, fixture.product.id))
+  })
+  if (local) await f.check('mini-score-reload', async () => {
+    const saved = await f.mini.mini.evaluate(() => wx.getStorageSync('scoreSubmission:v1:101'))
+    expect(saved.idempotencyKey).toBe(body.idempotencyKey)
+    expect(saved.payload.productId).toBe(String(fixture.product.id))
+    page = await f.mini.mini.navigateTo('/pages-score/scoreproduct/confirm')
+    await expect.poll(async () => (await (await page.$('uv-button')).text())).toContain('原请求重试')
+  })
+  await f.check('original-score-key-replay', async () => {
+    if (local) {
+      const request = await f.mini.scoreSubmit(page); expect(request.responseCode).toBe(0); expect(request.data.idempotencyKey).toBe(body.idempotencyKey)
+      expect(await f.mini.mini.evaluate(() => wx.getStorageSync('scoreSubmission:v1:101'))).toBeFalsy()
+    } else expect(await f.api('POST', '/app-api/score-order/submit', body, fixture.token)).toBe(true)
+  })
+  await f.check('exactly-once-sql', () => { assertScoreOnce(before, scoreState(f, fixture.product.id)) })
+}
+async function printerUnknown(f: Flow) {
+  let device: number, requestId: string, row: any
+  const prefix = '/admin-api/store/printer'
+  const counters = () => { const value = f.bridge('printer-counters', {}); return { print: value.printCalls, status: value.statusCalls } }
+  const state = () => f.oracle('printer-state', { printerId: device })[0]
+  const calls = counters()
+  await f.check('device-created', async () => {
+    device = await f.api('POST', prefix + '/create', { name: f.title('printer'), providerCode: 'OWNED_TEST', deviceCode: f.title('device'), model: 'Synthetic', connectionType: 'LAN', enabled: true, configuration: {} })
+    await f.api('PUT', prefix + '/binding', { id: device, shopId: 101 })
+    await f.page.goto('/mall/web-print')
+    row = f.page.getByRole('row').filter({ hasText: f.title('printer') }); await expect(row).toBeVisible()
+  })
+  await f.check('unknown-from-explicit-test', async () => {
+    const response = f.page.waitForResponse(r => r.url().includes('/store/printer/test-print') && r.request().method() === 'POST')
+    await row.getByRole('button', { name: '测试打印', exact: true }).click()
+    await f.page.getByRole('dialog').getByRole('button', { name: /确定|确 定/ }).click()
+    const result = await (await response).json(); expect(result.code).toBe(0); expect(result.data.state).toBe('UNKNOWN'); requestId = result.data.requestId
+    await expect(row.getByRole('button', { name: '查询测试结果', exact: true })).toBeVisible()
+    expect(counters()).toEqual({ print: calls.print + 1, status: calls.status })
+  })
+  await f.check('query-does-not-send', async () => {
+    const before = state(), count = counters()
+    const response = f.page.waitForResponse(r => r.url().includes('/store/printer/test-print/get') && r.request().method() === 'GET')
+    await row.getByRole('button', { name: '查询测试结果', exact: true }).click()
+    await f.page.getByRole('dialog').getByRole('button', { name: /确定|确 定/ }).click()
+    expect((await (await response).json()).data.state).toBe('UNKNOWN')
+    expect(state()).toEqual(before); expect(counters()).toEqual(count)
+    expect((await f.api('GET', `${prefix}/test-print/get?id=${device}&requestId=${requestId}`)).state).toBe('UNKNOWN')
+    expect(counters()).toEqual(count)
+  })
+  await f.check('history-shows-unknown', async () => {
+    await row.getByRole('button', { name: '测试记录', exact: true }).click()
+    const dialog = f.page.locator('.el-dialog:visible'); await expect(dialog).toContainText(requestId); await expect(dialog).toContainText('待确认')
+    await dialog.locator('.el-dialog__header .is-hover').last().click()
+  })
+  await f.check('staff-denied', async () => {
+    const page = await f.browser.newPage()
+    try {
+      const token = await f.login(page, context.accounts.staff)
+      expect((await f.api('GET', `${prefix}/test-print/get?id=${device}&requestId=${requestId}`, undefined, token, false)).code).not.toBe(0)
+      expect((await f.api('GET', prefix + '/page?pageNo=1&pageSize=10', undefined, token, false)).code).not.toBe(0)
+    } finally { await page.close() }
+  })
+  await f.check('cached-status-readonly', async () => {
+    const before = state(), count = counters()
+    await f.api('GET', `${prefix}/status?id=${device}`)
+    expect(state()).toEqual(before); expect(counters()).toEqual(count)
+  })
+  await f.check('explicit-status-refresh', async () => {
+    const count = counters()
+    expect((await f.api('POST', `${prefix}/status/refresh?id=${device}`)).state).toBe('ONLINE')
+    expect(counters()).toEqual({ print: count.print, status: count.status + 1 })
+    expect(state().jobs).toBe(1); expect(state().jobState).toBe('UNKNOWN')
+  })
+}
+
 const scenarios: Record<string, (flow: Flow) => Promise<void>> = {
+  'score-redemption': scoreRedemption, 'score-retry': scoreRetry, 'printer-unknown': printerUnknown,
   'pickup-contact': pickupContact, 'auth-session': authSession, 'catalog-order': catalogOrder, 'store-isolation': storeIsolation,
   'order-retry': orderRetry, 'order-cancel': orderCancel,
   'coupon-release': flow => couponFlow(flow, false), 'coupon-complete': flow => couponFlow(flow, true)

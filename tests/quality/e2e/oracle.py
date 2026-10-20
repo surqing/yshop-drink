@@ -22,6 +22,19 @@ def order_id(value):
 def query_for(name, ids):
     if name=='order-contact':
         return "SELECT JSON_OBJECT('memberId',uid,'userPhone',user_phone) FROM yshop_store_order WHERE order_id="+order_id(ids.get('orderId'))+';'
+    if name=='score-state':
+        member=number(ids.get('memberId'));product=number(ids.get('productId'))
+        return ("SELECT JSON_OBJECT('points',(SELECT integral FROM yshop_user WHERE id="+member+"),'stock',p.stock,'sales',p.sales,"
+                "'orderId',(SELECT MAX(order_id) FROM yshop_score_order WHERE uid="+member+" AND product_id=p.id),'orders',(SELECT COUNT(*) FROM yshop_score_order WHERE uid="+member+" AND product_id=p.id),"
+                "'submissions',(SELECT COUNT(*) FROM yshop_score_submission s JOIN yshop_score_order o ON o.order_id=s.order_id AND o.uid=s.uid WHERE s.uid="+member+" AND o.product_id=p.id),"
+                "'debit',(SELECT COALESCE(SUM(b.number),0) FROM yshop_user_bill b JOIN yshop_score_order o ON o.order_id=b.extend_field AND o.uid=b.uid WHERE o.uid="+member+" AND o.product_id=p.id),"
+                "'ledgerBalance',(SELECT MIN(b.balance) FROM yshop_user_bill b JOIN yshop_score_order o ON o.order_id=b.extend_field AND o.uid=b.uid WHERE o.uid="+member+" AND o.product_id=p.id),"
+                "'totalScore',(SELECT COALESCE(SUM(total_score),0) FROM yshop_score_order WHERE uid="+member+" AND product_id=p.id)) FROM yshop_score_product p WHERE p.id="+product+';')
+    if name=='printer-state':
+        device=number(ids.get('printerId'))
+        return ("SELECT JSON_OBJECT('state',p.device_state,'checkedAt',p.state_checked_at,'authorization',p.authorization,"
+                "'jobs',(SELECT COUNT(*) FROM yshop_printer_test_job WHERE printer_id=p.id),"
+                "'jobState',(SELECT MAX(state) FROM yshop_printer_test_job WHERE printer_id=p.id)) FROM yshop_printer p WHERE id="+device+';')
     if name=='order':
         return "SELECT JSON_OBJECT('id',id,'memberId',uid,'shopId',shop_id,'amount',pay_price,'paid',paid,'status',status,'deleted',CAST(deleted AS UNSIGNED),'couponId',coupon_id,'quantity',total_num,'remark',remark) FROM yshop_store_order WHERE order_id="+order_id(ids.get('orderId'))+';'
     if name=='order-lines':

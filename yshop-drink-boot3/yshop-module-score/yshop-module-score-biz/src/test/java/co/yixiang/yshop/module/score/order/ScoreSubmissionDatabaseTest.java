@@ -14,8 +14,8 @@ class ScoreSubmissionDatabaseTest {
     @AfterEach void close() throws Exception { if(f!=null)f.close(); }
     @Test void sameIntentRepeatedReturnsOriginalSuccessWithoutSecondMovement() {
         var request=f.request("1");
-        f.orders.submit(1L,request);
-        f.orders.submit(1L,request);
+        assertDoesNotThrow(()->f.orders.submit(1L,request), "First valid intent must succeed");
+        assertDoesNotThrow(()->f.orders.submit(1L,request), "Committed key must replay successfully");
         assertEquals(1,f.n("SELECT COUNT(*) FROM yshop_score_order"));
         assertEquals(1,f.n("SELECT COUNT(*) FROM yshop_user_bill"));
         f.decimal("900","SELECT integral FROM yshop_user WHERE id=1");

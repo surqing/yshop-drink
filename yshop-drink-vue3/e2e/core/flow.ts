@@ -73,7 +73,7 @@ export class Flow {
     expect((await info.json()).qualityOwner).toBe(context.owner)
     this.stage = 'ADMIN_LOGIN'; this.save()
     this.adminToken = await this.login()
-    if (context.profile === 'local') {
+    if (context.profile === 'local' && this.selected.requiredCapabilities.includes('mini')) {
       const { MiniDriver } = require(join(context.repo, 'tests/mini/e2e-driver.cjs'))
       this.stage = 'MINI_LAUNCH'; this.save()
       this.mini = await MiniDriver.launch(context.mini, join(context.output, `mini-${this.id}`))

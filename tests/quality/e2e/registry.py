@@ -1,6 +1,9 @@
 """One explicit business/check inventory, shared with the scenario executor."""
 
 _CHECKS = {
+    'score-redemption': ['score-fixture','score-submitted','score-ledger-sql','same-key-replay','different-content-conflict','insufficient-points','exactly-once-sql'],
+    'score-retry': ['score-fixture','committed-score-response-lost','original-score-key-replay','exactly-once-sql'],
+    'printer-unknown': ['device-created','unknown-from-explicit-test','query-does-not-send','history-shows-unknown','staff-denied','cached-status-readonly','explicit-status-refresh'],
     'pickup-contact': ['pickup-created','contact-sql','admin-contact','same-key-contact-conflict','confirmed-submission','cancel-restores-once','identity-sql'],
     'auth-session': ['admin-login','invalid-provider-proof','sms-login','sms-invalid-and-reused',
                      'expired-session','logout-revokes-access','identity-sql'],
@@ -17,6 +20,9 @@ _CHECKS = {
                         'duplicate-completion','admin-paid-order','coupon-redeemed','completion-ledger-sql'],
 }
 _LOCAL = {
+    'score-redemption': ['mini-score-page'],
+    'score-retry': ['mini-score-reload'],
+    'printer-unknown': [],
     'pickup-contact': ['mini-contact-edited'],
     'auth-session': ['mini-visitor-login','mini-phone-authorization','mini-denied-authorization','mini-expired-session'],
     'catalog-order': ['mini-sku-and-topping','mini-order-submitted'],
@@ -34,15 +40,17 @@ def select_scenarios(profile, scenario=None):
     if scenario is not None and scenario not in _CHECKS:
         raise ValueError('UNKNOWN_E2E_SCENARIO')
     ids=[scenario] if scenario is not None else list(_CHECKS)
-    return [{'id':name, 'variant':'mini-admin' if profile=='local' else 'api-admin',
+    return [{'id':name, 'variant':'mini-admin' if profile=='local' and name!='printer-unknown' else 'api-admin',
              'profiles':['local','ci'],
-             'requiredCapabilities':['docker','backend','browser','test-support'] + (['mini'] if profile=='local' else []) +
+             'requiredCapabilities':['docker','backend','browser','test-support'] + (['mini'] if profile=='local' and name!='printer-unknown' else []) +
                 (['native-confirmation'] if profile=='local' and name in ('order-cancel','coupon-release') else []),
              'expectedCheckIds':_CHECKS[name] + (_LOCAL[name] if profile=='local' else [])}
             for name in ids]
 
 
 def listing(profile, scenario=None):
-    return {'profile':profile, 'scope':'three-end-core' if profile=='local' else 'backend-admin-core',
-            'miniStatus':'REQUIRED' if profile=='local' else 'NOT_RUN',
-            'selection':'subset' if scenario else 'core', 'scenarios':select_scenarios(profile,scenario)}
+    scenarios=select_scenarios(profile,scenario)
+    needs_mini=any('mini' in item['requiredCapabilities'] for item in scenarios)
+    return {'profile':profile, 'scope':'three-end-core' if needs_mini else 'backend-admin-subset' if scenario else 'backend-admin-core',
+            'miniStatus':'REQUIRED' if needs_mini else 'NOT_RUN',
+            'selection':'subset' if scenario else 'core', 'scenarios':scenarios}
