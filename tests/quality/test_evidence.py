@@ -346,6 +346,18 @@ class ControlledEvidenceFaults(unittest.TestCase):
         registry={'qa.Suite':{'a':1,'b(String)[1]':1,'b(String)[2]':1}}
         self.assertEqual(registry,scoped_cases(registry,['Suite#a','Suite#b','Suite#b']))
 
+    def test_mutation_environment_discards_external_acceptance_overrides(self):
+        from mutate import mutation_environment
+        source={'PRINTER_ACCEPTANCE_CONFIG':'/outside/printer.properties',
+                'YSHOP_PRINTER_ACCEPTANCE_CONFIG':'legacy',
+                'YSHOP_SCORE_ACCEPTANCE_CONFIG':'score','YSHOP_SCORE_ACCEPTANCE_H2':'/outside/score.mv.db',
+                'KEEP_SYNTHETIC_FLAG':'yes'}
+        result=mutation_environment(source)
+        for key in ['PRINTER_ACCEPTANCE_CONFIG','YSHOP_PRINTER_ACCEPTANCE_CONFIG',
+                    'YSHOP_SCORE_ACCEPTANCE_CONFIG','YSHOP_SCORE_ACCEPTANCE_H2']:
+            self.assertNotIn(key,result)
+        self.assertEqual('yes',result['KEEP_SYNTHETIC_FLAG'])
+
     def test_private_mini_receipt_cannot_certify_tracked_asset(self):
         from inventory import collect
         temporary=tempfile.TemporaryDirectory();self.addCleanup(temporary.cleanup)

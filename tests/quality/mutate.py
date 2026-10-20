@@ -92,12 +92,22 @@ def classify_mutation(failures, errors):
     # Runtime initialization/SQL/transport errors invalidate attribution even if other tests assert.
     return 'ASSERTION_FAILURE' if failures > 0 and errors == 0 else 'INCONCLUSIVE'
 
+MUTATION_ENV_OVERRIDES = (
+    'YSHOP_ACCEPTANCE_CONFIG', 'YSHOP_ORDERING_ACCEPTANCE_CONFIG',
+    'YSHOP_INGRESS_BASE_URL', 'YSHOP_COUPON_REDIS_ACCEPTANCE',
+    'YSHOP_SCORE_ACCEPTANCE_CONFIG', 'YSHOP_SCORE_ACCEPTANCE_H2',
+    'PRINTER_ACCEPTANCE_CONFIG', 'YSHOP_PRINTER_ACCEPTANCE_CONFIG',
+)
+
+def mutation_environment(source=None):
+    """Remove caller-owned external acceptance targets from isolated mutation runs."""
+    env=dict(os.environ if source is None else source)
+    for key in MUTATION_ENV_OVERRIDES:env.pop(key,None)
+    return env
+
 def run(output, only=None):
     output.mkdir(parents=True,exist_ok=False,mode=0o700)
-    env=os.environ.copy()
-    for key in ['YSHOP_ACCEPTANCE_CONFIG','YSHOP_ORDERING_ACCEPTANCE_CONFIG','YSHOP_INGRESS_BASE_URL','YSHOP_COUPON_REDIS_ACCEPTANCE',
-                'YSHOP_SCORE_ACCEPTANCE_CONFIG','YSHOP_PRINTER_ACCEPTANCE_CONFIG']:
-        env.pop(key,None)
+    env=mutation_environment()
     operators=[x for x in OPERATORS if only is None or x[0] in only]
     if not operators:raise RuntimeError('NO_MUTATIONS_SELECTED')
     registry=manifest(REPO)
