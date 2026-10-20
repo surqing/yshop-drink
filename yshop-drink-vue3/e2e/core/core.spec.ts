@@ -507,6 +507,15 @@ function assertScoreOnce(before: any, after: any) {
   expect(Number(after.debit)).toBe(100); expect(Number(after.totalScore)).toBe(100)
   expect(Number(after.ledgerBalance)).toBe(Number(after.points))
 }
+async function assertScoreMiniRefusal(f: Flow, page: any, request: any, message: string) {
+  await expect.poll(async () => (await page.$('[role="status"]'))?.text()).toContain(message)
+  await expect.poll(async () => (await (await page.$('uv-button'))?.text())).toContain('重试兑换')
+  expect(await (await (await page.$('uv-button')).$('button')).property('disabled')).toBeFalsy()
+  const saved = await f.mini.mini.evaluate(() => wx.getStorageSync('scoreSubmission:v1:101'))
+  expect(saved.state).toBe('failed')
+  expect(saved.idempotencyKey).toBe(request.data.idempotencyKey)
+  expect((await f.mini.mini.currentPage()).path).toBe('pages-score/scoreproduct/confirm')
+}
 async function scoreRedemption(f: Flow) {
   let fixture: any, body: any, before: any, page: any
   await f.check('score-fixture', async () => { fixture = await scoreFixture(f); before = scoreState(f, fixture.product.id); expect(before.orders).toBe(0) })
@@ -536,9 +545,17 @@ async function scoreRedemption(f: Flow) {
     if (local) {
       const refusalPage = await f.mini.scoreCheckout(expensive.product, expensive.address)
       const request = await f.mini.scoreSubmit(refusalPage); expect(request.responseCode).toBe(1008018002)
+      await assertScoreMiniRefusal(f, refusalPage, request, '积分不足')
     } else expect((await f.api('POST', '/app-api/score-order/submit', expensive.body, expensive.token, false)).msg).toBe('积分不足')
     expect(scoreState(f, expensive.product.id)).toEqual(unchanged)
-    expect((await f.api('POST', '/app-api/score-order/submit', { ...body, num: '10', idempotencyKey: key() }, fixture.token, false)).msg).toBe('库存不足')
+    if (local) {
+      const soldOut = await scoreFixture(f), refusalPage = await f.mini.scoreCheckout(soldOut.product, soldOut.address)
+      await f.api('PUT', '/admin-api/score/product/update', { ...soldOut.product, stock: 0 })
+      const stockBefore = scoreState(f, soldOut.product.id)
+      const request = await f.mini.scoreSubmit(refusalPage); expect(request.responseCode).toBe(1008018003)
+      await assertScoreMiniRefusal(f, refusalPage, request, '库存不足')
+      expect(scoreState(f, soldOut.product.id)).toEqual(stockBefore)
+    } else expect((await f.api('POST', '/app-api/score-order/submit', { ...body, num: '10', idempotencyKey: key() }, fixture.token, false)).msg).toBe('库存不足')
   })
   await f.check('exactly-once-sql', () => { assertScoreOnce(before, scoreState(f, fixture.product.id)) })
 }
