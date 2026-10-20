@@ -508,9 +508,10 @@ function assertScoreOnce(before: any, after: any) {
   expect(Number(after.ledgerBalance)).toBe(Number(after.points))
 }
 async function assertScoreMiniRefusal(f: Flow, page: any, request: any, message: string) {
-  await expect.poll(async () => (await page.$('[role="status"]'))?.text()).toContain(message)
-  await expect.poll(async () => (await (await page.$('uv-button'))?.text())).toContain('重试兑换')
-  expect(await (await (await page.$('uv-button')).$('button')).property('disabled')).toBeFalsy()
+  await expect.poll(async () => (await page.$('.score-product-confirm__feedback'))?.text()).toContain(message)
+  await expect.poll(async () => (await (await page.$('.score-product-confirm__submit'))?.text())).toContain('重试兑换')
+  const component = await page.$('.score-product-confirm__submit')
+  expect(await component.$('.uv-button-wrapper--dis')).toBeNull()
   const saved = await f.mini.mini.evaluate(() => wx.getStorageSync('scoreSubmission:v1:101'))
   expect(saved.state).toBe('failed')
   expect(saved.idempotencyKey).toBe(request.data.idempotencyKey)
@@ -552,7 +553,7 @@ async function scoreRedemption(f: Flow) {
       const soldOut = await scoreFixture(f), refusalPage = await f.mini.scoreCheckout(soldOut.product, soldOut.address)
       await f.api('PUT', '/admin-api/score/product/update', { ...soldOut.product, stock: 0 })
       const stockBefore = scoreState(f, soldOut.product.id)
-      const request = await f.mini.scoreSubmit(refusalPage); expect(request.responseCode).toBe(1008018003)
+      const request = await f.mini.scoreSubmit(refusalPage); expect(request.responseCode).toBe(1008018002)
       await assertScoreMiniRefusal(f, refusalPage, request, '库存不足')
       expect(scoreState(f, soldOut.product.id)).toEqual(stockBefore)
     } else expect((await f.api('POST', '/app-api/score-order/submit', { ...body, num: '10', idempotencyKey: key() }, fixture.token, false)).msg).toBe('库存不足')
@@ -575,7 +576,7 @@ async function scoreRetry(f: Flow) {
     expect(saved.idempotencyKey).toBe(body.idempotencyKey)
     expect(saved.payload.productId).toBe(String(fixture.product.id))
     page = await f.mini.mini.navigateTo('/pages-score/scoreproduct/confirm')
-    await expect.poll(async () => (await (await page.$('uv-button')).text())).toContain('原请求重试')
+    await expect.poll(async () => (await (await page.$('.score-product-confirm__submit')).text())).toContain('原请求重试')
   })
   await f.check('original-score-key-replay', async () => {
     if (local) {

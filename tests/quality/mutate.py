@@ -84,7 +84,7 @@ def scoped_cases(registry, selectors):
         name=matches[0]
         cases={k:v for k,v in registry[name].items() if not method or k.split('(',1)[0].split('[',1)[0]==method}
         if not cases:raise RuntimeError('MUTATION_METHOD_NOT_REGISTERED')
-        selected[name]=cases
+        selected.setdefault(name,{}).update(cases)
     return selected
 
 

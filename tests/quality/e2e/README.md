@@ -34,7 +34,7 @@ local 还需要 macOS、HBuilderX、已登录且启用服务端口的微信开�
 
 ## 场景和边界
 
-七组必需场景为 `auth-session`、`catalog-order`、`store-isolation`、`order-retry`、`order-cancel`、`coupon-release`、`coupon-complete`。local 标为 `mini-admin`；ci 标为 `api-admin`，小程序明确 NOT_RUN。
+完整集合为 11 个必需场景：`score-redemption`、`score-retry`、`printer-unknown`、`pickup-contact`、`auth-session`、`catalog-order`、`store-isolation`、`order-retry`、`order-cancel`、`coupon-release`、`coupon-complete`。local 中 10 个场景使用官方 Mini 并标为 `mini-admin`；`printer-unknown` 使用后台页面和后端，标为 `api-admin`，其单场景运行明确 Mini NOT_RUN。ci 的 11 个场景均为 `api-admin`，小程序明确 NOT_RUN。
 
 认证从空会话开始。自动化只替换微信平台凭据、手机号授权事件和短信发送渠道；会员绑定、验证码生命周期、token、业务服务、事务和数据库真实运行。未知微信公众号或支付 SDK 操作直接失败。合成完成通过私有子进程命令桥调用真实完成服务，不经供应商，不直接写 SQL 改已支付状态。真实微信身份、真机、真实短信、支付通知协议和真实支付均不在验收范围内。
 

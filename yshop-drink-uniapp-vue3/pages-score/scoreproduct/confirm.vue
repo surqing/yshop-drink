@@ -41,11 +41,11 @@
 			<view class="text-right font-size-lg mt-5 text-color-assist">本次消耗 <text class="font-size-medium text-color-base ">{{ product.score }} 积分</text></view>
 		</view>
 	</view>
-    <view v-if="feedback" class="px-2 mt-2" role="status">{{ feedback }}</view>
+    <view v-if="feedback" class="px-2 mt-2 score-product-confirm__feedback" role="status">{{ feedback }}</view>
     <view v-if="submissionState === 'unknown'" class="px-2 mt-2" @click="viewOrders">查看兑换记录（确认原兑换结果后再发起新兑换）</view>
 	<view class="fixed-bottom flex justify-between align-center bg-white ">
 		<view class="mx-2 ont-weight-light">本次消耗 <text class="text-danger">{{ product.score }} 积分</text></view>
-		<view><uv-button type="warning" :color="scoreProductAccent" :customStyle="customStyle" size="large" :text="buttonText" :disabled="submissionState === 'submitting' || submissionState === 'success' || recoveryBlocked" :loading="submissionState === 'submitting'" @click="submit"></uv-button></view>
+		<view><uv-button class="score-product-confirm__submit" type="warning" :color="scoreProductAccent" :customStyle="customStyle" size="large" :text="buttonText" :disabled="submissionState === 'submitting' || submissionState === 'success' || recoveryBlocked" :loading="submissionState === 'submitting'" @click="submit"></uv-button></view>
 	</view>
 	<uv-toast ref="uToast" />
 </template>

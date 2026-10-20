@@ -341,6 +341,11 @@ class ControlledEvidenceFaults(unittest.TestCase):
         self.assertEqual({'qa.Suite':{'b(String)[1]':1,'b(String)[2]':1}},scoped_cases(registry,['Suite#b']))
         with self.assertRaisesRegex(RuntimeError,'NOT_REGISTERED'):scoped_cases(registry,['Suite#missing'])
 
+    def test_mutation_method_scopes_union_without_duplicate_cases(self):
+        from mutate import scoped_cases
+        registry={'qa.Suite':{'a':1,'b(String)[1]':1,'b(String)[2]':1}}
+        self.assertEqual(registry,scoped_cases(registry,['Suite#a','Suite#b','Suite#b']))
+
     def test_private_mini_receipt_cannot_certify_tracked_asset(self):
         from inventory import collect
         temporary=tempfile.TemporaryDirectory();self.addCleanup(temporary.cleanup)

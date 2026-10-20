@@ -105,13 +105,24 @@ class MiniDriver {
   async scoreSubmit(page, { loseResponse=false }={}) {
     if(loseResponse) await this.mini.evaluate(()=>wx.setStorageSync('__e2eFault',{dropNextScoreResponse:true}))
     const before=(await this.state()).requests.filter(r=>r.path==='/app-api/score-order/submit').length
-    const component=await until(()=>page.$('uv-button'))
+    const component=await until(()=>page.$('.score-product-confirm__submit'))
     const button=await until(()=>component.$('button'))
+    await until(async()=>!(await component.$('.uv-button-wrapper--dis')))
     await button.tap()
-    const request=await until(async()=>{
+    let request
+    try {request=await until(async()=>{
       const rows=(await this.state()).requests.filter(r=>r.path==='/app-api/score-order/submit')
       return rows.length>before && rows.at(-1).responseCode!==undefined?rows.at(-1):null
-    })
+    })} catch(error) {
+      // Keep diagnostics private and bounded; never call a page/component submit handler.
+      const read=async fn=>{try{return await fn()}catch(failure){return `UNAVAILABLE:${failure.message}`}}
+      const probe={pageId:page.id,currentPageId:(await this.mini.currentPage())?.id,
+        footer:await read(async()=>(await page.$('.fixed-bottom'))?.outerWxml()),
+        button:await read(()=>button.outerWxml()),
+        requestCount:(await this.state()).requests.filter(r=>r.path==='/app-api/score-order/submit').length}
+      fs.writeFileSync(path.join(this.output,'score-submit-private.json'),JSON.stringify(probe,null,2),{mode:0o600})
+      throw error
+    }
     if(loseResponse) await until(async()=>(await this.state()).scoreDropped)
     else if(request.responseCode===0) await until(async()=>(await this.mini.currentPage()).path==='pages-score/scoreproduct/order')
     return request
