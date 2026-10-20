@@ -8,5 +8,5 @@
     "D007": "FIXED",
     "D008": "OPEN"
   },
-  "scoreIdempotencyRequired": false
+  "scoreIdempotencyRequired": true
 }

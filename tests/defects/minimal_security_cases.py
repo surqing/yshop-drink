@@ -6,6 +6,7 @@ owner transfers and denial of every request; they do not mock persistence.
 """
 from concurrent.futures import ThreadPoolExecutor
 import threading
+import uuid
 
 
 def address_cases(api, sql, case, token, login):
@@ -57,7 +58,7 @@ def address_cases(api, sql, case, token, login):
                 codes.append(api('POST', prefix + value, token=token)['code'])
             codes.append(api('POST', '/app-api/address/addAndEdit', payload(value), token)['code'])
             codes.append(api('POST', '/app-api/score-order/submit',
-                             {'productId': '9101', 'addressId': value, 'num': '1'}, token)['code'])
+                             {'productId': '9101', 'addressId': value, 'num': '1', 'idempotencyKey': uuid.uuid4().hex}, token)['code'])
         o.update(codes=codes, unchanged=snapshot() == before)
         assert all(c == 1004004001 for c in codes) and o['unchanged'], 'Invalid IDs must produce parameter errors with no mutation'
 
@@ -69,7 +70,7 @@ def address_cases(api, sql, case, token, login):
             codes.append(api('POST', '/app-api/address/default/set/' + str(value), token=token)['code'])
             codes.append(api('POST', '/app-api/address/del/' + str(value), token=token)['code'])
             codes.append(api('POST', '/app-api/score-order/submit',
-                             {'productId': '9101', 'addressId': str(value), 'num': '1'}, token)['code'])
+                             {'productId': '9101', 'addressId': str(value), 'num': '1', 'idempotencyKey': uuid.uuid4().hex}, token)['code'])
         o.update(codes=codes, unchanged=snapshot() == before)
         assert all(c == 1004004000 for c in codes) and o['unchanged'], 'Missing/deleted addresses must fail before a default reset'
 
@@ -100,12 +101,12 @@ def address_cases(api, sql, case, token, login):
         sql("DELETE FROM yshop_score_order WHERE product_id=9101; DELETE FROM yshop_user_bill WHERE uid=101 AND category='integral'; "
             'UPDATE yshop_score_product SET stock=10,sales=0,is_switch=1 WHERE id=9101; UPDATE yshop_user SET integral=1000 WHERE id=101;')
         before = sql('SELECT stock,sales FROM yshop_score_product WHERE id=9101; SELECT integral FROM yshop_user WHERE id=101;')
-        r = api('POST', '/app-api/score-order/submit', {'productId': '9101', 'addressId': '9202', 'num': '1'}, token)
+        r = api('POST', '/app-api/score-order/submit', {'productId': '9101', 'addressId': '9202', 'num': '1', 'idempotencyKey': uuid.uuid4().hex}, token)
         assert r['code'] == 1004004000, 'Authenticated foreign checkout must reach ownership rejection'
         assert sql('SELECT stock,sales FROM yshop_score_product WHERE id=9101; SELECT integral FROM yshop_user WHERE id=101;') == before
         assert sql('SELECT COUNT(*) FROM yshop_score_order WHERE product_id=9101').strip() == '0'
         assert sql("SELECT COUNT(*) FROM yshop_user_bill WHERE uid=101 AND category='integral'").strip() == '0'
-        r = api('POST', '/app-api/score-order/submit', {'productId': '9101', 'addressId': '9201', 'num': '1'}, token)
+        r = api('POST', '/app-api/score-order/submit', {'productId': '9101', 'addressId': '9201', 'num': '1', 'idempotencyKey': uuid.uuid4().hex}, token)
         assert r['code'] == 0, 'The same authenticated member must be able to order using its own address'
         assert sql("SELECT COUNT(*) FROM yshop_score_order WHERE product_id=9101 AND uid=101 AND customer_phone='13800000101' AND customer_address='Street AUnit A'").strip() == '1'
         o.update(foreignRejectedWithoutSideEffects=True, ownCheckoutSucceeded=True)
