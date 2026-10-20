@@ -6,7 +6,7 @@
     "D005": "FIXED",
     "D006": "FIXED",
     "D007": "FIXED",
-    "D008": "OPEN"
+    "D008": "FIXED"
   },
   "scoreIdempotencyRequired": false
 }

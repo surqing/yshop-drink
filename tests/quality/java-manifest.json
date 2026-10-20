@@ -347,7 +347,14 @@
     "categoryAndOrderAuthorizationUsesDatabaseShopNotTokenHint": 1,
     "unexpectedDatabaseFailuresCannotBecomeNormalRaceLosers": 1,
     "skuCapacityAdmissionHasIndependentReasonAndNoPartialReservation": 1,
-    "productOwnershipAdmissionPrecedesCategoryAndConditionalDebit": 1
+    "productOwnershipAdmissionPrecedesCategoryAndConditionalDebit": 1,
+    "pickupKeepsEditedTrimmedContactWithoutChangingMemberIdentity": 1,
+    "invalidPickupContactHasNoOrderOrInventorySideEffects": 1,
+    "changingPickupContactWithSameKeyConflictsWithoutAnotherOrder": 1,
+    "legacyPickupWithMissingContactRequiresExistingOrderReview": 1,
+    "legacyPickupCanReplayOnlySameStoredContact": 1,
+    "legacyDeliveryReplaysOriginalAddressContactDespiteClientContactChanges": 1,
+    "committedSubmissionCanBeConfirmedWithoutChangingLegacyContact": 1
   },
   "co.yixiang.yshop.module.order.payment.CallbackIngressEndToEndTest": {
     "validSyntheticAnonymousNotification": 1,

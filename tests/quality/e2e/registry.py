@@ -1,6 +1,7 @@
 """One explicit business/check inventory, shared with the scenario executor."""
 
 _CHECKS = {
+    'pickup-contact': ['pickup-created','contact-sql','admin-contact','same-key-contact-conflict','confirmed-submission','cancel-restores-once','identity-sql'],
     'auth-session': ['admin-login','invalid-provider-proof','sms-login','sms-invalid-and-reused',
                      'expired-session','logout-revokes-access','identity-sql'],
     'catalog-order': ['admin-create-product','admin-configure-sku','admin-configure-topping',
@@ -16,6 +17,7 @@ _CHECKS = {
                         'duplicate-completion','admin-paid-order','coupon-redeemed','completion-ledger-sql'],
 }
 _LOCAL = {
+    'pickup-contact': ['mini-contact-edited'],
     'auth-session': ['mini-visitor-login','mini-phone-authorization','mini-denied-authorization','mini-expired-session'],
     'catalog-order': ['mini-sku-and-topping','mini-order-submitted'],
     'store-isolation': ['mini-switch-clears-context'],

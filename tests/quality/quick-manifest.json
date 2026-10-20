@@ -1,6 +1,6 @@
 {
   "tests/auth-errors.test.mjs": 2,
-  "tests/business/cart-context-test.mjs": 22,
+  "tests/business/cart-context-test.mjs": 37,
   "tests/business/catalog-options-test.mjs": 11,
   "tests/business/coupon-context-test.mjs": 13,
   "tests/sms-errors.test.mjs": 4,

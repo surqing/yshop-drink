@@ -432,8 +432,67 @@ async function couponFlow(f: Flow, complete: boolean) {
   }
 }
 
+async function pickupContact(f: Flow) {
+  const product = await f.createProduct(), token = await f.member(), contact = '13800000999'
+  const before = f.oracle('identity', { memberId: 101 })[0]
+  let page: any, order: any, body: any
+  if (local) await f.check('mini-contact-edited', async () => {
+    await f.mini.selectStore('QA Shop A'); await f.mini.addProduct(product.name)
+    page = await f.mini.checkout()
+    const input = await page.$('.pay-page__contact-input'); expect(input).toBeTruthy()
+    await input.input(contact)
+    await expect.poll(async () => (await page.$('.pay-page__contact-input')).property('value')).toBe(contact)
+    await f.mini.mini.navigateTo('/pages-checkout/remark/remark')
+    page = await f.mini.mini.navigateBack()
+    await expect.poll(async () => (await page.$('.pay-page__contact-input')).property('value')).toBe(contact)
+  })
+  await f.check('pickup-created', async () => {
+    if (local) {
+      order = await f.mini.submit(page)
+      body = (await f.mini.state()).requests.filter((r: any) => r.path === '/app-api/order/create').at(-1).data
+      expect(body.mobile).toBe(contact)
+    } else { order = await f.createOrder(product, token, { mobile: contact }); body = order.body }
+    expect(order.orderId).toBeTruthy()
+  })
+  await f.check('contact-sql', () => {
+    expect(f.oracle('order-contact', { orderId: order.orderId })[0]).toEqual({ memberId: 101, userPhone: contact })
+    expect(f.oracle('inventory', { skuId: product.skus[0].id })[0].stock).toBe(9)
+  })
+  await f.check('admin-contact', async () => {
+    const row = await f.viewOrder(order.orderId)
+    await row.getByRole('button', { name: '更多' }).hover()
+    await f.page.getByRole('menuitem', { name: '订单详情', exact: true }).click()
+    const drawer = f.page.locator('.el-drawer').filter({ visible: true } as any)
+    await expect(drawer).toContainText('联系电话')
+    await expect(drawer).toContainText(contact)
+  })
+  await f.check('same-key-contact-conflict', async () => {
+    const denied = await f.api('POST', '/app-api/order/create', { ...body, mobile: '13800000888' }, token, false)
+    expect(denied.msg).toBe('ORDER_IDEMPOTENCY_CONFLICT')
+    expect(f.oracle('submission', { memberId: 101, key: body.idempotencyKey })[0].count).toBe(1)
+    expect(f.oracle('order-contact', { orderId: order.orderId })[0].userPhone).toBe(contact)
+  })
+  await f.check('confirmed-submission', async () => {
+    const result = await f.api('GET', '/app-api/order/submission-result?idempotencyKey=' + body.idempotencyKey, undefined, token)
+    expect(result.orderId).toBe(order.orderId)
+    const other = await f.member(2)
+    expect((await f.api('GET', '/app-api/order/submission-result?idempotencyKey=' + body.idempotencyKey, undefined, other, false)).msg).toBe('ORDER_SUBMISSION_UNCONFIRMED')
+    expect((await f.api('GET', '/app-api/order/submission-result?idempotencyKey=' + body.idempotencyKey, undefined, '', false)).code).not.toBe(0)
+    expect(f.oracle('submission', { memberId: 101, key: body.idempotencyKey })[0].count).toBe(1)
+  })
+  await f.check('cancel-restores-once', async () => {
+    await f.api('POST', '/app-api/order/cancel', { id: order.orderId }, token)
+    await f.api('POST', '/app-api/order/cancel', { id: order.orderId }, token)
+    expect(f.oracle('inventory', { skuId: product.skus[0].id })[0].stock).toBe(10)
+  })
+  await f.check('identity-sql', () => {
+    expect(f.oracle('identity', { memberId: 101 })[0]).toEqual(before)
+    expect(f.oracle('financial-records', { orderId: order.orderId })[0]).toEqual({ payments: 0, attempts: 0, bills: 0 })
+  })
+}
+
 const scenarios: Record<string, (flow: Flow) => Promise<void>> = {
-  'auth-session': authSession, 'catalog-order': catalogOrder, 'store-isolation': storeIsolation,
+  'pickup-contact': pickupContact, 'auth-session': authSession, 'catalog-order': catalogOrder, 'store-isolation': storeIsolation,
   'order-retry': orderRetry, 'order-cancel': orderCancel,
   'coupon-release': flow => couponFlow(flow, false), 'coupon-complete': flow => couponFlow(flow, true)
 }

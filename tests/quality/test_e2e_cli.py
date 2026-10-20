@@ -60,14 +60,14 @@ class E2eCliTest(unittest.TestCase):
         return subprocess.run([sys.executable, str(REPO/'tests/quality/run.py'), *arguments],
                               cwd=REPO, text=True, capture_output=True, timeout=20)
 
-    def test_local_lists_seven_mini_variants_without_creating_output(self):
+    def test_local_lists_registered_mini_variants_without_creating_output(self):
         with tempfile.TemporaryDirectory() as folder:
             output=Path(folder)/'must-not-exist'
             result=self.invoke('E2E','--profile','local','--list','--output',str(output))
             self.assertEqual(0,result.returncode,result.stderr)
             report=json.loads(result.stdout)
             self.assertEqual('local',report['profile'])
-            self.assertEqual(['auth-session','catalog-order','store-isolation','order-retry',
+            self.assertEqual(['pickup-contact','auth-session','catalog-order','store-isolation','order-retry',
                               'order-cancel','coupon-release','coupon-complete'],
                              [s['id'] for s in report['scenarios']])
             self.assertTrue(all(s['variant']=='mini-admin' for s in report['scenarios']))
@@ -78,7 +78,7 @@ class E2eCliTest(unittest.TestCase):
         self.assertEqual(0,result.returncode,result.stderr)
         report=json.loads(result.stdout)
         self.assertEqual('NOT_RUN',report['miniStatus'])
-        self.assertEqual(7,len(report['scenarios']))
+        self.assertEqual(8,len(report['scenarios']))
         self.assertTrue(all(s['variant']=='api-admin' for s in report['scenarios']))
 
     def test_filtered_list_contains_only_requested_scenario(self):

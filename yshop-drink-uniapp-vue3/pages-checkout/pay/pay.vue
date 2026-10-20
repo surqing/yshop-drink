@@ -66,7 +66,7 @@
 					<list-cell class="pay-page__cell pay-page__cell--contact" last :hover="false" v-if="orderType == 'takein'">
 						<view class="flex-fill d-flex justify-content-between align-items-center">
 							<view class="title flex-fill">联系电话</view>
-							<view class="time"><input class="text-right" placeholder="请输入手机号码" :value="member.mobile" />
+							<view class="time"><input class="text-right pay-page__contact-input" placeholder="请输入手机号码" v-model="contactMobile" :disabled="submitting || contactPending" @input="touchContact" />
 							</view>
 							<button class="pay-page__contact-tip font-size-sm">自动填写</button>
 						</view>
@@ -181,6 +181,7 @@
 			</list-cell>
 			<!-- 备注 end -->
 		</view>
+        <view v-if="contactPending" class="pay-page__pending" @tap="confirmPendingOrder">查看本次已提交的订单</view>
 		<!-- 付款栏 begin -->
 		<view class="pay-page__footer w-100 position-fixed fixed-bottom d-flex align-items-center justify-content-between bg-white">
 			<view class="pay-page__footer-label font-size-sm">合计：</view>
@@ -219,10 +220,11 @@
 import {
   ref,
   computed,
-  nextTick
+  nextTick,
+  watch
 } from 'vue'
 import { useMainStore } from '@/store/store'
-import { PAYMENT_FROZEN, eligibleCoupons } from '@/utils/ordering-context'
+import { PAYMENT_FROZEN, eligibleCoupons, submissionSnapshot, submissionSucceeded, unresolvedSubmission, matchesSubmittedCart, submissionKey } from '@/utils/ordering-context'
 import { cents } from '@/utils/catalog-options'
 import { couponDiscount, couponContextMatches } from '@/utils/coupon-context'
 import { storeToRefs } from 'pinia'
@@ -232,6 +234,7 @@ import  debounce  from '@/uni_modules/uv-ui-tools/libs/function/debounce'
 
 import {
   orderSubmit,
+  orderSubmissionResult,
   payUnify,
   getWechatConfig
 } from '@/api/order'
@@ -246,6 +249,67 @@ const { orderType,address, store,location,isLogin,member,mycoupon } = storeToRef
 const active = ref(false)
 const title = ref('确认订单')
 const submitting = ref(false)
+const contactMobile = ref('')
+const contactInitialized = ref(false)
+const contactPending = ref(false)
+const touchContact = () => { contactInitialized.value = true }
+watch(() => [member.value?.id, member.value?.mobile], ([id, mobile], previous) => {
+    if (String(previous?.[0] || '') !== String(id || '')) {
+        contactInitialized.value = false
+        contactPending.value = false
+        contactMobile.value = ''
+    }
+    if (contactInitialized.value) return
+    const saved = submissionSnapshot(uni, String(member.value?.id || ''))
+    contactPending.value = unresolvedSubmission(saved)
+    if (id && contactPending.value) {
+        try {
+            const payload = JSON.parse(saved.payload)
+            if (payload.orderType === 'takein' && typeof payload.mobile === 'string') {
+                contactMobile.value = payload.mobile
+                contactInitialized.value = true
+                contactPending.value = true
+                return
+            }
+        } catch { /* Invalid old cache is handled by the submission guard. */ }
+    }
+    if (mobile) {
+        contactMobile.value = String(mobile)
+        contactInitialized.value = true
+    }
+}, { immediate: true })
+
+const clearConfirmedContext = (owner, key, request) => {
+    if (String(member.value?.id || '') !== owner) return
+    const active = submissionSnapshot(uni, owner)
+    if (active?.key && active.key !== key) return
+    if (!matchesSubmittedCart(uni.getStorageSync('cart') || [], request)) return
+    main.REMOVE_CART()
+    uni.removeStorageSync('cart')
+    if (String(mycoupon.value?.id || 0) === String(request.couponId || 0)) main.DEL_COUPON()
+}
+const confirmPendingOrder = async () => {
+    if (submitting.value) return
+    const owner = String(member.value?.id || '')
+    const saved = submissionSnapshot(uni, owner)
+    if (!owner || !saved?.key) return
+    submitting.value = true
+    try {
+        const order = await orderSubmissionResult(saved.key)
+        if (!/^[a-f0-9]{32}$/.test(String(order?.orderId || ''))) throw Error('ORDER_SUBMISSION_UNCONFIRMED')
+        if (String(member.value?.id || '') !== owner) return
+        // Only a server-confirmed, owned order resolves this exact intent.
+        submissionSucceeded(uni, saved.key, owner, true)
+        let request
+        try { request = JSON.parse(saved.payload) } catch { request = null }
+        clearConfirmedContext(owner, saved.key, request)
+        contactPending.value = false
+        await uni.redirectTo({ url: '/pages-order/orders/detail?id=' + order.orderId })
+    } catch {
+        uni.showToast({ title: '结果仍未确认，请保留原请求稍后重试', icon: 'none' })
+    } finally { submitting.value = false }
+}
+
 const jsStr = ref('')
 const cart = ref([])
 const form = ref({
@@ -492,11 +556,13 @@ const pay = async() => {
         uni.showToast({ title: '门店已变化，请重新选择商品', icon: 'none' })
         return
     }
+    const owner = String(member.value?.id || '')
     submitting.value = true
     uni.showLoading({ title: '提交中' })
     try {
         const data = {
             orderType: orderType.value,
+            mobile: orderType.value === 'takein' ? contactMobile.value.trim() : undefined,
             addressId: orderType.value === 'takeout' ? address.value.id : 0,
             shopId: store.value.id,
             gettime: takeinRange.value[defaultSelector.value[0]].value,
@@ -507,16 +573,21 @@ const pay = async() => {
             choices: cart.value.map(item => ({ version: Number(item.catalogVersion || 0), selections: item.selections || [] })),
             couponId: coupon.value.id || 0
         }
-        const order = await orderSubmit(data)
-        if (!order?.orderId) return
-        main.DEL_COUPON()
-        main.REMOVE_CART()
-        uni.removeStorageSync('cart')
-        uni.removeStorageSync('checkoutSubmission')
+        const key = submissionKey(uni, data, true, owner)
+        const order = await orderSubmit({ ...data, idempotencyKey: key })
+        if (!order?.orderId || String(member.value?.id || '') !== owner) return
+        clearConfirmedContext(owner, key, data)
         await uni.redirectTo({ url: '/pages-order/orders/detail?id=' + order.orderId })
     } catch (error) {
         // Preserve the cart and submission key: a failed response can follow a committed order.
-        uni.showToast({ title: String(error?.msg || error?.message || '').includes('CATALOG_CHANGED') ? '商品配置已更新，请返回点餐页刷新并确认' : '提交未确认，请重试；不会重复创建订单', icon: 'none' })
+        contactPending.value = unresolvedSubmission(submissionSnapshot(uni, String(member.value?.id || '')))
+        const reason = String(error?.data?.msg || error?.msg || error?.message || '')
+        let message = '提交未确认，请保持原内容重试或查看订单列表'
+        if (reason.includes('INVALID_PICKUP_CONTACT')) message = '请输入有效的联系手机号码'
+        else if (reason.includes('ORDER_CONTACT_RECONFIRM_REQUIRED')) message = '已有订单的联系方式需要核实，请到订单列表查看'
+        else if (reason.includes('CATALOG_CHANGED')) message = '商品配置已更新，请返回点餐页刷新并确认'
+        else if (/ORDER_SUBMISSION_PENDING|ORDER_SUBMISSION_RECOVERY_REQUIRED/.test(reason)) message = '上次订单尚未确认，请恢复原内容重试或查看订单列表'
+        uni.showToast({ title: message, icon: 'none' })
     } finally {
         submitting.value = false
         uni.hideLoading()

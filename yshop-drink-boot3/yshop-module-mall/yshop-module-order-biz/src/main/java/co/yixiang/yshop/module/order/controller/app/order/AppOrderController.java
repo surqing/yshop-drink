@@ -63,6 +63,7 @@ import static co.yixiang.yshop.module.order.enums.ErrorCodeConstants.STORE_ORDER
 public class AppOrderController {
 
     private final AppStoreOrderService appStoreOrderService;
+    private final co.yixiang.yshop.module.order.service.ordering.OrderPlacementService orderPlacementService;
     private final AsyncOrderRedisDAO asyncOrderRedisDAO;
     private final co.yixiang.yshop.module.order.service.payment.VerifiedPaymentCallback verifiedPaymentCallback;
     private final AppStoreShopService appStoreShopService;
@@ -81,6 +82,13 @@ public class AppOrderController {
         return success(appStoreOrderService.createOrder(uid, param));
     }
 
+
+    @PreAuthenticated
+    @GetMapping("/submission-result")
+    @Operation(summary = "只读确认当前会员已提交的订单")
+    public CommonResult<Map<String, Object>> submissionResult(@RequestParam String idempotencyKey) {
+        return success(orderPlacementService.submissionResult(getLoginUserId(), idempotencyKey));
+    }
 
     /**
      * 订单支付
