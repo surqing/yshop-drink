@@ -20,6 +20,8 @@ def order_id(value):
 
 
 def query_for(name, ids):
+    if name=='order-contact':
+        return "SELECT JSON_OBJECT('memberId',uid,'userPhone',user_phone) FROM yshop_store_order WHERE order_id="+order_id(ids.get('orderId'))+';'
     if name=='order':
         return "SELECT JSON_OBJECT('id',id,'memberId',uid,'shopId',shop_id,'amount',pay_price,'paid',paid,'status',status,'deleted',CAST(deleted AS UNSIGNED),'couponId',coupon_id,'quantity',total_num,'remark',remark) FROM yshop_store_order WHERE order_id="+order_id(ids.get('orderId'))+';'
     if name=='order-lines':

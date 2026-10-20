@@ -100,7 +100,13 @@ const search = (keywork) => {
 }
 // 选中店铺
 const choice = (shop) => {
-	main.SET_STORE(shop);
+	try {
+		main.SET_STORE(shop);
+	} catch (error) {
+		if (error?.message !== 'ORDER_SUBMISSION_PENDING') throw error
+		uni.showToast({ title: '上次订单尚未确认，请先重试或查看订单列表', icon: 'none' })
+		return
+	}
 	uni.$emit('refreshMenu')
 	uni.switchTab({ 
 		url:'/pages/menu/menu',

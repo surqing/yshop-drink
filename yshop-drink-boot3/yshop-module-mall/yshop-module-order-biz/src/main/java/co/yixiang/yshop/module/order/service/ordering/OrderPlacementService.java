@@ -94,11 +94,26 @@ public class OrderPlacementService {
         return key.getKey().longValue();
     }
 
+    public Map<String, Object> submissionResult(Long uid, String key) {
+        if (uid == null || uid <= 0 || key == null || !key.matches("[A-Za-z0-9_-]{16,64}"))
+            throw reject("ORDER_IDEMPOTENCY_KEY_REQUIRED");
+        // A committed submission and its order share one transaction. Absence is uncertain,
+        // never permission to discard a key while another submission may be committing.
+        var rows = jdbc.queryForList("SELECT o.order_id FROM yshop_order_submission s JOIN yshop_store_order o"
+                + " ON o.order_id=s.order_id AND o.uid=s.uid WHERE s.uid=? AND s.idempotency_key=?", uid, key);
+        if (rows.size() != 1) throw reject("ORDER_SUBMISSION_UNCONFIRMED");
+        return Map.of("orderId", rows.get(0).get("order_id").toString());
+    }
+
     public Map<String, Object> place(Long uid, AppOrderParam p) {
         if (uid == null || uid <= 0 || p == null) throw reject("INVALID_ORDER_INPUT");
         long shopId = positive(p.getShopId());
         if (!Set.of("takein", "takeout").contains(Objects.toString(p.getOrderType(), "")))
             throw reject("UNSUPPORTED_ORDER_TYPE");
+        String contact = "takein".equals(p.getOrderType()) ? Objects.toString(p.getMobile(), "").trim() : "";
+        if ("takein".equals(p.getOrderType())
+                && !co.yixiang.yshop.framework.common.util.validation.ValidationUtils.isMobile(contact))
+            throw reject("INVALID_PICKUP_CONTACT");
         if (p.getIdempotencyKey() == null || !p.getIdempotencyKey().matches("[A-Za-z0-9_-]{16,64}"))
             throw reject("ORDER_IDEMPOTENCY_KEY_REQUIRED");
         if (p.getProductId() == null
@@ -149,22 +164,24 @@ public class OrderPlacementService {
                                                                 line.sku(),
                                                                 line.quantity(),Objects.toString(line.choice(),"")))
                                         .toList()));
-        String hash;
+        String legacyHash = digest(canonical);
+        String hash = digest(co.yixiang.yshop.framework.common.util.json.JsonUtils.toJsonString(
+                List.of("order-contact-v2", canonical, contact)));
+        return new TransactionTemplate(transactions)
+                .execute(tx -> create(uid, p, shopId, minutes, lines, hash, legacyHash, contact));
+    }
+
+    private static String digest(String canonical) {
         try {
-            hash =
-                    HexFormat.of()
-                            .formatHex(
-                                    MessageDigest.getInstance("SHA-256")
-                                            .digest(canonical.getBytes(StandardCharsets.UTF_8)));
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                    .digest(canonical.getBytes(StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException ex) {
             throw new IllegalStateException(ex);
         }
-        return new TransactionTemplate(transactions)
-                .execute(tx -> create(uid, p, shopId, minutes, lines, hash));
     }
 
     private Map<String, Object> create(
-            Long uid, AppOrderParam p, long shopId, int minutes, List<Line> lines, String hash) {
+            Long uid, AppOrderParam p, long shopId, int minutes, List<Line> lines, String hash, String legacyHash, String contact) {
         String generated = UUID.randomUUID().toString().replace("-", "");
         // Upsert acquires the unique submission row; do not gap-lock a missing key before
         // inserting.
@@ -181,9 +198,15 @@ public class OrderPlacementService {
                                 + " idempotency_key=? FOR UPDATE",
                         uid,
                         p.getIdempotencyKey());
-        if (!hash.equals(submission.get("request_hash")))
-            throw reject("ORDER_IDEMPOTENCY_CONFLICT");
         String orderId = submission.get("order_id").toString();
+        if (!hash.equals(submission.get("request_hash"))) {
+            if (!legacyHash.equals(submission.get("request_hash"))) throw reject("ORDER_IDEMPOTENCY_CONFLICT");
+            if ("takein".equals(p.getOrderType())) {
+                var existing = one("SELECT user_phone FROM yshop_store_order WHERE order_id=? AND uid=?", orderId, uid);
+                if (!contact.equals(Objects.toString(existing.get("user_phone"), "").trim()))
+                    throw reject("ORDER_CONTACT_RECONFIRM_REQUIRED");
+            }
+        }
         if (!generated.equals(orderId)) return Map.of("orderId", orderId);
         one("SELECT id FROM yshop_user WHERE id=? AND deleted=0", uid);
         var shop =
@@ -274,7 +297,7 @@ public class OrderPlacementService {
                             money(product.get("give_integral"))
                                     .multiply(BigDecimal.valueOf(line.quantity())));
         }
-        String name = "", phone = "", address = "";
+        String name = "", phone = contact, address = "";
         BigDecimal postage = BigDecimal.ZERO;
         if ("takeout".equals(p.getOrderType())) {
             if (number(shop, "distance") <= 0 || total.compareTo(money(shop.get("min_price"))) < 0)

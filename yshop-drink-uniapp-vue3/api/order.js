@@ -1,5 +1,6 @@
 import api from './api'
-import { submissionKey, PAYMENT_FROZEN } from '@/utils/ordering-context'
+import { useMainStore } from '@/store/store'
+import { submissionKey, submissionRejected, submissionSucceeded, PAYMENT_FROZEN } from '@/utils/ordering-context'
 
 /**
  * 订单列表  
@@ -12,8 +13,15 @@ export function orderTakeFoods(data) {
  * 订单创建  
  */
 export function orderSubmit(data) {
-  const idempotencyKey = data.idempotencyKey || submissionKey(uni, data)
-  return api.post(`/order/create`, { ...data, idempotencyKey }, { login: true })
+  const owner = String(useMainStore().member?.id || '')
+  const idempotencyKey = data.idempotencyKey || submissionKey(uni, data, true, owner)
+  return api.post(`/order/create`, { ...data, idempotencyKey }, { login: true }).then(result => {
+    submissionSucceeded(uni, idempotencyKey, owner)
+    return result
+  }).catch(error => {
+    submissionRejected(uni, idempotencyKey, error, owner)
+    throw error
+  })
 }
 
 
@@ -68,4 +76,9 @@ export function getWechatConfig() {
 /** Cancel only an authenticated customer's own unpaid order. */
 export function orderCancel(id) {
   return api.post('/order/cancel', { id }, { login: true })
+}
+
+/** Read the committed result; a missing result never releases an uncertain key. */
+export function orderSubmissionResult(key) {
+  return api.get('/order/submission-result', { idempotencyKey: key }, { login: true })
 }
