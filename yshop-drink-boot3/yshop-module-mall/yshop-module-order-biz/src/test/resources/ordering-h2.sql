@@ -2,7 +2,7 @@ CREATE TABLE yshop_store_shop(id BIGINT PRIMARY KEY,name VARCHAR(100),mobile VAR
 CREATE TABLE yshop_store_product_category(id BIGINT PRIMARY KEY,shop_id BIGINT,parent_id BIGINT,name VARCHAR(100),pic_url VARCHAR(256),status INT,deleted INT DEFAULT 0);
 CREATE TABLE yshop_store_product(id BIGINT AUTO_INCREMENT PRIMARY KEY,shop_id BIGINT,image VARCHAR(100),slider_image VARCHAR(100),store_name VARCHAR(100),store_info VARCHAR(100),keyword VARCHAR(100),cate_id VARCHAR(64),stock INT,sales INT,is_show INT,is_integral INT,give_integral DECIMAL(10,2),deleted INT DEFAULT 0);
 CREATE TABLE yshop_store_product_attr_value(id BIGINT AUTO_INCREMENT PRIMARY KEY,product_id BIGINT,sku VARCHAR(256),stock INT,sales INT,price DECIMAL(10,2),cost DECIMAL(10,2));
-CREATE TABLE yshop_user(id BIGINT PRIMARY KEY,username VARCHAR(100),password VARCHAR(100),nickname VARCHAR(100),deleted INT DEFAULT 0);
+CREATE TABLE yshop_user(id BIGINT PRIMARY KEY,mobile VARCHAR(30),username VARCHAR(100),password VARCHAR(100),nickname VARCHAR(100),deleted INT DEFAULT 0);
 CREATE TABLE yshop_user_address(id BIGINT PRIMARY KEY,uid BIGINT,real_name VARCHAR(100),phone VARCHAR(30),address VARCHAR(100),detail VARCHAR(100),deleted INT DEFAULT 0);
 CREATE TABLE yshop_coupon_user(id BIGINT PRIMARY KEY,shop_id VARCHAR(100),title VARCHAR(100),least DECIMAL(10,2),`value` DECIMAL(10,2),start_time TIMESTAMP,end_time TIMESTAMP,type INT,user_id BIGINT,status INT,coupon_id BIGINT,deleted INT DEFAULT 0,reserved_order_id VARCHAR(32));
 CREATE TABLE yshop_order_number(id BIGINT AUTO_INCREMENT PRIMARY KEY,order_id VARCHAR(32));

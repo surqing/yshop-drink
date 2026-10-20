@@ -49,6 +49,8 @@ import static co.yixiang.yshop.module.score.enums.ErrorCodeConstants.*;
 public class AppScoreOrderServiceImpl extends ServiceImpl<ScoreOrderMapper, ScoreOrderDO> implements AppScoreOrderService {
 
     @Resource
+    private co.yixiang.yshop.module.score.dal.mysql.scoresubmission.ScoreSubmissionMapper submissionMapper;
+    @Resource
     private ScoreOrderMapper orderMapper;
     @Resource
     private ScoreProductMapper scoreProductMapper;
@@ -73,8 +75,22 @@ public class AppScoreOrderServiceImpl extends ServiceImpl<ScoreOrderMapper, Scor
     public void submit(Long uid,AppScoreOrderParam appScoreOrderParam) {
         if (uid == null) throw exception(USER_NOT_EXISTS);
         if (appScoreOrderParam == null) throw exception(ORDER_PARAM_INVALID);
+        String key = appScoreOrderParam.getIdempotencyKey();
+        if (key == null || !key.matches("[A-Za-z0-9_-]{16,64}")) throw exception(SUBMISSION_KEY_INVALID);
         int quantity = positiveInteger(appScoreOrderParam.getNum());
         long productId = positiveProductId(appScoreOrderParam.getProductId());
+        long addressId = positiveAddressId(appScoreOrderParam.getAddressId());
+        String hash = cn.hutool.crypto.digest.DigestUtil.sha256Hex(
+                "score-v1\n" + productId + "\n" + quantity + "\n" + addressId);
+        // A process-independent nonce also identifies which transaction inserted the claim.
+        String orderSn = IdUtil.fastSimpleUUID();
+        submissionMapper.claim(uid, key, hash, orderSn);
+        var submission = submissionMapper.lock(uid, key);
+        if (submission == null) throw new IllegalStateException("SCORE_SUBMISSION_INSERT_FAILED");
+        if (!hash.equals(submission.getRequestHash())) throw exception(SUBMISSION_CONFLICT);
+        // A visible prior record committed together with all financial writes. Replay it
+        // before live product/address/member checks, including after a process restart.
+        if (!orderSn.equals(submission.getOrderId())) return;
         // Lock product -> member, matching all integral writers' member row lock.
         ScoreProductDO scoreProductDO = scoreProductMapper.lockById(productId);
         if (scoreProductDO == null || !Integer.valueOf(1).equals(scoreProductDO.getIsSwitch())
@@ -98,8 +114,6 @@ public class AppScoreOrderServiceImpl extends ServiceImpl<ScoreOrderMapper, Scor
         if (before == null || before.compareTo(cost) < 0) throw exception(SCORE_NOT);
         BigDecimal after = before.subtract(cost);
 
-        //生成分布式唯一值
-        String orderSn = IdUtil.getSnowflake(0, 0).nextIdStr();
         ScoreOrderDO scoreOrderDO = ScoreOrderDO.builder()
                 .havePaid(ShopCommonEnum.IS_STATUS_1.getValue())
                 .customerAddress(userAddressDO.getAddress() + userAddressDO.getDetail())
@@ -129,6 +143,18 @@ public class AppScoreOrderServiceImpl extends ServiceImpl<ScoreOrderMapper, Scor
             if (value <= 0) throw exception(ORDER_PARAM_INVALID);
             return value;
         } catch (NumberFormatException overflow) { throw exception(ORDER_PARAM_INVALID); }
+    }
+
+    private long positiveAddressId(String addressId) {
+        try {
+            if (addressId == null || !addressId.matches("[0-9]+"))
+                throw new NumberFormatException();
+            long value = Long.parseLong(addressId);
+            if (value <= 0) throw new NumberFormatException();
+            return value;
+        } catch (NumberFormatException invalid) {
+            throw exception(co.yixiang.yshop.module.member.enums.ErrorCodeConstants.USER_ADDRESS_PARAM_NOT_EXISTS);
+        }
     }
 
     private long positiveProductId(String productId) {

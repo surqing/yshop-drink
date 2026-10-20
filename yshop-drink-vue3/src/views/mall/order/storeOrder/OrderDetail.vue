@@ -7,6 +7,10 @@
         <el-descriptions-item label="联系电话">{{ DetailData.userPhone }}</el-descriptions-item>
         <el-descriptions-item label="收货地址">{{ DetailData.userAddress }}</el-descriptions-item>
       </el-descriptions>
+      <el-descriptions title="自提联系信息" :column="2" v-if="DetailData.orderType == 'takein'">
+        <el-descriptions-item label="用户昵称">{{ nickname }}</el-descriptions-item>
+        <el-descriptions-item label="联系电话">{{ DetailData.userPhone }}</el-descriptions-item>
+      </el-descriptions>
       <el-descriptions title="商品明细" :column="1">
           <el-descriptions-item label="菜品">
             <div v-for="(num,k) in addProductMark + 1" :key="k">
