@@ -22,6 +22,9 @@ class ScoreReceiptConcurrencyDatabaseTest {
     @BeforeEach void setup() throws Exception {
         f=new ScoreOrderDatabaseFixture();f.setup(StoreOrderMapper.class,StoreOrderStatusMapper.class);
         f.createTable("yshop_store_order");f.createTable("yshop_store_order_status");
+        // The shared legacy schema predates F1; this test exercises the current mapper contract.
+        f.db.execute("ALTER TABLE yshop_store_order ADD COLUMN fulfillment_status VARCHAR(24) NOT NULL DEFAULT 'LEGACY'");
+        f.db.execute("ALTER TABLE yshop_store_order ADD COLUMN fulfillment_version INT NOT NULL DEFAULT 0");
         f.db.update("INSERT INTO yshop_store_order(id,order_id,order_type,uid,real_name,user_phone,user_address,cart_id,total_num,total_price,pay_price,paid,status,refund_status,is_system_del,gain_integral,`unique`,pay_type,mark,cost,create_time)VALUES(1,'synthetic-receipt','takeout',1,'synthetic','13800000001','owned','',1,1,1,1,0,0,0,25.25,'synthetic-receipt','synthetic','',0,CURRENT_TIMESTAMP)");
         var status=new StoreOrderStatusServiceImpl();ScoreOrderDatabaseFixture.set(status,"baseMapper",f.sql.getMapper(StoreOrderStatusMapper.class));ScoreOrderDatabaseFixture.set(status,"storeOrderStatusMapper",f.sql.getMapper(StoreOrderStatusMapper.class));
         // Post-commit statistics are unrelated to account mutations and perform no provider I/O.
