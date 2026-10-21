@@ -28,5 +28,8 @@
     "old failed save cannot clear the loading state of a newer form",
     "old code creation completion cannot expose a code over a newer form",
     "late cancel confirmation cannot close a newer form"
+  ],
+  "tests/score-order-form.test.ts": [
+    "shipping form submits only the four allowlisted fields"
   ]
 }
