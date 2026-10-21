@@ -3,9 +3,17 @@ package co.yixiang.yshop.module.order.fulfillment;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import co.yixiang.yshop.framework.common.exception.ServiceException;
+import co.yixiang.yshop.framework.web.core.handler.GlobalExceptionHandler;
 import co.yixiang.yshop.framework.security.core.LoginUser;
 import co.yixiang.yshop.framework.tenant.core.context.TenantContextHolder;
+import co.yixiang.yshop.framework.mybatis.core.handler.DefaultDBFieldHandler;
 import co.yixiang.yshop.module.order.dal.dataobject.storeorder.StoreOrderDO;
+import co.yixiang.yshop.module.member.dal.dataobject.user.MemberUserDO;
+import co.yixiang.yshop.module.member.dal.dataobject.userbill.UserBillDO;
+import co.yixiang.yshop.module.member.dal.mysql.user.MemberUserMapper;
+import co.yixiang.yshop.module.member.dal.mysql.userbill.UserBillMapper;
+import co.yixiang.yshop.module.member.service.userbill.UserBillServiceImpl;
 import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentRewardService;
 import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService;
 import co.yixiang.yshop.module.store.service.storeshop.StoreAccessService;
@@ -18,32 +26,50 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ThreadLocalRandom;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.toolkit.GlobalConfigUtils;
+import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
+import org.mybatis.spring.SqlSessionTemplate;
+import org.apache.ibatis.session.SqlSessionFactory;
+
+import static co.yixiang.yshop.module.order.enums.ErrorCodeConstants.FULFILLMENT_IDEMPOTENCY_CONFLICT;
+import static co.yixiang.yshop.module.order.enums.ErrorCodeConstants.FULFILLMENT_STATE_CONFLICT;
+import static co.yixiang.yshop.module.order.enums.ErrorCodeConstants.FULFILLMENT_VERSION_CONFLICT;
 
 class OrderFulfillmentDatabaseTest {
     JdbcTemplate jdbc;
     PlatformTransactionManager transactions;
     OrderFulfillmentService service;
     OrderFulfillmentRewardService rewards;
+    OrderFulfillmentRewardService realRewards;
+    MemberUserMapper memberUserMapper;
+    UserBillMapper userBillMapper;
+    DriverManagerDataSource dataSource;
     PermissionApi permissions;
     boolean headquarters = true;
     boolean mysql;
     long orderId;
     long shopOneId;
     long shopTwoId;
+    long syntheticMemberId;
     Path boot;
 
     @BeforeEach void setup() throws Exception {
-        var dataSource = new DriverManagerDataSource();
+        dataSource = new DriverManagerDataSource();
         String config = System.getenv("YSHOP_ORDERING_ACCEPTANCE_CONFIG");
         mysql = config != null;
         if (mysql) {
@@ -66,12 +92,15 @@ class OrderFulfillmentDatabaseTest {
         orderId = 900_000_000_000L + ThreadLocalRandom.current().nextLong(1_000_000);
         shopOneId = 910_000_000_000L + ThreadLocalRandom.current().nextLong(1_000_000);
         shopTwoId = shopOneId + 1;
+        syntheticMemberId = 920_000_000_000L + ThreadLocalRandom.current().nextLong(1_000_000);
         if (mysql) ensureMysqlFixtures();
         else {
             jdbc.execute("CREATE TABLE yshop_store_shop(id BIGINT PRIMARY KEY,name VARCHAR(100),mobile VARCHAR(20),images VARCHAR(100),address VARCHAR(100),address_map VARCHAR(100),start_time TIMESTAMP,end_time TIMESTAMP,lng VARCHAR(30),lat VARCHAR(30),status INT,admin_id VARCHAR(100),deleted INT DEFAULT 0)");
             jdbc.execute("CREATE TABLE yshop_store_order(id BIGINT PRIMARY KEY,order_id VARCHAR(32) UNIQUE,uid BIGINT,shop_id BIGINT,tenant_id BIGINT DEFAULT 0,order_type VARCHAR(32),paid INT,status INT,refund_status INT,is_system_del INT DEFAULT 0,deleted BIT DEFAULT 0,gain_integral DECIMAL(10,2),pay_type VARCHAR(32) NOT NULL,mark VARCHAR(512) NOT NULL,cost DECIMAL(10,2) NOT NULL,create_time TIMESTAMP NOT NULL,update_time TIMESTAMP,fulfillment_status VARCHAR(24) DEFAULT 'LEGACY' NOT NULL,fulfillment_version INT DEFAULT 0 NOT NULL)");
             jdbc.execute("CREATE TABLE yshop_order_fulfillment_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,order_id BIGINT NOT NULL,request_key VARCHAR(64) NOT NULL UNIQUE,request_hash CHAR(64) NOT NULL,action VARCHAR(24) NOT NULL,from_status VARCHAR(24) NOT NULL,to_status VARCHAR(24) NOT NULL,expected_version INT,result_version INT NOT NULL,actor_id BIGINT NOT NULL,actor_type VARCHAR(16) NOT NULL,create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            setupMemberTables(false);
         }
+        if (mysql) setupMemberTables(true);
         if (mysql) {
             String migration = Files.readString(boot.resolve("sql/migrations/2026-10-22-order-fulfillment.sql"));
             transaction(() -> {
@@ -85,18 +114,67 @@ class OrderFulfillmentDatabaseTest {
         rewards = mock(OrderFulfillmentRewardService.class);
         permissions = mock(PermissionApi.class);
         when(permissions.hasAnyRoles(anyLong(), any(String[].class))).thenAnswer(call -> headquarters);
-        service = new OrderFulfillmentService(jdbc, new StoreAccessService(jdbc, permissions), rewards);
+        realRewards = createRealRewards();
+        service = createService(rewards);
     }
 
     private void ensureMysqlFixtures() throws Exception {
         String ddl = Files.readString(boot.resolve("sql/yixiang-drink-open.sql"));
-        for (String table : new String[] {"yshop_store_shop", "yshop_store_order"}) {
+        for (String table : new String[] {"yshop_store_shop", "yshop_store_order", "yshop_user", "yshop_user_bill"}) {
             if (jdbcTableMissing(table)) {
                 var matcher = java.util.regex.Pattern.compile("CREATE TABLE `" + table + "`.*?;", java.util.regex.Pattern.DOTALL).matcher(ddl);
                 assertTrue(matcher.find(), "Missing canonical DDL for " + table);
                 jdbc.execute(matcher.group());
             }
         }
+    }
+
+    private void setupMemberTables(boolean mysqlSchema) throws Exception {
+        var bean = new MybatisSqlSessionFactoryBean();
+        bean.setDataSource(dataSource);
+        var global = GlobalConfigUtils.defaults();
+        global.setMetaObjectHandler(new DefaultDBFieldHandler());
+        bean.setGlobalConfig(global);
+        var config = new MybatisConfiguration();
+        GlobalConfigUtils.setGlobalConfig(config, global);
+        config.setMapUnderscoreToCamelCase(true);
+        config.addMapper(MemberUserMapper.class);
+        config.addMapper(UserBillMapper.class);
+        bean.setConfiguration(config);
+        SqlSessionFactory factory = bean.getObject();
+        var sql = new SqlSessionTemplate(factory);
+        memberUserMapper = sql.getMapper(MemberUserMapper.class);
+        userBillMapper = sql.getMapper(UserBillMapper.class);
+        if (!mysqlSchema) {
+            createEntityTable(MemberUserDO.class);
+            createEntityTable(UserBillDO.class);
+        }
+    }
+
+    private void createEntityTable(Class<?> type) {
+        var table = TableInfoHelper.getTableInfo(type);
+        var columns = new java.util.ArrayList<String>();
+        columns.add(table.getKeyColumn() + " BIGINT PRIMARY KEY");
+        for (var field : table.getFieldList()) {
+            Class<?> propertyType = field.getPropertyType();
+            String sqlType = propertyType == BigDecimal.class ? "DECIMAL(20,4)"
+                    : propertyType == LocalDateTime.class ? "TIMESTAMP"
+                    : Number.class.isAssignableFrom(propertyType) ? "BIGINT"
+                    : propertyType == Boolean.class ? "BOOLEAN" : "VARCHAR(2048)";
+            columns.add(field.getColumn() + " " + sqlType
+                    + (field.getColumn().equals("deleted") ? " DEFAULT 0" : ""));
+        }
+        jdbc.execute("CREATE TABLE " + table.getTableName() + " (" + String.join(",", columns) + ")");
+    }
+
+    private OrderFulfillmentRewardService createRealRewards() {
+        var billService = new UserBillServiceImpl();
+        ReflectionTestUtils.setField(billService, "userBillMapper", userBillMapper);
+        return new OrderFulfillmentRewardService(memberUserMapper, billService);
+    }
+
+    private OrderFulfillmentService createService(OrderFulfillmentRewardService rewardService) {
+        return new OrderFulfillmentService(jdbc, new StoreAccessService(jdbc, permissions), rewardService);
     }
 
     private boolean jdbcTableMissing(String table) {
@@ -112,9 +190,13 @@ class OrderFulfillmentDatabaseTest {
     }
 
     private void insertOrder(String status, int version, int paid, int shop) {
+        insertOrder(status, version, paid, shop, 1L);
+    }
+
+    private void insertOrder(String status, int version, int paid, int shop, long uid) {
         String orderCode = "fulfillment-" + orderId;
-        jdbc.update("INSERT INTO yshop_store_order(id,order_id,uid,shop_id,order_type,paid,status,refund_status,is_system_del,deleted,gain_integral,pay_type,mark,cost,create_time,fulfillment_status,fulfillment_version) VALUES(?,?,1,?,'takein',?,0,0,0,0,2.50,'synthetic','Synthetic pickup',1,CURRENT_TIMESTAMP,?,?)",
-                orderId, orderCode, shop == 1 ? shopOneId : shopTwoId, paid, status, version);
+        jdbc.update("INSERT INTO yshop_store_order(id,order_id,uid,shop_id,order_type,paid,status,refund_status,is_system_del,deleted,gain_integral,pay_type,mark,cost,create_time,fulfillment_status,fulfillment_version) VALUES(?,?,?,?, 'takein',?,0,0,0,0,2.50,'synthetic','Synthetic pickup',1,CURRENT_TIMESTAMP,?,?)",
+                orderId, orderCode, uid, shop == 1 ? shopOneId : shopTwoId, paid, status, version);
     }
 
     private void login(long userId, int userType) {
@@ -132,8 +214,9 @@ class OrderFulfillmentDatabaseTest {
 
     @Test void transitionRejectsStaleVersion() {
         insertOrder("WAIT_ACCEPT", 2, 1, 1); login(101, 2);
-        var failure = assertThrows(RuntimeException.class, () -> transaction(() -> service.transitionStaff(orderId, "ACCEPT", 1, "accept-stale-0001")));
-        assertEquals("FULFILLMENT_VERSION_CONFLICT", failure.getMessage());
+        var failure = assertThrows(ServiceException.class, () -> transaction(() -> service.transitionStaff(orderId, "ACCEPT", 1, "accept-stale-0001")));
+        assertEquals(FULFILLMENT_VERSION_CONFLICT.getCode(), failure.getCode());
+        assertEquals(1008007034, new GlobalExceptionHandler("test", null).serviceExceptionHandler(failure).getCode());
         assertEquals("WAIT_ACCEPT", state());
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_fulfillment_log", Integer.class));
         verifyNoInteractions(rewards);
@@ -141,8 +224,8 @@ class OrderFulfillmentDatabaseTest {
 
     @Test void unpaidOrderCannotEnterFulfillment() {
         insertOrder("WAIT_ACCEPT", 1, 0, 1); login(101, 2);
-        var failure = assertThrows(RuntimeException.class, () -> transaction(() -> service.transitionStaff(orderId, "ACCEPT", 1, "unpaid-accept-0001")));
-        assertEquals("FULFILLMENT_STATE_CONFLICT", failure.getMessage());
+        var failure = assertThrows(ServiceException.class, () -> transaction(() -> service.transitionStaff(orderId, "ACCEPT", 1, "unpaid-accept-0001")));
+        assertEquals(FULFILLMENT_STATE_CONFLICT.getCode(), failure.getCode());
         assertEquals("WAIT_ACCEPT", state());
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_fulfillment_log WHERE order_id=?", Integer.class, orderId));
     }
@@ -159,7 +242,7 @@ class OrderFulfillmentDatabaseTest {
             start.countDown();
             var outcomes = java.util.List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS));
             assertEquals(1, outcomes.stream().filter("APPLIED"::equals).count());
-            assertEquals(1, outcomes.stream().filter("FULFILLMENT_VERSION_CONFLICT"::equals).count());
+            assertEquals(1, outcomes.stream().filter(FULFILLMENT_VERSION_CONFLICT.getCode().toString()::equals).count());
         } finally {
             pool.shutdownNow();
         }
@@ -177,7 +260,8 @@ class OrderFulfillmentDatabaseTest {
             transaction(() -> service.transitionStaff(orderId, "ACCEPT", 1, requestKey));
             return "APPLIED";
         } catch (RuntimeException failure) {
-            return failure.getMessage();
+            return failure instanceof ServiceException serviceException
+                    ? serviceException.getCode().toString() : failure.getMessage();
         } finally {
             SecurityContextHolder.clearContext();
             TenantContextHolder.clear();
@@ -186,8 +270,8 @@ class OrderFulfillmentDatabaseTest {
 
     @Test void legacyTakeCannotSkipReady() {
         insertOrder("WAIT_ACCEPT", 1, 1, 1); login(1, 1);
-        var failure = assertThrows(RuntimeException.class, () -> transaction(() -> service.legacyMemberTake(orderId, 1L)));
-        assertEquals("FULFILLMENT_STATE_CONFLICT", failure.getMessage());
+        var failure = assertThrows(ServiceException.class, () -> transaction(() -> service.legacyMemberTake(orderId, 1L)));
+        assertEquals(FULFILLMENT_STATE_CONFLICT.getCode(), failure.getCode());
         assertEquals("WAIT_ACCEPT", state());
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_fulfillment_log", Integer.class));
         verifyNoInteractions(rewards);
@@ -203,6 +287,37 @@ class OrderFulfillmentDatabaseTest {
         assertEquals(3, jdbc.queryForObject("SELECT status FROM yshop_store_order WHERE id=?", Integer.class, orderId));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_fulfillment_log WHERE order_id=?", Integer.class, orderId));
         verify(rewards, times(1)).award(any(StoreOrderDO.class));
+    }
+
+    @Test void collectionPersistsMemberPointsAndBillOnce() {
+        jdbc.update("INSERT INTO yshop_user(id,integral,deleted) VALUES(?,?,0)", syntheticMemberId, new BigDecimal("10.00"));
+        insertOrder("READY", 4, 1, 1, syntheticMemberId); login(syntheticMemberId, 1);
+        service = createService(realRewards);
+        var first = transaction(() -> service.transitionMember(orderId, syntheticMemberId, "COLLECT", 4, "real-reward-collect-0001"));
+        var replay = transaction(() -> service.transitionMember(orderId, syntheticMemberId, "COLLECT", 4, "real-reward-collect-0001"));
+        assertTrue(first.applied()); assertFalse(replay.applied());
+        assertEquals(new BigDecimal("12.5000"), memberUserMapper.selectById(syntheticMemberId).getIntegral());
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_user_bill WHERE uid=? AND link_id=? AND title='购买商品赠送积分'", Integer.class, syntheticMemberId, Long.toString(orderId)));
+        assertEquals(new BigDecimal("2.5000"), jdbc.queryForObject("SELECT number FROM yshop_user_bill WHERE uid=? AND link_id=?", BigDecimal.class, syntheticMemberId, Long.toString(orderId)));
+        assertEquals(new BigDecimal("12.5000"), jdbc.queryForObject("SELECT balance FROM yshop_user_bill WHERE uid=? AND link_id=?", BigDecimal.class, syntheticMemberId, Long.toString(orderId)));
+    }
+
+    @Test void realRewardWriteFailureRollsBackMemberOrderAndAudit() {
+        jdbc.update("INSERT INTO yshop_user(id,integral,deleted) VALUES(?,?,0)", syntheticMemberId, new BigDecimal("7.00"));
+        insertOrder("READY", 4, 1, 1, syntheticMemberId); login(syntheticMemberId, 1);
+        service = createService(realRewards);
+        jdbc.execute("ALTER TABLE yshop_user_bill ADD CONSTRAINT fulfillment_reward_test_reject CHECK (number < 0)");
+        try {
+            assertThrows(RuntimeException.class, () -> transaction(() -> service.transitionMember(
+                    orderId, syntheticMemberId, "COLLECT", 4, "real-reward-rollback-0001")));
+            assertEquals(new BigDecimal("7.0000"), memberUserMapper.selectById(syntheticMemberId).getIntegral());
+            assertEquals("READY", state());
+            assertEquals(4, jdbc.queryForObject("SELECT fulfillment_version FROM yshop_store_order WHERE id=?", Integer.class, orderId));
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_fulfillment_log WHERE order_id=?", Integer.class, orderId));
+            assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_user_bill WHERE uid=? AND link_id=?", Integer.class, syntheticMemberId, Long.toString(orderId)));
+        } finally {
+            jdbc.execute("ALTER TABLE yshop_user_bill DROP " + (mysql ? "CHECK " : "CONSTRAINT ") + "fulfillment_reward_test_reject");
+        }
     }
 
     @Test void paymentCompletesIntoWaitAccept() {
@@ -234,8 +349,8 @@ class OrderFulfillmentDatabaseTest {
     @Test void sameKeyDifferentContentIsRejected() {
         insertOrder("WAIT_ACCEPT", 1, 1, 1); login(101, 2);
         transaction(() -> service.transitionStaff(orderId, "ACCEPT", 1, "shared-request-0001"));
-        var failure = assertThrows(RuntimeException.class, () -> transaction(() -> service.transitionStaff(orderId, "START_PREPARING", 2, "shared-request-0001")));
-        assertEquals("FULFILLMENT_IDEMPOTENCY_CONFLICT", failure.getMessage());
+        var failure = assertThrows(ServiceException.class, () -> transaction(() -> service.transitionStaff(orderId, "START_PREPARING", 2, "shared-request-0001")));
+        assertEquals(FULFILLMENT_IDEMPOTENCY_CONFLICT.getCode(), failure.getCode());
         assertEquals("ACCEPTED", state());
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_fulfillment_log WHERE order_id=?", Integer.class, orderId));
     }
@@ -264,8 +379,10 @@ class OrderFulfillmentDatabaseTest {
         TenantContextHolder.clear();
         if (jdbc != null && orderId != 0) {
             jdbc.update("DELETE FROM yshop_order_fulfillment_log WHERE order_id=?", orderId);
+            jdbc.update("DELETE FROM yshop_user_bill WHERE uid=? AND link_id=?", syntheticMemberId, Long.toString(orderId));
             jdbc.update("DELETE FROM yshop_store_order WHERE id=?", orderId);
             jdbc.update("DELETE FROM yshop_store_shop WHERE id IN (?,?)", shopOneId, shopTwoId);
+            jdbc.update("DELETE FROM yshop_user WHERE id=?", syntheticMemberId);
         }
     }
 }

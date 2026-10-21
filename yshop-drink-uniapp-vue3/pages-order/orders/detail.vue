@@ -29,8 +29,13 @@
 							</view>
 							<!-- steps begin -->
 							<view v-if="order.orderType == 'takein'" class="d-flex flex-column align-items-center mt-20">
-								<view class="font-size-lg text-color-primary">履约状态：{{ fulfillmentLabel(order.fulfillmentStatus) }}</view>
-								<view v-if="!order.fulfillmentTimeline || order.fulfillmentTimeline.length == 0" class="font-size-sm text-color-assist mt-10">历史订单暂无履约状态记录</view>
+								<view class="font-size-lg text-color-primary">
+									{{ order.paid != 1 || order.refundStatus != 0 ? '订单状态：' : '履约状态：' }}{{ pickupStatusView(order).primary }}
+								</view>
+								<view v-if="pickupStatusView(order).showFulfillmentSeparately" class="font-size-sm text-color-assist mt-10">
+									履约状态：{{ pickupStatusView(order).fulfillment }}
+								</view>
+								<view v-if="order.paid == 1 && order.refundStatus == 0 && order.fulfillmentStatus == 'LEGACY' && (!order.fulfillmentTimeline || order.fulfillmentTimeline.length == 0)" class="font-size-sm text-color-assist mt-10">历史订单暂无履约状态记录</view>
 								<view v-for="(event, index) in order.fulfillmentTimeline" :key="`${event.resultVersion}-${index}`" class="font-size-sm text-color-assist mt-10">
 									{{ fulfillmentActionLabel(event.action) }} · {{ formatDateTime(event.createTime) }}
 								</view>
@@ -212,6 +217,7 @@ import {
 } from 'vue'
 import { onLoad} from '@dcloudio/uni-app'
 import { formatDateTime } from '@/utils/util'
+import { pickupStatusView } from '@/utils/pickup-order-status.mjs'
 import {
   orderDetail,
   orderReceive,
@@ -234,9 +240,6 @@ const order = ref({
 	statusDto:{payType:''}
 })
 const numForMading = ref(5)
-const fulfillmentLabel = (status) => ({
-	WAIT_ACCEPT: '待接单', ACCEPTED: '已接单', PREPARING: '制作中', READY: '待取餐', COLLECTED: '已取餐', LEGACY: '历史订单'
-}[status] || '待核对')
 const fulfillmentActionLabel = (action) => ({
 	PAYMENT_CONFIRMED: '支付成功，进入待接单', ACCEPT: '门店已接单', START_PREPARING: '开始制作', MARK_READY: '制作完成，等待取餐', COLLECT: '顾客已取餐'
 }[action] || action)

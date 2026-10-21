@@ -37,6 +37,14 @@ public interface ErrorCodeConstants {
 
     ErrorCode STORE_ORDER_DESK_NOT = new ErrorCode(1008007023, "当前桌号不存在");
 
+    // ========== 自取订单履约 ==========
+    ErrorCode FULFILLMENT_ACTION_INVALID = new ErrorCode(1008007030, "履约操作不支持");
+    ErrorCode FULFILLMENT_REQUEST_INVALID = new ErrorCode(1008007031, "履约请求参数不正确");
+    ErrorCode FULFILLMENT_ORDER_NOT_FOUND = new ErrorCode(1008007032, "订单不存在或不可操作");
+    ErrorCode FULFILLMENT_STATE_CONFLICT = new ErrorCode(1008007033, "订单履约状态已变化，请刷新后重试");
+    ErrorCode FULFILLMENT_VERSION_CONFLICT = new ErrorCode(1008007034, "订单版本已变化，请刷新后重试");
+    ErrorCode FULFILLMENT_IDEMPOTENCY_CONFLICT = new ErrorCode(1008007035, "请求键已用于其他履约操作");
+
 
 
 }

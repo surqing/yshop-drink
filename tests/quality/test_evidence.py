@@ -220,7 +220,15 @@ class EvidenceFaultInjection(unittest.TestCase):
         for folder in ['business','payment']:
             source=(Path(__file__).parents[1]/folder/'mysql-acceptance.py').read_text()
             self.assertGreater(source.index('print(json.dumps(summary))'),source.index('DROP DATABASE'))
-            self.assertNotIn('failIfNoSpecifiedTests=false',source)
+            if folder == 'payment':
+                self.assertNotIn('failIfNoSpecifiedTests=false',source)
+
+    def test_business_mysql_runner_compiles_checkout_dependencies_and_checks_exact_suites(self):
+        source=(Path(__file__).parents[1]/'business'/'mysql-acceptance.py').read_text()
+        self.assertIn("'-am'",source)
+        self.assertIn("'-Dsurefire.failIfNoSpecifiedTests=false'",source)
+        self.assertIn('evidence.arguments(expected)',source)
+        self.assertIn('evidence.validate()',source)
 
 class AcceptanceLifecycleFaultInjection(unittest.TestCase):
     def runner(self, folder):
@@ -249,7 +257,8 @@ class AcceptanceLifecycleFaultInjection(unittest.TestCase):
             spec=SimpleNamespace(loader=SimpleNamespace(exec_module=lambda value:None))
             ev=Mock();ev.id='synthetic-run';ev.arguments.return_value=[];ev.validate.return_value={'tests':80,'sourceSha':'synthetic','sourceDigest':'synthetic'}
             expected=({'synthetic.OrderingDatabaseTest':{'invariant':1},
-                       'synthetic.OrderFulfillmentDatabaseTest':{'invariant':1}} if folder=='business'
+                       'synthetic.OrderFulfillmentDatabaseTest':{'invariant':1},
+                       'synthetic.AppOrderTakeCompatibilityTest':{'invariant':1}} if folder=='business'
                       else {'synthetic.PaymentDatabaseTest':{'invariant':1}})
             stream=io.StringIO()
             with patch.object(module,'PRIVATE',root),patch.object(module,'WORKSPACE',root),patch.object(module.importlib.util,'spec_from_file_location',return_value=spec),patch.object(module.importlib.util,'module_from_spec',return_value=fake),patch.object(module,'Evidence',return_value=ev),patch.object(module,'manifest',return_value=expected),patch.object(module,'execute',return_value=exit_code),patch.object(sys,'argv',['runner']),contextlib.redirect_stdout(stream):

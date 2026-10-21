@@ -20,8 +20,13 @@
 							<view class="font-size-sm text-color-assist">取餐号：{{ item.numberId }}</view>
 							<view class="font-size-sm text-color-assist">订单编号：{{ item.orderId }}</view>
 						</view>
-						<view class="font-size-lg text-color-primary">
-							{{ item.orderType == 'takein' ? fulfillmentLabel(item.fulfillmentStatus) : item.statusDto.title }}
+						<view class="d-flex flex-column align-items-end">
+							<view class="font-size-lg text-color-primary">
+								{{ item.orderType == 'takein' ? pickupStatusView(item).primary : item.statusDto.title }}
+							</view>
+							<view v-if="item.orderType == 'takein' && pickupStatusView(item).showFulfillmentSeparately" class="font-size-sm text-color-assist">
+								履约状态：{{ pickupStatusView(item).fulfillment }}
+							</view>
 						</view>
 					</view>
 				</list-cell>
@@ -75,6 +80,7 @@ import { useMainStore } from '@/store/store'
 import { storeToRefs } from 'pinia'
 import { onLoad,onPullDownRefresh,onReachBottom} from '@dcloudio/uni-app'
 import { formatDateTime,kmUnit } from '@/utils/util'
+import { pickupStatusView } from '@/utils/pickup-order-status.mjs'
 import {
   orderGetOrders,
   orderReceive
@@ -106,9 +112,6 @@ const tabList = ref([{
 const current = ref(0)
 const type = ref(-1)
 const receivingOrderId = ref(null)
-const fulfillmentLabel = (status) => ({
-	WAIT_ACCEPT: '待接单', ACCEPTED: '已接单', PREPARING: '制作中', READY: '待取餐', COLLECTED: '已取餐', LEGACY: '历史订单'
-}[status] || '待核对')
 const canReceive = (order) => order.orderType == 'takein'
 	? order.fulfillmentStatus == 'READY'
 	: order.status < 2

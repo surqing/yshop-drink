@@ -168,7 +168,11 @@ public class AppOrderController {
     @Operation(summary = "订单收货")
     public CommonResult<Boolean> orderTake(@RequestBody @Validated AppDoOrderParam param) {
         Long uid = getLoginUserId();
-        appStoreOrderService.takeOrder(param.getUni(), uid, param.getExpectedVersion(), param.getRequestKey());
+        if (param.getExpectedVersion() == null && param.getRequestKey() == null) {
+            appStoreOrderService.takeOrder(param.getUni(), uid);
+        } else {
+            appStoreOrderService.takeOrder(param.getUni(), uid, param.getExpectedVersion(), param.getRequestKey());
+        }
         return success(true);
     }
 

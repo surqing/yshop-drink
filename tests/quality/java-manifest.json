@@ -376,7 +376,13 @@
     "historicalPaidPickupRemainsLegacy": 1,
     "sameKeyDifferentContentIsRejected": 1,
     "rewardFailureRollsBackCollectedStateAndAudit": 1,
-    "staffCannotTransitionAnotherShopOrder": 1
+    "staffCannotTransitionAnotherShopOrder": 1,
+    "collectionPersistsMemberPointsAndBillOnce": 1,
+    "realRewardWriteFailureRollsBackMemberOrderAndAudit": 1
+  },
+  "co.yixiang.yshop.module.order.fulfillment.AppOrderTakeCompatibilityTest": {
+    "oldPickupClientUsesGuardedLegacyTransition": 1,
+    "versionedPickupRequestUsesVersionedTransition": 1
   },
   "co.yixiang.yshop.module.order.payment.CallbackIngressEndToEndTest": {
     "validSyntheticAnonymousNotification": 1,

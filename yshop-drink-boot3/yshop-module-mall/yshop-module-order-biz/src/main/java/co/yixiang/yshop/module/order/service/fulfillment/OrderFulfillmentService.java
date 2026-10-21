@@ -3,6 +3,7 @@ package co.yixiang.yshop.module.order.service.fulfillment;
 import co.yixiang.yshop.framework.security.core.LoginUser;
 import co.yixiang.yshop.framework.security.core.util.SecurityFrameworkUtils;
 import co.yixiang.yshop.framework.tenant.core.context.TenantContextHolder;
+import co.yixiang.yshop.framework.common.exception.ServiceException;
 import co.yixiang.yshop.module.order.dal.dataobject.storeorder.StoreOrderDO;
 import co.yixiang.yshop.module.order.service.payment.PaymentOrder;
 import co.yixiang.yshop.module.store.service.storeshop.StoreAccessService;
@@ -25,6 +26,14 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+
+import static co.yixiang.yshop.framework.common.exception.util.ServiceExceptionUtil.exception;
+import static co.yixiang.yshop.module.order.enums.ErrorCodeConstants.FULFILLMENT_ACTION_INVALID;
+import static co.yixiang.yshop.module.order.enums.ErrorCodeConstants.FULFILLMENT_IDEMPOTENCY_CONFLICT;
+import static co.yixiang.yshop.module.order.enums.ErrorCodeConstants.FULFILLMENT_ORDER_NOT_FOUND;
+import static co.yixiang.yshop.module.order.enums.ErrorCodeConstants.FULFILLMENT_REQUEST_INVALID;
+import static co.yixiang.yshop.module.order.enums.ErrorCodeConstants.FULFILLMENT_STATE_CONFLICT;
+import static co.yixiang.yshop.module.order.enums.ErrorCodeConstants.FULFILLMENT_VERSION_CONFLICT;
 
 /** Single transactional boundary for pickup fulfillment and legacy pickup receipts. */
 @Service
@@ -106,12 +115,12 @@ public class OrderFulfillmentService {
     private TransitionResult transition(Long orderId, String action, Integer expectedVersion, String requestKey,
             Long actorId, String actorType, boolean legacy) {
         String next = NEXT.get(action);
-        if (next == null) throw new FulfillmentException("FULFILLMENT_ACTION_INVALID");
+        if (next == null) throw exception(FULFILLMENT_ACTION_INVALID);
         if (!legacy && (expectedVersion == null || expectedVersion < 1 || requestKey == null || !REQUEST_KEY.matcher(requestKey).matches()))
-            throw new FulfillmentException("FULFILLMENT_REQUEST_INVALID");
+            throw exception(FULFILLMENT_REQUEST_INVALID);
 
         OrderRow order = lock(orderId);
-        if (order == null) throw new FulfillmentException("FULFILLMENT_ORDER_NOT_FOUND");
+        if (order == null) throw exception(FULFILLMENT_ORDER_NOT_FOUND);
         authorize(order, actorId, actorType);
         var prior = findAction(requestKey);
         String requestHash = hash(order.id(), action, expectedVersion, actorType + ":" + actorId);
@@ -121,13 +130,13 @@ public class OrderFulfillmentService {
         }
         if (order.paid() != 1 || order.refundStatus() != 0 || order.systemDeleted() != 0 || !"takein".equals(order.orderType()))
             throw stateConflict();
-        if (expectedVersion != null && expectedVersion != order.fulfillmentVersion()) throw new FulfillmentException("FULFILLMENT_VERSION_CONFLICT");
+        if (expectedVersion != null && expectedVersion != order.fulfillmentVersion()) throw exception(FULFILLMENT_VERSION_CONFLICT);
         if (!expectedFrom(action).equals(order.fulfillmentStatus())) throw stateConflict();
 
         int nextVersion = order.fulfillmentVersion() + 1;
         if (jdbc.update("UPDATE yshop_store_order SET fulfillment_status=?,fulfillment_version=?,status=CASE WHEN ?='COLLECTED' THEN 3 ELSE status END,update_time=CURRENT_TIMESTAMP WHERE id=? AND paid=1 AND refund_status=0 AND is_system_del=0 AND deleted=0 AND order_type='takein' AND fulfillment_status=? AND fulfillment_version=?",
                 next, nextVersion, next, order.id(), order.fulfillmentStatus(), order.fulfillmentVersion()) != 1)
-            throw new FulfillmentException("FULFILLMENT_VERSION_CONFLICT");
+            throw exception(FULFILLMENT_VERSION_CONFLICT);
         try {
             insertAction(order.id(), requestKey, requestHash, action, order.fulfillmentStatus(), next, expectedVersion, nextVersion, actorId, actorType);
         } catch (DataIntegrityViolationException duplicate) {
@@ -188,8 +197,8 @@ public class OrderFulfillmentService {
         }
     }
 
-    private static FulfillmentException stateConflict() { return new FulfillmentException("FULFILLMENT_STATE_CONFLICT"); }
-    private static FulfillmentException idempotencyConflict() { return new FulfillmentException("FULFILLMENT_IDEMPOTENCY_CONFLICT"); }
+    private static ServiceException stateConflict() { return exception(FULFILLMENT_STATE_CONFLICT); }
+    private static ServiceException idempotencyConflict() { return exception(FULFILLMENT_IDEMPOTENCY_CONFLICT); }
 
     private static final RowMapper<OrderRow> ORDER_ROW = (rs, row) -> new OrderRow(
             rs.getLong("id"), rs.getString("order_id"), rs.getLong("uid"), rs.getLong("shop_id"), rs.getString("order_type"),
@@ -209,7 +218,4 @@ public class OrderFulfillmentService {
     public record FulfillmentLogView(String action, String fromStatus, String toStatus, Integer expectedVersion,
             int resultVersion, Long actorId, String actorType, LocalDateTime createTime) {}
 
-    public static class FulfillmentException extends RuntimeException {
-        public FulfillmentException(String message) { super(message); }
-    }
 }
