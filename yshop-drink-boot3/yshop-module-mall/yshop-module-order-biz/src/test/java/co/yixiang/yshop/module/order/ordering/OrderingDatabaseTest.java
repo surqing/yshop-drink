@@ -1192,7 +1192,7 @@ class OrderingDatabaseTest {
                         .paid(0)
                         .orderType("takein")
                         .build();
-        when(mapper.selectById(oid)).thenReturn(original);
+        when(mapper.lockAdminOrder(oid)).thenReturn(original);
         var service = new co.yixiang.yshop.module.order.service.storeorder.StoreOrderServiceImpl();
         ReflectionTestUtils.setField(service, "storeOrderMapper", mapper);
         var input =
@@ -1212,8 +1212,8 @@ class OrderingDatabaseTest {
                         co.yixiang.yshop.module.order.dal.dataobject.storeorder.StoreOrderDO.class);
         verify(mapper).updateById(update.capture());
         var safe = update.getValue();
-        assertEquals(1L, safe.getUid());
-        assertEquals(id, safe.getOrderId());
+        assertNull(safe.getUid());
+        assertNull(safe.getOrderId());
         assertNull(safe.getShopId());
         assertNull(safe.getPaid());
         assertNull(safe.getPayPrice());

@@ -31,6 +31,15 @@ public interface StoreOrderMapper extends BaseMapperX<StoreOrderDO> {
     @Select("SELECT * FROM yshop_store_order WHERE id=#{id} AND uid=#{uid} AND deleted=0 FOR UPDATE")
     StoreOrderDO lockReceiptOrder(@Param("id") Long id, @Param("uid") Long uid);
 
+    @Select("SELECT * FROM yshop_store_order WHERE id=#{id} AND deleted=0 FOR UPDATE")
+    StoreOrderDO lockAdminOrder(@Param("id") Long id);
+
+    @org.apache.ibatis.annotations.Update("UPDATE yshop_store_order SET status=1,delivery_name=#{deliveryName},delivery_id=#{deliveryId},delivery_type=#{deliveryType},remark=#{remark},update_time=CURRENT_TIMESTAMP " +
+            "WHERE id=#{id} AND uid=#{uid} AND paid=1 AND status=0 AND refund_status=0 AND is_system_del=0 AND deleted=0")
+    int markDispatched(@Param("id") Long id, @Param("uid") Long uid,
+                       @Param("deliveryName") String deliveryName, @Param("deliveryId") String deliveryId,
+                       @Param("deliveryType") String deliveryType, @Param("remark") String remark);
+
     @org.apache.ibatis.annotations.Update("UPDATE yshop_store_order SET status=3,update_time=CURRENT_TIMESTAMP WHERE id=#{id} AND uid=#{uid} " +
             "AND paid=1 AND status IN (0,1,2) AND refund_status=0 AND is_system_del=0 AND deleted=0")
     int markReceived(@Param("id") Long id, @Param("uid") Long uid);
