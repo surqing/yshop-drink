@@ -6,8 +6,10 @@ import co.yixiang.yshop.framework.security.core.util.SecurityFrameworkUtils;
 import co.yixiang.yshop.framework.tenant.core.context.TenantContextHolder;
 import co.yixiang.yshop.module.store.dal.mysql.printer.PrinterRepository;
 import co.yixiang.yshop.module.store.dal.mysql.printer.PrinterRepository.Device;
+import co.yixiang.yshop.module.store.service.storeshop.StoreAccessService;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -20,16 +22,22 @@ public class PrinterService {
     private final PrinterProviderRegistry registry;
     private final PrinterSecretCipher cipher;
     private final TransactionTemplate tx;
+    private final StoreAccessService storeAccess;
     private final boolean tenantEnabled;
     public PrinterService(PrinterRepository repo,PrinterProviderRegistry registry,PrinterSecretCipher cipher,TransactionTemplate tx,
-            @Value("${yshop.tenant.enable:false}") boolean tenantEnabled) {
-        this.repo=repo; this.registry=registry; this.cipher=cipher; this.tx=tx;
+            StoreAccessService storeAccess,@Value("${yshop.tenant.enable:false}") boolean tenantEnabled) {
+        this.repo=repo; this.registry=registry; this.cipher=cipher; this.tx=tx; this.storeAccess=storeAccess;
         this.tenantEnabled=tenantEnabled;
     }
     private long tenant() {
         var user=SecurityFrameworkUtils.getLoginUser();
         Long contextTenant=TenantContextHolder.getTenantId();
-        if(user==null||user.getId()==null||!Long.valueOf(0).equals(user.getShopId()))
+        try {
+            storeAccess.requireHeadquarters();
+        } catch (AccessDeniedException denied) {
+            throw new PrinterFailure("HEADQUARTERS_ONLY",false);
+        }
+        if(user==null||user.getId()==null)
             throw new PrinterFailure("HEADQUARTERS_ONLY",false);
         // With tenant filters disabled, OAuth caches a null tenant while the database
         // defaults it to 0. Both identify the same single-tenant scope; never use a header

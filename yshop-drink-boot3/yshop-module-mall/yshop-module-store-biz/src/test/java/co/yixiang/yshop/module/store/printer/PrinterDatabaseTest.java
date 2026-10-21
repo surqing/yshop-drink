@@ -41,6 +41,9 @@ class PrinterDatabaseTest {
     DataSourceTransactionManager manager;
     PrinterSecretCipher cipher;
     FakeProvider fake;
+    final Set<String> headquartersRoles=new HashSet<>();
+    PermissionApi printerPermissions;
+    StoreAccessService printerAccess;
     static boolean mysql() { return System.getenv("PRINTER_ACCEPTANCE_CONFIG")!=null; }
     @BeforeEach void setup() throws Exception {
         DataSource ds;
@@ -56,8 +59,16 @@ class PrinterDatabaseTest {
         jdbc.update("DELETE FROM yshop_printer_binding"); jdbc.update("DELETE FROM yshop_printer_test_job");
         jdbc.update("DELETE FROM yshop_printer_provider_token"); jdbc.update("DELETE FROM yshop_printer");
         cipher=new PrinterSecretCipher(Base64.getEncoder().encodeToString(new byte[32])); fake=new FakeProvider("YILIAN_YUN");
+        headquartersRoles.clear(); headquartersRoles.add("business_headquarters");
+        printerPermissions=mock(PermissionApi.class);
+        when(printerPermissions.hasAnyRoles(anyLong(),any(String[].class))).thenAnswer(call->{
+            return Arrays.stream(call.getArguments()).skip(1)
+                    .flatMap(argument -> argument instanceof String[] roles ? Arrays.stream(roles) : java.util.stream.Stream.of((String) argument))
+                    .anyMatch(headquartersRoles::contains);
+        });
+        printerAccess=new StoreAccessService(jdbc,printerPermissions);
         // A second transport deliberately needs no edits to the business service or the first provider.
-        service=new PrinterService(repo,new PrinterProviderRegistry(List.of(fake,new FakeProvider("SECOND_VENDOR"))),cipher,new TransactionTemplate(manager),false);
+        service=new PrinterService(repo,new PrinterProviderRegistry(List.of(fake,new FakeProvider("SECOND_VENDOR"))),cipher,new TransactionTemplate(manager),printerAccess,false);
         login(1,0);
     }
     private void fixture() {
@@ -82,6 +93,43 @@ class PrinterDatabaseTest {
         return new SaveRequest(id,"测试设备","YILIAN_YUN",code,"K4","CLOUD",true,configuration);
     }
     private long device(String code) { return service.save(request(null,code,Map.of("terminalKey","synthetic-device-key")),false); }
+
+    @Test void zeroShopHintDoesNotGrantHeadquarters() {
+        long id=device("4000000001"); headquartersRoles.clear(); login(1,0);
+        PrinterRepository observedRepo=spy(repo);
+        PrinterProviderRegistry observedRegistry=spy(new PrinterProviderRegistry(List.of(fake)));
+        PrinterService guarded=new PrinterService(observedRepo,observedRegistry,cipher,new TransactionTemplate(manager),printerAccess,false);
+        int sessions=fake.sessionCalls.get(),authorizations=fake.authorizeCalls.get();
+
+        assertThrows(PrinterFailure.class,()->guarded.authorize(id,false));
+
+        verifyNoInteractions(observedRepo,observedRegistry);
+        assertEquals(sessions,fake.sessionCalls.get()); assertEquals(authorizations,fake.authorizeCalls.get());
+    }
+
+    @Test void revokedHeadquartersCannotUseCachedSession() {
+        long id=device("4000000001"); login(1,0);
+        PrinterRepository observedRepo=spy(repo);
+        PrinterProviderRegistry observedRegistry=spy(new PrinterProviderRegistry(List.of(fake)));
+        PrinterService guarded=new PrinterService(observedRepo,observedRegistry,cipher,new TransactionTemplate(manager),printerAccess,false);
+        LoginUser cached=(LoginUser)SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        assertEquals(id,guarded.get(id).id());
+        clearInvocations(observedRepo,observedRegistry);
+        headquartersRoles.clear();
+
+        assertSame(cached,SecurityContextHolder.getContext().getAuthentication().getPrincipal());
+        assertThrows(PrinterFailure.class,()->guarded.get(id));
+
+        verifyNoInteractions(observedRepo,observedRegistry);
+    }
+
+    @Test void explicitHeadquartersUsesRoleAndTenantScope() {
+        long id=device("4000000001");
+        login(1,1);
+
+        assertEquals(id,service.get(id).id());
+        assertEquals(1L,jdbc.queryForObject("SELECT tenant_id FROM yshop_printer WHERE id=?",Long.class,id));
+    }
     @Test void migrationIsRepeatableAndRestoresOnlyPrinterMenu() {
         assertEquals("mall/store/printer/index",jdbc.queryForObject("SELECT component FROM system_menu WHERE id=2308",String.class));
         assertEquals(0,jdbc.queryForObject("SELECT deleted+0 FROM system_menu WHERE id=2308",Integer.class));
@@ -100,7 +148,7 @@ class PrinterDatabaseTest {
         assertThrows(PrinterFailure.class,()->cipher.decrypt(another,"wrong-context"));
     }
     @Test void localManagementWorksWithoutServiceOrEncryptionConfiguration() {
-        PrinterService local=new PrinterService(repo,new PrinterProviderRegistry(List.of(fake)),new PrinterSecretCipher(""),new TransactionTemplate(manager),false);
+        PrinterService local=new PrinterService(repo,new PrinterProviderRegistry(List.of(fake)),new PrinterSecretCipher(""),new TransactionTemplate(manager),printerAccess,false);
         long id=local.save(request(null,"4000000001",Map.of()),false);
         assertTrue(local.get(id).configuredFields().isEmpty());
         local.bind(new BindingRequest(id,1L));
@@ -127,8 +175,8 @@ class PrinterDatabaseTest {
     @Test void tenantAndHeadquartersChecksApplyToDirectServiceCalls() {
         long id=device("4000000001"); login(2,0);
         assertEquals(0L,service.page(1,10,null,null).getTotal()); assertThrows(PrinterFailure.class,()->service.get(id));
-        login(1,1); assertThrows(PrinterFailure.class,service::providers); assertThrows(PrinterFailure.class,()->service.bind(new BindingRequest(id,1L)));
-        login(1,0); TenantContextHolder.clear(); assertEquals(id,service.get(id).id());
+        headquartersRoles.clear(); login(1,1); assertThrows(PrinterFailure.class,service::providers); assertThrows(PrinterFailure.class,()->service.bind(new BindingRequest(id,1L)));
+        headquartersRoles.add("business_headquarters"); login(1,0); TenantContextHolder.clear(); assertEquals(id,service.get(id).id());
         TenantContextHolder.setTenantId(2L); assertThrows(PrinterFailure.class,()->service.get(id));
     }
     @Test void singleTenantNullTokenAndDatabaseDefaultShareScopeButTenantModeRejectsMissingIdentity() {
@@ -139,10 +187,10 @@ class PrinterDatabaseTest {
         assertEquals(0L,jdbc.queryForObject("SELECT tenant_id FROM yshop_printer WHERE id=?",Long.class,id));
         user.setTenantId(0L); assertEquals(id,service.get(id).id());
         user.setTenantId(null);
-        PrinterService strict=new PrinterService(repo,new PrinterProviderRegistry(List.of(fake)),cipher,new TransactionTemplate(manager),true);
+        PrinterService strict=new PrinterService(repo,new PrinterProviderRegistry(List.of(fake)),cipher,new TransactionTemplate(manager),printerAccess,true);
         assertThrows(PrinterFailure.class,()->strict.get(id));
         TenantContextHolder.setTenantId(1L); assertThrows(PrinterFailure.class,()->service.get(id));
-        TenantContextHolder.clear(); user.setShopId(1L); assertThrows(PrinterFailure.class,()->service.get(id));
+        TenantContextHolder.clear(); headquartersRoles.clear(); user.setShopId(1L); assertThrows(PrinterFailure.class,()->service.get(id));
     }
     @Configuration @EnableTransactionManagement
     static class ShopTransactions {}
@@ -287,7 +335,7 @@ class PrinterDatabaseTest {
         assertEquals(before,after);
         assertEquals(0L,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_printer_provider_token",Long.class));
         login(2,0); assertThrows(PrinterFailure.class,()->controller.status(id));
-        login(1,1); assertThrows(PrinterFailure.class,()->controller.status(id));
+        headquartersRoles.clear(); login(1,1); assertThrows(PrinterFailure.class,()->controller.status(id));
     }
     @Test void testPrintingIsIdempotentAndTimeoutDoesNotResubmit() {
         long id=device("4000000001"); service.authorize(id,false);
@@ -434,7 +482,7 @@ class PrinterDatabaseTest {
         login(2,0); assertEquals(0L,service.page(1,10,null,null,true).getTotal());
         assertThrows(PrinterFailure.class,()->service.jobs(id,1,10));
         assertThrows(PrinterFailure.class,()->service.getJob(id,request.requestId()));
-        login(1,1); assertThrows(PrinterFailure.class,()->service.jobs(id,1,10));
+        headquartersRoles.clear(); login(1,1); assertThrows(PrinterFailure.class,()->service.jobs(id,1,10));
         assertThrows(PrinterFailure.class,()->service.getJob(id,request.requestId()));
     }
     @Test void requestLookupCannotMixDevicesEvenInsideTheSameTenant() {
@@ -444,7 +492,7 @@ class PrinterDatabaseTest {
     }
     @Test void devicesWithoutAuthorizationUseUsbAndLanThroughTheSameBusinessService() {
         FakeProvider local=new FakeProvider("LOCAL_TEST",false);
-        var localService=new PrinterService(repo,new PrinterProviderRegistry(List.of(local)),cipher,new TransactionTemplate(manager),false);
+        var localService=new PrinterService(repo,new PrinterProviderRegistry(List.of(local)),cipher,new TransactionTemplate(manager),printerAccess,false);
         for(String connection:List.of("USB","LAN")) {
             long id=localService.save(new SaveRequest(null,"本地设备","LOCAL_TEST","local-"+connection,"",connection,true,Map.of()),false);
             assertEquals(Authorization.UNAUTHORIZED,localService.get(id).authorization());
@@ -479,7 +527,7 @@ class PrinterDatabaseTest {
                     return this;
                 }
             };
-            var pooled=new PrinterService(poolRepo,new PrinterProviderRegistry(List.of(adapter)),cipher,new TransactionTemplate(poolManager),false);
+            var pooled=new PrinterService(poolRepo,new PrinterProviderRegistry(List.of(adapter)),cipher,new TransactionTemplate(poolManager),printerAccess,false);
             List<Long> ids=new ArrayList<>();
             for(int i=0;i<20;i++) ids.add(pooled.save(new SaveRequest(null,"并发设备","POOL_TEST","pool-"+i,"","LAN",true,Map.of()),false));
             var workers=Executors.newFixedThreadPool(21); CountDownLatch start=new CountDownLatch(1);
