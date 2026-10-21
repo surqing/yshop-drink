@@ -5,6 +5,7 @@
   "tests/business/cart-context-test.mjs": 37,
   "tests/business/catalog-options-test.mjs": 11,
   "tests/business/coupon-context-test.mjs": 13,
+  "tests/business/pickup-order-status-test.mjs": 5,
   "tests/business/score-submission-test.mjs": 21,
   "tests/e2e-assertions.test.mjs": 6,
   "tests/e2e-expiry-navigation.test.mjs": 3,
