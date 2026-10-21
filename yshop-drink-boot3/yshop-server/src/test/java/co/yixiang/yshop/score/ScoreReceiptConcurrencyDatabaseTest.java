@@ -102,6 +102,19 @@ class ScoreReceiptConcurrencyDatabaseTest {
         assertEquals(0,f.n("SELECT COUNT(*) FROM yshop_store_order_status"));
     }
 
+    @Test void legacySendOrderKeepsDeliveryTransitions() {
+        f.db.update("UPDATE yshop_store_order SET order_type='send' WHERE id=1");
+
+        dispatches.updateStoreOrder(sendRequest());
+        assertEquals(1,f.n("SELECT status FROM yshop_store_order WHERE id=1"));
+
+        receipts.takeOrder("synthetic-receipt",1L);
+        assertEquals(3,f.n("SELECT status FROM yshop_store_order WHERE id=1"));
+        assertEquals(1,f.n("SELECT COUNT(*) FROM yshop_store_order_status WHERE change_type='user_take_delivery'"));
+        assertEquals(1,f.n("SELECT COUNT(*) FROM yshop_user_bill WHERE title='购买商品赠送积分' AND link_id='1'"));
+        f.decimal("1025.25","SELECT integral FROM yshop_user WHERE id=1");
+    }
+
     private StoreOrderUpdateReqVO sendRequest() {
         var request=new StoreOrderUpdateReqVO();request.setId(1L);request.setUpdateType(UpdateOrderEnum.ORDER_SEND.getValue());
         request.setDeliveryName("synthetic-carrier");request.setDeliveryId("synthetic-tracking");request.setDeliveryType("express");

@@ -549,7 +549,7 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
             else orderFulfillmentService.transitionMember(candidate.getId(), uid, "COLLECT", expectedVersion, requestKey);
             return;
         }
-        if (!OrderLogEnum.ORDER_TAKE_OUT.getValue().equals(candidate.getOrderType())) throw exception(ORDER_STATUS_ERROR);
+        if (!OrderLogEnum.isDeliveryOrderType(candidate.getOrderType())) throw exception(ORDER_STATUS_ERROR);
         // Re-read under the order lock; an earlier lookup is only an owned row hint.
         StoreOrderDO order = storeOrderMapper.lockReceiptOrder(candidate.getId(), uid);
         if (order == null) throw exception(STORE_ORDER_NOT_EXISTS);

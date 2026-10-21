@@ -50,4 +50,11 @@ public enum OrderLogEnum {
 		return toType(value) == null ? null : toType(value).desc;
 	}
 
+	/**
+	 * Older order rows inherit the schema's "send" default for delivery orders.
+	 */
+	public static boolean isDeliveryOrderType(String value) {
+		return ORDER_TAKE_OUT.value.equals(value) || "send".equals(value);
+	}
+
 }

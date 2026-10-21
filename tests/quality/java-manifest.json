@@ -1588,7 +1588,8 @@
     "completedDeliveryCannotBeDispatchedAgain": 1,
     "concurrentDispatchAndReceiptCannotReopenCompletedOrder": 10,
     "dispatchRejectsUnpaidRefundingOrDeletedOrders": 1,
-    "dispatchLogFailureRollsBackStatusUpdate": 1
+    "dispatchLogFailureRollsBackStatusUpdate": 1,
+    "legacySendOrderKeepsDeliveryTransitions": 1
   },
   "co.yixiang.yshop.server.quality.MemberIdentityMysqlAcceptanceTest": {
     "unregisteredSmsNeverCreatesMemberTokenOrSuccessLog": 1,

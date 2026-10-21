@@ -140,7 +140,7 @@ public class StoreOrderServiceImpl implements StoreOrderService {
 
             // Delivery may only advance from the initial paid state. The conditional write
             // repeats the predicate so stale or concurrent requests cannot reopen an order.
-            if (!OrderLogEnum.ORDER_TAKE_OUT.getValue().equals(current.getOrderType())
+            if (!OrderLogEnum.isDeliveryOrderType(current.getOrderType())
                     || !OrderInfoEnum.STATUS_0.getValue().equals(current.getStatus())) {
                 throw exception(ORDER_STATUS_ERROR);
             }
