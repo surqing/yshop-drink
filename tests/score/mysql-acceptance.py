@@ -100,10 +100,10 @@ def main():
         if before!=history():raise RuntimeError('MIGRATION_CHANGED_HISTORY')
         report['migrationAcceptance']={'result':'PASS','cases':migration_cases,'legacyDataUnchanged':True,'noHistoricalBackfill':True}
         env=os.environ.copy();env['YSHOP_SCORE_ACCEPTANCE_CONFIG']=str(config)
-        expected={k:v for k,v in manifest(REPO).items() if k.rsplit('.',1)[-1] in {'ScoreOrderDatabaseTest','ScoreSubmissionDatabaseTest','ScoreReceiptConcurrencyDatabaseTest'}}
-        if len(expected)!=3:raise RuntimeError('SCORE_SUITE_MISSING')
+        expected={k:v for k,v in manifest(REPO).items() if k.rsplit('.',1)[-1] in {'ScoreOrderAdminUpdateDatabaseTest','ScoreOrderDatabaseTest','ScoreSubmissionDatabaseTest','ScoreReceiptConcurrencyDatabaseTest'}}
+        if len(expected)!=4:raise RuntimeError('SCORE_SUITE_MISSING')
         ev=Evidence(root/'evidence');maven=env.get('YSHOP_MAVEN',shutil.which('mvn') or 'mvn')
-        command=[maven,'-pl','yshop-server','-am','-Pmysql-acceptance','test','-Dtest=ScoreOrderDatabaseTest,ScoreSubmissionDatabaseTest,ScoreReceiptConcurrencyDatabaseTest','-Dsurefire.failIfNoSpecifiedTests=false']
+        command=[maven,'-pl','yshop-server','-am','-Pmysql-acceptance','test','-Dtest=ScoreOrderDatabaseTest,ScoreSubmissionDatabaseTest,ScoreReceiptConcurrencyDatabaseTest,ScoreOrderAdminUpdateDatabaseTest','-Dsurefire.failIfNoSpecifiedTests=false']
         if env.get('YSHOP_MAVEN_REPOSITORY'):command+=['-Dmaven.repo.local='+env['YSHOP_MAVEN_REPOSITORY']]
         command+=ev.arguments(expected)
         mod=REPO/'yshop-drink-boot3'

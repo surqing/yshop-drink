@@ -234,14 +234,18 @@ public class AppScoreOrderServiceImpl extends ServiceImpl<ScoreOrderMapper, Scor
      */
     @Override
     public void take(Long uid, Long id) {
-        LambdaQueryWrapper<ScoreOrderDO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ScoreOrderDO::getUid, uid).eq(ScoreOrderDO::getId,id);
-        ScoreOrderDO scoreOrderDO = this.getOne(wrapper);
-        if(scoreOrderDO == null){
+        int updated = orderMapper.receiveIfDispatched(id, uid);
+        if (updated == 1) {
+            return;
+        }
+        ScoreOrderDO scoreOrderDO = orderMapper.selectById(id);
+        if (scoreOrderDO == null || !uid.equals(scoreOrderDO.getUid())) {
             throw exception(ORDER_NOT_EXISTS);
         }
-        scoreOrderDO.setHaveReceived(ShopCommonEnum.DEFAULT_1.getValue());
-        this.updateById(scoreOrderDO);
+        if (OrderInfoEnum.STATUS_1.getValue().equals(scoreOrderDO.getHaveReceived())) {
+            return; // A retry after a lost response is idempotent for the owning member.
+        }
+        throw exception(ORDER_NOT_RECEIVABLE);
     }
 
     /**

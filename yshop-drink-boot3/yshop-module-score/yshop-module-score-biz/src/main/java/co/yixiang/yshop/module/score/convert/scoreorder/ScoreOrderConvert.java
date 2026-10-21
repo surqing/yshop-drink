@@ -22,8 +22,6 @@ public interface ScoreOrderConvert {
 
     ScoreOrderDO convert(ScoreOrderCreateReqVO bean);
 
-    ScoreOrderDO convert(ScoreOrderUpdateReqVO bean);
-
     ScoreOrderRespVO convert(ScoreOrderDO bean);
 
     AppScoreOrderVO convert01(ScoreOrderDO bean);

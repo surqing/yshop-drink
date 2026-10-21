@@ -848,6 +848,18 @@
     "invalidNotifyFails(String)[7]": 1,
     "invalidNotifyFails(String)[8]": 1
   },
+  "co.yixiang.yshop.module.score.order.ScoreOrderAdminUpdateDatabaseTest": {
+    "staleDispatchCannotClearReceipt": 1,
+    "paidRedemptionCannotBeDeleted": 1,
+    "memberCannotReceiveAnotherMembersOrder": 1,
+    "dispatchCannotRewriteRedemptionSnapshot": 1,
+    "receiptMutationsUsePostRoutesAndShippingKeepsPutRoute": 1,
+    "customerCannotReceiveBeforeDispatch": 1,
+    "memberReceiptReplayIsIdempotentAfterDispatch": 1,
+    "adminReceiptReplayIsIdempotentAfterDispatch": 1,
+    "unpaidOrderCanBeDeleted": 1,
+    "unpaidOrderCannotBeDispatched": 1
+  },
   "co.yixiang.yshop.module.score.order.ScoreOrderDatabaseTest": {
     "quantityTwoChargesTotalAndRecordsPostDebitBalance": 1,
     "zeroAffectedRowsAtEveryWriteRollBackEverything(String)[1]": 1,

@@ -49,24 +49,11 @@ const dialogVisible = ref(false) // 弹窗的是否展示
 const dialogTitle = ref('') // 弹窗的标题
 const formLoading = ref(false) // 表单的加载中：1）修改时的数据加载；2）提交的按钮禁用
 const formType = ref('') // 表单的类型：create - 新增；update - 修改
-const formData = ref<Partial<OrderApi.OrderVO>>({
+const formData = ref<Partial<OrderApi.ScoreOrderUpdateVO>>({
   id: undefined as number | undefined,
-  userId: undefined,
-  productId: undefined,
-  number: undefined,
-  score: undefined,
-  totalScore: undefined,
-  ip: undefined,
   expressSn: undefined,
   expressNumber: undefined,
-  expressCompany: undefined as string | undefined,
-  customerName: undefined,
-  customerPhone: undefined,
-  customerAddress: undefined,
-  status: undefined,
-  havePaid: undefined,
-  haveDelivered: undefined,
-  haveReceived: undefined
+  expressCompany: undefined
 })
 const express = ref<{ code: string; name: string }[]>([])
 const formRules = reactive({
@@ -86,7 +73,13 @@ const open = async (type: string, id?: number) => {
   if (id) {
     formLoading.value = true
     try {
-      formData.value = await OrderApi.getOrder(id)
+      const order = await OrderApi.getOrder(id)
+      formData.value = {
+        id: order.id,
+        expressSn: order.expressSn,
+        expressNumber: order.expressNumber,
+        expressCompany: order.expressCompany
+      }
     } finally {
       formLoading.value = false
     }
@@ -104,7 +97,12 @@ const submitForm = async () => {
   // 提交请求
   formLoading.value = true
   try {
-    const data = formData.value as unknown as OrderApi.OrderVO
+    const data: OrderApi.ScoreOrderUpdateVO = {
+      id: formData.value.id!,
+      expressSn: formData.value.expressSn!,
+      expressNumber: formData.value.expressNumber!,
+      expressCompany: formData.value.expressCompany!
+    }
     await OrderApi.updateOrder(data)
     message.success(t('common.updateSuccess'))
     dialogVisible.value = false
@@ -126,21 +124,9 @@ const selectExpress = (val) => {
 const resetForm = () => {
   formData.value = {
     id: undefined as number | undefined,
-    userId: undefined,
-    productId: undefined,
-    number: undefined,
-    score: undefined,
-    totalScore: undefined,
-    ip: undefined,
+    expressSn: undefined,
     expressNumber: undefined,
-    expressCompany: undefined as string | undefined,
-    customerName: undefined,
-    customerPhone: undefined,
-    customerAddress: undefined,
-    status: undefined,
-    havePaid: undefined,
-    haveDelivered: undefined,
-    haveReceived: undefined
+    expressCompany: undefined
   }
   formRef.value?.resetFields()
 }

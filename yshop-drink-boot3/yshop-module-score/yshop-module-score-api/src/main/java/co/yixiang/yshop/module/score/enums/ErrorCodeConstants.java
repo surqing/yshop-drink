@@ -9,5 +9,8 @@ public interface ErrorCodeConstants {
     ErrorCode PRODUCT_NOT_EXISTS = new ErrorCode(1008018001, "积分产品不存在");
     ErrorCode SCORE_NOT = new ErrorCode(1008018002, "积分不足");
     ErrorCode PRODUCT_NOT_STOCK = new ErrorCode(1008018002, "库存不足");
+    ErrorCode ORDER_NOT_DISPATCHABLE = new ErrorCode(1008018006, "积分订单当前状态不允许发货");
+    ErrorCode ORDER_NOT_RECEIVABLE = new ErrorCode(1008018007, "积分订单当前状态不允许确认收货");
+    ErrorCode ORDER_SETTLED_READ_ONLY = new ErrorCode(1008018008, "已成交积分订单不可删除");
 }
 

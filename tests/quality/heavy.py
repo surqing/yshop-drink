@@ -72,8 +72,8 @@ def main():
         return {'tests':expected,'cleanup':'PASS','runId':r['runId']}
     def score_report():
         r=json.loads((root/'score/report.json').read_text())
-        expected={k:v for k,v in manifest(REPO).items() if k.rsplit('.',1)[-1] in {'ScoreOrderDatabaseTest','ScoreReceiptConcurrencyDatabaseTest','ScoreSubmissionDatabaseTest'}}
-        if (len(expected)!=3 or r.get('result')!='PASS' or r.get('cleanup')!='PASS'
+        expected={k:v for k,v in manifest(REPO).items() if k.rsplit('.',1)[-1] in {'ScoreOrderAdminUpdateDatabaseTest','ScoreOrderDatabaseTest','ScoreReceiptConcurrencyDatabaseTest','ScoreSubmissionDatabaseTest'}}
+        if (len(expected)!=4 or r.get('result')!='PASS' or r.get('cleanup')!='PASS'
             or r.get('complete') is not True or r.get('sourceUnchanged') is not True
             or not re.fullmatch('[a-f0-9]{32}',r.get('runId',''))
             or r.get('owner')!=r.get('runId') or any(r.get(k)!=v for k,v in identity.items())):

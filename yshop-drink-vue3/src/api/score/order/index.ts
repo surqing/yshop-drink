@@ -23,6 +23,13 @@ export interface OrderVO {
   haveReceived: number
 }
 
+export interface ScoreOrderUpdateVO {
+  id: number
+  expressSn: string
+  expressNumber: string
+  expressCompany: string
+}
+
 // 查询积分商城订单列表
 export const getOrderPage = async (params: PageParam) => {
   return await request.get({ url: `/score/order/page`, params })
@@ -39,7 +46,7 @@ export const createOrder = async (data: OrderVO) => {
 }
 
 // 修改积分商城订单
-export const updateOrder = async (data: OrderVO) => {
+export const updateOrder = async (data: ScoreOrderUpdateVO) => {
   return await request.put({ url: `/score/order/update`, data })
 }
 
@@ -58,6 +65,6 @@ export const getLogistic = async (param1,param2) => {
 }
 
 // 收货
-export const takeStoreOrder = async (id) => {
-  return await request.get({ url: `/score/order/take?id=` + id })
+export const takeStoreOrder = async (id: number) => {
+  return await request.post({ url: `/score/order/take`, data: { id } })
 }

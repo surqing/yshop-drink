@@ -4,6 +4,7 @@ import co.yixiang.yshop.framework.common.pojo.CommonResult;
 import co.yixiang.yshop.framework.security.core.annotations.PreAuthenticated;
 import co.yixiang.yshop.module.score.controller.app.order.param.AppScoreOrderParam;
 import co.yixiang.yshop.module.score.controller.app.order.vo.AppScoreOrderVO;
+import co.yixiang.yshop.module.score.controller.common.vo.ScoreOrderTakeReqVO;
 import co.yixiang.yshop.module.score.controller.app.product.param.AppScoreProductQueryParam;
 import co.yixiang.yshop.module.score.controller.app.product.vo.AppScoreProductVO;
 import co.yixiang.yshop.module.score.service.scoreorder.AppScoreOrderService;
@@ -83,11 +84,11 @@ public class AppScoreOrderController {
      * 收货
      */
     @PreAuthenticated
-    @GetMapping("/take")
+    @PostMapping("/take")
     @Operation(summary = "收货")
-    public CommonResult<Boolean> take(@RequestParam(value = "id", defaultValue = "0") Long id){
+    public CommonResult<Boolean> take(@RequestBody @Valid ScoreOrderTakeReqVO reqVO){
         Long uid = getLoginUserId();
-        appScoreOrderService.take(uid,id);
+        appScoreOrderService.take(uid, reqVO.getId());
         return success(true);
     }
 

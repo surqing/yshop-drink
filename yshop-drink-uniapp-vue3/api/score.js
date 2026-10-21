@@ -39,7 +39,7 @@ export function scoreShopOrderDetail(data) {
  * 确认收货
  */
 export function scoreShopReceive(data) {
-  return api.get('/score-order/take', data, { login: true })
+  return api.post('/score-order/take', data, { login: true })
 }
 
 

@@ -1,6 +1,6 @@
 package co.yixiang.yshop.module.score.service.scoreorder;
 
-import co.yixiang.yshop.framework.common.enums.ShopCommonEnum;
+import co.yixiang.yshop.framework.common.enums.OrderInfoEnum;
 import co.yixiang.yshop.module.member.controller.admin.user.vo.UserRespVO;
 import co.yixiang.yshop.module.member.convert.user.UserConvert;
 import co.yixiang.yshop.module.member.dal.dataobject.user.MemberUserDO;
@@ -51,38 +51,40 @@ public class ScoreOrderServiceImpl implements ScoreOrderService {
 
     @Override
     public void updateOrder(ScoreOrderUpdateReqVO updateReqVO) {
-        // 校验存在
-        validateOrderExists(updateReqVO.getId());
-        // 更新
-        ScoreOrderDO updateObj = ScoreOrderConvert.INSTANCE.convert(updateReqVO);
-        updateObj.setHaveDelivered(ShopCommonEnum.DEFAULT_1.getValue());
-        orderMapper.updateById(updateObj);
+        int updated = orderMapper.dispatchIfAwaiting(updateReqVO.getId(), updateReqVO.getExpressSn(),
+                updateReqVO.getExpressNumber(), updateReqVO.getExpressCompany());
+        if (updated != 1) {
+            throw exception(ORDER_NOT_DISPATCHABLE);
+        }
     }
 
     @Override
     public void deleteOrder(Long id) {
-        // 校验存在
-        validateOrderExists(id);
-        // 删除
-        orderMapper.deleteById(id);
+        if (orderMapper.deleteIfUnpaid(id) == 1) {
+            return;
+        }
+        ScoreOrderDO order = orderMapper.selectById(id);
+        if (order == null) {
+            throw exception(ORDER_NOT_EXISTS);
+        }
+        throw exception(ORDER_SETTLED_READ_ONLY);
     }
 
     @Override
     public void takeOrder(Long id) {
-        // 校验存在
-        ScoreOrderDO scoreOrderDO = orderMapper.selectById(id);
-        if (scoreOrderDO == null) {
+        if (orderMapper.receiveDispatched(id) == 1) {
+            return;
+        }
+        ScoreOrderDO order = orderMapper.selectById(id);
+        if (order == null) {
             throw exception(ORDER_NOT_EXISTS);
         }
-        scoreOrderDO.setHaveReceived(ShopCommonEnum.DEFAULT_1.getValue());
-        orderMapper.updateById(scoreOrderDO);
-
-    }
-
-    private void validateOrderExists(Long id) {
-        if (orderMapper.selectById(id) == null) {
-            throw exception(ORDER_NOT_EXISTS);
+        if (OrderInfoEnum.PAY_STATUS_1.getValue().equals(order.getHavePaid())
+                && OrderInfoEnum.STATUS_1.getValue().equals(order.getHaveDelivered())
+                && OrderInfoEnum.STATUS_1.getValue().equals(order.getHaveReceived())) {
+            return; // Retry after a lost response is safe for an already received order.
         }
+        throw exception(ORDER_NOT_RECEIVABLE);
     }
 
     @Override
