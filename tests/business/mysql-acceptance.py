@@ -51,7 +51,7 @@ def main():
         env['YSHOP_ORDERING_ACCEPTANCE_CONFIG'] = str(jdbc)
         command = maven_command(WORKSPACE) + [
                    '-pl', 'yshop-module-mall/yshop-module-order-biz', '-am', '-Pmysql-acceptance', 'test',
-                   '-Dtest=' + ('OrderingDatabaseTest,OrderFulfillmentDatabaseTest,AppOrderTakeCompatibilityTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance,CouponDatabaseTest' if coupon else 'OrderingDatabaseTest,OrderFulfillmentDatabaseTest,AppOrderTakeCompatibilityTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance' if catalog else 'OrderingDatabaseTest,OrderFulfillmentDatabaseTest,AppOrderTakeCompatibilityTest'), '-Dsurefire.failIfNoSpecifiedTests=false']
+                   '-Dtest=' + ('OrderingDatabaseTest,OrderFulfillmentDatabaseTest,AppOrderTakeCompatibilityTest,StoreOrderStatisticsDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance,CouponDatabaseTest' if coupon else 'OrderingDatabaseTest,OrderFulfillmentDatabaseTest,AppOrderTakeCompatibilityTest,StoreOrderStatisticsDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance' if catalog else 'OrderingDatabaseTest,OrderFulfillmentDatabaseTest,AppOrderTakeCompatibilityTest,StoreOrderStatisticsDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=false']
         evidence = Evidence(PRIVATE / 'quality')
         selected = next(x.split('=', 1)[1].split(',') for x in command if x.startswith('-Dtest='))
         registered = manifest(REPO)

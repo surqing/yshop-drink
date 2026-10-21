@@ -73,8 +73,62 @@ export interface StoreOrderFulfillmentTransition {
   requestKey: string
 }
 
+export interface StoreOrderSummaryQuery {
+  from: string
+  to: string
+  shopId?: number
+}
+
+export interface StoreOrderSummary {
+  authorizedShopIds: number[] | null
+  headquarters: boolean
+  from: string
+  to: string
+  generatedAt: string
+  paidOrderCount: number
+  grossPaidAmount: number
+  soldQuantity: number
+  refundOrderCount: number
+  refundPendingCount: number
+  refundCompletedCount: number
+  refundAmount: number
+  waitAcceptQueueCount: number
+  acceptedQueueCount: number
+  preparingQueueCount: number
+  readyQueueCount: number
+}
+
+export interface StoreOrderSummaryShop {
+  id: number
+  name: string
+}
+
+export interface StoreOrderSummaryDetail {
+  id: number
+  orderId: string
+  shopId: number
+  payTime: string
+  payPrice: number
+  refundStatus: number
+  refundPrice: number
+  totalNum: number
+  fulfillmentStatus: string
+}
+
 export const transitionStoreOrderFulfillment = async (data: StoreOrderFulfillmentTransition) => {
   return await request.post({ url: `/order/store-order/fulfillment/transition`, data })
+}
+
+export const getStoreOrderSummary = async (params: StoreOrderSummaryQuery) => {
+  return await request.get({ url: `/order/store-order/store-summary`, params }) as StoreOrderSummary
+}
+
+export const getStoreOrderSummaryShops = async () => {
+  return await request.get({ url: `/order/store-order/store-summary/shops` }) as StoreOrderSummaryShop[]
+}
+
+export const getStoreOrderSummaryDetails = async (params: StoreOrderSummaryQuery & { pageNo: number; pageSize: number }) => {
+  return await request.get({ url: `/order/store-order/store-summary/details`, params }) as { list: StoreOrderSummaryDetail[]; total: number }
 }
 
 // 查询订单列表

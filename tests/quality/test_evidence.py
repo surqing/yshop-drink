@@ -258,7 +258,8 @@ class AcceptanceLifecycleFaultInjection(unittest.TestCase):
             ev=Mock();ev.id='synthetic-run';ev.arguments.return_value=[];ev.validate.return_value={'tests':80,'sourceSha':'synthetic','sourceDigest':'synthetic'}
             expected=({'synthetic.OrderingDatabaseTest':{'invariant':1},
                        'synthetic.OrderFulfillmentDatabaseTest':{'invariant':1},
-                       'synthetic.AppOrderTakeCompatibilityTest':{'invariant':1}} if folder=='business'
+                       'synthetic.AppOrderTakeCompatibilityTest':{'invariant':1},
+                       'synthetic.StoreOrderStatisticsDatabaseTest':{'invariant':1}} if folder=='business'
                       else {'synthetic.PaymentDatabaseTest':{'invariant':1}})
             stream=io.StringIO()
             with patch.object(module,'PRIVATE',root),patch.object(module,'WORKSPACE',root),patch.object(module.importlib.util,'spec_from_file_location',return_value=spec),patch.object(module.importlib.util,'module_from_spec',return_value=fake),patch.object(module,'Evidence',return_value=ev),patch.object(module,'manifest',return_value=expected),patch.object(module,'execute',return_value=exit_code),patch.object(sys,'argv',['runner']),contextlib.redirect_stdout(stream):

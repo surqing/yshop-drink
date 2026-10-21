@@ -127,7 +127,7 @@ def main():
         redis_config=private('redis.properties','url=redis://127.0.0.1:'+rbind['HostPort']+'\npassword='+rpw+'\n')
         env.update(YSHOP_COUPON_REDIS_ACCEPTANCE='true',YSHOP_COUPON_REDIS_CONFIG=str(redis_config))
         if a.scope=='full':
-            command('mysql-business',[sys.executable,'tests/business/mysql-acceptance.py','--coupon'],lambda:acceptance_log('mysql-business',{'OrderingDatabaseTest','OrderFulfillmentDatabaseTest','AppOrderTakeCompatibilityTest','CatalogDatabaseTest','CatalogEditingMysqlAcceptance','CouponDatabaseTest'}))
+            command('mysql-business',[sys.executable,'tests/business/mysql-acceptance.py','--coupon'],lambda:acceptance_log('mysql-business',{'OrderingDatabaseTest','OrderFulfillmentDatabaseTest','AppOrderTakeCompatibilityTest','StoreOrderStatisticsDatabaseTest','CatalogDatabaseTest','CatalogEditingMysqlAcceptance','CouponDatabaseTest'}))
             command('mysql-financial',[sys.executable,'tests/payment/mysql-acceptance.py','--coupon'],lambda:acceptance_log('mysql-financial',{'PaymentDatabaseTest','WalletDatabaseTest','PaymentAttemptDatabaseTest','WechatV3DatabaseTest','PaymentLiveReadinessDatabaseTest','LiveMerchantPreflightDatabaseTest','PaymentCancellationDatabaseTest','CouponPaymentDatabaseTest'}))
             command('mysql-auth',[sys.executable,'tests/quality/auth-mysql.py','--output',str(root/'auth')],auth_report)
             command('mysql-member-identity',[sys.executable,'tests/quality/member-score-mysql.py','--output',str(root/'member-identity')],identity_report)

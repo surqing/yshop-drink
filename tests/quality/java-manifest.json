@@ -384,6 +384,12 @@
     "oldPickupClientUsesGuardedLegacyTransition": 1,
     "versionedPickupRequestUsesVersionedTransition": 1
   },
+  "co.yixiang.yshop.module.order.statistics.StoreOrderStatisticsDatabaseTest": {
+    "storeSummaryCannotReadForeignShop": 1,
+    "headquartersEqualsAuthorizedStoreTotals": 1,
+    "shanghaiMidnightBelongsToOneDay": 1,
+    "emptyWindowReturnsZeroMetrics": 1
+  },
   "co.yixiang.yshop.module.order.payment.CallbackIngressEndToEndTest": {
     "validSyntheticAnonymousNotification": 1,
     "replayExactlyOnce": 1,

@@ -11,6 +11,7 @@ import co.yixiang.yshop.module.order.dal.redis.order.AsyncCountRedisDAO;
 import co.yixiang.yshop.module.order.service.storeorder.AsyncStoreOrderService;
 import co.yixiang.yshop.module.order.service.storeorder.StoreOrderService;
 import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService;
+import co.yixiang.yshop.module.order.service.statistics.StoreOrderStatisticsService;
 import co.yixiang.yshop.module.order.service.storeorder.dto.OrderTimeDataDto;
 import co.yixiang.yshop.module.order.service.storeorderstatus.StoreOrderStatusService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -20,11 +21,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 
@@ -43,6 +46,8 @@ public class StoreOrderController {
     private StoreOrderService storeOrderService;
     @Resource
     private OrderFulfillmentService orderFulfillmentService;
+    @Resource
+    private StoreOrderStatisticsService storeOrderStatisticsService;
     @Resource
     private StoreOrderStatusService storeOrderStatusService;
     @Resource
@@ -183,6 +188,35 @@ public class StoreOrderController {
     public CommonResult<Long> refund() {
         storeAccess.requireHeadquarters();
         return success(storeOrderService.orderNotice());
+    }
+
+    @GetMapping("/store-summary")
+    @Operation(summary = "获得授权门店订单经营汇总")
+    @PreAuthorize("@ss.hasPermission('order:store-order:query')")
+    public CommonResult<StoreOrderStatisticsService.Summary> getStoreOrderSummary(
+            @RequestParam(required = false) Long shopId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return success(storeOrderStatisticsService.summary(shopId, from, to));
+    }
+
+    @GetMapping("/store-summary/details")
+    @Operation(summary = "获得授权门店订单汇总明细")
+    @PreAuthorize("@ss.hasPermission('order:store-order:query')")
+    public CommonResult<PageResult<StoreOrderStatisticsService.OrderDetail>> getStoreOrderSummaryDetails(
+            @RequestParam(required = false) Long shopId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "1") int pageNo,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        return success(storeOrderStatisticsService.details(shopId, from, to, pageNo, pageSize));
+    }
+
+    @GetMapping("/store-summary/shops")
+    @Operation(summary = "获得统计可见门店")
+    @PreAuthorize("@ss.hasPermission('order:store-order:query')")
+    public CommonResult<List<StoreOrderStatisticsService.ShopOption>> getStoreOrderSummaryShops() {
+        return success(storeOrderStatisticsService.authorizedShops());
     }
 
 
