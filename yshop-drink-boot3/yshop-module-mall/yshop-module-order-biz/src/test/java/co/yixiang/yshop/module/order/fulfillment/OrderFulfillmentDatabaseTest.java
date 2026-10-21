@@ -212,6 +212,11 @@ class OrderFulfillmentDatabaseTest {
         return jdbc.queryForObject("SELECT fulfillment_status FROM yshop_store_order WHERE id=?", String.class, orderId);
     }
 
+    private void assertAmount(String expected, BigDecimal actual) {
+        assertNotNull(actual);
+        assertEquals(0, new BigDecimal(expected).compareTo(actual));
+    }
+
     @Test void transitionRejectsStaleVersion() {
         insertOrder("WAIT_ACCEPT", 2, 1, 1); login(101, 2);
         var failure = assertThrows(ServiceException.class, () -> transaction(() -> service.transitionStaff(orderId, "ACCEPT", 1, "accept-stale-0001")));
@@ -296,10 +301,10 @@ class OrderFulfillmentDatabaseTest {
         var first = transaction(() -> service.transitionMember(orderId, syntheticMemberId, "COLLECT", 4, "real-reward-collect-0001"));
         var replay = transaction(() -> service.transitionMember(orderId, syntheticMemberId, "COLLECT", 4, "real-reward-collect-0001"));
         assertTrue(first.applied()); assertFalse(replay.applied());
-        assertEquals(new BigDecimal("12.5000"), memberUserMapper.selectById(syntheticMemberId).getIntegral());
+        assertAmount("12.50", memberUserMapper.selectById(syntheticMemberId).getIntegral());
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_user_bill WHERE uid=? AND link_id=? AND title='购买商品赠送积分'", Integer.class, syntheticMemberId, Long.toString(orderId)));
-        assertEquals(new BigDecimal("2.5000"), jdbc.queryForObject("SELECT number FROM yshop_user_bill WHERE uid=? AND link_id=?", BigDecimal.class, syntheticMemberId, Long.toString(orderId)));
-        assertEquals(new BigDecimal("12.5000"), jdbc.queryForObject("SELECT balance FROM yshop_user_bill WHERE uid=? AND link_id=?", BigDecimal.class, syntheticMemberId, Long.toString(orderId)));
+        assertAmount("2.50", jdbc.queryForObject("SELECT number FROM yshop_user_bill WHERE uid=? AND link_id=?", BigDecimal.class, syntheticMemberId, Long.toString(orderId)));
+        assertAmount("12.50", jdbc.queryForObject("SELECT balance FROM yshop_user_bill WHERE uid=? AND link_id=?", BigDecimal.class, syntheticMemberId, Long.toString(orderId)));
     }
 
     @Test void realRewardWriteFailureRollsBackMemberOrderAndAudit() {
@@ -310,7 +315,7 @@ class OrderFulfillmentDatabaseTest {
         try {
             assertThrows(RuntimeException.class, () -> transaction(() -> service.transitionMember(
                     orderId, syntheticMemberId, "COLLECT", 4, "real-reward-rollback-0001")));
-            assertEquals(new BigDecimal("7.0000"), memberUserMapper.selectById(syntheticMemberId).getIntegral());
+            assertAmount("7.00", memberUserMapper.selectById(syntheticMemberId).getIntegral());
             assertEquals("READY", state());
             assertEquals(4, jdbc.queryForObject("SELECT fulfillment_version FROM yshop_store_order WHERE id=?", Integer.class, orderId));
             assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_fulfillment_log WHERE order_id=?", Integer.class, orderId));
