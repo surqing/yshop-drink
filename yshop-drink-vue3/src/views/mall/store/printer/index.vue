@@ -1,4 +1,6 @@
 <template>
+  <el-tabs v-model="activeTab" class="mb-16px">
+    <el-tab-pane label="设备管理" name="printers">
   <ContentWrap>
     <el-alert v-if="loadError" title="打印机列表加载失败" type="error" :closable="false" show-icon>
       <el-button link type="primary" @click="initialize">重新加载</el-button>
@@ -164,6 +166,11 @@
       >状态查询以打印服务返回值为准；部分设备离线状态可能延迟更新。删除设备前请先解绑门店并取消授权。</p
     >
   </ContentWrap>
+    </el-tab-pane>
+    <el-tab-pane label="订单打印任务" name="order-jobs">
+      <OrderPrintJobs />
+    </el-tab-pane>
+  </el-tabs>
 
   <Dialog v-model="formVisible" :title="form.id ? '编辑打印机' : '新增打印机'" width="560px">
     <el-form
@@ -312,11 +319,13 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import * as Api from '@/api/mall/store/printer'
+import OrderPrintJobs from './OrderPrintJobs.vue'
 import { CACHE_KEY, useCache } from '@/hooks/web/useCache'
 import { formatDate } from '@/utils/formatTime'
 
 defineOptions({ name: 'StorePrinter' })
 const message = useMessage()
+const activeTab = ref('printers')
 async function confirm(text: string) {
   try {
     await message.confirm(text)

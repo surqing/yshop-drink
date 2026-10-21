@@ -51,6 +51,8 @@ public class PrinterService {
         return user.getTenantId();
     }
     private long actor() { return Objects.requireNonNull(SecurityFrameworkUtils.getLoginUserId()); }
+    /** Applies the same fresh headquarters-role and tenant checks used by printer management. */
+    public long requireHeadquartersTenant() { return tenant(); }
     private String context(Device d) { return "printer:"+d.tenantId+":"+d.providerCode+":"+d.deviceCode; }
     private Map<String,String> config(Device d) {
         if(d.encryptedConfig==null) return new LinkedHashMap<>();
@@ -148,6 +150,30 @@ public class PrinterService {
         PrinterProvider.assertOutsideTransaction();
         try { return new Prepared(registry.require(providerCode).openSession(),null); }
         catch(PrinterFailure ex) { return new Prepared(null,ex); }
+    }
+    /** Internal order-worker send path. The caller owns the durable job lease and has no user context. */
+    OrderPrintAttempt sendOrderPrint(long tenantId,long printerId,long shopId,String requestId,Receipt receipt) {
+        PrinterProvider.assertOutsideTransaction();
+        Device d;
+        try {
+            d=repo.require(tenantId,printerId,false);
+            if(!Objects.equals(d.shopId,shopId)) throw new PrinterFailure("PRINTER_NOT_BOUND",false);
+            if(!d.enabled) throw new PrinterFailure("PRINTER_DISABLED",false);
+            if(d.authorization!=Authorization.AUTHORIZED) throw new PrinterFailure("PRINTER_NOT_AUTHORIZED",false);
+            if(d.state!=DeviceState.ONLINE) throw new PrinterFailure("DEVICE_NOT_ONLINE",false);
+            PrinterProvider provider=registry.require(d.providerCode);
+            if(!provider.info().capabilities().textPrint()) throw new PrinterFailure("UNSUPPORTED_OPERATION",false);
+        } catch(PrinterFailure failure) {
+            return new OrderPrintAttempt(false,null,failure);
+        }
+        Prepared prepared=prepare(d.providerCode);
+        if(prepared.failure()!=null) return new OrderPrintAttempt(false,null,prepared.failure());
+        try {
+            String origin=cn.hutool.crypto.digest.DigestUtil.sha256Hex(tenantId+":"+requestId);
+            return new OrderPrintAttempt(true,prepared.session().print(d.deviceCode,origin,receipt),null);
+        } catch(PrinterFailure failure) {
+            return new OrderPrintAttempt(true,null,failure);
+        }
     }
     private boolean expired(LocalDateTime created) {
         return created==null||!created.isAfter(LocalDateTime.now().minusMinutes(1));
@@ -297,4 +323,5 @@ public class PrinterService {
         PageResult<JobView> page=repo.jobs(tenant,id,pageNo,pageSize);
         return new PageResult<>(page.getList().stream().map(this::observed).toList(),page.getTotal());
     }
+    record OrderPrintAttempt(boolean submitted,PrintResult result,PrinterFailure failure) {}
 }

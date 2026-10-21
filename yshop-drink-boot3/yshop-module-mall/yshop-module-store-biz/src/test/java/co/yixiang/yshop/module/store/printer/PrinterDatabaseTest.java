@@ -41,6 +41,7 @@ class PrinterDatabaseTest {
     DataSourceTransactionManager manager;
     PrinterSecretCipher cipher;
     FakeProvider fake;
+    PrinterProviderRegistry providers;
     final Set<String> headquartersRoles=new HashSet<>();
     PermissionApi printerPermissions;
     StoreAccessService printerAccess;
@@ -56,6 +57,7 @@ class PrinterDatabaseTest {
         fixture();
         jdbc.update("UPDATE yshop_store_shop SET deleted=0");
         applyMigration(); applyMigration();
+        jdbc.update("DELETE FROM yshop_order_print_job"); jdbc.update("DELETE FROM yshop_order_fulfillment_print_event");
         jdbc.update("DELETE FROM yshop_printer_binding"); jdbc.update("DELETE FROM yshop_printer_test_job");
         jdbc.update("DELETE FROM yshop_printer_provider_token"); jdbc.update("DELETE FROM yshop_printer");
         cipher=new PrinterSecretCipher(Base64.getEncoder().encodeToString(new byte[32])); fake=new FakeProvider("YILIAN_YUN");
@@ -68,11 +70,14 @@ class PrinterDatabaseTest {
         });
         printerAccess=new StoreAccessService(jdbc,printerPermissions);
         // A second transport deliberately needs no edits to the business service or the first provider.
-        service=new PrinterService(repo,new PrinterProviderRegistry(List.of(fake,new FakeProvider("SECOND_VENDOR"))),cipher,new TransactionTemplate(manager),printerAccess,false);
+        providers=new PrinterProviderRegistry(List.of(fake,new FakeProvider("SECOND_VENDOR")));
+        service=new PrinterService(repo,providers,cipher,new TransactionTemplate(manager),printerAccess,false);
         login(1,0);
     }
     private void fixture() {
         jdbc.execute("CREATE TABLE IF NOT EXISTS yshop_store_shop (id bigint PRIMARY KEY,name varchar(100),deleted boolean DEFAULT false)");
+        String engine=mysql()?" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4":"";
+        jdbc.execute("CREATE TABLE IF NOT EXISTS yshop_order_fulfillment_print_event (id bigint AUTO_INCREMENT PRIMARY KEY,tenant_id bigint NOT NULL,order_id bigint NOT NULL,shop_id bigint NOT NULL,event_key varchar(128) NOT NULL,event_type varchar(32) NOT NULL,payload_snapshot text NOT NULL,state varchar(24) NOT NULL DEFAULT 'PENDING',attempts int NOT NULL DEFAULT 0,next_attempt_at timestamp NULL,last_error varchar(500) NULL,create_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,update_time timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(tenant_id,event_key))"+engine);
         if(jdbc.queryForObject("SELECT COUNT(*) FROM yshop_store_shop",Long.class)==0) {
             jdbc.update("INSERT INTO yshop_store_shop VALUES (1,'测试门店一',false),(2,'测试门店二',false)");
         }
@@ -83,6 +88,19 @@ class PrinterDatabaseTest {
         }
     }
     private void applyMigration() throws Exception { PrinterMigrationSupport.migrate(jdbc,mysql()); }
+    private OrderPrintJobWorker newWorker() { return new OrderPrintJobWorker(jdbc,manager,service,providers); }
+    private long insertPrintEvent(String eventKey,long shopId) {
+        long orderId=Math.abs(UUID.randomUUID().getMostSignificantBits());
+        String payload="{\"schemaVersion\":1,\"orderId\":"+orderId+",\"orderCode\":\"synthetic-"+orderId+"\",\"shopName\":\"Synthetic frozen shop\",\"pickupNumber\":123,\"contactPhone\":\"138****1234\",\"totalQuantity\":2,\"paidAmount\":19.50,\"items\":[{\"title\":\"Synthetic tea\",\"quantity\":2,\"unitPrice\":9.75,\"specification\":\"large|less ice\",\"cartDetails\":\"{}\"}]}";
+        jdbc.update("INSERT INTO yshop_order_fulfillment_print_event(tenant_id,order_id,shop_id,event_key,event_type,payload_snapshot,state,attempts,create_time,update_time) VALUES(1,?,?,?,'PICKUP_ACCEPTED',?,'PENDING',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",orderId,shopId,eventKey,payload);
+        return jdbc.queryForObject("SELECT id FROM yshop_order_fulfillment_print_event WHERE tenant_id=1 AND event_key=?",Long.class,eventKey);
+    }
+    private long readyPrinter(long shopId,String deviceCode) {
+        long id=device(deviceCode);
+        service.bind(new BindingRequest(id,shopId));
+        jdbc.update("UPDATE yshop_printer SET authorization='AUTHORIZED',device_state='ONLINE',state_checked_at=CURRENT_TIMESTAMP WHERE tenant_id=1 AND id=?",id);
+        return id;
+    }
     @AfterEach void cleanup() { SecurityContextHolder.clearContext(); TenantContextHolder.clear(); }
     private void login(long tenant,long shop) {
         LoginUser user=new LoginUser(); user.setId(1L); user.setUserType(2); user.setShopId(shop); user.setTenantId(tenant);
@@ -135,6 +153,132 @@ class PrinterDatabaseTest {
         assertEquals(0,jdbc.queryForObject("SELECT deleted+0 FROM system_menu WHERE id=2308",Integer.class));
         assertEquals(1,jdbc.queryForObject("SELECT deleted+0 FROM system_menu WHERE id=2313",Integer.class));
         assertEquals(3,jdbc.queryForObject("SELECT COUNT(*) FROM system_menu WHERE permission IN ('store:web-print:authorize','store:web-print:binding','store:web-print:test')",Integer.class));
+    }
+
+    @Test void committedAcceptanceSurvivesWorkerRestart() {
+        long event=insertPrintEvent("restart-event-0001",1L); readyPrinter(1L,"4000000990");
+        var jobs=new OrderPrintJobService(jdbc,manager,service,newWorker());
+        assertEquals(-event,jobs.page(1,20,1L).getList().get(0).id());
+        assertEquals("PENDING",jobs.get(-event).state());
+        newWorker().processPendingEvents();
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",Integer.class,event));
+        newWorker().processPendingEvents();
+        assertEquals("PROCESSED",jdbc.queryForObject("SELECT state FROM yshop_order_fulfillment_print_event WHERE id=?",String.class,event));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",Integer.class,event));
+        assertEquals(0,fake.printCalls.get());
+    }
+
+    @Test void duplicateEventCreatesOneJob() {
+        long event=insertPrintEvent("duplicate-event-0001",1L); readyPrinter(1L,"4000000991");
+        var worker=newWorker(); worker.processPendingEvents(); worker.processPendingEvents();
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",Integer.class,event));
+        assertEquals(0,fake.printCalls.get());
+    }
+
+    @Test void missingDeviceIsVisibleAndRefreshDoesNotCallProvider() {
+        long event=insertPrintEvent("waiting-device-event-0001",1L);
+        var worker=newWorker(); worker.processPendingEvents();
+        long sessions=fake.sessionCalls.get(),prints=fake.printCalls.get();
+        assertEquals("WAITING_DEVICE",jdbc.queryForObject("SELECT state FROM yshop_order_fulfillment_print_event WHERE id=?",String.class,event));
+        var jobs=new OrderPrintJobService(jdbc,manager,service,worker);
+        var page=jobs.page(1,20,1L);
+        assertEquals(1,page.getTotal());
+        assertEquals(-event,page.getList().get(0).id());
+        assertEquals("NO_BOUND_DEVICE",page.getList().get(0).errorCode());
+        assertEquals("WAITING_DEVICE",jobs.refresh(-event).state());
+        assertEquals(sessions,fake.sessionCalls.get()); assertEquals(prints,fake.printCalls.get());
+    }
+
+    @Test void expiredOrderPrintLeaseBecomesUnknownWithoutResend() {
+        long event=insertPrintEvent("expired-order-print-0001",1L); readyPrinter(1L,"4000000994");
+        var worker=newWorker(); worker.processPendingEvents();
+        long job=jdbc.queryForObject("SELECT id FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",Long.class,event);
+        jdbc.update("UPDATE yshop_order_print_job SET state='SENDING',attempts=1,lease_token='crashed-worker',lease_expires_at=? WHERE id=?",
+                java.time.LocalDateTime.now().minusMinutes(2),job);
+        assertEquals(1,worker.recoverExpiredJobs());
+        worker.dispatchPendingJobs();
+        assertEquals("UNKNOWN",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE id=?",String.class,job));
+        assertEquals("WORKER_LEASE_EXPIRED",jdbc.queryForObject("SELECT last_error FROM yshop_order_print_job WHERE id=?",String.class,job));
+        assertEquals(0,fake.printCalls.get());
+    }
+
+    @Test void unknownNeverAutoResends() {
+        long event=insertPrintEvent("unknown-event-0001",1L); readyPrinter(1L,"4000000992");
+        var worker=newWorker(); worker.processPendingEvents();
+        fake.printFailure=new PrinterFailure("PROVIDER_TIMEOUT",true);
+        worker.dispatchPendingJobs();
+        assertEquals(1,fake.printCalls.get());
+        assertEquals("UNKNOWN",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",String.class,event));
+        fake.printFailure=null;
+        worker.processPendingEvents(); worker.recoverExpiredJobs(); worker.dispatchPendingJobs();
+        assertEquals(1,fake.printCalls.get());
+        assertEquals("UNKNOWN",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",String.class,event));
+    }
+
+    @Test void reprintCreatesAuditedChild() {
+        long event=insertPrintEvent("reprint-event-0001",1L); readyPrinter(1L,"4000000993");
+        var worker=newWorker(); worker.processPendingEvents(); worker.dispatchPendingJobs();
+        long parent=jdbc.queryForObject("SELECT id FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",Long.class,event);
+        assertEquals("ACCEPTED",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE id=?",String.class,parent));
+        assertTrue(fake.receipts.get(0).lines().contains("联系电话：138****1234"));
+        assertTrue(fake.receipts.get(0).lines().contains("Synthetic tea x2"));
+        assertTrue(fake.receipts.get(0).lines().contains("规格：large|less ice"));
+        var jobs=new OrderPrintJobService(jdbc,manager,service,worker);
+        login(2,0);
+        assertEquals("PRINT_JOB_NOT_FOUND",assertThrows(PrinterFailure.class,()->jobs.reprint(
+                new OrderPrintJobService.ReprintRequest(parent,"foreign-tenant-reprint-01","跨租户重打"))).getMessage());
+        login(1,0);
+        var child=jobs.reprint(new OrderPrintJobService.ReprintRequest(parent,"manual-reprint-0001","顾客反馈未收到小票"));
+        var replay=jobs.reprint(new OrderPrintJobService.ReprintRequest(parent,"manual-reprint-0001","顾客反馈未收到小票"));
+        assertEquals(child.id(),replay.id());
+        assertNotEquals(parent,child.id());
+        assertEquals(parent,jdbc.queryForObject("SELECT parent_job_id FROM yshop_order_print_job WHERE id=?",Long.class,child.id()));
+        assertEquals("顾客反馈未收到小票",jdbc.queryForObject("SELECT reprint_reason FROM yshop_order_print_job WHERE id=?",String.class,child.id()));
+        assertEquals("REPRINT",jdbc.queryForObject("SELECT purpose FROM yshop_order_print_job WHERE id=?",String.class,child.id()));
+        assertEquals(jdbc.queryForObject("SELECT payload_snapshot FROM yshop_order_print_job WHERE id=?",String.class,parent),
+                jdbc.queryForObject("SELECT payload_snapshot FROM yshop_order_print_job WHERE id=?",String.class,child.id()));
+        assertEquals("REQUEST_CONFLICT",assertThrows(PrinterFailure.class,()->jobs.reprint(
+                new OrderPrintJobService.ReprintRequest(parent,"manual-reprint-0001","不同重打原因"))).getMessage());
+        assertEquals(1,fake.printCalls.get());
+        worker.dispatchPendingJobs();
+        assertEquals(2,fake.printCalls.get());
+        assertEquals(fake.receipts.get(0),fake.receipts.get(1));
+        assertEquals("ACCEPTED",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE id=?",String.class,child.id()));
+        assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",Integer.class,event));
+    }
+
+    @Test void staleReprintRetryReadsConcurrentCommittedTask() throws Exception {
+        long event=insertPrintEvent("reprint-stale-event-0001",1L); readyPrinter(1L,"4000000995");
+        var worker=newWorker(); worker.processPendingEvents(); worker.dispatchPendingJobs();
+        long parent=jdbc.queryForObject("SELECT id FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",Long.class,event);
+        var jobs=new OrderPrintJobService(jdbc,manager,service,worker);
+        var request=new OrderPrintJobService.ReprintRequest(parent,"concurrent-reprint-key-01","结果待核对后确认重打");
+        var snapshotEstablished=new CountDownLatch(1); var concurrentCommitted=new CountDownLatch(1);
+        var pool=Executors.newSingleThreadExecutor();
+        try {
+            var staleReplay=pool.submit(()->{
+                login(1,0);
+                var snapshot=new TransactionTemplate(manager);
+                snapshot.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
+                return snapshot.execute(status->{
+                    assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_job WHERE tenant_id=1 AND request_key=?",Integer.class,request.requestKey()));
+                    snapshotEstablished.countDown();
+                    try { assertTrue(concurrentCommitted.await(5,TimeUnit.SECONDS)); }
+                    catch(InterruptedException failure) { Thread.currentThread().interrupt(); throw new IllegalStateException(failure); }
+                    return jobs.reprint(request).id();
+                });
+            });
+            assertTrue(snapshotEstablished.await(5,TimeUnit.SECONDS));
+            login(1,0);
+            long committed=jobs.reprint(request).id();
+            concurrentCommitted.countDown();
+            assertEquals(committed,staleReplay.get(10,TimeUnit.SECONDS));
+            assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_job WHERE tenant_id=1 AND request_key=?",Integer.class,request.requestKey()));
+        } finally {
+            concurrentCommitted.countDown();
+            pool.shutdownNow();
+            cleanup();
+        }
     }
     @Test void secretsAreEncryptedWriteOnlyAndPreservedOnBlankEdit() {
         long id=device("4000000001");
@@ -543,7 +687,7 @@ class PrinterDatabaseTest {
         }
     }
     static class FakeProvider implements PrinterProvider, PrinterSession {
-        final String code; final AtomicInteger printCalls=new AtomicInteger();
+        final String code; final AtomicInteger printCalls=new AtomicInteger(); final List<Receipt> receipts=new CopyOnWriteArrayList<>();
         volatile PrinterFailure authorizeFailure,printFailure,statusFailure; volatile boolean crash;
         DeviceState deviceState=DeviceState.ONLINE;
         final boolean requiresAuthorization;
@@ -558,6 +702,6 @@ class PrinterDatabaseTest {
         public void authorize(String device,String name,Map<String,String> config) { authorizeCalls.incrementAndGet(); if(crash) throw new IllegalStateException("SIMULATED_CRASH"); if(authorizeFailure!=null) throw authorizeFailure; }
         public void deauthorize(String device) {}
         public DeviceState status(String device) { if(statusFailure!=null) throw statusFailure;return deviceState; }
-        public PrintResult print(String device,String request,Receipt receipt) { printCalls.incrementAndGet(); if(crash) throw new IllegalStateException("SIMULATED_CRASH"); if(printFailure!=null) throw printFailure; assertEquals(1,receipt.copies()); return new PrintResult("123456789"); }
+        public PrintResult print(String device,String request,Receipt receipt) { printCalls.incrementAndGet(); receipts.add(receipt); if(crash) throw new IllegalStateException("SIMULATED_CRASH"); if(printFailure!=null) throw printFailure; assertEquals(1,receipt.copies()); return new PrintResult("123456789"); }
     }
 }

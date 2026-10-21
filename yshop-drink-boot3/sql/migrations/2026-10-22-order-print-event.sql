@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS yshop_order_fulfillment_print_event (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  tenant_id BIGINT NOT NULL DEFAULT 0,
+  order_id BIGINT UNSIGNED NOT NULL,
+  shop_id BIGINT UNSIGNED NOT NULL,
+  event_key VARCHAR(128) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  event_type VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  payload_snapshot LONGTEXT NOT NULL,
+  state VARCHAR(24) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'PENDING',
+  attempts INT NOT NULL DEFAULT 0,
+  next_attempt_at DATETIME NULL,
+  last_error VARCHAR(500) NULL,
+  create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_fulfillment_print_event (tenant_id,event_key),
+  KEY idx_fulfillment_print_event_state (state,next_attempt_at,id),
+  KEY idx_fulfillment_print_event_tenant_state (tenant_id,state,create_time,id),
+  KEY idx_fulfillment_print_event_order (tenant_id,order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

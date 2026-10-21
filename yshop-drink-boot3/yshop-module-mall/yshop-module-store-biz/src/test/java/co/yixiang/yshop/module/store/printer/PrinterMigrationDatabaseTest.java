@@ -41,6 +41,8 @@ class PrinterMigrationDatabaseTest {
             assertEquals(shops,jdbc.queryForList("SELECT * FROM yshop_store_shop ORDER BY id"));
             assertEquals(grants,jdbc.queryForList("SELECT * FROM system_role_menu ORDER BY menu_id"));
             assertEquals(4,jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME LIKE 'yshop_printer%' AND ENGINE='InnoDB'",Integer.class));
+            assertEquals("InnoDB",jdbc.queryForObject("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_order_print_job'",String.class));
+            assertEquals(0L,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_job",Long.class));
             assertEquals("mall/store/printer/index",jdbc.queryForObject("SELECT component FROM system_menu WHERE id=2308",String.class));
             assertEquals(1,jdbc.queryForObject("SELECT deleted+0 FROM system_menu WHERE id=2313",Integer.class));
         } finally {jdbc.execute("DROP TABLE system_role_menu");}

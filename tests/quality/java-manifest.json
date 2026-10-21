@@ -378,7 +378,10 @@
     "rewardFailureRollsBackCollectedStateAndAudit": 1,
     "staffCannotTransitionAnotherShopOrder": 1,
     "collectionPersistsMemberPointsAndBillOnce": 1,
-    "realRewardWriteFailureRollsBackMemberOrderAndAudit": 1
+    "realRewardWriteFailureRollsBackMemberOrderAndAudit": 1,
+    "acceptedPickupPersistsFrozenPrintEvent": 1,
+    "nonMobilePhoneSnapshotRevealsAtMostLastFourDigits": 1,
+    "acceptanceEventFailureRollsBackTransitionAndAudit": 1
   },
   "co.yixiang.yshop.module.order.fulfillment.AppOrderTakeCompatibilityTest": {
     "oldPickupClientUsesGuardedLegacyTransition": 1,
@@ -997,6 +1000,13 @@
     "reconnectPreparationFailureDoesNotReportCachedAuthorizationAsSuccess": 1,
     "expiredAuthorizationIntentNeverDispatchesAfterSessionPreparation": 1,
     "missingRequestLookupIsReadOnlyAndExplicitSubmissionReusesItsId": 1,
+    "committedAcceptanceSurvivesWorkerRestart": 1,
+    "duplicateEventCreatesOneJob": 1,
+    "missingDeviceIsVisibleAndRefreshDoesNotCallProvider": 1,
+    "expiredOrderPrintLeaseBecomesUnknownWithoutResend": 1,
+    "unknownNeverAutoResends": 1,
+    "reprintCreatesAuditedChild": 1,
+    "staleReprintRetryReadsConcurrentCommittedTask": 1,
     "staleLookupDoesNotChangeTheDatabaseOrDispatchAnyPrint": 1,
     "expiredTestIntentNeverDispatchesAfterSessionPreparation": 1,
     "preparationFailureEndsThePrintWithoutCallingTheDevice": 1,

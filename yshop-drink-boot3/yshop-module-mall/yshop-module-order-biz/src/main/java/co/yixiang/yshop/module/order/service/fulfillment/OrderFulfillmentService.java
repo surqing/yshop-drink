@@ -50,6 +50,7 @@ public class OrderFulfillmentService {
     private final JdbcTemplate jdbc;
     private final StoreAccessService storeAccess;
     private final OrderFulfillmentRewardService rewards;
+    private final FulfillmentEventRepository fulfillmentEvents;
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public TransitionResult transitionStaff(Long orderId, String action, Integer expectedVersion, String requestKey) {
@@ -142,6 +143,7 @@ public class OrderFulfillmentService {
         } catch (DataIntegrityViolationException duplicate) {
             throw idempotencyConflict();
         }
+        if ("ACCEPTED".equals(next)) fulfillmentEvents.insertPickupAccepted(order.id(), nextVersion);
         if ("COLLECTED".equals(next)) rewards.award(order.toStoreOrder());
         return new TransitionResult(next, nextVersion, true);
     }

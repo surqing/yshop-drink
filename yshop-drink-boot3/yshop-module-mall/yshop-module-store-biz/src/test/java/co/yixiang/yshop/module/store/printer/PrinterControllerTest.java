@@ -2,6 +2,8 @@ package co.yixiang.yshop.module.store.printer;
 
 import co.yixiang.yshop.framework.apilog.core.util.SensitiveDataSanitizer;
 import co.yixiang.yshop.module.store.controller.admin.printer.PrinterController;
+import co.yixiang.yshop.module.store.controller.admin.printer.OrderPrintJobController;
+import co.yixiang.yshop.module.store.service.printer.OrderPrintJobService;
 import co.yixiang.yshop.module.store.service.printer.PrinterService;
 import org.junit.jupiter.api.*;
 import org.springframework.context.annotation.*;
@@ -23,6 +25,8 @@ class PrinterControllerTest {
     static class Config {
         @Bean PrinterService service() { return mock(PrinterService.class); }
         @Bean PrinterController controller(PrinterService service) { return new PrinterController(service); }
+        @Bean OrderPrintJobService orderPrintJobService() { return mock(OrderPrintJobService.class); }
+        @Bean OrderPrintJobController orderPrintJobController(OrderPrintJobService service) { return new OrderPrintJobController(service); }
         @Bean(name="ss") Permissions permissions() { return new Permissions(); }
     }
     public static class Permissions {
@@ -34,6 +38,8 @@ class PrinterControllerTest {
         try(var context=new AnnotationConfigApplicationContext(Config.class)) {
             PrinterController controller=context.getBean(PrinterController.class);
             PrinterService service=context.getBean(PrinterService.class);
+            OrderPrintJobController orderJobs=context.getBean(OrderPrintJobController.class);
+            OrderPrintJobService orderJobService=context.getBean(OrderPrintJobService.class);
             Permissions permissions=context.getBean(Permissions.class);
             SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("test",null,List.of()));
             List<Action> actions=List.of(
@@ -45,12 +51,17 @@ class PrinterControllerTest {
                 new Action("delete",()->controller.delete(1)),new Action("authorize",()->controller.authorize(1)),
                 new Action("authorize",()->controller.deauthorize(1)),new Action("authorize",()->controller.reconnect(1)),new Action("binding",()->controller.bind(new BindingRequest(1L,1L))),
                 new Action("binding",()->controller.unbind(1)),new Action("test",()->controller.test(new TestRequest(1L,"synthetic-request-01"))));
+            actions = new ArrayList<>(actions);
+            actions.addAll(List.of(new Action("query",()->orderJobs.page(1,20,null)),
+                    new Action("query",()->orderJobs.get(1L)),new Action("query",()->orderJobs.refresh(1L)),
+                    new Action("test",()->orderJobs.reprint(new OrderPrintJobService.ReprintRequest(1L,"manual-reprint-0001","synthetic reason")))));
             for(Action action:actions) {
-                permissions.allowed=Set.of(); clearInvocations(service);
-                assertThrows(AccessDeniedException.class,action.call()::run); verifyNoInteractions(service);
+                permissions.allowed=Set.of(); clearInvocations(service,orderJobService);
+                assertThrows(AccessDeniedException.class,action.call()::run); verifyNoInteractions(service,orderJobService);
                 permissions.allowed=Set.of("store:web-print:"+action.permission());
                 assertDoesNotThrow(action.call()::run);
-                assertFalse(mockingDetails(service).getInvocations().isEmpty());
+                assertTrue(!mockingDetails(service).getInvocations().isEmpty()
+                        || !mockingDetails(orderJobService).getInvocations().isEmpty());
             }
         } finally { SecurityContextHolder.clearContext(); }
     }
@@ -64,6 +75,12 @@ class PrinterControllerTest {
                 .content("{\"id\":1,\"requestId\":\"short\"}"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
+        OrderPrintJobService orderJobs=mock(OrderPrintJobService.class);
+        var orderMvc=MockMvcBuilders.standaloneSetup(new OrderPrintJobController(orderJobs)).build();
+        orderMvc.perform(post("/store/order-print-job/reprint").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"jobId\":-1,\"requestKey\":\"short\",\"reason\":\"\"}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(orderJobs);
     }
     @Test void statusGetIsCachedAndRefreshUsesExplicitPost() throws Exception {
         PrinterService service=mock(PrinterService.class);

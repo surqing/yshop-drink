@@ -49,6 +49,27 @@ export interface Job {
   errorCode?: string
   createTime: PrinterTime
 }
+export interface OrderPrintJob {
+  id: number
+  eventId: number
+  orderId: number
+  shopId: number
+  printerId?: number
+  printerName?: string
+  state: 'PENDING' | 'SENDING' | 'ACCEPTED' | 'FAILED' | 'UNKNOWN' | 'WAITING_DEVICE'
+  errorCode?: string
+  providerJobId?: string
+  attempts: number
+  parentJobId?: number
+  reprintReason?: string
+  payloadSnapshot: string
+  createTime: PrinterTime
+}
+export interface ReprintRequest {
+  jobId: number
+  requestKey: string
+  reason: string
+}
 export interface ShopOption {
   id: number
   name: string
@@ -93,3 +114,11 @@ export const jobs = (id: number, params: PageParam) =>
     url: '/store/printer/test-print/page',
     params: { id, ...params }
   })
+export const orderPrintJobs = (params: PageParam & { shopId?: number }) =>
+  request.get<{ list: OrderPrintJob[]; total: number }>({ url: '/store/order-print-job/page', params })
+export const getOrderPrintJob = (id: number) =>
+  request.get<OrderPrintJob>({ url: '/store/order-print-job/get', params: { id } })
+export const refreshOrderPrintJob = (id: number) =>
+  request.post<OrderPrintJob>({ url: '/store/order-print-job/refresh', params: { id } })
+export const reprintOrderPrintJob = (data: ReprintRequest) =>
+  request.post<OrderPrintJob>({ url: '/store/order-print-job/reprint', data })

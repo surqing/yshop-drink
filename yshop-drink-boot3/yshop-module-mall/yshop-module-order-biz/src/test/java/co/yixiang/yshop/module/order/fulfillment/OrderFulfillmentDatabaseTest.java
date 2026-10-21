@@ -15,6 +15,7 @@ import co.yixiang.yshop.module.member.dal.mysql.user.MemberUserMapper;
 import co.yixiang.yshop.module.member.dal.mysql.userbill.UserBillMapper;
 import co.yixiang.yshop.module.member.service.userbill.UserBillServiceImpl;
 import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentRewardService;
+import co.yixiang.yshop.module.order.service.fulfillment.FulfillmentEventRepository;
 import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService;
 import co.yixiang.yshop.module.store.service.storeshop.StoreAccessService;
 import co.yixiang.yshop.module.system.api.permission.PermissionApi;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -96,8 +98,10 @@ class OrderFulfillmentDatabaseTest {
         if (mysql) ensureMysqlFixtures();
         else {
             jdbc.execute("CREATE TABLE yshop_store_shop(id BIGINT PRIMARY KEY,name VARCHAR(100),mobile VARCHAR(20),images VARCHAR(100),address VARCHAR(100),address_map VARCHAR(100),start_time TIMESTAMP,end_time TIMESTAMP,lng VARCHAR(30),lat VARCHAR(30),status INT,admin_id VARCHAR(100),deleted INT DEFAULT 0)");
-            jdbc.execute("CREATE TABLE yshop_store_order(id BIGINT PRIMARY KEY,order_id VARCHAR(32) UNIQUE,uid BIGINT,shop_id BIGINT,tenant_id BIGINT DEFAULT 0,order_type VARCHAR(32),paid INT,status INT,refund_status INT,is_system_del INT DEFAULT 0,deleted BIT DEFAULT 0,gain_integral DECIMAL(10,2),pay_type VARCHAR(32) NOT NULL,mark VARCHAR(512) NOT NULL,cost DECIMAL(10,2) NOT NULL,create_time TIMESTAMP NOT NULL,update_time TIMESTAMP,fulfillment_status VARCHAR(24) DEFAULT 'LEGACY' NOT NULL,fulfillment_version INT DEFAULT 0 NOT NULL)");
+            jdbc.execute("CREATE TABLE yshop_store_order(id BIGINT PRIMARY KEY,order_id VARCHAR(32) UNIQUE,uid BIGINT,shop_id BIGINT,shop_name VARCHAR(100),user_phone VARCHAR(18),number_id INT,total_num INT,pay_price DECIMAL(10,2),tenant_id BIGINT DEFAULT 0,order_type VARCHAR(32),paid INT,status INT,refund_status INT,is_system_del INT DEFAULT 0,deleted BIT DEFAULT 0,gain_integral DECIMAL(10,2),pay_type VARCHAR(32) NOT NULL,mark VARCHAR(512) NOT NULL,cost DECIMAL(10,2) NOT NULL,create_time TIMESTAMP NOT NULL,update_time TIMESTAMP,fulfillment_status VARCHAR(24) DEFAULT 'LEGACY' NOT NULL,fulfillment_version INT DEFAULT 0 NOT NULL)");
+            jdbc.execute("CREATE TABLE yshop_store_order_cart_info(id BIGINT AUTO_INCREMENT PRIMARY KEY,oid BIGINT NOT NULL,order_id VARCHAR(32),cart_id BIGINT DEFAULT 0,product_id BIGINT DEFAULT 0,cart_info CLOB NOT NULL,title VARCHAR(100),number INT,price DECIMAL(10,2),spec VARCHAR(500))");
             jdbc.execute("CREATE TABLE yshop_order_fulfillment_log(id BIGINT AUTO_INCREMENT PRIMARY KEY,order_id BIGINT NOT NULL,request_key VARCHAR(64) NOT NULL UNIQUE,request_hash CHAR(64) NOT NULL,action VARCHAR(24) NOT NULL,from_status VARCHAR(24) NOT NULL,to_status VARCHAR(24) NOT NULL,expected_version INT,result_version INT NOT NULL,actor_id BIGINT NOT NULL,actor_type VARCHAR(16) NOT NULL,create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP)");
+            jdbc.execute("CREATE TABLE yshop_order_fulfillment_print_event(id BIGINT AUTO_INCREMENT PRIMARY KEY,tenant_id BIGINT NOT NULL,order_id BIGINT NOT NULL,shop_id BIGINT NOT NULL,event_key VARCHAR(128) NOT NULL,event_type VARCHAR(32) NOT NULL,payload_snapshot CLOB NOT NULL,state VARCHAR(24) NOT NULL DEFAULT 'PENDING',attempts INT NOT NULL DEFAULT 0,next_attempt_at TIMESTAMP NULL,last_error VARCHAR(500) NULL,create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,CONSTRAINT uk_fulfillment_print_event UNIQUE(tenant_id,event_key))");
             setupMemberTables(false);
         }
         if (mysql) setupMemberTables(true);
@@ -108,6 +112,8 @@ class OrderFulfillmentDatabaseTest {
                     if (!sql.isBlank()) jdbc.execute(sql);
                 return null;
             });
+            String printEvents = Files.readString(boot.resolve("sql/migrations/2026-10-22-order-print-event.sql"));
+            for (String sql : printEvents.split(";")) if (!sql.isBlank()) jdbc.execute(sql);
         }
         jdbc.update("DELETE FROM yshop_order_fulfillment_log");
         insertShops();
@@ -120,7 +126,7 @@ class OrderFulfillmentDatabaseTest {
 
     private void ensureMysqlFixtures() throws Exception {
         String ddl = Files.readString(boot.resolve("sql/yixiang-drink-open.sql"));
-        for (String table : new String[] {"yshop_store_shop", "yshop_store_order", "yshop_user", "yshop_user_bill"}) {
+        for (String table : new String[] {"yshop_store_shop", "yshop_store_order", "yshop_store_order_cart_info", "yshop_user", "yshop_user_bill"}) {
             if (jdbcTableMissing(table)) {
                 var matcher = java.util.regex.Pattern.compile("CREATE TABLE `" + table + "`.*?;", java.util.regex.Pattern.DOTALL).matcher(ddl);
                 assertTrue(matcher.find(), "Missing canonical DDL for " + table);
@@ -174,11 +180,15 @@ class OrderFulfillmentDatabaseTest {
     }
 
     private OrderFulfillmentService createService(OrderFulfillmentRewardService rewardService) {
-        return new OrderFulfillmentService(jdbc, new StoreAccessService(jdbc, permissions), rewardService);
+        return new OrderFulfillmentService(jdbc, new StoreAccessService(jdbc, permissions), rewardService,
+                new FulfillmentEventRepository(jdbc, new ObjectMapper()));
     }
 
     private boolean jdbcTableMissing(String table) {
-        return jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?", Integer.class, table) == 0;
+        String query = mysql
+                ? "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?"
+                : "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE LOWER(TABLE_NAME)=LOWER(?)";
+        return jdbc.queryForObject(query, Integer.class, table) == 0;
     }
 
     private void insertShops() {
@@ -195,8 +205,8 @@ class OrderFulfillmentDatabaseTest {
 
     private void insertOrder(String status, int version, int paid, int shop, long uid) {
         String orderCode = "fulfillment-" + orderId;
-        jdbc.update("INSERT INTO yshop_store_order(id,order_id,uid,shop_id,order_type,paid,status,refund_status,is_system_del,deleted,gain_integral,pay_type,mark,cost,create_time,fulfillment_status,fulfillment_version) VALUES(?,?,?,?, 'takein',?,0,0,0,0,2.50,'synthetic','Synthetic pickup',1,CURRENT_TIMESTAMP,?,?)",
-                orderId, orderCode, uid, shop == 1 ? shopOneId : shopTwoId, paid, status, version);
+        jdbc.update("INSERT INTO yshop_store_order(id,order_id,uid,shop_id,shop_name,user_phone,number_id,total_num,pay_price,order_type,paid,status,refund_status,is_system_del,deleted,gain_integral,pay_type,mark,cost,create_time,fulfillment_status,fulfillment_version) VALUES(?,?,?,?,?,'13800001234',2301,2,19.50,'takein',?,0,0,0,0,2.50,'synthetic','Synthetic pickup',1,CURRENT_TIMESTAMP,?,?)",
+                orderId, orderCode, uid, shop == 1 ? shopOneId : shopTwoId, "Synthetic fulfillment shop " + shop, paid, status, version);
     }
 
     private void login(long userId, int userType) {
@@ -333,6 +343,52 @@ class OrderFulfillmentDatabaseTest {
         assertEquals("PAYMENT_CONFIRMED", jdbc.queryForObject("SELECT action FROM yshop_order_fulfillment_log WHERE order_id=?", String.class, orderId));
     }
 
+    @Test void acceptedPickupPersistsFrozenPrintEvent() {
+        insertOrder("WAIT_ACCEPT", 1, 1, 1); login(101, 2);
+        jdbc.update("INSERT INTO yshop_store_order_cart_info(oid,order_id,cart_id,product_id,cart_info,title,number,price,spec) VALUES(?,?,0,77,'{}','Synthetic milk tea',2,9.75,'large|less ice')",
+                orderId, "fulfillment-" + orderId);
+        var first = transaction(() -> service.transitionStaff(orderId, "ACCEPT", 1, "accept-print-event-0001"));
+        assertEquals("ACCEPTED", first.status());
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_fulfillment_print_event WHERE order_id=?", Integer.class, orderId));
+        var event = jdbc.queryForMap("SELECT tenant_id,shop_id,event_type,state,payload_snapshot FROM yshop_order_fulfillment_print_event WHERE order_id=?", orderId);
+        assertEquals("PICKUP_ACCEPTED", event.get("event_type"));
+        assertEquals("PENDING", event.get("state"));
+        String snapshot = event.get("payload_snapshot").toString();
+        assertTrue(snapshot.contains("Synthetic fulfillment shop 1"));
+        assertTrue(snapshot.contains("Synthetic milk tea"));
+        assertTrue(snapshot.contains("large|less ice"));
+        assertTrue(snapshot.contains("138****1234"));
+        assertFalse(snapshot.contains("13800001234"));
+        assertTrue(snapshot.contains("19.50"));
+        assertEquals(0L, ((Number) event.get("tenant_id")).longValue());
+        assertEquals(shopOneId, ((Number) event.get("shop_id")).longValue());
+        transaction(() -> service.transitionStaff(orderId, "ACCEPT", 1, "accept-print-event-0001"));
+        jdbc.update("UPDATE yshop_store_order SET shop_name='Changed shop',user_phone='13911112222',number_id=9999,pay_price=0.01 WHERE id=?", orderId);
+        jdbc.update("UPDATE yshop_store_order_cart_info SET title='Changed product',spec='changed' WHERE oid=?", orderId);
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_fulfillment_print_event WHERE order_id=?", Integer.class, orderId));
+        String frozen = jdbc.queryForObject("SELECT payload_snapshot FROM yshop_order_fulfillment_print_event WHERE order_id=?", String.class, orderId);
+        assertEquals(snapshot, frozen);
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_fulfillment_log WHERE order_id=?", Integer.class, orderId));
+    }
+
+    @Test void nonMobilePhoneSnapshotRevealsAtMostLastFourDigits() {
+        insertOrder("WAIT_ACCEPT", 1, 1, 1); login(101, 2);
+        jdbc.update("UPDATE yshop_store_order SET user_phone='12345678' WHERE id=?", orderId);
+        transaction(() -> service.transitionStaff(orderId, "ACCEPT", 1, "accept-nonmobile-phone-0001"));
+        String snapshot=jdbc.queryForObject("SELECT payload_snapshot FROM yshop_order_fulfillment_print_event WHERE order_id=?",String.class,orderId);
+        assertTrue(snapshot.contains("\"contactPhone\":\"****5678\""));
+        assertFalse(snapshot.contains("12345678"));
+    }
+
+    @Test void acceptanceEventFailureRollsBackTransitionAndAudit() {
+        insertOrder("WAIT_ACCEPT", 1, 1, 1); login(101, 2);
+        jdbc.execute("DROP TABLE yshop_order_fulfillment_print_event");
+        assertThrows(RuntimeException.class, () -> transaction(() -> service.transitionStaff(orderId, "ACCEPT", 1, "accept-print-failure-0001")));
+        assertEquals("WAIT_ACCEPT", state());
+        assertEquals(1, jdbc.queryForObject("SELECT fulfillment_version FROM yshop_store_order WHERE id=?", Integer.class, orderId));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_fulfillment_log WHERE order_id=?", Integer.class, orderId));
+    }
+
     @Test void historicalPaidPickupRemainsLegacy() {
         insertOrder("LEGACY", 0, 1, 1);
         var historical = prePaymentOrder();
@@ -383,6 +439,8 @@ class OrderFulfillmentDatabaseTest {
         SecurityContextHolder.clearContext();
         TenantContextHolder.clear();
         if (jdbc != null && orderId != 0) {
+            if (!jdbcTableMissing("yshop_order_fulfillment_print_event")) jdbc.update("DELETE FROM yshop_order_fulfillment_print_event WHERE order_id=?", orderId);
+            if (!jdbcTableMissing("yshop_store_order_cart_info")) jdbc.update("DELETE FROM yshop_store_order_cart_info WHERE oid=?", orderId);
             jdbc.update("DELETE FROM yshop_order_fulfillment_log WHERE order_id=?", orderId);
             jdbc.update("DELETE FROM yshop_user_bill WHERE uid=? AND link_id=?", syntheticMemberId, Long.toString(orderId));
             jdbc.update("DELETE FROM yshop_store_order WHERE id=?", orderId);
