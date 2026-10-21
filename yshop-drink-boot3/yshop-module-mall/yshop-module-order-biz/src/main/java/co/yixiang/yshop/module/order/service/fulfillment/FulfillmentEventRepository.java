@@ -3,7 +3,6 @@ package co.yixiang.yshop.module.order.service.fulfillment;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,7 +20,11 @@ public class FulfillmentEventRepository {
     private final ObjectMapper objectMapper;
 
     public void insertPickupAccepted(long orderId, int fulfillmentVersion) {
-        Map<String, Object> order = jdbc.queryForMap("SELECT tenant_id,shop_id,order_id,shop_name,number_id,user_phone,total_num,pay_price,create_time FROM yshop_store_order WHERE id=?", orderId);
+        PrintOrder order = jdbc.queryForObject("SELECT tenant_id,shop_id,order_id,shop_name,number_id,user_phone,total_num,pay_price,create_time FROM yshop_store_order WHERE id=?",
+                (rs, row) -> new PrintOrder(rs.getObject("tenant_id", Long.class), rs.getLong("shop_id"), rs.getString("order_id"),
+                        rs.getString("shop_name"), rs.getObject("number_id", Integer.class), rs.getString("user_phone"),
+                        rs.getObject("total_num", Integer.class), rs.getBigDecimal("pay_price"),
+                        rs.getObject("create_time", java.time.LocalDateTime.class)), orderId);
         List<Map<String, Object>> items = jdbc.query("SELECT title,number,price,spec,cart_info FROM yshop_store_order_cart_info WHERE oid=? ORDER BY id",
                 (rs, row) -> {
                     Map<String, Object> item = new LinkedHashMap<>();
@@ -33,20 +36,19 @@ public class FulfillmentEventRepository {
                     return item;
                 }, orderId);
 
-        long tenantId = order.get("tenant_id") == null ? 0L : ((Number) order.get("tenant_id")).longValue();
-        long shopId = ((Number) order.get("shop_id")).longValue();
+        long tenantId = order.tenantId() == null ? 0L : order.tenantId();
+        long shopId = order.shopId();
         String eventKey = "pickup-accepted:" + orderId + ":" + fulfillmentVersion;
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("schemaVersion", 1);
         payload.put("orderId", orderId);
-        payload.put("orderCode", order.get("order_id"));
-        payload.put("shopName", order.get("shop_name"));
-        payload.put("pickupNumber", order.get("number_id"));
-        payload.put("contactPhone", maskPhone((String) order.get("user_phone")));
-        payload.put("totalQuantity", order.get("total_num"));
-        payload.put("paidAmount", order.get("pay_price"));
-        Timestamp createTime = (Timestamp) order.get("create_time");
-        payload.put("orderCreatedAt", createTime == null ? null : createTime.toLocalDateTime().toString());
+        payload.put("orderCode", order.orderCode());
+        payload.put("shopName", order.shopName());
+        payload.put("pickupNumber", order.pickupNumber());
+        payload.put("contactPhone", maskPhone(order.contactPhone()));
+        payload.put("totalQuantity", order.totalQuantity());
+        payload.put("paidAmount", order.paidAmount());
+        payload.put("orderCreatedAt", order.createdAt() == null ? null : order.createdAt().toString());
         payload.put("items", items);
         String snapshot;
         try {
@@ -65,4 +67,7 @@ public class FulfillmentEventRepository {
         if (digits.length() <= 4) return "****";
         return "****" + digits.substring(digits.length() - 4);
     }
+
+    private record PrintOrder(Long tenantId, long shopId, String orderCode, String shopName, Integer pickupNumber,
+            String contactPhone, Integer totalQuantity, BigDecimal paidAmount, java.time.LocalDateTime createdAt) {}
 }
