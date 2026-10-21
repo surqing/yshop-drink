@@ -99,6 +99,8 @@ CREATE TABLE `yshop_store_order` (
   `pay_time` datetime DEFAULT NULL COMMENT '支付时间',
   `pay_type` varchar(32) NOT NULL COMMENT '支付方式',
   `status` tinyint(1) NOT NULL DEFAULT '0' COMMENT '订单状态（-1 : 申请退款 -2 : 退货成功 0：待发货；1：待收货；2：已收货；3：已完成；-1：已退款）',
+  `fulfillment_status` varchar(24) NOT NULL DEFAULT 'LEGACY',
+  `fulfillment_version` int NOT NULL DEFAULT 0,
   `refund_status` tinyint unsigned NOT NULL DEFAULT '0' COMMENT '0 未退款 1 申请中 2 已退款',
   `refund_reason_wap_img` varchar(255) DEFAULT NULL COMMENT '退款图片',
   `refund_reason_wap_explain` varchar(255) DEFAULT NULL COMMENT '退款用户说明',

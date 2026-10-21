@@ -1,11 +1,35 @@
 """Environment/oracle boundaries prevent shared-data access and result fabrication."""
 import json
 from pathlib import Path
+import re
 import tempfile
 import unittest
 from unittest.mock import patch
 
 class OwnedEnvironmentTest(unittest.TestCase):
+    def test_owned_e2e_schema_includes_current_fulfillment_and_print_migrations(self):
+        from e2e.environment import MIGRATIONS
+        required = [
+            '2026-10-22-order-fulfillment.sql',
+            '2026-10-22-order-print-event.sql',
+            '2026-10-22-order-print-job.sql',
+        ]
+        self.assertEqual(required, [name for name in MIGRATIONS if name in required])
+
+    def test_member_identity_mysql_schema_applies_fulfillment_migration(self):
+        source = (Path(__file__).resolve().parent / 'member-score-mysql.py').read_text()
+        self.assertIn('2026-10-22-order-fulfillment.sql', source)
+
+    def test_payment_mysql_store_order_fixture_contains_fulfillment_columns(self):
+        fixture = (Path(__file__).resolve().parents[2]
+                   / 'yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz'
+                   / 'src/test/resources/mysql/payment-entities.sql').read_text()
+        match = re.search(r'CREATE TABLE `yshop_store_order` \((.*?)\) ENGINE=', fixture, re.S)
+        self.assertIsNotNone(match)
+        for column in ('fulfillment_status', 'fulfillment_version'):
+            with self.subTest(column=column):
+                self.assertIn(f'`{column}`', match.group(1))
+
     def test_lightweight_import_does_not_require_optional_yaml(self):
         import subprocess,sys
         result=subprocess.run([sys.executable,'-S','-c',

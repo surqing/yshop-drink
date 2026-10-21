@@ -62,7 +62,8 @@ def main():
         tables=re.findall(r'CREATE TABLE `(?:yshop_|system_)[^`]+` \(.*?\) ENGINE=.*?;',ddl,re.S)
         if not tables:raise RuntimeError('CANONICAL_DDL_MISSING')
         docker('exec','-i',name,'mysql','--defaults-extra-file=/run/secrets/client.cnf',schema,input='\n'.join(tables))
-        for migration in ['2026-10-03-wallet-ledger.sql','2026-10-11-member-identity.sql']:
+        for migration in ['2026-10-03-wallet-ledger.sql','2026-10-11-member-identity.sql',
+                          '2026-10-22-order-fulfillment.sql']:
             docker('exec','-i',name,'mysql','--defaults-extra-file=/run/secrets/client.cnf',schema,input=(checkout/'yshop-drink-boot3/sql/migrations'/migration).read_text())
         redis_password=secrets.token_hex(24)
         redis_conf=private('redis.conf','bind 0.0.0.0\nprotected-mode yes\nrequirepass '+redis_password+'\nsave ""\nappendonly no\n')
@@ -92,7 +93,8 @@ def main():
         rows=docker('exec',name,'mysql','--defaults-extra-file=/run/secrets/client.cnf','-N','-e',
                     "SELECT TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA='"+schema+"'").splitlines()
         expected_tables={re.search(r'CREATE TABLE `([^`]+)`',table).group(1) for table in tables}
-        expected_tables.update({'yshop_member_wallet_transaction','yshop_member_recharge_order'})
+        expected_tables.update({'yshop_member_wallet_transaction','yshop_member_recharge_order',
+                                'yshop_order_fulfillment_log'})
         engines=dict(row.split('\t') for row in rows)
         report['schemaInventory']={'expected':sorted(expected_tables),'observed':sorted(engines)}
         if set(engines)!=expected_tables or set(engines.values())!={'InnoDB'}:raise RuntimeError('INNODB_SCHEMA_REQUIRED')
