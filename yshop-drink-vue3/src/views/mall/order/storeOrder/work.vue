@@ -1,8 +1,10 @@
 <template>
   <ContentWrap>
    <el-tabs v-model="activeName"  @tab-click="handleClick">
-     <el-tab-pane label="全部订单" name="first"/>
-     <el-tab-pane label="普通订单" name="second"/>
+     <el-tab-pane label="待接单" name="WAIT_ACCEPT"/>
+     <el-tab-pane label="已接单" name="ACCEPTED"/>
+     <el-tab-pane label="制作中" name="PREPARING"/>
+     <el-tab-pane label="待取餐" name="READY"/>
    </el-tabs>
  </ContentWrap>
  <ContentWrap>
@@ -65,6 +67,7 @@
              <div>下单时间:{{ formatDate(order.createTime) }}</div>
              <div>取餐时间:{{ formatDate(order.getTime) }}</div>
              <div>类型:{{ order.orderType == 'takeout' ? '外卖' : '自取' }}</div>
+             <div>履约状态:{{ fulfillmentLabel(order.fulfillmentStatus) }}</div>
              <div>  
                <el-button
                  type="primary"
@@ -72,15 +75,13 @@
                  v-hasPermi="['order:store-order:update']"
                >详情</el-button>
                <el-button
-                 type="primary"
-                 @click="openForm('orderSend', order.id)"
+                 v-if="nextFulfillmentAction(order.fulfillmentStatus)"
+                 type="success"
+                 :loading="transitioningId === order.id"
+                 :disabled="transitioningId !== null"
+                 @click="transitionOrder(order)"
                  v-hasPermi="['order:store-order:update']"
-               >出单</el-button>
-               <el-button
-                 type="danger"
-                 @click="handleDelete(order.id)"
-                 v-hasPermi="['order:store-order:update']"
-               >删除</el-button>
+               >{{ nextFulfillmentLabel(order.fulfillmentStatus) }}</el-button>
              </div>
            </el-card>
         </div>
@@ -122,19 +123,51 @@ const queryParams = reactive({
  userPhone: "",
  createTime: [],
  orderStatus: 1,
+ fulfillmentStatus: 'WAIT_ACCEPT',
  payStatus: "",
  numberId: undefined
 
 })
 const queryFormRef = ref() // 搜索的表单
 const exportLoading = ref(false) // 导出的加载中
+const transitioningId = ref<number | null>(null)
 
-const activeName = ref('first')
+const activeName = ref('WAIT_ACCEPT')
 
 
+const handleClick = (tab: TabsPaneContext) => {
+ queryParams.fulfillmentStatus = String(tab.paneName)
+ queryParams.pageNo = 1
+ getList()
+}
 
-const handleClick = (tab: TabsPaneContext, event: Event) => {
- console.log(tab, event)
+const fulfillmentLabel = (status?: string) => ({
+ WAIT_ACCEPT: '待接单', ACCEPTED: '已接单', PREPARING: '制作中', READY: '待取餐', COLLECTED: '已取餐', LEGACY: '历史订单'
+}[status || ''] || '待核对')
+const nextFulfillmentAction = (status?: string) => ({
+ WAIT_ACCEPT: 'ACCEPT', ACCEPTED: 'START_PREPARING', PREPARING: 'MARK_READY', READY: 'COLLECT'
+}[status || ''])
+const nextFulfillmentLabel = (status?: string) => ({
+ WAIT_ACCEPT: '接单', ACCEPTED: '开始制作', PREPARING: '完成制作', READY: '确认取餐'
+}[status || ''] || '')
+const transitionOrder = async (order: StoreOrderApi.StoreOrderVO) => {
+ const action = nextFulfillmentAction(order.fulfillmentStatus)
+ if (!action || order.fulfillmentVersion == null || transitioningId.value !== null) return
+ transitioningId.value = order.id
+ try {
+   await StoreOrderApi.transitionStoreOrderFulfillment({
+     id: order.id,
+     action: action as StoreOrderApi.StoreOrderFulfillmentTransition['action'],
+     expectedVersion: order.fulfillmentVersion,
+     requestKey: crypto.randomUUID()
+   })
+   await getList()
+ } catch {
+   message.error('订单状态已变化，请刷新后重试')
+   await getList()
+ } finally {
+   transitioningId.value = null
+ }
 }
 
 
@@ -189,19 +222,6 @@ const openForm = (type: string, id?: number) => {
 
  
 }
-
-/** 删除按钮操作 */
-const handleDelete = async (id: number) => {
- try {
-   // 删除的二次确认
-   await message.delConfirm()
-   // 发起删除
-   await StoreOrderApi.deleteStoreOrder(id)
-   // 刷新列表
-   getList()
- } catch {}
-}
-
 
 /** 导出按钮操作 */
 const handleExport = async () => {

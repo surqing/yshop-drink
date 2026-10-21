@@ -28,7 +28,14 @@
 								<view class="order-detail-page__sort-num">{{ order.paid == 1 ? order.numberId : '--' }}</view>
 							</view>
 							<!-- steps begin -->
-							<view class="d-flex just-content-center">
+							<view v-if="order.orderType == 'takein'" class="d-flex flex-column align-items-center mt-20">
+								<view class="font-size-lg text-color-primary">履约状态：{{ fulfillmentLabel(order.fulfillmentStatus) }}</view>
+								<view v-if="!order.fulfillmentTimeline || order.fulfillmentTimeline.length == 0" class="font-size-sm text-color-assist mt-10">历史订单暂无履约状态记录</view>
+								<view v-for="(event, index) in order.fulfillmentTimeline" :key="`${event.resultVersion}-${index}`" class="font-size-sm text-color-assist mt-10">
+									{{ fulfillmentActionLabel(event.action) }} · {{ formatDateTime(event.createTime) }}
+								</view>
+							</view>
+							<view v-else class="d-flex just-content-center">
 								<view class="order-detail-steps d-flex flex-column w-80">
 									<view class="order-detail-steps__icons">
 										<view class="order-detail-steps__icon-item">
@@ -74,7 +81,7 @@
 								</view>
 							</view>
 							<!-- steps end -->
-							<view v-if="order.status==0 && order.paid > 0" class="d-flex just-content-center align-items-center font-size-base text-color-assist mb-40">
+							<view v-if="order.orderType != 'takein' && order.status==0 && order.paid > 0" class="d-flex just-content-center align-items-center font-size-base text-color-assist mb-40">
 								您前面还有 <text class="text-color-primary mr-10 ml-10">{{order.preNum}}</text> 单待制作
 							</view>
 							<!-- goods begin -->
@@ -188,7 +195,7 @@
             </view>
             <view v-if="order.deleted" class="bg-white p-3">订单已取消</view>
 			<view class="fixed-bottom flex justify-end bg-white p-2" v-if="order.paid > 0 && order.refundStatus == 0">
-				<view class="mr-1"><uv-button type="success" v-if="order.status < 2" :plain="true" size="small" text="确认收到餐" @click="receive(order)"></uv-button></view>
+				<view class="mr-1"><uv-button type="success" v-if="canReceive(order)" :loading="receiving" :plain="true" size="small" :text="order.orderType == 'takein' ? '确认取餐' : '确认收到餐'" @click="receive(order)"></uv-button></view>
 				<view><uv-button type="warning" :plain="true" size="small" text="申请退款" @click="refund(order)"></uv-button></view>
 			</view>
 		</view>
@@ -211,6 +218,7 @@ import {
   orderCancel,
 } from '@/api/order'
 const canceling = ref(false)
+const receiving = ref(false)
 const cancelUnpaid = () => {
   uni.showModal({title: '取消订单', content: '取消后会恢复库存和预占优惠券', success: async ({confirm}) => {
     if (!confirm || canceling.value) return
@@ -226,6 +234,15 @@ const order = ref({
 	statusDto:{payType:''}
 })
 const numForMading = ref(5)
+const fulfillmentLabel = (status) => ({
+	WAIT_ACCEPT: '待接单', ACCEPTED: '已接单', PREPARING: '制作中', READY: '待取餐', COLLECTED: '已取餐', LEGACY: '历史订单'
+}[status] || '待核对')
+const fulfillmentActionLabel = (action) => ({
+	PAYMENT_CONFIRMED: '支付成功，进入待接单', ACCEPT: '门店已接单', START_PREPARING: '开始制作', MARK_READY: '制作完成，等待取餐', COLLECT: '顾客已取餐'
+}[action] || action)
+const canReceive = (value) => value.orderType == 'takein'
+	? value.fulfillmentStatus == 'READY'
+	: value.status < 2
 
 onLoad((option) => {
 	detail(option.id);
@@ -260,9 +277,23 @@ const makePhoneCall = () =>{
 
 // 确认收到货
 const receive  = async(order) => {
-	let data = await orderReceive({uni:order.orderId});
-	if (data) {
-		await getOrders(true)
+	if (receiving.value || !canReceive(order)) return
+	receiving.value = true
+	try {
+		const data = await orderReceive({
+			uni: order.orderId,
+			...(order.orderType == 'takein' ? {
+				expectedVersion: order.fulfillmentVersion,
+				requestKey: `collect-${order.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+			} : {})
+		})
+		if (data) await detail(order.orderId)
+	} catch {
+		// The server may have committed before a response was lost; reload the authoritative state.
+		await detail(order.orderId)
+		uni.showToast({ title: '订单状态已刷新', icon: 'none' })
+	} finally {
+		receiving.value = false
 	}
 }
 //提交退款

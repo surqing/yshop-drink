@@ -37,6 +37,7 @@ import co.yixiang.yshop.module.order.enums.OrderLogEnum;
 import co.yixiang.yshop.module.order.enums.OrderStatusEnum;
 import co.yixiang.yshop.module.order.enums.PayTypeEnum;
 import co.yixiang.yshop.module.order.service.storeorder.dto.StatusDto;
+import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService;
 import co.yixiang.yshop.module.order.service.storeordercartinfo.StoreOrderCartInfoService;
 import co.yixiang.yshop.module.order.service.storeorderstatus.StoreOrderStatusService;
 import co.yixiang.yshop.module.pay.dal.dataobject.merchantdetails.MerchantDetailsDO;
@@ -142,6 +143,9 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
 
     @Resource
     private co.yixiang.yshop.module.order.service.ordering.OrderPlacementService orderPlacementService;
+
+    @Resource
+    private OrderFulfillmentService orderFulfillmentService;
 
     private static final String LOCK_KEY = "cart:check:stock:lock";
     private static final String STOCK_LOCK_KEY = "cart:do:stock:lock";
@@ -452,6 +456,17 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
             statusDTO.setMsg("已为您退款,感谢您的支持");
             statusDTO.setType("-2");
             statusDTO.setTitle("已退款");
+        } else if (OrderLogEnum.ORDER_TAKE_IN.getValue().equals(order.getOrderType())
+                && order.getFulfillmentStatus() != null
+                && !"LEGACY".equals(order.getFulfillmentStatus())) {
+            switch (order.getFulfillmentStatus()) {
+                case "WAIT_ACCEPT" -> { statusDTO.setTitle("待接单"); statusDTO.setMsg("门店即将确认您的订单"); statusDTO.setType("1"); statusDTO.setYClass("state-nfh"); }
+                case "ACCEPTED" -> { statusDTO.setTitle("已接单"); statusDTO.setMsg("门店已接单，准备开始制作"); statusDTO.setType("1"); statusDTO.setYClass("state-nfh"); }
+                case "PREPARING" -> { statusDTO.setTitle("制作中"); statusDTO.setMsg("门店正在制作您的订单"); statusDTO.setType("1"); statusDTO.setYClass("state-nfh"); }
+                case "READY" -> { statusDTO.setTitle("待取餐"); statusDTO.setMsg("制作完成，请到店取餐"); statusDTO.setType("2"); statusDTO.setYClass("state-ysh"); }
+                case "COLLECTED" -> { statusDTO.setTitle("已取餐"); statusDTO.setMsg("取餐完成，感谢您的支持"); statusDTO.setType("4"); statusDTO.setYClass("state-ytk"); }
+                default -> { statusDTO.setTitle("履约状态待核对"); statusDTO.setMsg("请联系门店确认订单进度"); statusDTO.setType("1"); statusDTO.setYClass("state-nfh"); }
+            }
         } else if (OrderInfoEnum.STATUS_0.getValue().equals(order.getStatus())) {
             // 拼团 todo
             if (order.getPinkId() > 0) {
@@ -514,11 +529,27 @@ public class AppStoreOrderServiceImpl extends ServiceImpl<StoreOrderMapper,Store
     @Override
     @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public void takeOrder(String orderId, Long uid) {
+        takeOrderInternal(orderId, uid, null, null, true);
+    }
+
+    @Override
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, rollbackFor = Exception.class)
+    public void takeOrder(String orderId, Long uid, Integer expectedVersion, String requestKey) {
+        takeOrderInternal(orderId, uid, expectedVersion, requestKey, false);
+    }
+
+    private void takeOrderInternal(String orderId, Long uid, Integer expectedVersion, String requestKey, boolean legacy) {
         if (uid == null) throw exception(STORE_ORDER_NOT_EXISTS);
         AppStoreOrderQueryVo candidate = this.getOrderInfo(orderId, uid);
         if (candidate == null) {
             throw exception(STORE_ORDER_NOT_EXISTS);
         }
+        if (OrderLogEnum.ORDER_TAKE_IN.getValue().equals(candidate.getOrderType())) {
+            if (legacy) orderFulfillmentService.legacyMemberTake(candidate.getId(), uid);
+            else orderFulfillmentService.transitionMember(candidate.getId(), uid, "COLLECT", expectedVersion, requestKey);
+            return;
+        }
+        if (!OrderLogEnum.ORDER_TAKE_OUT.getValue().equals(candidate.getOrderType())) throw exception(ORDER_STATUS_ERROR);
         // Re-read under the order lock; an earlier lookup is only an owned row hint.
         StoreOrderDO order = storeOrderMapper.lockReceiptOrder(candidate.getId(), uid);
         if (order == null) throw exception(STORE_ORDER_NOT_EXISTS);

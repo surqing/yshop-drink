@@ -71,6 +71,7 @@ public interface StoreOrderMapper extends BaseMapperX<StoreOrderDO> {
                 .likeIfPresent(StoreOrderDO::getRealName, reqVO.getRealName())
                 .eqIfPresent(StoreOrderDO::getUserPhone, reqVO.getUserPhone())
                 .eqIfPresent(StoreOrderDO::getOrderType,reqVO.getOrderType())
+                .eqIfPresent(StoreOrderDO::getFulfillmentStatus, reqVO.getFulfillmentStatus())
                 .betweenIfPresent(StoreOrderDO::getCreateTime, reqVO.getCreateTime());
                 //.orderByDesc(StoreOrderDO::getId);
         if( OrderTypeEnum.TYPE_WORK.getValue().equals(reqVO.getType())){

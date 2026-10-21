@@ -10,6 +10,7 @@ import co.yixiang.yshop.module.order.dal.dataobject.storeorderstatus.StoreOrderS
 import co.yixiang.yshop.module.order.dal.redis.order.AsyncCountRedisDAO;
 import co.yixiang.yshop.module.order.service.storeorder.AsyncStoreOrderService;
 import co.yixiang.yshop.module.order.service.storeorder.StoreOrderService;
+import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService;
 import co.yixiang.yshop.module.order.service.storeorder.dto.OrderTimeDataDto;
 import co.yixiang.yshop.module.order.service.storeorderstatus.StoreOrderStatusService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -40,6 +41,8 @@ public class StoreOrderController {
 
     @Resource
     private StoreOrderService storeOrderService;
+    @Resource
+    private OrderFulfillmentService orderFulfillmentService;
     @Resource
     private StoreOrderStatusService storeOrderStatusService;
     @Resource
@@ -92,6 +95,17 @@ public class StoreOrderController {
         storeAccess.requireOrder(id);
         storeOrderService.takeStoreOrder(id);
         return success(true);
+    }
+
+    @PostMapping("/fulfillment/transition")
+    @Operation(summary = "推进自提订单履约状态")
+    @PreAuthorize("@ss.hasPermission('order:store-order:update')")
+    public CommonResult<StoreOrderFulfillmentTransitionRespVO> transitionFulfillment(
+            @Valid @RequestBody StoreOrderFulfillmentTransitionReqVO request) {
+        storeAccess.requireOrder(request.getId());
+        var result = orderFulfillmentService.transitionStaff(request.getId(), request.getAction(),
+                request.getExpectedVersion(), request.getRequestKey());
+        return success(new StoreOrderFulfillmentTransitionRespVO(result.status(), result.version(), !result.applied()));
     }
 
     @GetMapping("/get")

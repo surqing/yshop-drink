@@ -51,7 +51,7 @@ def main():
         env['YSHOP_ORDERING_ACCEPTANCE_CONFIG'] = str(jdbc)
         command = maven_command(WORKSPACE) + [
                    '-pl', 'yshop-module-mall/yshop-module-order-biz', '-Pmysql-acceptance', 'test',
-                   '-Dtest=' + ('OrderingDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance,CouponDatabaseTest' if coupon else 'OrderingDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance' if catalog else 'OrderingDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=true']
+                   '-Dtest=' + ('OrderingDatabaseTest,OrderFulfillmentDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance,CouponDatabaseTest' if coupon else 'OrderingDatabaseTest,OrderFulfillmentDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance' if catalog else 'OrderingDatabaseTest,OrderFulfillmentDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=true']
         evidence = Evidence(PRIVATE / 'quality')
         selected = next(x.split('=', 1)[1].split(',') for x in command if x.startswith('-Dtest='))
         registered = manifest(REPO)
@@ -64,7 +64,7 @@ def main():
             raise RuntimeError('ORDERING_ACCEPTANCE_FAILED_PRIVATE_LOG_SAVED')
         engines = db.mysql(f"SELECT COUNT(*),SUM(ENGINE='InnoDB') FROM information_schema.TABLES WHERE TABLE_SCHEMA='{schema}';").strip()
         table_count, innodb_count = map(int, engines.split('\t'))
-        if table_count != innodb_count or table_count < (20 if catalog else 17):
+        if table_count != innodb_count or table_count < (21 if catalog else 18):
             raise RuntimeError('INNODB_REQUIRED')
         if coupon:
             required = ['yshop_coupon', 'yshop_coupon_user', 'yshop_coupon_claim', 'yshop_coupon_newcomer', 'yshop_coupon_operation']

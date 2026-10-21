@@ -19,6 +19,7 @@ import co.yixiang.yshop.module.order.controller.app.order.vo.AppStoreOrderQueryV
 import co.yixiang.yshop.module.order.dal.dataobject.storeorder.StoreOrderDO;
 import co.yixiang.yshop.module.order.dal.redis.order.AsyncOrderRedisDAO;
 import co.yixiang.yshop.module.order.service.storeorder.AppStoreOrderService;
+import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService;
 import co.yixiang.yshop.module.pay.http.HttpRequestNoticeNewParams;
 import co.yixiang.yshop.module.store.controller.app.storeshop.vo.AppStoreShopVO;
 import co.yixiang.yshop.module.store.convert.storeshop.StoreShopConvert;
@@ -67,6 +68,7 @@ public class AppOrderController {
     private final AsyncOrderRedisDAO asyncOrderRedisDAO;
     private final co.yixiang.yshop.module.order.service.payment.VerifiedPaymentCallback verifiedPaymentCallback;
     private final AppStoreShopService appStoreShopService;
+    private final OrderFulfillmentService orderFulfillmentService;
 ;
 
 
@@ -152,7 +154,9 @@ public class AppOrderController {
         if (ObjectUtil.isNull(storeOrder)) {
             throw exception(STORE_ORDER_NOT_EXISTS);
         }
-        return success(appStoreOrderService.handleOrder(storeOrder));
+        AppStoreOrderQueryVo response = appStoreOrderService.handleOrder(storeOrder);
+        response.setFulfillmentTimeline(orderFulfillmentService.history(storeOrder.getId()));
+        return success(response);
     }
 
 
@@ -164,7 +168,7 @@ public class AppOrderController {
     @Operation(summary = "订单收货")
     public CommonResult<Boolean> orderTake(@RequestBody @Validated AppDoOrderParam param) {
         Long uid = getLoginUserId();
-        appStoreOrderService.takeOrder(param.getUni(), uid);
+        appStoreOrderService.takeOrder(param.getUni(), uid, param.getExpectedVersion(), param.getRequestKey());
         return success(true);
     }
 

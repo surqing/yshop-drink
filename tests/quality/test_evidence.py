@@ -242,13 +242,15 @@ class AcceptanceLifecycleFaultInjection(unittest.TestCase):
                 if provision_failure and sql.startswith(provision_failure):raise RuntimeError('SYNTHETIC_PROVISION_FAILURE')
                 if sql.startswith('SELECT VERSION'):return '8.0.46'
                 if sql.startswith('SELECT COUNT(*) FROM information_schema.SCHEMATA') or sql.startswith('SELECT COUNT(*) FROM mysql.user'):return '1' if residual else '0'
-                if sql.startswith('SELECT COUNT(*)'):return '17\t17' if folder=='business' else '12\t12'
+                if sql.startswith('SELECT COUNT(*)'):return '18\t18' if folder=='business' else '12\t12'
                 if sql.startswith('DROP') and cleanup_failure:raise RuntimeError('SYNTHETIC_CLEANUP_FAILURE')
                 return ''
             fake=SimpleNamespace(mysql=mysql)
             spec=SimpleNamespace(loader=SimpleNamespace(exec_module=lambda value:None))
             ev=Mock();ev.id='synthetic-run';ev.arguments.return_value=[];ev.validate.return_value={'tests':80,'sourceSha':'synthetic','sourceDigest':'synthetic'}
-            expected={'synthetic.OrderingDatabaseTest':{'invariant':1}} if folder=='business' else {'synthetic.PaymentDatabaseTest':{'invariant':1}}
+            expected=({'synthetic.OrderingDatabaseTest':{'invariant':1},
+                       'synthetic.OrderFulfillmentDatabaseTest':{'invariant':1}} if folder=='business'
+                      else {'synthetic.PaymentDatabaseTest':{'invariant':1}})
             stream=io.StringIO()
             with patch.object(module,'PRIVATE',root),patch.object(module,'WORKSPACE',root),patch.object(module.importlib.util,'spec_from_file_location',return_value=spec),patch.object(module.importlib.util,'module_from_spec',return_value=fake),patch.object(module,'Evidence',return_value=ev),patch.object(module,'manifest',return_value=expected),patch.object(module,'execute',return_value=exit_code),patch.object(sys,'argv',['runner']),contextlib.redirect_stdout(stream):
                 if provision_failure:

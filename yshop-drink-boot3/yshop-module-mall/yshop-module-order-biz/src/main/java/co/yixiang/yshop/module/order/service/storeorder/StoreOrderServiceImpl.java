@@ -30,6 +30,7 @@ import co.yixiang.yshop.module.order.enums.OrderLogEnum;
 import co.yixiang.yshop.module.order.enums.PayTypeEnum;
 import co.yixiang.yshop.module.order.enums.UpdateOrderEnum;
 import co.yixiang.yshop.module.order.service.storeorderstatus.StoreOrderStatusService;
+import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService;
 import co.yixiang.yshop.module.product.service.storeproduct.AppStoreProductService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.egzosn.pay.common.bean.RefundOrder;
@@ -83,6 +84,8 @@ public class StoreOrderServiceImpl implements StoreOrderService {
     @Resource
     private AppStoreOrderService appStoreOrderService;
     @Resource
+    private OrderFulfillmentService orderFulfillmentService;
+    @Resource
     private MemberUserService userService;
     @Resource
     private WeixinNoticeProducer weixinNoticeProducer;
@@ -129,9 +132,9 @@ public class StoreOrderServiceImpl implements StoreOrderService {
                 throw exception(ORDER_STATUS_ERROR);
             }
 
-            // Pickup completion still uses the receipt transaction, which awards points once.
+            // Legacy pickup completion goes through the same READY-only transition service.
             if (OrderLogEnum.ORDER_TAKE_IN.getValue().equals(current.getOrderType())) {
-                appStoreOrderService.takeOrder(current.getOrderId(), current.getUid());
+                orderFulfillmentService.legacyStaffTake(current.getId());
                 return;
             }
 
@@ -192,6 +195,11 @@ public class StoreOrderServiceImpl implements StoreOrderService {
     @Override
     public void takeStoreOrder(Long id) {
         StoreOrderDO storeOrderDO = storeOrderMapper.selectById(id);
+        if (storeOrderDO == null) throw exception(STORE_ORDER_NOT_EXISTS);
+        if (OrderLogEnum.ORDER_TAKE_IN.getValue().equals(storeOrderDO.getOrderType())) {
+            orderFulfillmentService.legacyStaffTake(id);
+            return;
+        }
         appStoreOrderService.takeOrder(storeOrderDO.getOrderId(),storeOrderDO.getUid());
     }
 
@@ -217,6 +225,19 @@ public class StoreOrderServiceImpl implements StoreOrderService {
 
         storeOrderRespVO.setStatusStr(this.handleOrderStatus(storeOrderRespVO.getPaid()
                 ,storeOrderRespVO.getStatus(),storeOrderRespVO.getRefundStatus(),storeOrderRespVO.getIsSystemDel()));
+        if (OrderLogEnum.ORDER_TAKE_IN.getValue().equals(storeOrderDO.getOrderType())
+                && storeOrderDO.getFulfillmentStatus() != null
+                && !"LEGACY".equals(storeOrderDO.getFulfillmentStatus())) {
+            storeOrderRespVO.setStatusStr(switch (storeOrderDO.getFulfillmentStatus()) {
+                case "WAIT_ACCEPT" -> "待接单";
+                case "ACCEPTED" -> "已接单";
+                case "PREPARING" -> "制作中";
+                case "READY" -> "待取餐";
+                case "COLLECTED" -> "已取餐";
+                default -> "履约状态待核对";
+            });
+        }
+        storeOrderRespVO.setFulfillmentTimeline(orderFulfillmentService.history(id));
         return storeOrderRespVO;
     }
 

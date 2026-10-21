@@ -26,6 +26,7 @@ import co.yixiang.yshop.module.order.dal.mysql.storeorder.StoreOrderMapper;
 import co.yixiang.yshop.module.order.dal.mysql.storeorderstatus.StoreOrderStatusMapper;
 import co.yixiang.yshop.module.order.mq.consumer.PayNoticeConsumer;
 import co.yixiang.yshop.module.order.service.payment.*;
+import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService;
 import co.yixiang.yshop.module.order.service.payment.attempt.*;
 import co.yixiang.yshop.module.order.service.storeorder.*;
 import co.yixiang.yshop.module.order.service.storeordercartinfo.StoreOrderCartInfoService;
@@ -284,6 +285,11 @@ class PaymentDatabaseTest {
         }
 
         @Bean
+        OrderFulfillmentService fulfillment() {
+            return mock(OrderFulfillmentService.class);
+        }
+
+        @Bean
         PaymentEffects effects(
                 MemberUserService users,
                 UserBillService bills,
@@ -291,9 +297,10 @@ class PaymentDatabaseTest {
                 AsyncStoreOrderService statistics,
                 StoreOrderCartInfoService carts,
                 StoreOrderMapper orders,
-                WeixinNoticeProducer notifications) {
+                WeixinNoticeProducer notifications,
+                OrderFulfillmentService fulfillment) {
             return new PaymentEffects(
-                    users, bills, statuses, statistics, carts, orders, notifications);
+                    users, bills, statuses, statistics, carts, orders, notifications, fulfillment);
         }
 
         @Bean

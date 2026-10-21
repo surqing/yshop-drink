@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
+import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService.FulfillmentLogView;
 
 /**
  * <p>
@@ -202,6 +203,12 @@ public class AppStoreOrderQueryVo implements Serializable {
 
     @Schema(description = "就餐人数", required = true)
     private Integer deskPeople;
+
+    private String fulfillmentStatus;
+
+    private Integer fulfillmentVersion;
+
+    private List<FulfillmentLogView> fulfillmentTimeline;
 
 
 

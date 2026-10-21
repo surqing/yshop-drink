@@ -21,7 +21,7 @@
 							<view class="font-size-sm text-color-assist">订单编号：{{ item.orderId }}</view>
 						</view>
 						<view class="font-size-lg text-color-primary">
-							{{ item.statusDto.title }}
+							{{ item.orderType == 'takein' ? fulfillmentLabel(item.fulfillmentStatus) : item.statusDto.title }}
 						</view>
 					</view>
 				</list-cell>
@@ -48,12 +48,13 @@
 						</view>
 						<view class="d-flex align-items-center justify-content-end order-item__actions">
 							<button
-								v-if="item.paid > 0 && item.status < 2 && item.refundStatus == 0"
+								v-if="canReceive(item) && item.paid > 0 && item.refundStatus == 0"
 								class="order-item__btn"
+								:disabled="receivingOrderId == item.id"
 								plain
 								size="mini"
 								@tap.stop="receive(item)"
-							>确认收到餐</button>
+							>{{ item.orderType == 'takein' ? '确认取餐' : '确认收到餐' }}</button>
 							<button class="order-item__btn" plain size="mini" @tap="detail(item.orderId)">订单详情</button>
 						</view>
 					</view>
@@ -104,6 +105,13 @@ const tabList = ref([{
 )
 const current = ref(0)
 const type = ref(-1)
+const receivingOrderId = ref(null)
+const fulfillmentLabel = (status) => ({
+	WAIT_ACCEPT: '待接单', ACCEPTED: '已接单', PREPARING: '制作中', READY: '待取餐', COLLECTED: '已取餐', LEGACY: '历史订单'
+}[status] || '待核对')
+const canReceive = (order) => order.orderType == 'takein'
+	? order.fulfillmentStatus == 'READY'
+	: order.status < 2
 
 const goodsNum = computed(() => { //计算单个饮品添加到购物车的数量
 	return (goods) => {
@@ -157,9 +165,22 @@ const detail = (id) => {
 }
 // 确认收到货
 const receive  = async(order) => {
-	let data = await orderReceive({uni:order.orderId});
-	if (data) {
+	if (!canReceive(order) || receivingOrderId.value != null) return
+	receivingOrderId.value = order.id
+	try {
+		let data = await orderReceive({
+			uni: order.orderId,
+			...(order.orderType == 'takein' ? {
+				expectedVersion: order.fulfillmentVersion,
+				requestKey: `collect-${order.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+			} : {})
+		});
+		if (data) await getOrders(true)
+	} catch {
 		await getOrders(true)
+		uni.showToast({ title: '订单状态已刷新', icon: 'none' })
+	} finally {
+		receivingOrderId.value = null
 	}
 }
 	

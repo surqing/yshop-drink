@@ -62,6 +62,19 @@ export interface StoreOrderVO {
   shippingType: boolean
   isChannel: number
   isSystemDel: boolean
+  fulfillmentStatus?: 'LEGACY' | 'WAIT_ACCEPT' | 'ACCEPTED' | 'PREPARING' | 'READY' | 'COLLECTED'
+  fulfillmentVersion?: number
+}
+
+export interface StoreOrderFulfillmentTransition {
+  id: number
+  action: 'ACCEPT' | 'START_PREPARING' | 'MARK_READY' | 'COLLECT'
+  expectedVersion: number
+  requestKey: string
+}
+
+export const transitionStoreOrderFulfillment = async (data: StoreOrderFulfillmentTransition) => {
+  return await request.post({ url: `/order/store-order/fulfillment/transition`, data })
 }
 
 // 查询订单列表

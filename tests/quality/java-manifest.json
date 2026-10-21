@@ -366,6 +366,18 @@
     "legacyDeliveryReplaysOriginalAddressContactDespiteClientContactChanges": 1,
     "committedSubmissionCanBeConfirmedWithoutChangingLegacyContact": 1
   },
+  "co.yixiang.yshop.module.order.fulfillment.OrderFulfillmentDatabaseTest": {
+    "transitionRejectsStaleVersion": 1,
+    "unpaidOrderCannotEnterFulfillment": 1,
+    "concurrentAcceptUsesOneVersionWinner": 1,
+    "legacyTakeCannotSkipReady": 1,
+    "collectAwardsOnce": 1,
+    "paymentCompletesIntoWaitAccept": 1,
+    "historicalPaidPickupRemainsLegacy": 1,
+    "sameKeyDifferentContentIsRejected": 1,
+    "rewardFailureRollsBackCollectedStateAndAudit": 1,
+    "staffCannotTransitionAnotherShopOrder": 1
+  },
   "co.yixiang.yshop.module.order.payment.CallbackIngressEndToEndTest": {
     "validSyntheticAnonymousNotification": 1,
     "replayExactlyOnce": 1,
