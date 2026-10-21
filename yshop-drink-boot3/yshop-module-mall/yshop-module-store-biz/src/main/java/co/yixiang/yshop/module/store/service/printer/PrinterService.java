@@ -159,9 +159,10 @@ public class PrinterService {
             d=repo.require(tenantId,printerId,false);
             if(!Objects.equals(d.shopId,shopId)) throw new PrinterFailure("PRINTER_NOT_BOUND",false);
             if(!d.enabled) throw new PrinterFailure("PRINTER_DISABLED",false);
-            if(d.authorization!=Authorization.AUTHORIZED) throw new PrinterFailure("PRINTER_NOT_AUTHORIZED",false);
-            if(d.state!=DeviceState.ONLINE) throw new PrinterFailure("DEVICE_NOT_ONLINE",false);
             PrinterProvider provider=registry.require(d.providerCode);
+            if(provider.info().requiresAuthorization()&&d.authorization!=Authorization.AUTHORIZED)
+                throw new PrinterFailure("PRINTER_NOT_AUTHORIZED",false);
+            if(d.state!=DeviceState.ONLINE) throw new PrinterFailure("DEVICE_NOT_ONLINE",false);
             if(!provider.info().capabilities().textPrint()) throw new PrinterFailure("UNSUPPORTED_OPERATION",false);
         } catch(PrinterFailure failure) {
             return new OrderPrintAttempt(false,null,failure);

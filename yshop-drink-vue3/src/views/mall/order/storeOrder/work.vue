@@ -161,6 +161,7 @@ import OrderDetail from './OrderDetail.vue'
 import OrderRecord from './OrderRecord.vue'
 import type { TabsPaneContext } from 'element-plus'
 import { formatDate } from '@/utils/formatTime'
+import { nextIsoDate } from '@/utils/dateRange'
 
 const message = useMessage() // 消息弹窗
 const loading = ref(true) // 列表的加载中
@@ -207,8 +208,8 @@ const detailsRequestSequence = ref(0)
 
 const summaryQuery = () => {
  if (!summaryDates.value || summaryDates.value.length !== 2) return null
- const [from, to] = summaryDates.value
- return { from, to, ...(summaryShopId.value == null ? {} : { shopId: summaryShopId.value }) }
+ const [from, inclusiveTo] = summaryDates.value
+ return { from, to: nextIsoDate(inclusiveTo), ...(summaryShopId.value == null ? {} : { shopId: summaryShopId.value }) }
 }
 
 const loadSummary = async () => {

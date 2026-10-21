@@ -289,6 +289,11 @@
     "issuedSnapshotDoesNotFollowTemplateEditsOrDisable": 1,
     "exhaustedTemplateIsNotAdvertisedAvailableToAnotherEligibleMember": 1
   },
+  "co.yixiang.yshop.module.order.ordering.StoreOrderDetailStatusTest": {
+    "pickupFulfillmentDoesNotReplaceRefundOrDeletionStatus(int, int, String)[1]": 1,
+    "pickupFulfillmentDoesNotReplaceRefundOrDeletionStatus(int, int, String)[2]": 1,
+    "pickupFulfillmentDoesNotReplaceRefundOrDeletionStatus(int, int, String)[3]": 1
+  },
   "co.yixiang.yshop.module.order.ordering.OrderingDatabaseTest": {
     "couponOtherOwner": 1,
     "couponOtherStore": 1,
@@ -1003,9 +1008,11 @@
     "committedAcceptanceSurvivesWorkerRestart": 1,
     "duplicateEventCreatesOneJob": 1,
     "missingDeviceIsVisibleAndRefreshDoesNotCallProvider": 1,
+    "refreshingRecoveredWaitingEventReturnsItsProcessedJobState": 1,
     "expiredOrderPrintLeaseBecomesUnknownWithoutResend": 1,
     "unknownNeverAutoResends": 1,
     "reprintCreatesAuditedChild": 1,
+    "receiptAndReprintIncludeFrozenCatalogCustomizations": 1,
     "staleReprintRetryReadsConcurrentCommittedTask": 1,
     "staleLookupDoesNotChangeTheDatabaseOrDispatchAnyPrint": 1,
     "expiredTestIntentNeverDispatchesAfterSessionPreparation": 1,
@@ -1013,6 +1020,7 @@
     "deletedDevicesKeepReadableHistoryButAllDeviceOperationsRemainBlocked": 1,
     "requestLookupCannotMixDevicesEvenInsideTheSameTenant": 1,
     "devicesWithoutAuthorizationUseUsbAndLanThroughTheSameBusinessService": 1,
+    "orderPrintSupportsLocalDeviceThatDoesNotRequireAuthorization": 1,
     "twentyRequestsShareTwoConnectionsWithoutNestedTokenTransactions": 1
   },
   "co.yixiang.yshop.module.store.printer.PrinterMigrationDatabaseTest": {
@@ -1384,6 +1392,9 @@
     "testHasAnyRoles": 1,
     "testProcessUserDeleted": 1,
     "testGetEnableUserRoleListByUserIdFromCache": 1
+  },
+  "co.yixiang.yshop.module.system.service.permission.PermissionServiceRoleCacheEvictionTest": {
+    "replacingUserRolesEvictsCachedHeadquartersAuthorization": 1
   },
   "co.yixiang.yshop.module.system.service.permission.RoleServiceImplTest": {
     "testValidateUpdateRole_systemRoleCanNotBeUpdate": 1,

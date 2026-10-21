@@ -31,5 +31,15 @@
   ],
   "tests/score-order-form.test.ts": [
     "shipping form submits only the four allowlisted fields"
+  ],
+  "tests/store-order-detail-status.test.ts": [
+    "order detail keeps refund status and shows pickup fulfillment separately"
+  ],
+  "tests/store-order-summary-date-range.test.ts": [
+    "inclusive date picker end date is sent as the next-day exclusive bound for totals and details"
+  ],
+  "tests/store-order-print-jobs.test.ts": [
+    "refreshing an unknown job reads state without submitting a print",
+    "network failure retries a manual reprint with the same masked request"
   ]
 }

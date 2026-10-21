@@ -55,6 +55,7 @@
         <el-descriptions-item label="就餐人数">{{ DetailData.deskPeople ? DetailData.deskPeople : '无' }}</el-descriptions-item>
         <el-descriptions-item label="订单号">{{ DetailData.orderId }}</el-descriptions-item>
         <el-descriptions-item label="订单状态">{{ DetailData.statusStr }}</el-descriptions-item>
+        <el-descriptions-item v-if="DetailData.orderType == 'takein'" label="履约状态">{{ fulfillmentStatusText(DetailData.fulfillmentStatus) }}</el-descriptions-item>
         <el-descriptions-item label="商品总数">{{ DetailData.totalNum }}</el-descriptions-item>
         <el-descriptions-item label="商品总价">{{ DetailData.totalPrice }}</el-descriptions-item>
         <el-descriptions-item label="支付邮费">{{ DetailData.payPostage }}</el-descriptions-item>
@@ -99,6 +100,10 @@ const nickname = ref('')
 const logisticResult = ref<Record<string, { acceptTime: string; acceptStation: string }>>({})
 const product = ref<StoreOrderApi.StoreOrderProductVO[]>([])
 const addProductMark = ref(0)
+const fulfillmentStatusText = (status?: StoreOrderApi.StoreOrderVO['fulfillmentStatus']) => ({
+  WAIT_ACCEPT: '待接单', ACCEPTED: '已接单', PREPARING: '制作中', READY: '待取餐',
+  COLLECTED: '已取餐', LEGACY: '历史订单'
+}[status || ''] || '履约状态待核对')
 /** 打开弹窗 */
 const open = async (type: string, id: number) => {
   drawer.value = true

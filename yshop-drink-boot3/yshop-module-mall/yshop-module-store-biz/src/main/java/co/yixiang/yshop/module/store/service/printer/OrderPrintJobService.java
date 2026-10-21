@@ -58,7 +58,7 @@ public class OrderPrintJobService {
 
     public JobView get(long id) {
         long tenant = printerAccess.requireHeadquartersTenant();
-        if (id < 0) return waitingEvent(tenant, -id);
+        if (id < 0) return eventState(tenant, -id);
         List<JobView> rows = jdbc.query("SELECT id,event_id,order_id,shop_id,printer_id,printer_name_snapshot AS printer_name,state,last_error,provider_job_id,attempts,parent_job_id,reprint_reason,payload_snapshot,create_time FROM yshop_order_print_job WHERE tenant_id=? AND id=?",
                 this::map, tenant, id);
         if (rows.isEmpty()) throw new PrinterFailure("PRINT_JOB_NOT_FOUND", false);
@@ -67,8 +67,17 @@ public class OrderPrintJobService {
 
     public JobView refresh(long id) {
         long tenant = printerAccess.requireHeadquartersTenant();
-        if (id < 0) worker.refreshEvent(tenant, -id);
-        else worker.refreshJob(tenant, id);
+        if (id < 0) {
+            JobView event = eventState(tenant, -id);
+            if ("PENDING".equals(event.state()) || "WAITING_DEVICE".equals(event.state())) {
+                try {
+                    worker.refreshEvent(tenant, -id);
+                } catch (PrinterFailure failure) {
+                    // The scheduler may have expanded this event after the read above.
+                    if (!"PRINT_JOB_NOT_FOUND".equals(failure.getMessage())) throw failure;
+                }
+            }
+        } else worker.refreshJob(tenant, id);
         return get(id);
     }
 
@@ -113,8 +122,8 @@ public class OrderPrintJobService {
         });
     }
 
-    private JobView waitingEvent(long tenant, long eventId) {
-        List<JobView> rows = jdbc.query("SELECT -id AS id,id AS event_id,order_id,shop_id,NULL AS printer_id,NULL AS printer_name,state,last_error,NULL AS provider_job_id,attempts,NULL AS parent_job_id,NULL AS reprint_reason,payload_snapshot,create_time FROM yshop_order_fulfillment_print_event WHERE tenant_id=? AND id=? AND state IN ('PENDING','WAITING_DEVICE')",
+    private JobView eventState(long tenant, long eventId) {
+        List<JobView> rows = jdbc.query("SELECT -id AS id,id AS event_id,order_id,shop_id,NULL AS printer_id,NULL AS printer_name,state,last_error,NULL AS provider_job_id,attempts,NULL AS parent_job_id,NULL AS reprint_reason,payload_snapshot,create_time FROM yshop_order_fulfillment_print_event WHERE tenant_id=? AND id=?",
                 this::map, tenant, eventId);
         if (rows.isEmpty()) throw new PrinterFailure("PRINT_JOB_NOT_FOUND", false);
         return rows.get(0);

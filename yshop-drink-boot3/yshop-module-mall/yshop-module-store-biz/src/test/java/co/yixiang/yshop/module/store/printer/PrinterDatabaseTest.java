@@ -189,6 +189,21 @@ class PrinterDatabaseTest {
         assertEquals(sessions,fake.sessionCalls.get()); assertEquals(prints,fake.printCalls.get());
     }
 
+    @Test void refreshingRecoveredWaitingEventReturnsItsProcessedJobState() {
+        long event=insertPrintEvent("recovered-device-event-0001",1L);
+        var worker=newWorker(); worker.processPendingEvents();
+        var jobs=new OrderPrintJobService(jdbc,manager,service,worker);
+        assertEquals("WAITING_DEVICE",jobs.get(-event).state());
+        readyPrinter(1L,"4000000996");
+
+        var refreshed=jobs.refresh(-event);
+
+        assertEquals("PROCESSED",refreshed.state());
+        assertEquals(1,jobs.page(1,20,1L).getTotal());
+        assertEquals(0,fake.sessionCalls.get());
+        assertEquals(0,fake.printCalls.get());
+    }
+
     @Test void expiredOrderPrintLeaseBecomesUnknownWithoutResend() {
         long event=insertPrintEvent("expired-order-print-0001",1L); readyPrinter(1L,"4000000994");
         var worker=newWorker(); worker.processPendingEvents();
@@ -245,6 +260,34 @@ class PrinterDatabaseTest {
         assertEquals(fake.receipts.get(0),fake.receipts.get(1));
         assertEquals("ACCEPTED",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE id=?",String.class,child.id()));
         assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",Integer.class,event));
+    }
+
+    @Test void receiptAndReprintIncludeFrozenCatalogCustomizations() {
+        long event=insertPrintEvent("customized-receipt-event-0001",1L);
+        String cartDetails=JsonUtils.toJsonString(Map.of("version",1,"options",List.of(
+                Map.of("groupName","甜度","name","五分糖","quantity",1,"surcharge",new java.math.BigDecimal("0.00")),
+                Map.of("groupName","加料","name","珍珠","quantity",2,"surcharge",new java.math.BigDecimal("1.50")))));
+        String payload=JsonUtils.toJsonString(Map.of(
+                "schemaVersion",1,"orderId",123L,"orderCode","synthetic-customized-order",
+                "shopName","Synthetic frozen shop","pickupNumber",123,"contactPhone","138****1234",
+                "orderCreatedAt","2031-10-22T10:00:00","totalQuantity",2,"paidAmount",new java.math.BigDecimal("19.50"),
+                "items",List.of(Map.of("title","Synthetic tea","quantity",2,"unitPrice",new java.math.BigDecimal("9.75"),
+                        "specification","large|less ice","cartDetails",cartDetails))));
+        jdbc.update("UPDATE yshop_order_fulfillment_print_event SET payload_snapshot=? WHERE id=?",payload,event);
+        readyPrinter(1L,"4000000997");
+        var worker=newWorker(); worker.processPendingEvents(); worker.dispatchPendingJobs();
+        assertEquals(1,fake.receipts.size());
+        assertTrue(fake.receipts.get(0).lines().contains("定制：甜度 五分糖"));
+        assertTrue(fake.receipts.get(0).lines().contains("定制：加料 珍珠 x2（+￥3.00）"));
+
+        long parent=jdbc.queryForObject("SELECT id FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",Long.class,event);
+        var jobs=new OrderPrintJobService(jdbc,manager,service,worker);
+        jobs.reprint(new OrderPrintJobService.ReprintRequest(parent,"customized-reprint-0001","顾客反馈未收到小票"));
+        worker.dispatchPendingJobs();
+        assertEquals(2,fake.receipts.size());
+        assertEquals(fake.receipts.get(0),fake.receipts.get(1));
+        assertTrue(fake.receipts.get(1).lines().contains("定制：甜度 五分糖"));
+        assertTrue(fake.receipts.get(1).lines().contains("定制：加料 珍珠 x2（+￥3.00）"));
     }
 
     @Test void staleReprintRetryReadsConcurrentCommittedTask() throws Exception {
@@ -647,6 +690,24 @@ class PrinterDatabaseTest {
             localService.unbind(id); localService.delete(id);
         }
         assertEquals(2,local.printCalls.get());
+    }
+    @Test void orderPrintSupportsLocalDeviceThatDoesNotRequireAuthorization() {
+        FakeProvider local=new FakeProvider("LOCAL_ORDER_TEST",false);
+        var localProviders=new PrinterProviderRegistry(List.of(local));
+        var localService=new PrinterService(repo,localProviders,cipher,new TransactionTemplate(manager),printerAccess,false);
+        long id=localService.save(new SaveRequest(null,"本地订单设备","LOCAL_ORDER_TEST","local-order-1","","USB",true,Map.of()),false);
+        localService.bind(new BindingRequest(id,1L));
+        localService.status(id);
+        long event=insertPrintEvent("local-order-print-event-0001",1L);
+        var worker=new OrderPrintJobWorker(jdbc,manager,localService,localProviders);
+
+        worker.processPendingEvents();
+        assertEquals("PROCESSED",jdbc.queryForObject("SELECT state FROM yshop_order_fulfillment_print_event WHERE id=?",String.class,event));
+        worker.dispatchPendingJobs();
+
+        assertEquals(1,local.printCalls.get());
+        assertEquals("ACCEPTED",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE event_id=?",String.class,event));
+        assertEquals(Authorization.UNAUTHORIZED,localService.get(id).authorization());
     }
     @Test void twentyRequestsShareTwoConnectionsWithoutNestedTokenTransactions() throws Exception {
         Properties properties=new Properties(); String url,user,password;

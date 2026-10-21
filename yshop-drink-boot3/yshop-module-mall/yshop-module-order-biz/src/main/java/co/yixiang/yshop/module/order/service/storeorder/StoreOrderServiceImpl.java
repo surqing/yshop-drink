@@ -225,18 +225,6 @@ public class StoreOrderServiceImpl implements StoreOrderService {
 
         storeOrderRespVO.setStatusStr(this.handleOrderStatus(storeOrderRespVO.getPaid()
                 ,storeOrderRespVO.getStatus(),storeOrderRespVO.getRefundStatus(),storeOrderRespVO.getIsSystemDel()));
-        if (OrderLogEnum.ORDER_TAKE_IN.getValue().equals(storeOrderDO.getOrderType())
-                && storeOrderDO.getFulfillmentStatus() != null
-                && !"LEGACY".equals(storeOrderDO.getFulfillmentStatus())) {
-            storeOrderRespVO.setStatusStr(switch (storeOrderDO.getFulfillmentStatus()) {
-                case "WAIT_ACCEPT" -> "待接单";
-                case "ACCEPTED" -> "已接单";
-                case "PREPARING" -> "制作中";
-                case "READY" -> "待取餐";
-                case "COLLECTED" -> "已取餐";
-                default -> "履约状态待核对";
-            });
-        }
         storeOrderRespVO.setFulfillmentTimeline(orderFulfillmentService.history(id));
         return storeOrderRespVO;
     }

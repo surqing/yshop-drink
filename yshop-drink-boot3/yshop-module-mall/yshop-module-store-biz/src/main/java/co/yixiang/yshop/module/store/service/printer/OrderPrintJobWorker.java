@@ -87,13 +87,16 @@ public class OrderPrintJobWorker {
 
     private String notReady(DeviceTarget device) {
         if (device.deleted() || !device.enabled()) return "PRINTER_DISABLED";
-        if (!"AUTHORIZED".equals(device.authorization())) return "PRINTER_NOT_AUTHORIZED";
-        if (!"ONLINE".equals(device.deviceState())) return "DEVICE_" + device.deviceState();
+        PrinterProvider provider;
         try {
-            if (!providers.require(device.providerCode()).info().capabilities().textPrint()) return "UNSUPPORTED_OPERATION";
+            provider = providers.require(device.providerCode());
         } catch (PrinterFailure failure) {
             return failure.getMessage();
         }
+        if (provider.info().requiresAuthorization() && !"AUTHORIZED".equals(device.authorization()))
+            return "PRINTER_NOT_AUTHORIZED";
+        if (!"ONLINE".equals(device.deviceState())) return "DEVICE_" + device.deviceState();
+        if (!provider.info().capabilities().textPrint()) return "UNSUPPORTED_OPERATION";
         return null;
     }
 
@@ -203,12 +206,43 @@ public class OrderPrintJobWorker {
                 lines.add(item.path("title").asText() + " x" + item.path("quantity").asText());
                 String spec = item.path("specification").asText();
                 if (!spec.isBlank()) lines.add("规格：" + spec);
+                appendCustomizations(item, lines);
             }
             lines.add("商品数：" + payload.path("totalQuantity").asText());
             lines.add("实付：￥" + payload.path("paidAmount").asText());
             return new Receipt("自提订单小票", lines, 1);
         } catch (Exception failure) {
             throw new PrinterFailure("PRINT_SNAPSHOT_INVALID", false);
+        }
+    }
+
+    private void appendCustomizations(JsonNode item, List<String> lines) {
+        JsonNode value = item.path("cartDetails");
+        if (value.isMissingNode() || value.isNull()) return;
+        try {
+            JsonNode details = value.isTextual() ? json.readTree(value.asText()) : value;
+            JsonNode options = details.path("options");
+            if (!options.isArray()) return;
+            for (JsonNode option : options) {
+                String name = option.path("name").asText("").trim();
+                if (name.isEmpty()) continue;
+                int quantity = option.path("quantity").asInt(1);
+                if (quantity < 1 || quantity > 100) continue;
+                String group = option.path("groupName").asText("").trim();
+                StringBuilder line = new StringBuilder("定制：");
+                if (!group.isEmpty()) line.append(group).append(' ');
+                line.append(name);
+                if (quantity > 1) line.append(" x").append(quantity);
+                JsonNode surchargeNode = option.path("surcharge");
+                if (surchargeNode.isNumber()) {
+                    java.math.BigDecimal surcharge = surchargeNode.decimalValue()
+                            .multiply(java.math.BigDecimal.valueOf(quantity)).setScale(2, java.math.RoundingMode.UNNECESSARY);
+                    if (surcharge.signum() > 0) line.append("（+￥").append(surcharge.toPlainString()).append('）');
+                }
+                lines.add(line.toString());
+            }
+        } catch (Exception ignored) {
+            // Legacy cart snapshots may not contain catalog option JSON.
         }
     }
 
