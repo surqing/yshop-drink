@@ -348,13 +348,38 @@ class MiniDriver {
   }
   async collectPickupOrder(page) {
     const before = (await this.state()).requests.filter(row => row.path === '/app-api/order/take').length
-    const component = await until(() => page.$('.fixed-bottom uv-button'))
-    const button = await until(() => component.$('button'))
-    await button.tap()
-    const request = await until(async () => {
-      const rows = (await this.state()).requests.filter(row => row.path === '/app-api/order/take')
-      return rows.length > before && rows.at(-1).responseCode !== undefined ? rows.at(-1) : null
+    const component = await until(async () => {
+      for (const candidate of await page.$$('.fixed-bottom uv-button')) {
+        if ((await candidate.text()).includes('确认取餐')) return candidate
+      }
+      return null
     })
+    const button = await until(() => component.$('button.uv-button'))
+    await until(async () => !(await component.$('.uv-button-wrapper--dis')))
+    let request
+    try {
+      await button.tap()
+      request = await until(async () => {
+        const rows = (await this.state()).requests.filter(row => row.path === '/app-api/order/take')
+        return rows.length > before && rows.at(-1).responseCode !== undefined ? rows.at(-1) : null
+      })
+    } catch (error) {
+      const read = async fn => { try { return await fn() } catch (failure) { return `UNAVAILABLE:${failure.message}` } }
+      const state = await this.state()
+      const probe = {
+        currentPage: (await this.mini.currentPage())?.path,
+        pageId: page.id,
+        footer: await read(async () => (await page.$('.fixed-bottom'))?.outerWxml()),
+        pickupButton: await read(() => component.outerWxml()),
+        nativeButton: await read(() => button.outerWxml()),
+        nativeButtonSize: await read(() => button.size()),
+        nativeButtonOffset: await read(() => button.offset()),
+        requestCountBefore: before,
+        requestCountAfter: state.requests.filter(row => row.path === '/app-api/order/take').length,
+      }
+      fs.writeFileSync(path.join(this.output, 'pickup-collect-private.json'), JSON.stringify(probe, null, 2), { mode: 0o600 })
+      throw error
+    }
     await until(async () => (await this.pickupStatus(page)).includes('已取餐'))
     return request
   }

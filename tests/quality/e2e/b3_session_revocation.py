@@ -109,7 +109,7 @@ def side_effect_snapshot(environment):
 def denied(response):
     envelope = response.get('envelope')
     return response.get('httpStatus', 0) in (401, 403) or (
-        isinstance(envelope, dict) and envelope.get('code') not in (0, None)
+        isinstance(envelope, dict) and envelope.get('code') == 403
     )
 
 

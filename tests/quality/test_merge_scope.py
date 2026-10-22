@@ -2,6 +2,7 @@
 import copy
 import time
 import unittest
+from unittest.mock import patch
 from merge_scope import compare_defects, LEGACY_IDS, SECURITY_IDS
 from defect_contract import ASSERTION_FINGERPRINTS, OPEN_FAILURES, load_contract, validate_contract, assertion_fingerprints, stable_ast_dump, HISTORICAL_SOURCE
 from pathlib import Path
@@ -168,15 +169,22 @@ class MergeScopeTest(unittest.TestCase):
             bad=Path(folder)/'bad.py';bad.write_text(path.read_text().replace("o['points']=='800.00'","o['points']=='900.00'"))
             with self.assertRaises(ValueError):assertion_fingerprints(bad)
 
-    def test_ast_fingerprint_ignores_empty_python312_type_params(self):
+    def test_ast_fingerprint_normalizes_empty_python312_type_params(self):
         import ast
         node=ast.parse('def sample():\n return 1\n').body[0]
-        original=stable_ast_dump(node)
-        node.type_params=[]
-        self.assertEqual(original,stable_ast_dump(node))
-        if 'type_params' in node._fields:
-            node.type_params=[ast.Name(id='T',ctx=ast.Load())]
-            self.assertNotEqual(original,stable_ast_dump(node))
+        # Simulate the Python 3.12 dump schema while this suite runs on the
+        # pinned Python 3.11 CI runtime. Python 3.11 ignores dynamic AST attrs.
+        with patch('defect_contract.ast.dump', return_value="FunctionDef(name='sample', type_params=[])"):
+            self.assertEqual("FunctionDef(name='sample')", stable_ast_dump(node))
+        with patch('defect_contract.ast.dump', return_value="FunctionDef(name='sample', type_params=[Name(id='T')])"):
+            self.assertEqual("FunctionDef(name='sample', type_params=[Name(id='T')])", stable_ast_dump(node))
+
+    def test_b3_denial_classifier_rejects_generic_application_failures(self):
+        from e2e.b3_session_revocation import denied
+        self.assertTrue(denied({'httpStatus':403,'envelope':{'code':0}}))
+        self.assertTrue(denied({'httpStatus':200,'envelope':{'code':403}}))
+        self.assertFalse(denied({'httpStatus':200,'envelope':{'code':500}}))
+        self.assertFalse(denied({'httpStatus':200,'envelope':{'code':400}}))
 
     def test_baseline_and_candidate_business_assertions_stay_identical(self):
         from legacy_baseline import assertion_equivalence
