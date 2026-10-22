@@ -963,7 +963,7 @@ async function orderPrintJobs(f: Flow) {
     await f.check('offline-device-waits-on-real-page', async () => {
       f.bridge('printer-state', { state: 'OFFLINE' })
       printerId = await f.api('POST', printerPrefix + '/create', {
-        name: f.title('order-printer'), providerCode: 'OWNED_TEST', deviceCode: f.title('device'),
+        name: f.title('order-printer'), providerCode: 'OWNED_TEST', deviceCode: f.title('order-printer-device'),
         model: 'Synthetic', connectionType: 'LAN', enabled: true, configuration: {}
       })
       await f.api('PUT', printerPrefix + '/binding', { id: printerId, shopId: 101 })
