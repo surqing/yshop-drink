@@ -38,6 +38,8 @@ PRINTER_FIXTURE_COUNTS = {
     'yshop_order_fulfillment_print_event': 0,
     'yshop_printer_provider_token': 0,
 }
+HQ_USER_ID = 910104
+HQ_ROLE_ID = 910104
 ALLOWED_ROUTES = {
     ('POST', '/admin-api/system/auth/login'),
     ('GET', '/admin-api/system/auth/get-permission-info'),
@@ -52,11 +54,11 @@ def fixture(environment, config, support):
     support.configure(environment, config)
     config['info']['e2eTestSupport'] = 'b3-tenant-context'
     environment.sql(
-        "INSERT INTO system_role(id,name,code,sort,status,type) "
-        "VALUES(104,'QA headquarters revocation','business_headquarters',4,0,2);"
-        "INSERT INTO system_users(id,username,password,nickname,status,tenant_id) "
-        "SELECT 104,'qualityhq',password,'synthetic-hq',0,901 FROM system_users WHERE id=101;"
-        "INSERT INTO system_user_role(user_id,role_id) VALUES(104,104);"
+        f"INSERT INTO system_role(id,name,code,sort,status,type) "
+        f"VALUES({HQ_ROLE_ID},'QA headquarters revocation','business_headquarters',4,0,2);"
+        f"INSERT INTO system_users(id,username,password,nickname,status,tenant_id) "
+        f"SELECT {HQ_USER_ID},'qualityhq',password,'synthetic-hq',0,901 FROM system_users WHERE id=101;"
+        f"INSERT INTO system_user_role(user_id,role_id) VALUES({HQ_USER_ID},{HQ_ROLE_ID});"
         "INSERT INTO yshop_printer(id,tenant_id,name,provider_code,device_code,model,connection_type,enabled,creator,updater) "
         "VALUES(9001,0,'QA tenant zero printer','YILIAN_YUN','qa-tenant-zero-device','synthetic','YILIAN_YUN',1,'quality','quality');"
     )
@@ -86,22 +88,22 @@ def side_effect_snapshot(environment):
     return {
         'printerTables': printer_snapshot(environment),
         'userRoleIds': environment.sql(
-            'SELECT COALESCE(GROUP_CONCAT(role_id ORDER BY role_id),\'\') FROM system_user_role WHERE user_id=104 AND deleted=0;'
+            f'SELECT COALESCE(GROUP_CONCAT(role_id ORDER BY role_id),\'\') FROM system_user_role WHERE user_id={HQ_USER_ID} AND deleted=0;'
         ).strip(),
         'deletedUserRoleIds': environment.sql(
-            'SELECT COALESCE(GROUP_CONCAT(role_id ORDER BY role_id),\'\') FROM system_user_role WHERE user_id=104 AND deleted=1;'
+            f'SELECT COALESCE(GROUP_CONCAT(role_id ORDER BY role_id),\'\') FROM system_user_role WHERE user_id={HQ_USER_ID} AND deleted=1;'
         ).strip(),
         'headquartersMenuIds': environment.sql(
-            'SELECT COALESCE(GROUP_CONCAT(menu_id ORDER BY menu_id),\'\') FROM system_role_menu WHERE role_id=104 AND deleted=0;'
+            f'SELECT COALESCE(GROUP_CONCAT(menu_id ORDER BY menu_id),\'\') FROM system_role_menu WHERE role_id={HQ_ROLE_ID} AND deleted=0;'
         ).strip(),
         'deletedHeadquartersMenuIds': environment.sql(
-            'SELECT COALESCE(GROUP_CONCAT(menu_id ORDER BY menu_id),\'\') FROM system_role_menu WHERE role_id=104 AND deleted=1;'
+            f'SELECT COALESCE(GROUP_CONCAT(menu_id ORDER BY menu_id),\'\') FROM system_role_menu WHERE role_id={HQ_ROLE_ID} AND deleted=1;'
         ).strip(),
         'accessTokens': int(environment.sql(
-            'SELECT COUNT(*) FROM system_oauth2_access_token WHERE user_id=104;'
+            f'SELECT COUNT(*) FROM system_oauth2_access_token WHERE user_id={HQ_USER_ID};'
         ).strip()),
         'refreshTokens': int(environment.sql(
-            'SELECT COUNT(*) FROM system_oauth2_refresh_token WHERE user_id=104;'
+            f'SELECT COUNT(*) FROM system_oauth2_refresh_token WHERE user_id={HQ_USER_ID};'
         ).strip()),
     }
 
@@ -249,10 +251,10 @@ def run(repo, output):
                'fakePrinterCounters': provider_counts(baseline_vendor)})
 
         assigned_menu = data(api('POST', '/admin-api/system/permission/assign-role-menu',
-                                 {'roleId': 104, 'menuIds': [2309]}, admin))
+                                 {'roleId': HQ_ROLE_ID, 'menuIds': [2309]}, admin))
         check('real permission route grants the missing printer query menu',
               assigned_menu is True and environment.sql(
-                  'SELECT COUNT(*) FROM system_role_menu WHERE role_id=104 AND menu_id=2309;').strip() == '1')
+                  f'SELECT COUNT(*) FROM system_role_menu WHERE role_id={HQ_ROLE_ID} AND menu_id=2309;').strip() == '1')
 
         page = api('GET', '/admin-api/store/printer/page?pageNo=1&pageSize=10', token=hq_token)
         page_data = page.get('envelope', {}).get('data', {}) if isinstance(page.get('envelope'), dict) else {}
@@ -261,7 +263,7 @@ def run(repo, output):
               {'pageTotal': page_data.get('total'), 'pageListCount': len(page_data.get('list', []))
                if isinstance(page_data.get('list'), list) else None})
         cache_patterns = {
-            'userRoles': '*user_role_ids*104*',
+            'userRoles': f'*user_role_ids*{HQ_USER_ID}*',
             'printerPermissionMenus': '*permission_menu_ids*store:web-print:query*',
             'printerMenuRoles': '*menu_role_ids*2309*',
         }
@@ -295,30 +297,30 @@ def run(repo, output):
                'denial': denial_evidence(cross_tenant_printer),
                'fakePrinterCounters': provider_counts(resource_vendor_after)})
 
-        roles_before = environment.sql('SELECT role_id FROM system_user_role WHERE user_id=104 ORDER BY role_id;').strip()
-        check('headquarters role is present before route revocation', roles_before == '104')
+        roles_before = environment.sql(f'SELECT role_id FROM system_user_role WHERE user_id={HQ_USER_ID} ORDER BY role_id;').strip()
+        check('headquarters role is present before route revocation', roles_before == str(HQ_ROLE_ID))
         revoke_vendor_before = invoke(environment.context() | support.context(), 'printer-counters', {})
         revoked = data(api('POST', '/admin-api/system/permission/assign-user-role',
-                           {'userId': 104, 'roleIds': []}, admin))
+                           {'userId': HQ_USER_ID, 'roleIds': []}, admin))
         check('real permission route revokes the headquarters role',
               revoked is True and environment.sql(
-                  'SELECT COUNT(*) FROM system_user_role WHERE user_id=104 AND role_id=104 AND deleted=0;').strip() == '0',
+                  f'SELECT COUNT(*) FROM system_user_role WHERE user_id={HQ_USER_ID} AND role_id={HQ_ROLE_ID} AND deleted=0;').strip() == '0',
               {'response': revoked,
                'activeRoleIds': environment.sql(
-                   'SELECT COALESCE(GROUP_CONCAT(role_id ORDER BY role_id),\'\') FROM system_user_role WHERE user_id=104 AND deleted=0;'
+                   f'SELECT COALESCE(GROUP_CONCAT(role_id ORDER BY role_id),\'\') FROM system_user_role WHERE user_id={HQ_USER_ID} AND deleted=0;'
                ).strip(),
                'deletedRoleIds': environment.sql(
-                   'SELECT COALESCE(GROUP_CONCAT(role_id ORDER BY role_id),\'\') FROM system_user_role WHERE user_id=104 AND deleted=1;'
+                   f'SELECT COALESCE(GROUP_CONCAT(role_id ORDER BY role_id),\'\') FROM system_user_role WHERE user_id={HQ_USER_ID} AND deleted=1;'
                ).strip()})
 
-        remaining_user_role_keys = redis_keys(environment, '*user_role_ids*104*')
+        remaining_user_role_keys = redis_keys(environment, f'*user_role_ids*{HQ_USER_ID}*')
         report['redisCacheEvidence']['userRoleKeysAfterRevocation'] = len(remaining_user_role_keys)
         check('role revocation evicts the warmed user role Redis cache', not remaining_user_role_keys,
               report['redisCacheEvidence']['userRoleKeysAfterRevocation'])
 
         permission_info = data(api('GET', '/admin-api/system/auth/get-permission-info', token=hq_token))
         check('the same old access token remains a valid session after role revocation',
-              permission_info.get('user', {}).get('id') == 104 and
+              permission_info.get('user', {}).get('id') == HQ_USER_ID and
               'business_headquarters' not in permission_info.get('roles', []))
 
         revoke_before = side_effect_snapshot(environment)
