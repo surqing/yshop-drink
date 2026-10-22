@@ -185,6 +185,9 @@ class MergeScopeTest(unittest.TestCase):
         self.assertTrue(denied({'httpStatus':200,'envelope':{'code':403}}))
         self.assertFalse(denied({'httpStatus':200,'envelope':{'code':500}}))
         self.assertFalse(denied({'httpStatus':200,'envelope':{'code':400}}))
+        self.assertFalse(denied({'httpStatus':200,'envelope':{'code':1008016100}}))
+        self.assertTrue(denied({'httpStatus':200,'envelope':{'code':1008016100}},
+                               expected_application_codes=(1008016100,)))
 
     def test_baseline_and_candidate_business_assertions_stay_identical(self):
         from legacy_baseline import assertion_equivalence

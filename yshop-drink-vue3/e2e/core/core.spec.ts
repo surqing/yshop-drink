@@ -929,6 +929,13 @@ async function orderPrintJobs(f: Flow) {
   try {
     await f.check('unbound-order-waits-on-real-page', async () => {
       const countsBefore = printCounters(f)
+      // The preceding printer-unknown scenario creates this run's owned printer
+      // and leaves it bound. Restore this scenario's explicit unbound precondition.
+      const priorDevices = await f.api('GET', `${printerPrefix}/page?pageNo=1&pageSize=100&shopId=101&name=${encodeURIComponent(f.title('printer'))}`)
+      for (const device of priorDevices.list.filter((value: any) => value.name === f.title('printer')))
+        await f.api('DELETE', `${printerPrefix}/binding?id=${device.id}`)
+      const remainingDevices = await f.api('GET', `${printerPrefix}/page?pageNo=1&pageSize=100&shopId=101&name=${encodeURIComponent(f.title('printer'))}`)
+      expect(remainingDevices.list.filter((value: any) => value.name === f.title('printer'))).toHaveLength(0)
       product = await f.createProduct(101, 'print-jobs', 19)
       memberToken = await f.member()
       order = await f.createOrder(product, memberToken)

@@ -108,10 +108,10 @@ def side_effect_snapshot(environment):
     }
 
 
-def denied(response):
+def denied(response, expected_application_codes=(403,)):
     envelope = response.get('envelope')
     return response.get('httpStatus', 0) in (401, 403) or (
-        isinstance(envelope, dict) and envelope.get('code') == 403
+        isinstance(envelope, dict) and envelope.get('code') in expected_application_codes
     )
 
 
@@ -126,6 +126,7 @@ def denial_evidence(response):
     return {
         'httpStatus': response.get('httpStatus'),
         'applicationCode': envelope.get('code') if isinstance(envelope, dict) else None,
+        'applicationMessage': envelope.get('msg') if isinstance(envelope, dict) else None,
     }
 
 
@@ -291,7 +292,9 @@ def run(repo, output):
         resource_after = side_effect_snapshot(environment)
         resource_vendor_after = invoke(environment.context() | support.context(), 'printer-counters', {})
         check('tenant-901 token cannot read tenant-0 printer resource with no side effects',
-              denied(cross_tenant_printer) and resource_before == resource_after and
+              denied(cross_tenant_printer, expected_application_codes=(1008016100,)) and
+              denial_evidence(cross_tenant_printer).get('applicationMessage') == '打印机不存在' and
+              resource_before == resource_after and
               provider_counts(resource_vendor_before) == provider_counts(resource_vendor_after),
               {'before': resource_before, 'after': resource_after,
                'denial': denial_evidence(cross_tenant_printer),
