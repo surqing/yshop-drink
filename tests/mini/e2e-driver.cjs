@@ -348,14 +348,18 @@ class MiniDriver {
   }
   async collectPickupOrder(page) {
     const before = (await this.state()).requests.filter(row => row.path === '/app-api/order/take').length
-    let stage = 'locating-footer-buttons'
+    let stage = 'reading-footer'
+    let footer = null
     let button = null
     let request
     try {
-      button = await until(() => page.$('.fixed-bottom .uv-button'))
+      footer = await until(() => page.$('.fixed-bottom'))
+      const footerWxml = await footer.outerWxml()
+      if (footerWxml.includes('uv-button-wrapper--dis')) throw Error('PICKUP_BUTTON_DISABLED')
+      stage = 'footer-enabled'
+      button = await until(() => page.getElementByXpath('//text[text()="确认取餐"]'))
       if (!(await button.outerWxml()).includes('确认取餐')) throw Error('PICKUP_BUTTON_SELECTOR_MISMATCH')
-      stage = 'pickup-native-button-verified'
-      if (await button.property('disabled')) throw Error('PICKUP_BUTTON_DISABLED')
+      stage = 'pickup-label-verified'
       stage = 'pickup-button-enabled'
       await button.tap()
       stage = 'pickup-button-tapped'
@@ -372,7 +376,7 @@ class MiniDriver {
         currentPage: (await this.mini.currentPage())?.path,
         pageId: page.id,
         footer: await read(async () => (await page.$('.fixed-bottom'))?.outerWxml()),
-        pickupButton: await read(async () => (await page.$('.fixed-bottom'))?.outerWxml()),
+        pickupButton: await read(() => footer?.outerWxml()),
         pickupButtonNative: await read(() => button?.outerWxml()),
         pickupButtonSize: await read(() => button?.size()),
         pickupButtonOffset: await read(() => button?.offset()),
