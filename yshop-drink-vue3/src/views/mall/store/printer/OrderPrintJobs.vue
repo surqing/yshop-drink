@@ -49,7 +49,7 @@
       <el-table-column label="创建时间" width="180">
         <template #default="{ row }">{{ displayTime(row.createTime) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="150" fixed="right">
+      <el-table-column label="操作" width="245" fixed="right">
         <template #default="{ row }">
           <el-button
             v-hasPermi="['store:web-print:query']"
@@ -67,6 +67,15 @@
             :disabled="busyId === row.id"
             @click="openReprint(row)"
             >人工重打</el-button
+          >
+          <el-button
+            v-if="row.id > 0 && row.state === 'UNKNOWN'"
+            v-hasPermi="['store:web-print:test']"
+            link
+            type="danger"
+            :disabled="busyId === row.id"
+            @click="openRecovery(row)"
+            >核验后释放占用</el-button
           >
         </template>
       </el-table-column>
@@ -107,6 +116,49 @@
       </el-button>
     </template>
   </Dialog>
+
+  <Dialog v-model="recoveryVisible" title="核验后释放打印占用" width="560px">
+    <el-alert
+      title="此操作只用于进程中断后的 UNKNOWN 任务。必须先确认原发送进程已停止，并通过设备或打印服务核实没有出纸。系统会记录操作人和原因，不会自动重发。"
+      type="error"
+      :closable="false"
+      show-icon
+      class="mb-16px"
+    />
+    <el-form label-width="120px" @submit.prevent="submitRecovery">
+      <el-form-item label="处理说明">
+        <el-input
+          v-model="recoveryReason"
+          type="textarea"
+          :rows="3"
+          maxlength="255"
+          show-word-limit
+          :disabled="!!recoveryRequestKey"
+          placeholder="记录如何确认旧进程停止且设备没有出纸"
+        />
+      </el-form-item>
+      <el-form-item label="发送进程">
+        <el-checkbox v-model="senderStopped" :disabled="!!recoveryRequestKey">
+          我已确认原发送进程已停止
+        </el-checkbox>
+      </el-form-item>
+      <el-form-item label="打印结果">
+        <el-checkbox v-model="notPrintedConfirmed" :disabled="!!recoveryRequestKey">
+          我已核实打印服务或设备确认未出纸
+        </el-checkbox>
+      </el-form-item>
+    </el-form>
+    <el-alert v-if="recoveryError" title="释放未完成。重试会沿用同一请求编号；请勿在未核实结果时释放占用。" type="warning" :closable="false" />
+    <template #footer>
+      <el-button @click="recoveryVisible = false">关闭</el-button>
+      <el-button
+        type="danger"
+        :loading="recovering"
+        :disabled="!recoveryReason.trim() || !senderStopped || !notPrintedConfirmed"
+        @click="submitRecovery"
+      >确认核验并释放占用</el-button>
+    </template>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -144,7 +196,8 @@ const errorLabels: Record<string, string> = {
   PROVIDER_TIMEOUT: '服务响应超时，请检查设备',
   PRINTER_NOT_BOUND: '原打印机已解绑',
   DEVICE_NOT_ONLINE: '打印机当前未在线',
-  UNSUPPORTED_OPERATION: '设备不支持订单打印'
+  UNSUPPORTED_OPERATION: '设备不支持订单打印',
+  OPERATOR_CONFIRMED_NOT_PRINTED: '已核实未出纸，等待人工重打'
 }
 const errorText = (code: string) => errorLabels[code] || '操作未完成，请检查设备'
 const displayTime = (value: Api.PrinterTime) => formatDate(new Date(value))
@@ -196,6 +249,7 @@ async function refresh(row: Api.OrderPrintJob) {
 }
 
 function canReprint(row: Api.OrderPrintJob) {
+  if (row.state === 'UNKNOWN') return false
   return ['ACCEPTED', 'FAILED', 'UNKNOWN'].includes(row.state)
 }
 
@@ -258,6 +312,75 @@ async function submitReprint() {
     reprintError.value = true
   } finally {
     reprinting.value = false
+  }
+}
+
+const recoveryVisible = ref(false)
+const recoveryTarget = ref<Api.OrderPrintJob>()
+const recoveryReason = ref('')
+const senderStopped = ref(false)
+const notPrintedConfirmed = ref(false)
+const recoveryRequestKey = ref('')
+const recovering = ref(false)
+const recoveryError = ref(false)
+const recoveryStorageKey = ref('')
+
+function openRecovery(row: Api.OrderPrintJob) {
+  recoveryTarget.value = row
+  recoveryStorageKey.value = `order-print-recovery:${row.id}`
+  const saved = sessionStorage.getItem(recoveryStorageKey.value)
+  if (saved) {
+    try {
+      const pending = JSON.parse(saved) as { requestKey: string; reason: string }
+      recoveryRequestKey.value = pending.requestKey
+      recoveryReason.value = pending.reason
+      senderStopped.value = true
+      notPrintedConfirmed.value = true
+      recoveryError.value = true
+    } catch {
+      sessionStorage.removeItem(recoveryStorageKey.value)
+      recoveryRequestKey.value = ''
+      recoveryReason.value = ''
+      senderStopped.value = false
+      notPrintedConfirmed.value = false
+      recoveryError.value = false
+    }
+  } else {
+    recoveryRequestKey.value = ''
+    recoveryReason.value = ''
+    senderStopped.value = false
+    notPrintedConfirmed.value = false
+    recoveryError.value = false
+  }
+  recoveryVisible.value = true
+}
+
+async function submitRecovery() {
+  const target = recoveryTarget.value
+  const reason = maskPhones(recoveryReason.value.trim())
+  if (!target || !reason || !senderStopped.value || !notPrintedConfirmed.value || recovering.value) return
+  if (!recoveryRequestKey.value) {
+    recoveryRequestKey.value = `resolve_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`
+    sessionStorage.setItem(recoveryStorageKey.value, JSON.stringify({ requestKey: recoveryRequestKey.value, reason }))
+  }
+  recovering.value = true
+  recoveryError.value = false
+  try {
+    await Api.resolveUnknownOrderPrintJob({
+      jobId: target.id,
+      requestKey: recoveryRequestKey.value,
+      reason,
+      senderStopped: true,
+      notPrintedConfirmed: true
+    })
+    sessionStorage.removeItem(recoveryStorageKey.value)
+    message.success('已记录核验并释放设备占用；如需补打，请使用人工重打')
+    recoveryVisible.value = false
+    await load()
+  } catch {
+    recoveryError.value = true
+  } finally {
+    recovering.value = false
   }
 }
 

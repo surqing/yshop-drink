@@ -141,7 +141,7 @@ public class OrderPrintJobWorker {
             Claim claim = claim();
             if (claim == null) break;
             PrinterService.OrderPrintAttempt attempt = printers.sendOrderPrint(claim.tenantId(), claim.printerId(),
-                    claim.shopId(), claim.requestKey(), receipt(claim.payloadSnapshot()));
+                    claim.shopId(), claim.id(), claim.leaseToken(), claim.requestKey(), receipt(claim.payloadSnapshot()));
             finish(claim, attempt);
             if (attempt.submitted()) sent++;
         }
@@ -180,6 +180,11 @@ public class OrderPrintJobWorker {
             String state = failure != null && failure.uncertain() ? "UNKNOWN" : "FAILED";
             jdbc.update("UPDATE yshop_order_print_job SET state=?,last_error=?,lease_expires_at=NULL,update_time=CURRENT_TIMESTAMP "
                     + "WHERE id=? AND lease_token=? AND state IN ('SENDING','UNKNOWN')", state, error, claim.id(), claim.leaseToken());
+            return;
+        }
+        if (failure != null && ("PRINTER_NOT_BOUND".equals(error) || "WORKER_LEASE_EXPIRED".equals(error))) {
+            jdbc.update("UPDATE yshop_order_print_job SET state='FAILED',last_error=?,lease_expires_at=NULL,next_attempt_at=NULL,"
+                    + "update_time=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND state='SENDING'", error, claim.id(), claim.leaseToken());
             return;
         }
         if (claim.attempts() < MAX_ATTEMPTS) {

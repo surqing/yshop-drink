@@ -71,6 +71,7 @@ public class PrinterService {
     private void idle(Device d) {
         if(d.authorizationOperation!=null&&d.authorizationOperationAt!=null&&d.authorizationOperationAt.isAfter(LocalDateTime.now().minusMinutes(1)))
             throw new PrinterFailure("PRINTER_BUSY",false);
+        if(repo.dispatchClaimed(d)) throw new PrinterFailure("PRINTER_BUSY",false);
     }
     public List<ProviderInfo> providers() { tenant(); return registry.list(); }
     public List<ShopOption> shops() { tenant(); return repo.shops(); }
@@ -152,7 +153,8 @@ public class PrinterService {
         catch(PrinterFailure ex) { return new Prepared(null,ex); }
     }
     /** Internal order-worker send path. The caller owns the durable job lease and has no user context. */
-    OrderPrintAttempt sendOrderPrint(long tenantId,long printerId,long shopId,String requestId,Receipt receipt) {
+    OrderPrintAttempt sendOrderPrint(long tenantId,long printerId,long shopId,long jobId,String leaseToken,
+            String requestId,Receipt receipt) {
         PrinterProvider.assertOutsideTransaction();
         Device d;
         try {
@@ -170,10 +172,32 @@ public class PrinterService {
         Prepared prepared=prepare(d.providerCode);
         if(prepared.failure()!=null) return new OrderPrintAttempt(false,null,prepared.failure());
         try {
+            tx.executeWithoutResult(status->{
+                // Lock the job lease first, then the device row. Binding mutations lock the
+                // same device row; the committed claim below bridges the external-I/O gap.
+                if(!repo.lockActiveOrderPrintJob(tenantId,jobId,leaseToken))
+                    throw new PrinterFailure("WORKER_LEASE_EXPIRED",false);
+                Device current=repo.require(tenantId,printerId,true);
+                if(!Objects.equals(current.shopId,shopId)) throw new PrinterFailure("PRINTER_NOT_BOUND",false);
+                idle(current);
+                if(!current.enabled) throw new PrinterFailure("PRINTER_DISABLED",false);
+                PrinterProvider currentProvider=registry.require(current.providerCode);
+                if(currentProvider.info().requiresAuthorization()&&current.authorization!=Authorization.AUTHORIZED)
+                    throw new PrinterFailure("PRINTER_NOT_AUTHORIZED",false);
+                if(current.state!=DeviceState.ONLINE) throw new PrinterFailure("DEVICE_NOT_ONLINE",false);
+                if(!currentProvider.info().capabilities().textPrint()) throw new PrinterFailure("UNSUPPORTED_OPERATION",false);
+                repo.claimOrderPrintDevice(current,jobId,leaseToken,shopId);
+            });
+        } catch(PrinterFailure failure) {
+            return new OrderPrintAttempt(false,null,failure);
+        }
+        try {
             String origin=cn.hutool.crypto.digest.DigestUtil.sha256Hex(tenantId+":"+requestId);
             return new OrderPrintAttempt(true,prepared.session().print(d.deviceCode,origin,receipt),null);
         } catch(PrinterFailure failure) {
             return new OrderPrintAttempt(true,null,failure);
+        } finally {
+            tx.executeWithoutResult(status->repo.releaseOrderPrintDevice(tenantId,printerId,jobId,leaseToken));
         }
     }
     private boolean expired(LocalDateTime created) {

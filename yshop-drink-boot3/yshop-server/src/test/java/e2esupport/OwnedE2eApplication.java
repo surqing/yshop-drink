@@ -14,12 +14,16 @@ import co.yixiang.yshop.module.system.framework.sms.core.client.*;
 import co.yixiang.yshop.module.system.framework.sms.core.client.dto.*;
 import co.yixiang.yshop.module.system.framework.sms.core.property.SmsChannelProperties;
 import co.yixiang.yshop.framework.common.core.KeyValue;
+import co.yixiang.yshop.framework.common.enums.WebFilterOrderEnum;
+import co.yixiang.yshop.framework.tenant.core.web.TenantContextWebFilter;
 import me.chanjar.weixin.common.error.WxError;
 import me.chanjar.weixin.common.error.WxErrorException;
 import me.chanjar.weixin.mp.api.WxMpService;
 import com.egzosn.pay.spring.boot.core.PayServiceManager;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -73,6 +77,15 @@ public final class OwnedE2eApplication {
 
     @Configuration(proxyBeanMethods=false)
     public static class ExternalBoundaries {
+        @Bean
+        @ConditionalOnProperty(prefix="info",name="e2eTestSupport",havingValue="b3-tenant-context")
+        FilterRegistrationBean<TenantContextWebFilter> b3TenantContextFilter() {
+            FilterRegistrationBean<TenantContextWebFilter> registration=new FilterRegistrationBean<>();
+            registration.setFilter(new TenantContextWebFilter());
+            registration.setOrder(WebFilterOrderEnum.TENANT_CONTEXT_FILTER);
+            return registration;
+        }
+
         @Bean co.yixiang.yshop.module.store.service.printer.PrinterProvider ownedPrinterProvider() {
             return new OwnedPrinter();
         }

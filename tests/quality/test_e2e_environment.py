@@ -13,8 +13,12 @@ class OwnedEnvironmentTest(unittest.TestCase):
             '2026-10-22-order-fulfillment.sql',
             '2026-10-22-order-print-event.sql',
             '2026-10-22-order-print-job.sql',
+            '2026-10-05-printer-management.sql',
+            '2026-10-22-order-print-device-claim.sql',
         ]
         self.assertEqual(required, [name for name in MIGRATIONS if name in required])
+        self.assertLess(MIGRATIONS.index('2026-10-05-printer-management.sql'),
+                        MIGRATIONS.index('2026-10-22-order-print-device-claim.sql'))
 
     def test_member_identity_mysql_schema_applies_fulfillment_migration(self):
         source = (Path(__file__).resolve().parent / 'member-score-mysql.py').read_text()

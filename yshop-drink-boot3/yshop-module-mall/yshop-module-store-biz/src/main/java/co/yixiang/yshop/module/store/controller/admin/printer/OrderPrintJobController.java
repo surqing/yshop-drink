@@ -43,4 +43,9 @@ public class OrderPrintJobController {
     public CommonResult<JobView> reprint(@Valid @RequestBody OrderPrintJobService.ReprintRequest request) {
         return success(service.reprint(request));
     }
+
+    @PostMapping("/resolve-unknown") @PreAuthorize("@ss.hasPermission('store:web-print:test')")
+    public CommonResult<JobView> resolveUnknown(@Valid @RequestBody OrderPrintJobService.ResolveUnknownRequest request) {
+        return success(service.resolveUnknown(request));
+    }
 }

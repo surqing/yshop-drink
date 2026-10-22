@@ -4,6 +4,7 @@ import co.yixiang.yshop.framework.common.pojo.PageResult;
 import co.yixiang.yshop.module.store.service.printer.PrinterFailure;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Repository;
 import java.sql.*;
 import java.time.LocalDateTime;
@@ -117,11 +118,59 @@ public class PrinterRepository {
     }
     public void unbind(Device d) { jdbc.update("DELETE FROM yshop_printer_binding WHERE tenant_id=? AND printer_id=?",d.tenantId,d.id); }
     public void shopDeleted(long shopId) {
-        // The caller holds the shop row lock in the deletion transaction. Lock existing
-        // bindings too so a simultaneous explicit unbind cannot invalidate the write count.
-        int expected=jdbc.queryForList("SELECT printer_id FROM yshop_printer_binding WHERE shop_id=? FOR UPDATE",Long.class,shopId).size();
+        // The caller holds the shop row lock. Discover candidates without locks,
+        // then take printer locks in the same order as bind/unbind before touching
+        // binding rows. A locking JOIN can lock binding rows first under some plans
+        // and deadlock with unbind (printer row, then binding DELETE).
+        List<Long> candidates=jdbc.query("SELECT printer_id FROM yshop_printer_binding WHERE shop_id=? ORDER BY printer_id",
+                (rs,row)->rs.getLong(1),shopId);
+        List<Long> bound=new ArrayList<>();
+        for(long printerId:candidates) {
+            if(jdbc.query("SELECT id FROM yshop_printer WHERE id=? FOR UPDATE",(rs,row)->rs.getLong(1),printerId).isEmpty()) continue;
+            // Current read after acquiring the printer lock; stale snapshot rows
+            // are discarded if a concurrent unbind already committed.
+            if(jdbc.query("SELECT shop_id FROM yshop_printer_binding WHERE printer_id=? AND shop_id=? FOR UPDATE",
+                    (rs,row)->rs.getLong(1),printerId,shopId).isEmpty()) continue;
+            if(dispatchClaimed(printerId)) throw new PrinterFailure("PRINTER_BUSY",false);
+            bound.add(printerId);
+        }
+        int expected=bound.size();
         if(jdbc.update("DELETE FROM yshop_printer_binding WHERE shop_id=?",shopId)!=expected)
             throw new IllegalStateException("SHOP_BINDING_CLEANUP_WRITE_FAILED");
+    }
+    public boolean dispatchClaimed(Device d) { return dispatchClaimed(d.tenantId,d.id); }
+    private boolean dispatchClaimed(long tenant,long printer) {
+        // This is deliberately a current locking read. Under MySQL REPEATABLE READ,
+        // shop deletion may already have established an older consistent-read
+        // snapshot before it locks the printer. A plain COUNT could then miss a
+        // claim committed while that snapshot was open and remove the binding.
+        return !jdbc.query("SELECT job_id FROM yshop_order_print_device_claim WHERE tenant_id=? AND printer_id=? FOR UPDATE",
+                (rs,row)->rs.getLong(1),tenant,printer).isEmpty();
+    }
+    private boolean dispatchClaimed(long printer) {
+        // Printer IDs are globally unique; caller holds its printer row lock.
+        return !jdbc.query("SELECT job_id FROM yshop_order_print_device_claim WHERE printer_id=? FOR UPDATE",
+                (rs,row)->rs.getLong(1),printer).isEmpty();
+    }
+    /** Lock and validate the durable worker lease before taking the device reservation. */
+    public boolean lockActiveOrderPrintJob(long tenant,long job,String leaseToken) {
+        return !jdbc.query("SELECT id FROM yshop_order_print_job WHERE tenant_id=? AND id=? AND state='SENDING' "
+                +"AND lease_token=? AND lease_expires_at>CURRENT_TIMESTAMP FOR UPDATE",
+                (rs,row)->rs.getLong(1),tenant,job,leaseToken).isEmpty();
+    }
+    /** Caller holds the printer row lock; the durable claim serializes all workers for this device. */
+    public void claimOrderPrintDevice(Device d,long job,String leaseToken,long shopId) {
+        try {
+            jdbc.update("INSERT INTO yshop_order_print_device_claim(tenant_id,printer_id,job_id,lease_token,shop_id) "
+                    +"VALUES(?,?,?,?,?)",d.tenantId,d.id,job,leaseToken,shopId);
+        } catch(DuplicateKeyException busy) {
+            throw new PrinterFailure("PRINTER_BUSY",false);
+        }
+    }
+    public void releaseOrderPrintDevice(long tenant,long printer,long job,String leaseToken) {
+        if(jdbc.update("DELETE FROM yshop_order_print_device_claim WHERE tenant_id=? AND printer_id=? AND job_id=? AND lease_token=?",
+                tenant,printer,job,leaseToken)!=1)
+            throw new PrinterFailure("PRINTER_DISPATCH_CLAIM_LOST",true);
     }
     public JobView job(long tenant,String requestId) {
         List<JobView> rows=jdbc.query("SELECT j.*,p.name AS printer_name FROM yshop_printer_test_job j JOIN yshop_printer p "

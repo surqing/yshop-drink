@@ -1,6 +1,12 @@
 const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto')
 const { launchOfficial } = require('./official-launch.cjs')
+const { confirmWithAccessibility, confirmationPath } = require('./native-confirmation.cjs')
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+function saveNativeConfirmationRoute(output, route) {
+  const file = path.join(output, 'native-confirmation-route-private.json')
+  fs.writeFileSync(file, JSON.stringify(route, null, 2) + '\n', { mode: 0o600 })
+  try { fs.chmodSync(file, 0o600) } catch (_) { /* Creation mode remains the fallback. */ }
+}
 async function until(read, timeout = 15000) {
   const deadline = Date.now() + timeout
   while (Date.now() < deadline) { const result = await read(); if (result) return result; await sleep(150) }
@@ -195,6 +201,40 @@ class MiniDriver {
   async cancel() {
     const page = await this.mini.currentPage()
     const before = await this.state()
+    const route = {
+      runId: this.context.runId,
+      project: this.context.project,
+      officialMethod: 'miniprogram-automator.native().confirmModal()',
+      officialAttempted: true,
+      officialReturned: false,
+      officialFailureCode: null,
+      callbackCountBefore: before.nativeModalsConfirmed,
+      callbackCountAfterOfficial: null,
+      callbackCountAfterAccessibility: null,
+      callbackObserved: false,
+      adapter: this.context.nativeAdapter || 'disabled',
+      accessibilityAttempted: false,
+      accessibilityActionCompleted: false,
+      accessibilityFailureCode: null,
+      accessibilityReceipt: 'native-confirmation-accessibility-private.json',
+      accessibilityDiagnostics: {
+        collection: 'NOT_COLLECTED',
+        pid: null,
+        processMatchCount: null,
+        axWindowsStatusCode: null,
+        windowTotal: null,
+        windows: null,
+        ownedWindowCount: null,
+        webAreaCount: null,
+        webAreaUrls: null,
+        projectPathMatchCount: null,
+        dialogScopeCount: null,
+        confirmationNodeMatchCount: null
+      },
+      confirmationPath: 'NO_CONFIRMED_PATH',
+      result: 'IN_PROGRESS',
+      failureCode: null
+    }
     const component = await until(() => page.$('.order-cancel-button'))
     const button = await until(() => component.$('button'))
     const offset = await button.offset()
@@ -202,18 +242,74 @@ class MiniDriver {
     this.lifecycle('cancel-button-visible')
     await button.tap()
     await until(async () => (await this.state()).nativeModalsOpened > before.nativeModalsOpened)
-    await this.mini.native().confirmModal()
-    if (this.context.nativeAdapter === 'applescript') {
-      await sleep(300)
-      if ((await this.state()).nativeModalsConfirmed <= before.nativeModalsConfirmed) {
-        const { confirmWithAccessibility } = require('./native-confirmation.cjs')
-        await confirmWithAccessibility(this.context, this.output)
+    saveNativeConfirmationRoute(this.output, route)
+    try {
+      await this.mini.native().confirmModal()
+      route.officialReturned = true
+    } catch (error) {
+      route.officialFailureCode = error && (error.code || error.name) || 'OFFICIAL_NATIVE_CONFIRM_FAILED'
+      route.failureCode = 'OFFICIAL_NATIVE_CONFIRM_FAILED'
+      route.result = 'BLOCKED'
+      saveNativeConfirmationRoute(this.output, route)
+      throw error
+    }
+    await sleep(300)
+    let state = await this.state()
+    route.callbackCountAfterOfficial = state.nativeModalsConfirmed
+    route.callbackObserved = state.nativeModalsConfirmed > before.nativeModalsConfirmed
+    if (!route.callbackObserved && this.context.nativeAdapter === 'applescript') {
+      route.accessibilityAttempted = true
+      route.accessibilityDiagnostics.collection = 'IN_PROGRESS'
+      saveNativeConfirmationRoute(this.output, route)
+      try {
+        const accessibility = await confirmWithAccessibility(this.context, this.output)
+        route.accessibilityActionCompleted = accessibility.result === 'AXPRESS_COMPLETED'
+        route.accessibilityDiagnostics = { collection: 'COLLECTED', ...accessibility }
         this.evidence.nativeConfirmationAdapter = 'macos-applescript-accessibility'
         this.evidence.nativeAccessibilityPresses = (this.evidence.nativeAccessibilityPresses || 0) + 1
+      } catch (error) {
+        route.accessibilityFailureCode = error && error.code || 'ACCESSIBILITY_CONFIRMATION_FAILED'
+        if (error && error.diagnostics) route.accessibilityDiagnostics = { collection: 'COLLECTED', ...error.diagnostics }
+        route.failureCode = 'MINI_NATIVE_CONFIRMATION_UNAVAILABLE'
+        route.confirmationPath = confirmationPath({
+          accessibilityAttempted: true,
+          accessibilityActionCompleted: false,
+          callbackObserved: false
+        })
+        route.result = 'BLOCKED'
+        saveNativeConfirmationRoute(this.output, route)
+        throw Error('MINI_NATIVE_CONFIRMATION_UNAVAILABLE')
+      }
+      state = await this.state()
+      route.callbackCountAfterAccessibility = state.nativeModalsConfirmed
+      route.callbackObserved = state.nativeModalsConfirmed > before.nativeModalsConfirmed
+    }
+    if (!route.callbackObserved) {
+      try {
+        await until(async () => (await this.state()).nativeModalsConfirmed > before.nativeModalsConfirmed)
+        state = await this.state()
+        route.callbackObserved = state.nativeModalsConfirmed > before.nativeModalsConfirmed
+        if (route.accessibilityAttempted) route.callbackCountAfterAccessibility = state.nativeModalsConfirmed
+      } catch {
+        route.failureCode = 'MINI_NATIVE_CONFIRMATION_UNAVAILABLE'
+        route.confirmationPath = confirmationPath({
+          accessibilityAttempted: route.accessibilityAttempted,
+          accessibilityActionCompleted: route.accessibilityActionCompleted,
+          callbackObserved: false
+        })
+        route.result = 'BLOCKED'
+        saveNativeConfirmationRoute(this.output, route)
+        throw Error('MINI_NATIVE_CONFIRMATION_UNAVAILABLE')
       }
     }
-    try { await until(async () => (await this.state()).nativeModalsConfirmed > before.nativeModalsConfirmed) }
-    catch { throw Error('MINI_NATIVE_CONFIRMATION_UNAVAILABLE') }
+    route.confirmationPath = confirmationPath({
+      nativeCallbackObserved: route.callbackCountAfterOfficial > before.nativeModalsConfirmed,
+      accessibilityAttempted: route.accessibilityAttempted,
+      accessibilityActionCompleted: route.accessibilityActionCompleted,
+      callbackObserved: route.callbackObserved
+    })
+    route.result = 'CONFIRMED_BY_REAL_CALLBACK'
+    saveNativeConfirmationRoute(this.output, route)
     this.lifecycle('cancel-confirmed')
     await until(async () => (await this.mini.currentPage()).path === 'pages/order/order')
   }
