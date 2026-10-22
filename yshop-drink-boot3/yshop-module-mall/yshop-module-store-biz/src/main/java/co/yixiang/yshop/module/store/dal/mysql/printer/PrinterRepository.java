@@ -118,25 +118,39 @@ public class PrinterRepository {
     }
     public void unbind(Device d) { jdbc.update("DELETE FROM yshop_printer_binding WHERE tenant_id=? AND printer_id=?",d.tenantId,d.id); }
     public void shopDeleted(long shopId) {
-        // The caller holds the shop row lock. Lock its devices in the same order as
-        // explicit bind/unbind and refuse to tear down a binding during provider I/O.
-        List<Long> printerIds=jdbc.query("SELECT p.id FROM yshop_printer p JOIN yshop_printer_binding b "
-                +"ON b.printer_id=p.id AND b.tenant_id=p.tenant_id WHERE b.shop_id=? ORDER BY p.id FOR UPDATE",
+        // The caller holds the shop row lock. Discover candidates without locks,
+        // then take printer locks in the same order as bind/unbind before touching
+        // binding rows. A locking JOIN can lock binding rows first under some plans
+        // and deadlock with unbind (printer row, then binding DELETE).
+        List<Long> candidates=jdbc.query("SELECT printer_id FROM yshop_printer_binding WHERE shop_id=? ORDER BY printer_id",
                 (rs,row)->rs.getLong(1),shopId);
-        if(printerIds.stream().anyMatch(id->dispatchClaimed(id)))
-            throw new PrinterFailure("PRINTER_BUSY",false);
-        int expected=printerIds.size();
+        List<Long> bound=new ArrayList<>();
+        for(long printerId:candidates) {
+            if(jdbc.query("SELECT id FROM yshop_printer WHERE id=? FOR UPDATE",(rs,row)->rs.getLong(1),printerId).isEmpty()) continue;
+            // Current read after acquiring the printer lock; stale snapshot rows
+            // are discarded if a concurrent unbind already committed.
+            if(jdbc.query("SELECT shop_id FROM yshop_printer_binding WHERE printer_id=? AND shop_id=? FOR UPDATE",
+                    (rs,row)->rs.getLong(1),printerId,shopId).isEmpty()) continue;
+            if(dispatchClaimed(printerId)) throw new PrinterFailure("PRINTER_BUSY",false);
+            bound.add(printerId);
+        }
+        int expected=bound.size();
         if(jdbc.update("DELETE FROM yshop_printer_binding WHERE shop_id=?",shopId)!=expected)
             throw new IllegalStateException("SHOP_BINDING_CLEANUP_WRITE_FAILED");
     }
     public boolean dispatchClaimed(Device d) { return dispatchClaimed(d.tenantId,d.id); }
     private boolean dispatchClaimed(long tenant,long printer) {
-        return jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim WHERE tenant_id=? AND printer_id=?",
-                Integer.class,tenant,printer)>0;
+        // This is deliberately a current locking read. Under MySQL REPEATABLE READ,
+        // shop deletion may already have established an older consistent-read
+        // snapshot before it locks the printer. A plain COUNT could then miss a
+        // claim committed while that snapshot was open and remove the binding.
+        return !jdbc.query("SELECT job_id FROM yshop_order_print_device_claim WHERE tenant_id=? AND printer_id=? FOR UPDATE",
+                (rs,row)->rs.getLong(1),tenant,printer).isEmpty();
     }
     private boolean dispatchClaimed(long printer) {
-        return jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim WHERE printer_id=?",
-                Integer.class,printer)>0;
+        // Printer IDs are globally unique; caller holds its printer row lock.
+        return !jdbc.query("SELECT job_id FROM yshop_order_print_device_claim WHERE printer_id=? FOR UPDATE",
+                (rs,row)->rs.getLong(1),printer).isEmpty();
     }
     /** Lock and validate the durable worker lease before taking the device reservation. */
     public boolean lockActiveOrderPrintJob(long tenant,long job,String leaseToken) {

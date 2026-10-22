@@ -70,6 +70,13 @@ export interface ReprintRequest {
   requestKey: string
   reason: string
 }
+export interface ResolveUnknownRequest {
+  jobId: number
+  requestKey: string
+  reason: string
+  senderStopped: boolean
+  notPrintedConfirmed: boolean
+}
 export interface ShopOption {
   id: number
   name: string
@@ -122,3 +129,5 @@ export const refreshOrderPrintJob = (id: number) =>
   request.post<OrderPrintJob>({ url: '/store/order-print-job/refresh', params: { id } })
 export const reprintOrderPrintJob = (data: ReprintRequest) =>
   request.post<OrderPrintJob>({ url: '/store/order-print-job/reprint', data })
+export const resolveUnknownOrderPrintJob = (data: ResolveUnknownRequest) =>
+  request.post<OrderPrintJob>({ url: '/store/order-print-job/resolve-unknown', data })

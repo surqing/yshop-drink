@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.AssertTrue;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.sql.ResultSet;
@@ -15,6 +16,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -102,6 +104,7 @@ public class OrderPrintJobService {
                             rs.getString("payload_snapshot")), tenant, parentId).stream().findFirst().orElse(null);
             if (parent == null) throw new PrinterFailure("PRINT_JOB_NOT_FOUND", false);
             if (!List.of("ACCEPTED", "FAILED", "UNKNOWN").contains(parent.state())) throw new PrinterFailure("JOB_NOT_REPRINTABLE", false);
+            if("UNKNOWN".equals(parent.state())) throw new PrinterFailure("PRINT_RECOVERY_REQUIRED",false);
             int bound = jdbc.queryForObject("SELECT COUNT(*) FROM yshop_printer p JOIN yshop_printer_binding b "
                     + "ON b.tenant_id=p.tenant_id AND b.printer_id=p.id WHERE p.tenant_id=? AND p.id=? AND p.deleted=0 AND b.shop_id=?",
                     Integer.class, tenant, parent.printerId(), parent.shopId());
@@ -120,6 +123,69 @@ public class OrderPrintJobService {
             if(!requestHash.equals(createdHash)) throw new PrinterFailure("REQUEST_CONFLICT",false);
             return created;
         });
+    }
+
+    /** Explicitly resolve a crashed, expired send only after an operator verifies no print occurred. */
+    public JobView resolveUnknown(ResolveUnknownRequest request) {
+        long tenant=printerAccess.requireHeadquartersTenant();
+        Long actor=SecurityFrameworkUtils.getLoginUserId();
+        if(actor==null) throw new PrinterFailure("HEADQUARTERS_ONLY",false);
+        if(!request.senderStopped()||!request.notPrintedConfirmed())
+            throw new PrinterFailure("PRINT_RECOVERY_CONFIRMATION_REQUIRED",false);
+        String reason=maskPhones(request.reason().trim());
+        String requestHash=hash(tenant+"|"+request.jobId()+"|NOT_PRINTED_CONFIRMED|"+reason);
+        return tx.execute(status->{
+            List<Resolution> prior=jdbc.query("SELECT job_id,request_hash FROM yshop_order_print_device_claim_resolution "
+                    +"WHERE tenant_id=? AND request_key=? FOR UPDATE",
+                    (rs,row)->new Resolution(rs.getLong("job_id"),rs.getString("request_hash")),tenant,request.requestKey());
+            if(!prior.isEmpty()) {
+                if(prior.get(0).jobId()!=request.jobId()||!requestHash.equals(prior.get(0).requestHash()))
+                    throw new PrinterFailure("REQUEST_CONFLICT",false);
+                return job(tenant,request.jobId());
+            }
+
+            // Convert an expired lease to UNKNOWN inside this transaction. A live
+            // lease remains SENDING and cannot be released through this endpoint.
+            worker.refreshJob(tenant,request.jobId());
+            List<RecoveryTarget> targets=jdbc.query("SELECT id,printer_id,state,last_error,lease_token,lease_expires_at "
+                    +"FROM yshop_order_print_job WHERE tenant_id=? AND id=? FOR UPDATE",
+                    (rs,row)->new RecoveryTarget(rs.getLong("id"),rs.getLong("printer_id"),rs.getString("state"),
+                            rs.getString("last_error"),rs.getString("lease_token"),rs.getTimestamp("lease_expires_at")),
+                    tenant,request.jobId());
+            if(targets.isEmpty()) throw new PrinterFailure("PRINT_JOB_NOT_FOUND",false);
+            RecoveryTarget target=targets.get(0);
+            if(!"UNKNOWN".equals(target.state())||target.leaseExpiresAt()!=null)
+                throw new PrinterFailure("PRINT_WORKER_LEASE_ACTIVE",false);
+
+            if(jdbc.query("SELECT id FROM yshop_printer WHERE tenant_id=? AND id=? FOR UPDATE",
+                    (rs,row)->rs.getLong(1),tenant,target.printerId()).isEmpty())
+                throw new PrinterFailure("PRINTER_NOT_FOUND",false);
+            List<Claim> claims=jdbc.query("SELECT job_id,lease_token FROM yshop_order_print_device_claim "
+                    +"WHERE tenant_id=? AND printer_id=? FOR UPDATE",
+                    (rs,row)->new Claim(rs.getLong("job_id"),rs.getString("lease_token")),tenant,target.printerId());
+            if(!claims.isEmpty()&&(claims.get(0).jobId()!=target.id()||!Objects.equals(claims.get(0).leaseToken(),target.leaseToken())))
+                throw new PrinterFailure("PRINT_CLAIM_NOT_FOUND",false);
+
+            String outcome=claims.isEmpty()?"NOT_PRINTED_CONFIRMED_NO_CLAIM":"NOT_PRINTED_CONFIRMED_CLAIM_RELEASED";
+            jdbc.update("INSERT INTO yshop_order_print_device_claim_resolution(tenant_id,printer_id,job_id,request_key,request_hash,outcome,claim_was_present,reason,actor_id,prior_error) "
+                    +"VALUES(?,?,?,?,?,?,?, ?,?,?)",tenant,target.printerId(),target.id(),request.requestKey(),requestHash,outcome,
+                    !claims.isEmpty(),reason,actor,target.lastError());
+            if(jdbc.update("UPDATE yshop_order_print_job SET state='FAILED',last_error='OPERATOR_CONFIRMED_NOT_PRINTED',"
+                    +"lease_token=NULL,lease_expires_at=NULL,update_time=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=? AND state='UNKNOWN'",
+                    tenant,target.id())!=1)
+                throw new PrinterFailure("PRINT_JOB_STATE_CONFLICT",false);
+            if(!claims.isEmpty()&&jdbc.update("DELETE FROM yshop_order_print_device_claim WHERE tenant_id=? AND printer_id=? AND job_id=? AND lease_token=?",
+                    tenant,target.printerId(),target.id(),target.leaseToken())!=1)
+                throw new PrinterFailure("PRINTER_DISPATCH_CLAIM_LOST",true);
+            return job(tenant,target.id());
+        });
+    }
+
+    private JobView job(long tenant,long id) {
+        List<JobView> rows=jdbc.query("SELECT id,event_id,order_id,shop_id,printer_id,printer_name_snapshot AS printer_name,state,last_error,provider_job_id,attempts,parent_job_id,reprint_reason,payload_snapshot,create_time "
+                +"FROM yshop_order_print_job WHERE tenant_id=? AND id=?",this::map,tenant,id);
+        if(rows.isEmpty()) throw new PrinterFailure("PRINT_JOB_NOT_FOUND",false);
+        return rows.get(0);
     }
 
     private JobView eventState(long tenant, long eventId) {
@@ -163,6 +229,15 @@ public class OrderPrintJobService {
             @NotBlank @Pattern(regexp="[A-Za-z0-9_-]{16,64}") String requestKey,
             @NotBlank @Size(max=255) String reason) {}
 
+    public record ResolveUnknownRequest(@NotNull Long jobId,
+            @NotBlank @Pattern(regexp="[A-Za-z0-9_-]{16,64}") String requestKey,
+            @NotBlank @Size(max=255) String reason,
+            @AssertTrue boolean senderStopped,
+            @AssertTrue boolean notPrintedConfirmed) {}
+
     private record Parent(long id,long eventId,String eventKey,long orderId,long shopId,long printerId,String printerName,
             String providerCode,String deviceCode,String state,String payload) {}
+    private record Resolution(long jobId,String requestHash) {}
+    private record RecoveryTarget(long id,long printerId,String state,String lastError,String leaseToken,Timestamp leaseExpiresAt) {}
+    private record Claim(long jobId,String leaseToken) {}
 }
