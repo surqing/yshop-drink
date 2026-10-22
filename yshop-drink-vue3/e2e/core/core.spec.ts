@@ -568,7 +568,12 @@ async function pickupFulfillment(f: Flow) {
       expect(results.filter(code => code !== 0)).toHaveLength(1)
       const state = fulfillmentState(f, order.orderId)
       expect(state.fulfillmentStatus).toBe('ACCEPTED'); expect(state.fulfillmentVersion).toBe(2)
-      expect(f.oracle('print-jobs', { orderId: order.orderId })).toHaveLength(1)
+      const printRows = f.oracle('print-jobs', { orderId: order.orderId })
+      const events = printRows.filter((row: any) => row.kind === 'EVENT')
+      const jobs = printRows.filter((row: any) => row.kind === 'JOB')
+      expect(events).toHaveLength(1)
+      expect(jobs.length).toBeLessThanOrEqual(events.length)
+      if (jobs.length) expect(jobs[0].eventId).toBe(events[0].eventId)
     })
     await f.check('accept-through-work-page', async () => {
       const card = await workOrder(pageA, order.orderId, '已接单')

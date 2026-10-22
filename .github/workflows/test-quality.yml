@@ -151,6 +151,10 @@ jobs:
         env:
           BASE_REF: ${{ github.event.pull_request.base.sha || 'HEAD^' }}
         run: python3 tests/quality/secret_guard.py --base "$BASE_REF"
+      - name: Vue dependencies for Quick and frontend suites
+        if: ${{ !cancelled() }}
+        working-directory: yshop-drink-vue3
+        run: pnpm install --frozen-lockfile
       - name: Quick tests and deliberate runner failures
         if: ${{ !cancelled() }}
         run: python3 tests/quality/run.py QUICK --output "$RUNNER_TEMP/quality"
@@ -179,10 +183,6 @@ jobs:
           cli=Path.home()/'.m2/repository/org/jacoco/org.jacoco.cli/0.8.12/org.jacoco.cli-0.8.12-nodeps.jar'
           subprocess.run([sys.executable,'tests/quality/coverage.py','--run',str(candidates[0]),'--cli',str(cli),'--output',str(root/'coverage')],check=True)
           PYTHON
-      - name: Vue dependencies
-        if: ${{ !cancelled() }}
-        working-directory: yshop-drink-vue3
-        run: pnpm install --frozen-lockfile
       - name: Frontend logic, actual coupon component and V8 coverage
         if: ${{ !cancelled() }}
         run: python3 tests/quality/run.py frontend --output "$RUNNER_TEMP/frontend"
