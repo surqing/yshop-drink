@@ -32,6 +32,15 @@ public final class PrinterModels {
     public record JobView(String requestId, Long printerId, String printerName, JobState state,
             String providerJobId, String errorCode, LocalDateTime createTime) {}
     public record OperationResult(Authorization authorization, String errorCode) {}
+    public record PendingOperation(Long printerId, String operationToken, String operationType,
+            String requestId, LocalDateTime startedAt) {}
+    public record ResolveOperationRequest(@NotNull @Positive Long id,
+            @NotBlank @Pattern(regexp="[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}") String operationToken,
+            @NotBlank @Size(min=5,max=500) String reason,
+            @NotNull @AssertTrue Boolean senderStopped,
+            @NotNull @AssertTrue Boolean providerWorkSettled) {}
+    public record OperationResolutionResult(Long printerId, String operationToken, String operationType,
+            String outcome, LocalDateTime resolvedAt) {}
     public record StatusResult(DeviceState state, LocalDateTime checkedAt, String errorCode) {}
     public record Receipt(String title, List<String> lines, int copies) {
         public Receipt { lines = List.copyOf(lines); }

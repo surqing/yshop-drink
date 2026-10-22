@@ -64,4 +64,13 @@ public class PrinterController {
     public CommonResult<PageResult<JobView>> jobs(@RequestParam @Positive long id,
             @RequestParam(defaultValue="1") @Min(1) @Max(100000) int pageNo,
             @RequestParam(defaultValue="10") @Min(1) @Max(100) int pageSize) { return success(service.jobs(id,pageNo,pageSize)); }
+    @GetMapping("/operation/pending") @PreAuthorize("@ss.hasPermission('store:web-print:query')")
+    public CommonResult<PendingOperation> pendingOperation(@RequestParam @Positive long id) {
+        return success(service.pendingOperation(id));
+    }
+    @PostMapping("/operation/resolve") @PreAuthorize("@ss.hasPermission('store:web-print:authorize')")
+    @ApiAccessLog(requestEnable=false)
+    public CommonResult<OperationResolutionResult> resolveOperation(@Valid @RequestBody ResolveOperationRequest request) {
+        return success(service.resolveOperation(request));
+    }
 }

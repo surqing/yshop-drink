@@ -18,7 +18,7 @@ public class PrinterRepository {
     public PrinterRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
     public static class Device {
         public Long id, tenantId, shopId;
-        public String name, providerCode, deviceCode, model, connectionType, encryptedConfig, configuredFields, shopName, lastError, authorizationOperation;
+        public String name, providerCode, deviceCode, model, connectionType, encryptedConfig, configuredFields, shopName, lastError, authorizationOperation, authorizationOperationType, authorizationOperationRequestId;
         public boolean enabled, deleted;
         public Authorization authorization;
         public DeviceState state;
@@ -34,6 +34,8 @@ public class PrinterRepository {
         d.state=DeviceState.valueOf(rs.getString("device_state")); d.lastError=rs.getString("last_error");
         d.stateCheckedAt=time(rs,"state_checked_at"); d.createTime=time(rs,"create_time");
         d.configuredFields=rs.getString("configured_fields"); d.authorizationOperation=rs.getString("authorization_operation");
+        d.authorizationOperationType=rs.getString("authorization_operation_type");
+        d.authorizationOperationRequestId=rs.getString("authorization_operation_request_id");
         d.authorizationOperationAt=time(rs,"authorization_operation_at");
         return d;
     }
@@ -91,20 +93,20 @@ public class PrinterRepository {
                 d.name,d.model,d.enabled,d.encryptedConfig,d.configuredFields,String.valueOf(actor),d.tenantId,d.id);
     }
     public void authorization(Device d,Authorization state,String error,long actor) {
-        jdbc.update("UPDATE yshop_printer SET authorization=?,authorization_operation=NULL,authorization_operation_at=NULL,last_error=?,updater=?,update_time=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=?",
+        jdbc.update("UPDATE yshop_printer SET authorization=?,authorization_operation=NULL,authorization_operation_at=NULL,authorization_operation_type=NULL,authorization_operation_request_id=NULL,last_error=?,updater=?,update_time=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=?",
                 state.name(),error,String.valueOf(actor),d.tenantId,d.id);
     }
-    public void beginAuthorization(Device d,String operation,long actor) {
-        jdbc.update("UPDATE yshop_printer SET authorization='UNKNOWN',authorization_operation=?,authorization_operation_at=CURRENT_TIMESTAMP,last_error='RESULT_UNKNOWN',updater=? WHERE tenant_id=? AND id=?",
-                operation,String.valueOf(actor),d.tenantId,d.id);
+    public void beginAuthorization(Device d,String operation,String operationType,long actor) {
+        jdbc.update("UPDATE yshop_printer SET authorization='UNKNOWN',authorization_operation=?,authorization_operation_at=CURRENT_TIMESTAMP,authorization_operation_type=?,authorization_operation_request_id=NULL,last_error='RESULT_UNKNOWN',updater=? WHERE tenant_id=? AND id=?",
+                operation,operationType,String.valueOf(actor),d.tenantId,d.id);
     }
     /** Persist a short-lived exclusive provider operation without holding a DB lock during I/O. */
-    public void beginOperation(Device d,String operation,long actor) {
-        jdbc.update("UPDATE yshop_printer SET authorization_operation=?,authorization_operation_at=CURRENT_TIMESTAMP,updater=? WHERE tenant_id=? AND id=?",
-                operation,String.valueOf(actor),d.tenantId,d.id);
+    public void beginOperation(Device d,String operation,String operationType,String requestId,long actor) {
+        jdbc.update("UPDATE yshop_printer SET authorization_operation=?,authorization_operation_at=CURRENT_TIMESTAMP,authorization_operation_type=?,authorization_operation_request_id=?,updater=? WHERE tenant_id=? AND id=?",
+                operation,operationType,requestId,String.valueOf(actor),d.tenantId,d.id);
     }
     public void releaseOperation(Device d,String operation) {
-        if(jdbc.update("UPDATE yshop_printer SET authorization_operation=NULL,authorization_operation_at=NULL "
+        if(jdbc.update("UPDATE yshop_printer SET authorization_operation=NULL,authorization_operation_at=NULL,authorization_operation_type=NULL,authorization_operation_request_id=NULL "
                 +"WHERE tenant_id=? AND id=? AND authorization_operation=?",d.tenantId,d.id,operation)!=1)
             throw new PrinterFailure("PRINTER_BUSY",false);
     }
@@ -114,9 +116,47 @@ public class PrinterRepository {
     }
     public void finishStatusOperation(Device d,String operation,DeviceState state,String error,LocalDateTime time) {
         if(jdbc.update("UPDATE yshop_printer SET device_state=?,state_checked_at=?,last_error=?,authorization_operation=NULL,"
-                +"authorization_operation_at=NULL WHERE tenant_id=? AND id=? AND authorization_operation=?",
+                +"authorization_operation_at=NULL,authorization_operation_type=NULL,authorization_operation_request_id=NULL WHERE tenant_id=? AND id=? AND authorization_operation=?",
                 state.name(),time,error,d.tenantId,d.id,operation)!=1)
             throw new PrinterFailure("PRINTER_BUSY",false);
+    }
+    public PendingOperation pendingOperation(Device d) {
+        if(d.authorizationOperation==null) return null;
+        String type=d.authorizationOperationType,requestId=d.authorizationOperationRequestId;
+        if(type==null) {
+            List<String> submitting=jdbc.query("SELECT request_id FROM yshop_printer_test_job WHERE tenant_id=? AND printer_id=? AND state='SUBMITTING' ORDER BY id DESC LIMIT 1",
+                    (rs,n)->rs.getString(1),d.tenantId,d.id);
+            if(!submitting.isEmpty()) { type="TEST_PRINT"; requestId=submitting.get(0); }
+            else type="LEGACY_PROVIDER_OPERATION";
+        }
+        return new PendingOperation(d.id,d.authorizationOperation,type,requestId,d.authorizationOperationAt);
+    }
+    public void resolveProviderOperation(Device d,String operation,String type,long actor) {
+        boolean authorizationOperation=List.of("AUTHORIZE","DEAUTHORIZE","RECONNECT","LEGACY_PROVIDER_OPERATION").contains(type);
+        boolean statusOperation="STATUS_REFRESH".equals(type);
+        String authorization=authorizationOperation?Authorization.UNKNOWN.name():d.authorization.name();
+        String state=authorizationOperation||statusOperation?DeviceState.UNKNOWN.name():d.state.name();
+        if(jdbc.update("UPDATE yshop_printer SET authorization=?,device_state=?,state_checked_at=CASE WHEN ? THEN CURRENT_TIMESTAMP ELSE state_checked_at END,"
+                +"last_error='RESULT_UNKNOWN',updater=?,update_time=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=? AND authorization_operation=?",
+                authorization,state,authorizationOperation||statusOperation,String.valueOf(actor),d.tenantId,d.id,operation)!=1)
+            throw new PrinterFailure("PRINTER_OPERATION_TOKEN_MISMATCH",false);
+    }
+    public void insertOperationResolution(Device d,PendingOperation pending,String priorAuthorization,
+            String priorState,String outcome,String reason,long actor) {
+        jdbc.update("INSERT INTO yshop_printer_operation_resolution(tenant_id,printer_id,operation_token,operation_type,request_id,operation_at,"
+                +"prior_authorization,prior_device_state,outcome,reason,sender_stopped,provider_work_settled,actor_id) VALUES(?,?,?,?,?,?,?,?,?,?,TRUE,TRUE,?)",
+                d.tenantId,d.id,pending.operationToken(),pending.operationType(),pending.requestId(),pending.startedAt(),
+                priorAuthorization,priorState,outcome,reason.trim(),actor);
+    }
+    public int recoverSubmittingTestJob(Device d,String requestId) {
+        if(requestId==null) return 0;
+        return jdbc.update("UPDATE yshop_printer_test_job SET state='UNKNOWN',provider_job_id=NULL,error_code='RESULT_UNKNOWN' "
+                +"WHERE tenant_id=? AND printer_id=? AND request_id=? AND state='SUBMITTING'",d.tenantId,d.id,requestId);
+    }
+    public void clearOperation(Device d,String operation) {
+        if(jdbc.update("UPDATE yshop_printer SET authorization_operation=NULL,authorization_operation_at=NULL,authorization_operation_type=NULL,authorization_operation_request_id=NULL "
+                +"WHERE tenant_id=? AND id=? AND authorization_operation=?",d.tenantId,d.id,operation)!=1)
+            throw new PrinterFailure("PRINTER_OPERATION_TOKEN_MISMATCH",false);
     }
     public void delete(Device d,long actor) {
         jdbc.update("UPDATE yshop_printer SET deleted=1,enabled=0,updater=?,update_time=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=?",
@@ -149,8 +189,9 @@ public class PrinterRepository {
             // are discarded if a concurrent unbind already committed.
             if(jdbc.query("SELECT shop_id FROM yshop_printer_binding WHERE printer_id=? AND shop_id=? FOR UPDATE",
                     (rs,row)->rs.getLong(1),printerId,shopId).isEmpty()) continue;
-            if(device.authorizationOperation!=null&&device.authorizationOperationAt!=null
-                    &&device.authorizationOperationAt.isAfter(LocalDateTime.now().minusMinutes(1)))
+            // The timestamp is diagnostic only. A provider call can remain live after
+            // any lease expires, so shop deletion must fail closed while a token exists.
+            if(device.authorizationOperation!=null)
                 throw new PrinterFailure("PRINTER_BUSY",false);
             if(dispatchClaimed(printerId)) throw new PrinterFailure("PRINTER_BUSY",false);
             bound.add(printerId);

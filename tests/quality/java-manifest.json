@@ -991,7 +991,10 @@
     "deletionHoldingShopLockRejectsAConcurrentBinding": 1,
     "bindingHoldingShopLockIsCleanedByConcurrentDeletion": 1,
     "authorizationUnknownSurvivesFailureAndBlocksDelete": 1,
-    "authorizationCrashIntentIsDurableAndRecoverable": 1,
+    "authorizationCrashIntentRequiresAuditedTokenBoundRecovery": 1,
+    "activeProviderCallRemainsBusyAfterIntentTimestampExpires": 1,
+    "crashedStatusRefreshIsAuditedAndLeavesCachedStatusUnknown": 1,
+    "legacyOperationWithoutNewTypeMetadataRecoversConservatively": 1,
     "statusFailuresAreUnknownInsteadOfOffline": 1,
     "cachedStatusQueryNeverPreparesProviderOrChangesDatabase": 1,
     "providerSessionCallsRunOutsideDatabaseTransactions": 1,
@@ -1034,6 +1037,12 @@
   "co.yixiang.yshop.module.store.printer.PrinterMigrationDatabaseTest": {
     "firstMigrationAndCompleteRepeatPreserveLegacyDataAndRoleAssignments": 1,
     "partialPrinterSchemasAreRejectedBeforeCreatingTheMissingTables": 1,
+    "existingPrinterSchemaUpgradePreservesOperationAndAddsRecoveryAudit": 1,
+    "partialRecoveryMetadataIsRejectedBeforeSchemaChanges": 1,
+    "partialOperationResolutionTableIsRejectedBeforeSchemaChanges": 1,
+    "wrongFifteenColumnResolutionTableIsRejectedBeforeSchemaChanges": 1,
+    "missingOperationResolutionTokenUniquenessIsRejected": 1,
+    "cascadingOperationResolutionForeignKeyIsRejected": 1,
     "missingLegacyTableIsRejectedBeforePrinterDdl": 1,
     "incompatibleLegacyKeyIsRejectedBeforePrinterDdl": 1,
     "legacyNonTransactionalEngineIsRejectedBeforePrinterDdl": 1,
@@ -1609,6 +1618,9 @@
     "dispatchRejectsUnpaidRefundingOrDeletedOrders": 1,
     "dispatchLogFailureRollsBackStatusUpdate": 1,
     "legacySendOrderKeepsDeliveryTransitions": 1
+  },
+  "e2esupport.OwnedE2eApplicationTest": {
+    "statsBoundaryFixtureRejectsOrdersNotCompletedThroughThisRunBridge": 1
   },
   "co.yixiang.yshop.server.quality.MemberIdentityMysqlAcceptanceTest": {
     "unregisteredSmsNeverCreatesMemberTokenOrSuccessLog": 1,

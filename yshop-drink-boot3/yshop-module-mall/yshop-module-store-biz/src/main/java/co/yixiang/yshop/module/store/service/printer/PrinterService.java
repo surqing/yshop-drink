@@ -69,7 +69,9 @@ public class PrinterService {
                 d.authorization,d.state,d.stateCheckedAt,d.shopId,d.shopName,fields,d.lastError,d.createTime);
     }
     private void idle(Device d) {
-        if(d.authorizationOperation!=null&&d.authorizationOperationAt!=null&&d.authorizationOperationAt.isAfter(LocalDateTime.now().minusMinutes(1)))
+        // Provider work runs outside DB transactions and can outlive an arbitrary lease.
+        // Never let age alone make a still-running external operation appear idle.
+        if(d.authorizationOperation!=null)
             throw new PrinterFailure("PRINTER_BUSY",false);
         if(repo.dispatchClaimed(d)) throw new PrinterFailure("PRINTER_BUSY",false);
     }
@@ -226,7 +228,8 @@ public class PrinterService {
                 throw new PrinterFailure("UNSUPPORTED_OPERATION",false);
             if(!provider.info().configured()) throw new PrinterFailure("PROVIDER_NOT_CONFIGURED",false);
             if(!revoke&&!reconnect&&d.authorization==Authorization.UNAUTHORIZED) provider.validateAuthorization(config(d));
-            repo.beginAuthorization(d,operation,actor);
+            String operationType=reconnect?"RECONNECT":revoke?"DEAUTHORIZE":"AUTHORIZE";
+            repo.beginAuthorization(d,operation,operationType,actor);
             return new AuthorizationIntent(d.providerCode,d.authorization);
         });
         if(intent==null) return new OperationResult(revoke?Authorization.UNAUTHORIZED:Authorization.AUTHORIZED,null);
@@ -288,7 +291,7 @@ public class PrinterService {
             Device d=repo.require(tenant,id,true); idle(d);
             PrinterProvider provider=registry.require(d.providerCode);
             if(!provider.info().capabilities().status()) throw new PrinterFailure("UNSUPPORTED_OPERATION",false);
-            repo.beginOperation(d,operation,actor); return d.providerCode;
+            repo.beginOperation(d,operation,"STATUS_REFRESH",null,actor); return d.providerCode;
         });
         Prepared prepared=prepare(providerCode);
         Device snapshot=repo.require(tenant,id,false);
@@ -316,7 +319,7 @@ public class PrinterService {
             if(old!=null) { sameDevice(old,request.id()); return null; }
             idle(d);
             ready(d,registry.require(d.providerCode));
-            repo.beginOperation(d,operation,actor);
+            repo.beginOperation(d,operation,"TEST_PRINT",request.requestId(),actor);
             repo.insertJob(d,request.requestId(),actor); return d.providerCode;
         });
         if(providerCode==null) return getJob(request.id(),request.requestId());
@@ -378,6 +381,40 @@ public class PrinterService {
         JobView job=repo.job(tenant,requestId);
         if(job!=null) sameDevice(job,id);
         return observed(job);
+    }
+    /** Pending provider operations are visible to headquarters operators for explicit crash recovery. */
+    public PendingOperation pendingOperation(long id) {
+        Device device=repo.require(tenant(),id,false);
+        return repo.pendingOperation(device);
+    }
+    /** Recovery requires an exact operation token and explicit human confirmation of both external facts. */
+    public OperationResolutionResult resolveOperation(ResolveOperationRequest request) {
+        if(!Boolean.TRUE.equals(request.senderStopped())||!Boolean.TRUE.equals(request.providerWorkSettled()))
+            throw new PrinterFailure("RECOVERY_CONFIRMATION_REQUIRED",false);
+        if(request.reason()==null||request.reason().trim().length()<5)
+            throw new PrinterFailure("RECOVERY_REASON_REQUIRED",false);
+        long tenant=tenant(),actor=actor();
+        return tx.execute(status->{
+            Device device=repo.require(tenant,request.id(),true);
+            if(device.authorizationOperation==null||!request.operationToken().equals(device.authorizationOperation))
+                throw new PrinterFailure("PRINTER_OPERATION_TOKEN_MISMATCH",false);
+            PendingOperation pending=repo.pendingOperation(device);
+            if(pending==null||pending.operationType()==null)
+                throw new PrinterFailure("PRINTER_OPERATION_NOT_RECOVERABLE",false);
+            String outcome=switch(pending.operationType()) {
+                case "AUTHORIZE", "DEAUTHORIZE", "RECONNECT" -> "AUTHORIZATION_UNKNOWN";
+                case "STATUS_REFRESH" -> "DEVICE_STATUS_UNKNOWN";
+                case "TEST_PRINT" -> "TEST_PRINT_UNKNOWN";
+                case "LEGACY_PROVIDER_OPERATION" -> "PROVIDER_RESULT_UNKNOWN";
+                default -> throw new PrinterFailure("PRINTER_OPERATION_NOT_RECOVERABLE",false);
+            };
+            if("TEST_PRINT".equals(pending.operationType())&&repo.recoverSubmittingTestJob(device,pending.requestId())!=1)
+                throw new PrinterFailure("PRINTER_OPERATION_NOT_RECOVERABLE",false);
+            repo.insertOperationResolution(device,pending,device.authorization.name(),device.state.name(),outcome,request.reason(),actor);
+            repo.resolveProviderOperation(device,request.operationToken(),pending.operationType(),actor);
+            repo.clearOperation(device,request.operationToken());
+            return new OperationResolutionResult(device.id,request.operationToken(),pending.operationType(),outcome,LocalDateTime.now());
+        });
     }
     public PageResult<JobView> jobs(long id,int pageNo,int pageSize) {
         long tenant=tenant(); repo.requireIncludingDeleted(tenant,id,false);

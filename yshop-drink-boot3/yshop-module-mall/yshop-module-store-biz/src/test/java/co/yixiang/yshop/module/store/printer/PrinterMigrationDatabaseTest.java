@@ -40,12 +40,54 @@ class PrinterMigrationDatabaseTest {
             var complete=snapshot(); migrate(); assertEquals(complete,snapshot());
             assertEquals(shops,jdbc.queryForList("SELECT * FROM yshop_store_shop ORDER BY id"));
             assertEquals(grants,jdbc.queryForList("SELECT * FROM system_role_menu ORDER BY menu_id"));
-            assertEquals(4,jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME LIKE 'yshop_printer%' AND ENGINE='InnoDB'",Integer.class));
+            assertEquals(5,jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME LIKE 'yshop_printer%' AND ENGINE='InnoDB'",Integer.class));
+            assertEquals("InnoDB",jdbc.queryForObject("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer_operation_resolution'",String.class));
             assertEquals("InnoDB",jdbc.queryForObject("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_order_print_job'",String.class));
             assertEquals(0L,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_job",Long.class));
             assertEquals("mall/store/printer/index",jdbc.queryForObject("SELECT component FROM system_menu WHERE id=2308",String.class));
             assertEquals(1,jdbc.queryForObject("SELECT deleted+0 FROM system_menu WHERE id=2313",Integer.class));
         } finally {jdbc.execute("DROP TABLE system_role_menu");}
+    }
+    @Test void existingPrinterSchemaUpgradePreservesOperationAndAddsRecoveryAudit() throws Exception {
+        migrate();
+        String token="12345678-1234-1234-1234-123456789012";
+        jdbc.update("INSERT INTO yshop_printer(id,tenant_id,name,provider_code,device_code,connection_type,authorization,authorization_operation,authorization_operation_at) "
+                +"VALUES(1,7,'synthetic pending','SYNTHETIC','legacy-pending-device','CLOUD','UNKNOWN',?,NOW())",token);
+        jdbc.execute("DROP TABLE yshop_printer_operation_resolution");
+        jdbc.execute("ALTER TABLE yshop_printer DROP COLUMN authorization_operation_request_id, DROP COLUMN authorization_operation_type");
+        migrate();
+        assertEquals(token,jdbc.queryForObject("SELECT authorization_operation FROM yshop_printer WHERE id=1",String.class));
+        assertEquals("UNKNOWN",jdbc.queryForObject("SELECT authorization FROM yshop_printer WHERE id=1",String.class));
+        assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer' "
+                +"AND COLUMN_NAME IN ('authorization_operation_type','authorization_operation_request_id')",Integer.class));
+        assertEquals("InnoDB",jdbc.queryForObject("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer_operation_resolution'",String.class));
+        var complete=snapshot(); migrate(); assertEquals(complete,snapshot());
+    }
+    @Test void partialRecoveryMetadataIsRejectedBeforeSchemaChanges() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_printer DROP COLUMN authorization_operation_request_id"); rejectedUnchanged();
+    }
+    @Test void partialOperationResolutionTableIsRejectedBeforeSchemaChanges() throws Exception {
+        migrate(); jdbc.execute("DROP TABLE yshop_printer_operation_resolution");
+        jdbc.execute("CREATE TABLE yshop_printer_operation_resolution(id bigint PRIMARY KEY) ENGINE=InnoDB");
+        rejectedUnchanged();
+    }
+    @Test void wrongFifteenColumnResolutionTableIsRejectedBeforeSchemaChanges() throws Exception {
+        migrate(); jdbc.execute("DROP TABLE yshop_printer_operation_resolution");
+        String legacyColumns=java.util.stream.IntStream.rangeClosed(1,14)
+                .mapToObj(index->"legacy_"+String.format("%02d",index)+" int")
+                .collect(java.util.stream.Collectors.joining(","));
+        jdbc.execute("CREATE TABLE yshop_printer_operation_resolution(id bigint PRIMARY KEY,"+legacyColumns+") ENGINE=InnoDB");
+        rejectedUnchanged();
+    }
+    @Test void missingOperationResolutionTokenUniquenessIsRejected() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_printer_operation_resolution DROP INDEX uk_printer_operation_resolution_token");
+        rejectedUnchanged();
+    }
+    @Test void cascadingOperationResolutionForeignKeyIsRejected() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_printer_operation_resolution DROP FOREIGN KEY fk_printer_operation_resolution_device");
+        jdbc.execute("ALTER TABLE yshop_printer_operation_resolution ADD CONSTRAINT fk_printer_operation_resolution_device "
+                +"FOREIGN KEY(printer_id,tenant_id) REFERENCES yshop_printer(id,tenant_id) ON DELETE CASCADE");
+        rejectedUnchanged();
     }
     @Test void partialPrinterSchemasAreRejectedBeforeCreatingTheMissingTables() throws Exception {
         migrate(); jdbc.execute("DROP TABLE yshop_printer_provider_token"); rejectedUnchanged();

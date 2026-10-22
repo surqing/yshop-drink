@@ -73,7 +73,8 @@ public final class OwnedE2eApplication {
         assertDenied(()->payment.getOrderInfo(null));
         var executor=Executors.newSingleThreadScheduledExecutor(work -> {var t=new Thread(work,"e2e-command-mailbox");t.setDaemon(true);return t;});
         var events=new ConcurrentHashMap<String,PaymentSuccessEvent>();
-        executor.scheduleWithFixedDelay(()->processCommands(context,db,events),0,100,TimeUnit.MILLISECONDS);
+        var completedOrders=ConcurrentHashMap.<String>newKeySet();
+        executor.scheduleWithFixedDelay(()->processCommands(context,db,events,completedOrders),0,100,TimeUnit.MILLISECONDS);
         Runtime.getRuntime().addShutdownHook(new Thread(executor::shutdownNow));
         write(ROOT.resolve("support-ready.json"),Map.of("owner",OWNER,"status","PASSED","substitutes",List.of("mini-provider","sms-transport","mp-deny","payment-provider-deny"),"unknownProviderOperationsDenied",true));
     }
@@ -175,6 +176,11 @@ public final class OwnedE2eApplication {
         };
     }
 
+    static void requireRunOwnedStatsOrders(Set<String> completedOrders,String startOrder,String endOrder) {
+        if(!completedOrders.contains(startOrder)||!completedOrders.contains(endOrder))
+            throw new IllegalArgumentException("RUN_OWNED_COMPLETED_STATS_ORDERS_REQUIRED");
+    }
+
     static SmsClientFactory smsFactory() {
         SmsClient client=new SmsClient() {
             public Long getId(){return 901L;}
@@ -195,7 +201,8 @@ public final class OwnedE2eApplication {
         };
     }
 
-    static void processCommands(ConfigurableApplicationContext context,JdbcTemplate db,Map<String,PaymentSuccessEvent> events) {
+    static void processCommands(ConfigurableApplicationContext context,JdbcTemplate db,Map<String,PaymentSuccessEvent> events,
+            Set<String> completedOrders) {
         Path mailbox=ROOT.resolve("commands-"+OWNER);
         try(var requests=Files.list(mailbox.resolve("requests"))) {
             for(Path request:requests.filter(path->path.getFileName().toString().matches("[a-f0-9]{32}[.]json")).toList()) {
@@ -246,6 +253,7 @@ public final class OwnedE2eApplication {
                         if(!startOrder.matches("[A-Za-z0-9_-]{1,64}")||!endOrder.matches("[A-Za-z0-9_-]{1,64}")
                                 ||startOrder.equals(endOrder)||!to.isAfter(from))
                             throw new IllegalArgumentException("INVALID_STATS_BOUNDARY_FIXTURE");
+                        requireRunOwnedStatsOrders(completedOrders,startOrder,endOrder);
                         Integer eligible=db.queryForObject("SELECT COUNT(*) FROM yshop_store_order WHERE order_id IN (?,?) "
                                 +"AND paid=1 AND shop_id IN (101,102) AND COALESCE(tenant_id,0)=0 AND deleted=0 "
                                 +"AND create_time>=DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 1 DAY)",Integer.class,startOrder,endOrder);
@@ -283,7 +291,12 @@ public final class OwnedE2eApplication {
                             event=new PaymentSuccessEvent(PaymentSuccessEvent.Provider.WECHAT,attempt.getMerchantDetailsId(),attempt.getProviderOrderReference(),"synthetic-"+attempt.getAttemptId(),attempt.getAmountCents(),attempt.getAppid(),attempt.getMerchantIdentity(),"SUCCESS",LocalDateTime.now());
                             events.put(order,event);
                         }
-                        reply.put("result",context.getBean(PaymentFinalizationService.class).acceptAttemptVerified(event).name());
+                        String result=context.getBean(PaymentFinalizationService.class).acceptAttemptVerified(event).name();
+                        Integer paid=db.queryForObject("SELECT COUNT(*) FROM yshop_store_order WHERE order_id=? AND paid=1 "
+                                +"AND shop_id IN (101,102) AND COALESCE(tenant_id,0)=0 AND deleted=0",Integer.class,order);
+                        if(paid==null||paid!=1)throw new IllegalStateException("OWNED_ORDER_COMPLETION_NOT_CONFIRMED");
+                        completedOrders.add(order);
+                        reply.put("result",result);
                         reply.put("providerRequests",0);
                     } else throw new IllegalArgumentException("UNKNOWN_TEST_ACTION");
                     reply.put("status","PASSED");

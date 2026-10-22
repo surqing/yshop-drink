@@ -46,11 +46,13 @@ class PrinterControllerTest {
                 new Action("query",controller::providers),new Action("query",controller::shops),
                 new Action("query",()->controller.page(1,10,null,null,false)),new Action("query",()->controller.get(1)),
                 new Action("query",()->controller.status(1)),new Action("query",()->controller.refreshStatus(1)),new Action("query",()->controller.getJob(1,"synthetic-request-01")),new Action("query",()->controller.jobs(1,1,10)),
+                new Action("query",()->controller.pendingOperation(1)),
                 new Action("create",()->controller.create(new SaveRequest(null,"测试","YILIAN_YUN","40000001","","CLOUD",true,Map.of()))),
                 new Action("update",()->controller.update(new SaveRequest(1L,"测试","YILIAN_YUN","40000001","","CLOUD",true,Map.of()))),
                 new Action("delete",()->controller.delete(1)),new Action("authorize",()->controller.authorize(1)),
                 new Action("authorize",()->controller.deauthorize(1)),new Action("authorize",()->controller.reconnect(1)),new Action("binding",()->controller.bind(new BindingRequest(1L,1L))),
-                new Action("binding",()->controller.unbind(1)),new Action("test",()->controller.test(new TestRequest(1L,"synthetic-request-01"))));
+                new Action("binding",()->controller.unbind(1)),new Action("test",()->controller.test(new TestRequest(1L,"synthetic-request-01"))),
+                new Action("authorize",()->controller.resolveOperation(new ResolveOperationRequest(1L,"00000000-0000-0000-0000-000000000001","确认旧任务已停止",true,true))));
             actions = new ArrayList<>(actions);
             actions.addAll(List.of(new Action("query",()->orderJobs.page(1,20,null)),
                     new Action("query",()->orderJobs.get(1L)),new Action("query",()->orderJobs.refresh(1L)),
@@ -73,6 +75,9 @@ class PrinterControllerTest {
                 .andExpect(status().isBadRequest());
         mvc.perform(post("/store/printer/test-print").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"id\":1,\"requestId\":\"short\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/store/printer/operation/resolve").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"id\":1,\"operationToken\":\"00000000-0000-0000-0000-000000000001\",\"reason\":\"确认请求已结束\",\"senderStopped\":true,\"providerWorkSettled\":false}"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(service);
         OrderPrintJobService orderJobs=mock(OrderPrintJobService.class);

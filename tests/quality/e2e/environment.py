@@ -23,7 +23,7 @@ MIGRATIONS = ['payment-credential-columns.sql','2026-10-03-payment-finalization.
               '2026-10-11-member-identity.sql','2026-10-19-score-submission.sql',
               '2026-10-22-order-fulfillment.sql','2026-10-22-order-print-event.sql',
               '2026-10-22-order-print-job.sql','2026-10-05-printer-management.sql',
-              '2026-10-22-order-print-device-claim.sql']
+              '2026-10-22-order-print-device-claim.sql','2026-10-22-printer-operation-recovery.sql']
 
 
 def merge(target, values):
@@ -117,7 +117,7 @@ class OwnedEnvironment:
             # Permission descriptors require an actual menu ancestor. Our schema-only
             # fixture creates that menu below; production migrations reject its absence.
             if name in ('2026-10-08-coupon-permissions.sql','2026-10-05-printer-management.sql',
-                        '2026-10-22-order-print-device-claim.sql'):continue
+                        '2026-10-22-order-print-device-claim.sql','2026-10-22-printer-operation-recovery.sql'):continue
             self.report['stage']='MIGRATION:'+name
             self.sql((self.repo/'yshop-drink-boot3/sql/migrations'/name).read_text())
         self.docker('exec','-i',self.mysql,'mysql','--defaults-extra-file=/run/client.cnf',input=
@@ -151,6 +151,9 @@ class OwnedEnvironment:
         if '2026-10-22-order-print-device-claim.sql' in MIGRATIONS:
             self.report['stage']='MIGRATION:2026-10-22-order-print-device-claim.sql'
             self.sql((self.repo/'yshop-drink-boot3/sql/migrations/2026-10-22-order-print-device-claim.sql').read_text())
+        if '2026-10-22-printer-operation-recovery.sql' in MIGRATIONS:
+            self.report['stage']='MIGRATION:2026-10-22-printer-operation-recovery.sql'
+            self.sql((self.repo/'yshop-drink-boot3/sql/migrations/2026-10-22-printer-operation-recovery.sql').read_text())
         if '2026-10-08-coupon-permissions.sql' in MIGRATIONS:
             self.report['stage']='MIGRATION:2026-10-08-coupon-permissions.sql'
             self.sql((self.repo/'yshop-drink-boot3/sql/migrations/2026-10-08-coupon-permissions.sql').read_text())

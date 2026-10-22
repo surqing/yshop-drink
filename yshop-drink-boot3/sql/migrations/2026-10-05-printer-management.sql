@@ -8,6 +8,7 @@ CREATE PROCEDURE quality_check_printer_management()
 BEGIN
   DECLARE matched INT DEFAULT 0;
   DECLARE printer_tables INT DEFAULT 0;
+  DECLARE operation_columns INT DEFAULT 0;
   IF (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE()
       AND TABLE_NAME IN ('system_menu','yshop_store_shop') AND TABLE_TYPE='BASE TABLE' AND ENGINE='InnoDB')<>2 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='PRINTER_LEGACY_SCHEMA_REQUIRED';
@@ -121,6 +122,8 @@ BEGIN
       UNION ALL SELECT 'yshop_printer','authorization','varchar(20)','NO','UNAUTHORIZED','utf8mb4_0900_ai_ci',''
       UNION ALL SELECT 'yshop_printer','authorization_operation','varchar(36)','YES',NULL,'utf8mb4_0900_ai_ci',''
       UNION ALL SELECT 'yshop_printer','authorization_operation_at','datetime','YES',NULL,NULL,''
+      UNION ALL SELECT 'yshop_printer','authorization_operation_type','varchar(32)','YES',NULL,'utf8mb4_0900_ai_ci',''
+      UNION ALL SELECT 'yshop_printer','authorization_operation_request_id','varchar(64)','YES',NULL,'ascii_bin',''
       UNION ALL SELECT 'yshop_printer','device_state','varchar(20)','NO','UNKNOWN','utf8mb4_0900_ai_ci',''
       UNION ALL SELECT 'yshop_printer','state_checked_at','datetime','YES',NULL,NULL,''
       UNION ALL SELECT 'yshop_printer','encrypted_config','text','YES',NULL,'utf8mb4_0900_ai_ci',''
@@ -156,7 +159,11 @@ BEGIN
       AND (expected.coll IS NULL OR REPLACE(actual.COLLATION_NAME,'utf8_','utf8mb3_')=expected.coll)
       AND (CASE WHEN expected.extra<>'' THEN actual.EXTRA=expected.extra
            ELSE actual.EXTRA IN ('','DEFAULT_GENERATED') END);
-    IF matched<>38 OR (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('yshop_printer','yshop_printer_binding','yshop_printer_test_job','yshop_printer_provider_token'))<>38 THEN
+    SELECT COUNT(*) INTO operation_columns FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer'
+      AND COLUMN_NAME IN ('authorization_operation_type','authorization_operation_request_id');
+    IF matched NOT IN (38,40) OR operation_columns NOT IN (0,2)
+      OR (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('yshop_printer','yshop_printer_binding','yshop_printer_test_job','yshop_printer_provider_token')) NOT IN (38,40)
+      OR matched<>(SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('yshop_printer','yshop_printer_binding','yshop_printer_test_job','yshop_printer_provider_token')) THEN
       SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='PRINTER_SCHEMA_MISMATCH';
     END IF;
 
@@ -253,6 +260,8 @@ CREATE TABLE IF NOT EXISTS yshop_printer (
   authorization varchar(20) NOT NULL DEFAULT 'UNAUTHORIZED',
   authorization_operation varchar(36) DEFAULT NULL,
   authorization_operation_at datetime DEFAULT NULL,
+  authorization_operation_type varchar(32) DEFAULT NULL,
+  authorization_operation_request_id varchar(64) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
   device_state varchar(20) NOT NULL DEFAULT 'UNKNOWN',
   state_checked_at datetime DEFAULT NULL,
   encrypted_config text DEFAULT NULL,

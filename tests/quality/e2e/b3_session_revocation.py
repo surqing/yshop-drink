@@ -29,7 +29,7 @@ PRINTER_TABLES = (
     'yshop_printer', 'yshop_printer_binding', 'yshop_printer_test_job',
     'yshop_order_print_job', 'yshop_order_fulfillment_print_event',
     'yshop_printer_provider_token', 'yshop_order_print_device_claim',
-    'yshop_order_print_device_claim_resolution',
+    'yshop_order_print_device_claim_resolution', 'yshop_printer_operation_resolution',
 )
 PRINTER_FIXTURE_COUNTS = {
     'yshop_printer': 1,
@@ -40,6 +40,7 @@ PRINTER_FIXTURE_COUNTS = {
     'yshop_printer_provider_token': 0,
     'yshop_order_print_device_claim': 0,
     'yshop_order_print_device_claim_resolution': 0,
+    'yshop_printer_operation_resolution': 0,
 }
 HQ_USER_ID = 910104
 HQ_ROLE_ID = 910104
@@ -93,7 +94,8 @@ def printer_rows_snapshot(environment):
     # exposing encrypted credentials, provider tokens or claim lease tokens.
     queries = {
         'yshop_printer': "SELECT CONCAT_WS('|',id,tenant_id,name,provider_code,device_code,enabled,deleted,authorization,"
-                         "device_state,COALESCE(last_error,''),COALESCE(authorization_operation,'')) FROM yshop_printer ORDER BY id;",
+                         "device_state,COALESCE(last_error,''),COALESCE(authorization_operation,''),COALESCE(authorization_operation_type,''),"
+                         "COALESCE(authorization_operation_request_id,'')) FROM yshop_printer ORDER BY id;",
         'yshop_printer_binding': "SELECT CONCAT_WS('|',tenant_id,printer_id,shop_id) FROM yshop_printer_binding ORDER BY tenant_id,printer_id;",
         'yshop_printer_test_job': "SELECT CONCAT_WS('|',tenant_id,request_id,printer_id,state,COALESCE(provider_job_id,''),COALESCE(error_code,'')) "
                                   "FROM yshop_printer_test_job ORDER BY tenant_id,request_id;",
@@ -102,6 +104,9 @@ def printer_rows_snapshot(environment):
         'yshop_order_print_device_claim_resolution': "SELECT CONCAT_WS('|',tenant_id,printer_id,job_id,request_key,outcome,"
                                                        "claim_was_present,actor_id,COALESCE(prior_error,'')) "
                                                        "FROM yshop_order_print_device_claim_resolution ORDER BY tenant_id,job_id;",
+        'yshop_printer_operation_resolution': "SELECT CONCAT_WS('|',tenant_id,printer_id,operation_token,operation_type,"
+                                               "COALESCE(request_id,''),outcome,sender_stopped,provider_work_settled,actor_id,reason) "
+                                               "FROM yshop_printer_operation_resolution ORDER BY tenant_id,printer_id,operation_token;",
     }
     return {table: environment.sql(query).splitlines() for table, query in queries.items()}
 
@@ -380,6 +385,21 @@ def run(repo, output):
               {'before': revoke_before, 'after': after_revoke_db,
                'denial': denial_evidence(after_revoke),
                'fakePrinterCounters': provider_counts(after_revoke_vendor)})
+
+        revoked_print_before = side_effect_snapshot(environment)
+        revoked_print_vendor_before = invoke(environment.context() | support.context(), 'printer-counters', {})
+        revoked_test_print = api('POST', '/admin-api/store/printer/test-print',
+                                 {'id': 9001, 'requestId': 'b3-revoked-test-0001'}, token=hq_token)
+        revoked_print_after = side_effect_snapshot(environment)
+        revoked_print_vendor_after = invoke(environment.context() | support.context(), 'printer-counters', {})
+        check('same revoked old token cannot test-print tenant-0 printer with no side effects',
+              denied(revoked_test_print) and revoked_print_before == revoked_print_after and
+              provider_counts(revoked_print_vendor_before) == provider_counts(revoked_print_vendor_after) and
+              revoked_print_vendor_after.get('printCalls') == 0 and
+              revoked_print_vendor_after.get('statusCalls') == 0,
+              {'before': revoked_print_before, 'after': revoked_print_after,
+               'denial': denial_evidence(revoked_test_print),
+               'fakePrinterCounters': provider_counts(revoked_print_vendor_after)})
 
         check('printer tables remain unchanged except the synthetic cross-tenant fixture',
               printer_snapshot(environment) == PRINTER_FIXTURE_COUNTS,

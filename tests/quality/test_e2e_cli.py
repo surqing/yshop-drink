@@ -96,7 +96,7 @@ class E2eCliTest(unittest.TestCase):
         self.assertLess(checks.index('unknown-recovery-audited'),checks.index('manual-reprint-audited'))
         quick=json.loads((REPO/'tests/quality/quick-manifest.json').read_text())
         self.assertEqual(9,quick['tests/quality/test_e2e_oracle_contract.py'])
-        self.assertEqual(9,quick['tests/quality/test_e2e_support.py'])
+        self.assertEqual(10,quick['tests/quality/test_e2e_support.py'])
 
     def test_filtered_list_contains_only_requested_scenario(self):
         result=self.invoke('E2E','--profile','local','--scenario','order-retry','--list')

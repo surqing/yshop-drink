@@ -59,6 +59,7 @@ class PrinterDatabaseTest {
         fixture();
         jdbc.update("UPDATE yshop_store_shop SET deleted=0");
         applyMigration(); applyMigration();
+        jdbc.update("DELETE FROM yshop_printer_operation_resolution");
         jdbc.update("DELETE FROM yshop_order_print_device_claim_resolution"); jdbc.update("DELETE FROM yshop_order_print_device_claim"); jdbc.update("DELETE FROM yshop_order_print_job"); jdbc.update("DELETE FROM yshop_order_fulfillment_print_event");
         jdbc.update("DELETE FROM yshop_printer_binding"); jdbc.update("DELETE FROM yshop_printer_test_job");
         jdbc.update("DELETE FROM yshop_printer_provider_token"); jdbc.update("DELETE FROM yshop_printer");
@@ -760,14 +761,82 @@ class PrinterDatabaseTest {
         service.bind(new BindingRequest(id,1L)); assertThrows(PrinterFailure.class,()->service.authorize(id,true));
         service.unbind(id); service.authorize(id,true); service.delete(id);
     }
-    @Test void authorizationCrashIntentIsDurableAndRecoverable() {
+    @Test void authorizationCrashIntentRequiresAuditedTokenBoundRecovery() {
         long id=device("4000000001"); fake.crash=true;
         assertThrows(IllegalStateException.class,()->service.authorize(id,false));
         assertEquals(Authorization.UNKNOWN,service.get(id).authorization());
         assertEquals("PRINTER_BUSY",assertThrows(PrinterFailure.class,()->service.authorize(id,false)).getMessage());
         assertEquals("PRINTER_BUSY",assertThrows(PrinterFailure.class,()->service.bind(new BindingRequest(id,1L))).getMessage());
         jdbc.update("UPDATE yshop_printer SET authorization_operation_at=? WHERE id=?",java.time.LocalDateTime.now().minusMinutes(2),id);
+        PendingOperation pending=service.pendingOperation(id);
+        assertEquals("AUTHORIZE",pending.operationType());
+        assertThrows(PrinterFailure.class,()->service.resolveOperation(new ResolveOperationRequest(id,pending.operationToken(),"核实设备状态",false,true)));
+        assertEquals(pending.operationToken(),service.pendingOperation(id).operationToken());
+        assertThrows(PrinterFailure.class,()->service.resolveOperation(new ResolveOperationRequest(id,UUID.randomUUID().toString(),"核实设备状态",true,true)));
+        var resolved=service.resolveOperation(new ResolveOperationRequest(id,pending.operationToken(),"厂商后台确认授权请求已结束",true,true));
+        assertEquals("AUTHORIZATION_UNKNOWN",resolved.outcome());
+        assertNull(service.pendingOperation(id));
+        assertEquals(Authorization.UNKNOWN,service.get(id).authorization());
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_printer_operation_resolution WHERE tenant_id=1 AND printer_id=? AND operation_token=?",Integer.class,id,pending.operationToken()));
+        assertEquals("PRINTER_OPERATION_TOKEN_MISMATCH",assertThrows(PrinterFailure.class,()->service.resolveOperation(
+                new ResolveOperationRequest(id,pending.operationToken(),"重复恢复不能再写审计",true,true))).getMessage());
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_printer_operation_resolution WHERE tenant_id=1 AND printer_id=? AND operation_token=?",Integer.class,id,pending.operationToken()));
         fake.crash=false; assertEquals(Authorization.AUTHORIZED,service.authorize(id,false).authorization());
+    }
+    @Test void activeProviderCallRemainsBusyAfterIntentTimestampExpires() throws Exception {
+        long id=device("4000000001"); service.bind(new BindingRequest(id,1L));
+        CountDownLatch enteredStatus=new CountDownLatch(1),resumeStatus=new CountDownLatch(1);
+        fake.beforeStatus=()->{
+            enteredStatus.countDown();
+            try { if(!resumeStatus.await(10,TimeUnit.SECONDS)) throw new IllegalStateException("STATUS_RESUME_TIMEOUT"); }
+            catch(InterruptedException failure) { Thread.currentThread().interrupt(); throw new IllegalStateException(failure); }
+        };
+        var executor=Executors.newSingleThreadExecutor();
+        try {
+            Future<StatusResult> refresh=executor.submit(()->{login(1,0);try{return service.status(id);}finally{cleanup();}});
+            assertTrue(enteredStatus.await(5,TimeUnit.SECONDS));
+            jdbc.update("UPDATE yshop_printer SET authorization_operation_at=? WHERE id=?",java.time.LocalDateTime.now().minusMinutes(2),id);
+
+            login(1,0);
+            assertEquals("PRINTER_BUSY",assertThrows(PrinterFailure.class,()->service.unbind(id)).getMessage());
+            try(var context=shops(shopMapper(),repo)) {
+                assertEquals("PRINTER_BUSY",assertThrows(PrinterFailure.class,
+                        ()->context.getBean(StoreShopService.class).deleteShop(1L)).getMessage());
+            }
+            assertEquals(1L,service.get(id).shopId());
+
+            resumeStatus.countDown();
+            assertEquals(DeviceState.ONLINE,refresh.get(10,TimeUnit.SECONDS).state());
+        } finally {
+            resumeStatus.countDown(); executor.shutdownNow(); executor.awaitTermination(5,TimeUnit.SECONDS); cleanup();
+        }
+    }
+    @Test void crashedStatusRefreshIsAuditedAndLeavesCachedStatusUnknown() {
+        long id=device("4000000001");
+        jdbc.update("UPDATE yshop_printer SET device_state='ONLINE',state_checked_at=CURRENT_TIMESTAMP WHERE id=?",id);
+        fake.preparation=()->{throw new IllegalStateException("SIMULATED_CRASH");};
+        assertThrows(IllegalStateException.class,()->service.status(id));
+        PendingOperation pending=service.pendingOperation(id);
+        assertEquals("STATUS_REFRESH",pending.operationType());
+        fake.preparation=()->{};
+        var resolved=service.resolveOperation(new ResolveOperationRequest(id,pending.operationToken(),"确认状态查询请求已结束",true,true));
+        assertEquals("DEVICE_STATUS_UNKNOWN",resolved.outcome());
+        assertEquals(DeviceState.UNKNOWN,service.get(id).deviceState());
+        assertEquals(Authorization.UNAUTHORIZED,service.get(id).authorization());
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_printer_operation_resolution WHERE tenant_id=1 AND printer_id=? AND operation_type='STATUS_REFRESH'",Integer.class,id));
+    }
+    @Test void legacyOperationWithoutNewTypeMetadataRecoversConservatively() {
+        long id=device("4000000001");
+        service.authorize(id,false);
+        String token=UUID.randomUUID().toString();
+        jdbc.update("UPDATE yshop_printer SET authorization_operation=?,authorization_operation_at=CURRENT_TIMESTAMP,"
+                +"authorization_operation_type=NULL,authorization_operation_request_id=NULL WHERE tenant_id=1 AND id=?",token,id);
+        PendingOperation pending=service.pendingOperation(id);
+        assertEquals("LEGACY_PROVIDER_OPERATION",pending.operationType());
+        var resolved=service.resolveOperation(new ResolveOperationRequest(id,token,"确认历史厂商操作已结束",true,true));
+        assertEquals("PROVIDER_RESULT_UNKNOWN",resolved.outcome());
+        assertEquals(Authorization.UNKNOWN,service.get(id).authorization());
+        assertEquals(DeviceState.UNKNOWN,service.get(id).deviceState());
     }
     @Test void statusFailuresAreUnknownInsteadOfOffline() {
         long id=device("4000000001"); fake.deviceState=DeviceState.PAPER_OUT; assertEquals(DeviceState.PAPER_OUT,service.status(id).state());
@@ -807,8 +876,14 @@ class PrinterDatabaseTest {
         long id=device("4000000001"); service.authorize(id,false); fake.crash=true;
         TestRequest request=new TestRequest(id,"test-request-crash01"); assertThrows(IllegalStateException.class,()->service.test(request));
         fake.crash=false; assertEquals(JobState.SUBMITTING,service.test(request).state()); assertEquals(1,fake.printCalls.get());
-        jdbc.update("UPDATE yshop_printer_test_job SET create_time=? WHERE request_id=?",java.time.LocalDateTime.now().minusMinutes(2),request.requestId());
-        assertEquals(JobState.UNKNOWN,service.test(request).state()); assertEquals(1,fake.printCalls.get());
+        PendingOperation pending=service.pendingOperation(id);
+        assertEquals("TEST_PRINT",pending.operationType()); assertEquals(request.requestId(),pending.requestId());
+        assertThrows(PrinterFailure.class,()->service.resolveOperation(new ResolveOperationRequest(id,pending.operationToken(),"尚未核对设备结果",true,false)));
+        var resolved=service.resolveOperation(new ResolveOperationRequest(id,pending.operationToken(),"设备端确认没有生成该测试小票",true,true));
+        assertEquals("TEST_PRINT_UNKNOWN",resolved.outcome());
+        assertEquals(JobState.UNKNOWN,service.getJob(id,request.requestId()).state());
+        assertEquals(1,fake.printCalls.get());
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_printer_operation_resolution WHERE tenant_id=1 AND printer_id=? AND request_id=?",Integer.class,id,request.requestId()));
     }
     @Test void concurrentBindingKeepsOneOwner() throws Exception {
         long id=device("4000000001"); CountDownLatch start=new CountDownLatch(1); var executor=Executors.newFixedThreadPool(2);
@@ -1024,6 +1099,7 @@ class PrinterDatabaseTest {
         final boolean requiresAuthorization;
         Runnable preparation=()->{};
         volatile Runnable beforePrint=()->{};
+        volatile Runnable beforeStatus=()->{};
         final AtomicInteger authorizeCalls=new AtomicInteger(),sessionCalls=new AtomicInteger();
         PrinterFailure preparationFailure;
         FakeProvider(String code) { this(code,true); }
@@ -1033,7 +1109,7 @@ class PrinterDatabaseTest {
         public void validate(String device,String connection,Map<String,String> config) {}
         public void authorize(String device,String name,Map<String,String> config) { authorizeCalls.incrementAndGet(); if(crash) throw new IllegalStateException("SIMULATED_CRASH"); if(authorizeFailure!=null) throw authorizeFailure; }
         public void deauthorize(String device) {}
-        public DeviceState status(String device) { if(statusFailure!=null) throw statusFailure;return deviceState; }
+        public DeviceState status(String device) { beforeStatus.run();if(statusFailure!=null) throw statusFailure;return deviceState; }
         public PrintResult print(String device,String request,Receipt receipt) { printCalls.incrementAndGet(); receipts.add(receipt); beforePrint.run(); if(crash) throw new IllegalStateException("SIMULATED_CRASH"); if(printFailure!=null) throw printFailure; assertEquals(1,receipt.copies()); return new PrintResult("123456789"); }
     }
 }
