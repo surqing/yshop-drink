@@ -349,21 +349,16 @@ class MiniDriver {
   async collectPickupOrder(page) {
     const before = (await this.state()).requests.filter(row => row.path === '/app-api/order/take').length
     let stage = 'locating-footer-buttons'
-    let components = []
     let component = null
     let button = null
     let request
     try {
-      components = await until(async () => {
-        const found = await page.$$('.fixed-bottom uv-button')
-        return found.length >= 2 ? found : null
-      })
-      component = components[0]
+      component = await until(() => page.$('.fixed-bottom uv-button'))
       const componentWxml = await component.outerWxml()
       if (!componentWxml.includes('确认取餐')) throw Error('PICKUP_BUTTON_SELECTOR_MISMATCH')
       stage = 'pickup-component-verified'
-      button = await until(() => component.$('button'))
-      if (!(await button.outerWxml()).includes('确认取餐')) throw Error('PICKUP_NATIVE_BUTTON_SELECTOR_MISMATCH')
+      button = await until(() => page.getElementByXpath('//text[text()="确认取餐"]'))
+      if (!(await button.outerWxml()).includes('确认取餐')) throw Error('PICKUP_BUTTON_LABEL_SELECTOR_MISMATCH')
       stage = 'pickup-native-button-verified'
       await until(async () => !(await component.$('.uv-button-wrapper--dis')))
       stage = 'pickup-button-enabled'
@@ -382,11 +377,10 @@ class MiniDriver {
         currentPage: (await this.mini.currentPage())?.path,
         pageId: page.id,
         footer: await read(async () => (await page.$('.fixed-bottom'))?.outerWxml()),
-        components: await Promise.all(components.map(candidate => read(() => candidate.outerWxml()))),
         pickupButton: await read(() => component?.outerWxml()),
-        nativeButton: await read(() => button?.outerWxml()),
-        nativeButtonSize: await read(() => button?.size()),
-        nativeButtonOffset: await read(() => button?.offset()),
+        pickupButtonLabel: await read(() => button?.outerWxml()),
+        pickupButtonLabelSize: await read(() => button?.size()),
+        pickupButtonLabelOffset: await read(() => button?.offset()),
         requestCountBefore: before,
         requestCountAfter: state.requests.filter(row => row.path === '/app-api/order/take').length,
       }
