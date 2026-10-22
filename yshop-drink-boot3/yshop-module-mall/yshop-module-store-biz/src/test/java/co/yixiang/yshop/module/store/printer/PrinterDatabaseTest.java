@@ -26,6 +26,7 @@ import co.yixiang.yshop.module.store.dal.dataobject.storeshop.StoreShopDO;
 import javax.sql.DataSource;
 import com.alibaba.druid.pool.DruidDataSource;
 import java.nio.file.*;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,7 +58,7 @@ class PrinterDatabaseTest {
         fixture();
         jdbc.update("UPDATE yshop_store_shop SET deleted=0");
         applyMigration(); applyMigration();
-        jdbc.update("DELETE FROM yshop_order_print_job"); jdbc.update("DELETE FROM yshop_order_fulfillment_print_event");
+        jdbc.update("DELETE FROM yshop_order_print_device_claim"); jdbc.update("DELETE FROM yshop_order_print_job"); jdbc.update("DELETE FROM yshop_order_fulfillment_print_event");
         jdbc.update("DELETE FROM yshop_printer_binding"); jdbc.update("DELETE FROM yshop_printer_test_job");
         jdbc.update("DELETE FROM yshop_printer_provider_token"); jdbc.update("DELETE FROM yshop_printer");
         cipher=new PrinterSecretCipher(Base64.getEncoder().encodeToString(new byte[32])); fake=new FakeProvider("YILIAN_YUN");
@@ -224,10 +225,153 @@ class PrinterDatabaseTest {
         worker.dispatchPendingJobs();
         assertEquals(1,fake.printCalls.get());
         assertEquals("UNKNOWN",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",String.class,event));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim",Integer.class));
         fake.printFailure=null;
         worker.processPendingEvents(); worker.recoverExpiredJobs(); worker.dispatchPendingJobs();
         assertEquals(1,fake.printCalls.get());
         assertEquals("UNKNOWN",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",String.class,event));
+    }
+
+    @Test void expiredUnknownJobDoesNotAutoReleaseDeviceReservation() {
+        long event=insertPrintEvent("expired-claim-unknown-0001",1L);
+        long printer=readyPrinter(1L,"4000000995");
+        var worker=newWorker(); worker.processPendingEvents();
+        long job=jdbc.queryForObject("SELECT id FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",Long.class,event);
+        String token="expired-dispatch-lease-0001";
+        jdbc.update("UPDATE yshop_order_print_job SET state='SENDING',attempts=1,lease_token=?,lease_expires_at=? WHERE id=?",
+                token,LocalDateTime.now().minusMinutes(2),job);
+        jdbc.update("INSERT INTO yshop_order_print_device_claim(tenant_id,printer_id,job_id,lease_token,shop_id) VALUES(1,?,?,?,1)",
+                printer,job,token);
+
+        assertEquals(1,worker.recoverExpiredJobs());
+        assertEquals("UNKNOWN",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE id=?",String.class,job));
+        assertEquals("PRINTER_BUSY",assertThrows(PrinterFailure.class,()->service.unbind(printer)).getMessage());
+        worker.dispatchPendingJobs();
+
+        assertEquals(0,fake.printCalls.get());
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim WHERE printer_id=?",Integer.class,printer));
+        assertEquals("UNKNOWN",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE id=?",String.class,job));
+    }
+
+    @Test void printerReboundDuringSessionPreparationCannotReceiveOldShopOrder() throws Exception {
+        long event=insertPrintEvent("rebind-during-prepare-0001",1L);
+        long printer=readyPrinter(1L,"4000000998");
+        var worker=newWorker(); worker.processPendingEvents();
+        CountDownLatch preparing=new CountDownLatch(1),resume=new CountDownLatch(1);
+        fake.preparation=()->{
+            if(fake.sessionCalls.get()==1) {
+                preparing.countDown();
+                try {
+                    if(!resume.await(10,TimeUnit.SECONDS)) throw new IllegalStateException("PREPARATION_RESUME_TIMEOUT");
+                } catch(InterruptedException failure) {
+                    Thread.currentThread().interrupt(); throw new IllegalStateException(failure);
+                }
+            }
+        };
+        var pool=Executors.newSingleThreadExecutor();
+        try {
+            Future<Integer> dispatch=pool.submit(worker::dispatchPendingJobs);
+            assertTrue(preparing.await(5,TimeUnit.SECONDS),"worker did not reach provider session preparation");
+
+            service.unbind(printer);
+            service.bind(new BindingRequest(printer,2L));
+            resume.countDown();
+
+            assertEquals(0,dispatch.get(10,TimeUnit.SECONDS));
+            assertEquals(0,fake.printCalls.get(),"stale shop-1 job must not be sent to the shop-2 device");
+            assertEquals("FAILED",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",String.class,event));
+            assertEquals("PRINTER_NOT_BOUND",jdbc.queryForObject("SELECT last_error FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",String.class,event));
+            assertEquals(2L,service.get(printer).shopId());
+        } finally {
+            resume.countDown(); pool.shutdownNow(); pool.awaitTermination(5,TimeUnit.SECONDS);
+        }
+    }
+
+    @Test void printerDisabledDuringSessionPreparationCannotReceiveOrder() throws Exception {
+        long event=insertPrintEvent("disable-during-prepare-0001",1L);
+        long printer=readyPrinter(1L,"4000000999");
+        var worker=newWorker(); worker.processPendingEvents();
+        CountDownLatch preparing=new CountDownLatch(1),resume=new CountDownLatch(1);
+        fake.preparation=()->{
+            if(fake.sessionCalls.get()==1) {
+                preparing.countDown();
+                try { if(!resume.await(10,TimeUnit.SECONDS)) throw new IllegalStateException("PREPARATION_RESUME_TIMEOUT"); }
+                catch(InterruptedException failure) { Thread.currentThread().interrupt(); throw new IllegalStateException(failure); }
+            }
+        };
+        var pool=Executors.newSingleThreadExecutor();
+        try {
+            Future<Integer> dispatch=pool.submit(worker::dispatchPendingJobs);
+            assertTrue(preparing.await(5,TimeUnit.SECONDS));
+            service.save(new SaveRequest(printer,"测试设备","YILIAN_YUN","4000000999","K4","CLOUD",false,Map.of()),true);
+            resume.countDown();
+            assertEquals(0,dispatch.get(10,TimeUnit.SECONDS));
+            assertEquals(0,fake.printCalls.get());
+            assertEquals("PRINTER_DISABLED",jdbc.queryForObject("SELECT last_error FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",String.class,event));
+            assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim",Integer.class));
+        } finally {
+            resume.countDown(); pool.shutdownNow(); pool.awaitTermination(5,TimeUnit.SECONDS);
+        }
+    }
+
+    @Test void authorizationRevokedDuringSessionPreparationCannotReceiveOrder() throws Exception {
+        long event=insertPrintEvent("revoke-during-prepare-0001",1L);
+        long printer=readyPrinter(1L,"4000001000");
+        var worker=newWorker(); worker.processPendingEvents();
+        CountDownLatch preparing=new CountDownLatch(1),resume=new CountDownLatch(1);
+        fake.preparation=()->{
+            if(fake.sessionCalls.get()==1) {
+                preparing.countDown();
+                try { if(!resume.await(10,TimeUnit.SECONDS)) throw new IllegalStateException("PREPARATION_RESUME_TIMEOUT"); }
+                catch(InterruptedException failure) { Thread.currentThread().interrupt(); throw new IllegalStateException(failure); }
+            }
+        };
+        var pool=Executors.newSingleThreadExecutor();
+        try {
+            Future<Integer> dispatch=pool.submit(worker::dispatchPendingJobs);
+            assertTrue(preparing.await(5,TimeUnit.SECONDS));
+            service.unbind(printer);
+            assertEquals(Authorization.UNAUTHORIZED,service.authorize(printer,true).authorization());
+            service.bind(new BindingRequest(printer,1L));
+            resume.countDown();
+            assertEquals(0,dispatch.get(10,TimeUnit.SECONDS));
+            assertEquals(0,fake.printCalls.get());
+            assertEquals("PRINTER_NOT_AUTHORIZED",jdbc.queryForObject("SELECT last_error FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",String.class,event));
+            assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim",Integer.class));
+        } finally {
+            resume.countDown(); pool.shutdownNow(); pool.awaitTermination(5,TimeUnit.SECONDS);
+        }
+    }
+
+    @Test void twoWorkersCannotPrintOrRebindWhileOneDeviceSendIsInFlight() throws Exception {
+        long firstEvent=insertPrintEvent("two-workers-first-event-01",1L);
+        long secondEvent=insertPrintEvent("two-workers-second-event-01",1L);
+        long printer=readyPrinter(1L,"4000001001");
+        var firstWorker=newWorker(); var secondWorker=newWorker(); firstWorker.processPendingEvents();
+        CountDownLatch printing=new CountDownLatch(1),resume=new CountDownLatch(1);
+        fake.beforePrint=()->{
+            if(fake.printCalls.get()==1) {
+                printing.countDown();
+                try { if(!resume.await(10,TimeUnit.SECONDS)) throw new IllegalStateException("PRINT_RESUME_TIMEOUT"); }
+                catch(InterruptedException failure) { Thread.currentThread().interrupt(); throw new IllegalStateException(failure); }
+            }
+        };
+        var pool=Executors.newSingleThreadExecutor();
+        try {
+            Future<Integer> first=pool.submit(firstWorker::dispatchPendingJobs);
+            assertTrue(printing.await(5,TimeUnit.SECONDS),"first worker did not enter provider print");
+            assertEquals("PRINTER_BUSY",assertThrows(PrinterFailure.class,()->service.unbind(printer)).getMessage());
+            assertEquals(0,secondWorker.dispatchPendingJobs());
+            assertEquals(1,fake.printCalls.get(),"second worker must not enter the provider while the device is reserved");
+            assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim WHERE printer_id=?",Integer.class,printer));
+            resume.countDown();
+            assertEquals(1,first.get(10,TimeUnit.SECONDS));
+            assertEquals("ACCEPTED",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE event_id=?",String.class,firstEvent));
+            assertEquals("PENDING",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE event_id=?",String.class,secondEvent));
+            assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim",Integer.class));
+        } finally {
+            resume.countDown(); pool.shutdownNow(); pool.awaitTermination(5,TimeUnit.SECONDS);
+        }
     }
 
     @Test void reprintCreatesAuditedChild() {
@@ -753,6 +897,7 @@ class PrinterDatabaseTest {
         DeviceState deviceState=DeviceState.ONLINE;
         final boolean requiresAuthorization;
         Runnable preparation=()->{};
+        volatile Runnable beforePrint=()->{};
         final AtomicInteger authorizeCalls=new AtomicInteger(),sessionCalls=new AtomicInteger();
         PrinterFailure preparationFailure;
         FakeProvider(String code) { this(code,true); }
@@ -763,6 +908,6 @@ class PrinterDatabaseTest {
         public void authorize(String device,String name,Map<String,String> config) { authorizeCalls.incrementAndGet(); if(crash) throw new IllegalStateException("SIMULATED_CRASH"); if(authorizeFailure!=null) throw authorizeFailure; }
         public void deauthorize(String device) {}
         public DeviceState status(String device) { if(statusFailure!=null) throw statusFailure;return deviceState; }
-        public PrintResult print(String device,String request,Receipt receipt) { printCalls.incrementAndGet(); receipts.add(receipt); if(crash) throw new IllegalStateException("SIMULATED_CRASH"); if(printFailure!=null) throw printFailure; assertEquals(1,receipt.copies()); return new PrintResult("123456789"); }
+        public PrintResult print(String device,String request,Receipt receipt) { printCalls.incrementAndGet(); receipts.add(receipt); beforePrint.run(); if(crash) throw new IllegalStateException("SIMULATED_CRASH"); if(printFailure!=null) throw printFailure; assertEquals(1,receipt.copies()); return new PrintResult("123456789"); }
     }
 }

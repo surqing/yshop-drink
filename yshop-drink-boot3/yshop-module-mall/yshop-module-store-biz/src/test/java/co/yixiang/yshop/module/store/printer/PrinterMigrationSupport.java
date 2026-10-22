@@ -41,9 +41,13 @@ final class PrinterMigrationSupport {
             .replaceAll(" ON UPDATE CURRENT_TIMESTAMP", "")
             .replaceAll(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "");
         jdbc.execute(jobs.trim().replaceAll(";+$", ""));
+        String claims=Files.readString(Path.of("../../sql/migrations/2026-10-22-order-print-device-claim.sql"));
+        if(!mysql) claims=claims.replaceAll(" CHARACTER SET ascii COLLATE ascii_bin", "")
+            .replaceAll(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "");
+        jdbc.execute(claims.trim().replaceAll(";+$", ""));
     }
     static void upstream(JdbcTemplate jdbc) throws Exception {
-        for(String table:List.of("yshop_order_print_job","yshop_printer_binding","yshop_printer_test_job","yshop_printer_provider_token","yshop_printer","system_menu","yshop_store_shop")) jdbc.execute("DROP TABLE IF EXISTS "+table);
+        for(String table:List.of("yshop_order_print_device_claim","yshop_order_print_job","yshop_printer_binding","yshop_printer_test_job","yshop_printer_provider_token","yshop_printer","system_menu","yshop_store_shop")) jdbc.execute("DROP TABLE IF EXISTS "+table);
         String source=Files.readString(Path.of("../../sql/yixiang-drink-open.sql"));
         for(String table:List.of("system_menu","yshop_store_shop")) {
             Matcher m=Pattern.compile("(?ms)^CREATE TABLE `"+table+"` \\(.*?;").matcher(source);

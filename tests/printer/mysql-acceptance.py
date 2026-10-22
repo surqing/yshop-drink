@@ -71,7 +71,7 @@ def main():
         rows=docker('exec',name,'mysql','--defaults-extra-file=/run/secrets/client.cnf','-N','-e',
                     "SELECT TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA='"+schema+"'").splitlines()
         engines=dict(row.split('\t') for row in rows)
-        expected_tables={'system_menu','yshop_store_shop','yshop_printer','yshop_printer_binding','yshop_printer_test_job','yshop_printer_provider_token','yshop_order_print_job','yshop_order_fulfillment_print_event'}
+        expected_tables={'system_menu','yshop_store_shop','yshop_printer','yshop_printer_binding','yshop_printer_test_job','yshop_printer_provider_token','yshop_order_print_job','yshop_order_print_device_claim','yshop_order_fulfillment_print_event'}
         report['schemaInventory']={'expected':sorted(expected_tables),'observed':sorted(engines)}
         if set(engines)!=expected_tables or set(engines.values())!={'InnoDB'}:raise RuntimeError('INNODB_SCHEMA_REQUIRED')
         report['realProviderRequests']=0;report['legacyDefinitionsOnly']=True
