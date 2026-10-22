@@ -348,17 +348,28 @@ class MiniDriver {
   }
   async collectPickupOrder(page) {
     const before = (await this.state()).requests.filter(row => row.path === '/app-api/order/take').length
-    const component = await until(async () => {
-      for (const candidate of await page.$$('.fixed-bottom uv-button')) {
-        if ((await candidate.text()).includes('确认取餐')) return candidate
-      }
-      return null
-    })
-    const button = await until(() => component.$('button.uv-button'))
-    await until(async () => !(await component.$('.uv-button-wrapper--dis')))
+    let stage = 'locating-footer-buttons'
+    let components = []
+    let component = null
+    let button = null
     let request
     try {
+      components = await until(async () => {
+        const found = await page.$$('.fixed-bottom uv-button')
+        return found.length >= 2 ? found : null
+      })
+      component = components[0]
+      const componentWxml = await component.outerWxml()
+      if (!componentWxml.includes('确认取餐')) throw Error('PICKUP_BUTTON_SELECTOR_MISMATCH')
+      stage = 'pickup-component-verified'
+      button = await until(() => component.$('button'))
+      if (!(await button.outerWxml()).includes('确认取餐')) throw Error('PICKUP_NATIVE_BUTTON_SELECTOR_MISMATCH')
+      stage = 'pickup-native-button-verified'
+      await until(async () => !(await component.$('.uv-button-wrapper--dis')))
+      stage = 'pickup-button-enabled'
       await button.tap()
+      stage = 'pickup-button-tapped'
+      this.lifecycle('pickup-button-tapped')
       request = await until(async () => {
         const rows = (await this.state()).requests.filter(row => row.path === '/app-api/order/take')
         return rows.length > before && rows.at(-1).responseCode !== undefined ? rows.at(-1) : null
@@ -367,13 +378,15 @@ class MiniDriver {
       const read = async fn => { try { return await fn() } catch (failure) { return `UNAVAILABLE:${failure.message}` } }
       const state = await this.state()
       const probe = {
+        stage,
         currentPage: (await this.mini.currentPage())?.path,
         pageId: page.id,
         footer: await read(async () => (await page.$('.fixed-bottom'))?.outerWxml()),
-        pickupButton: await read(() => component.outerWxml()),
-        nativeButton: await read(() => button.outerWxml()),
-        nativeButtonSize: await read(() => button.size()),
-        nativeButtonOffset: await read(() => button.offset()),
+        components: await Promise.all(components.map(candidate => read(() => candidate.outerWxml()))),
+        pickupButton: await read(() => component?.outerWxml()),
+        nativeButton: await read(() => button?.outerWxml()),
+        nativeButtonSize: await read(() => button?.size()),
+        nativeButtonOffset: await read(() => button?.offset()),
         requestCountBefore: before,
         requestCountAfter: state.requests.filter(row => row.path === '/app-api/order/take').length,
       }
