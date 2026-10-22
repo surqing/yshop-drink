@@ -2,14 +2,19 @@ package co.yixiang.yshop.module.store.printer;
 
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** MySQL-only acceptance: production preflight, upstream DDL, and fail-before-write oracles. */
 class PrinterMigrationDatabaseTest {
     JdbcTemplate jdbc;
-    @BeforeEach void fixture() throws Exception { jdbc=PrinterMigrationSupport.mysql(); PrinterMigrationSupport.upstream(jdbc); }
-    @AfterEach void cleanup() throws Exception { PrinterMigrationSupport.upstream(jdbc); PrinterMigrationSupport.migrate(jdbc,true); }
+    SingleConnectionDataSource source;
+    @BeforeEach void fixture() throws Exception { source=PrinterMigrationSupport.mysqlSingleConnection(); jdbc=new JdbcTemplate(source); PrinterMigrationSupport.upstream(jdbc); }
+    @AfterEach void cleanup() throws Exception {
+        try {PrinterMigrationSupport.upstream(jdbc); PrinterMigrationSupport.migrate(jdbc,true);}
+        finally {if(source!=null) source.destroy();}
+    }
     void migrate() throws Exception { PrinterMigrationSupport.migrate(jdbc,true); }
     Map<String,Object> snapshot() {
         Map<String,Object> result=new TreeMap<>();
@@ -18,6 +23,7 @@ class PrinterMigrationDatabaseTest {
             result.put(name+".data",jdbc.queryForList("SELECT * FROM "+name));
         }
         result.put("triggers",jdbc.queryForList("SELECT TRIGGER_NAME,ACTION_STATEMENT FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() ORDER BY TRIGGER_NAME"));
+        result.put("routines",jdbc.queryForList("SELECT ROUTINE_NAME,ROUTINE_TYPE FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA=DATABASE() ORDER BY ROUTINE_NAME"));
         return result;
     }
     void rejectedUnchanged() {
@@ -100,6 +106,42 @@ class PrinterMigrationDatabaseTest {
     @Test void partialOperationResolutionTableIsRejectedBeforeSchemaChanges() throws Exception {
         migrate(); jdbc.execute("DROP TABLE yshop_printer_operation_resolution");
         jdbc.execute("CREATE TABLE yshop_printer_operation_resolution(id bigint PRIMARY KEY) ENGINE=InnoDB");
+        rejectedUnchanged();
+    }
+    @Test void partialOrderPrintDeviceClaimTableIsRejectedBeforeSchemaChanges() throws Exception {
+        migrate(); jdbc.execute("DROP TABLE yshop_order_print_device_claim");
+        jdbc.execute("CREATE TABLE yshop_order_print_device_claim(id bigint PRIMARY KEY) ENGINE=InnoDB");
+        rejectedUnchanged();
+    }
+    @Test void partialOrderPrintDeviceClaimResolutionTableIsRejectedBeforeSchemaChanges() throws Exception {
+        migrate(); jdbc.execute("DROP TABLE yshop_order_print_device_claim_resolution");
+        jdbc.execute("CREATE TABLE yshop_order_print_device_claim_resolution(id bigint PRIMARY KEY) ENGINE=InnoDB");
+        rejectedUnchanged();
+    }
+    @Test void missingOrderPrintDeviceClaimJobUniquenessIsRejected() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_order_print_device_claim DROP INDEX uk_order_print_device_claim_job");
+        rejectedUnchanged();
+    }
+    @Test void cascadingOrderPrintDeviceClaimForeignKeyIsRejected() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_order_print_device_claim DROP FOREIGN KEY fk_order_print_device_claim_printer");
+        jdbc.execute("ALTER TABLE yshop_order_print_device_claim ADD CONSTRAINT fk_order_print_device_claim_printer "
+                +"FOREIGN KEY(printer_id,tenant_id) REFERENCES yshop_printer(id,tenant_id) ON DELETE CASCADE");
+        rejectedUnchanged();
+    }
+    @Test void orderPrintDeviceClaimCreateTimeOnUpdateIsRejected() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_order_print_device_claim MODIFY create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+        rejectedUnchanged();
+    }
+    @Test void missingOrderPrintDeviceClaimResolutionJobUniquenessIsRejected() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_order_print_device_claim_resolution DROP INDEX uk_print_claim_resolution_job");
+        rejectedUnchanged();
+    }
+    @Test void missingOrderPrintDeviceClaimResolutionCreateTimeDefaultIsRejected() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_order_print_device_claim_resolution ALTER COLUMN create_time DROP DEFAULT");
+        rejectedUnchanged();
+    }
+    @Test void nonTransactionalOrderPrintDeviceClaimResolutionIsRejected() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_order_print_device_claim_resolution ENGINE=MyISAM");
         rejectedUnchanged();
     }
     @Test void wrongFifteenColumnResolutionTableIsRejectedBeforeSchemaChanges() throws Exception {

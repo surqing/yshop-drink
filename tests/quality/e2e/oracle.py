@@ -20,6 +20,12 @@ def order_id(value):
     return "'"+value+"'"
 
 
+def operation_token(value):
+    if not isinstance(value,str) or not re.fullmatch(r'[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}',value):
+        raise ValueError('OPERATION_TOKEN_INVALID')
+    return "'"+value+"'"
+
+
 def date_range(ids):
     values=[]
     for key in ('from','to'):
@@ -110,6 +116,13 @@ def query_for(name, ids):
                 "'operationTokenPresent',CAST(p.authorization_operation IS NOT NULL AS UNSIGNED),"
                 "'operationResolutionCount',(SELECT COUNT(*) FROM yshop_printer_operation_resolution r WHERE r.tenant_id=p.tenant_id AND r.printer_id=p.id)) "
                 "FROM yshop_printer p WHERE p.id="+device+';')
+    if name=='printer-operation-resolution':
+        device=number(ids.get('printerId'));token=operation_token(ids.get('operationToken'));request=order_id(ids.get('requestId'))
+        return ("SELECT JSON_OBJECT('operationType',r.operation_type,'requestId',r.request_id,'outcome',r.outcome,"
+                "'senderStopped',CAST(r.sender_stopped AS UNSIGNED),'providerWorkSettled',CAST(r.provider_work_settled AS UNSIGNED),"
+                "'actorId',r.actor_id,'reason',r.reason) FROM yshop_printer p JOIN yshop_printer_operation_resolution r "
+                "ON r.tenant_id=p.tenant_id AND r.printer_id=p.id WHERE p.id="+device+
+                " AND r.operation_token="+token+" AND r.request_id="+request+";")
     if name=='order':
         return "SELECT JSON_OBJECT('id',id,'memberId',uid,'shopId',shop_id,'amount',pay_price,'paid',paid,'status',status,'deleted',CAST(deleted AS UNSIGNED),'couponId',coupon_id,'quantity',total_num,'remark',remark) FROM yshop_store_order WHERE order_id="+order_id(ids.get('orderId'))+';'
     if name=='order-lines':

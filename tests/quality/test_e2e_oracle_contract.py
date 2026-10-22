@@ -69,6 +69,23 @@ class E2eOracleContractTest(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 query_for('print-recovery', {'jobId': value})
 
+    def test_printer_operation_resolution_oracle_matches_token_and_request_without_echoing_token(self):
+        token = '12345678-1234-1234-1234-123456789012'
+        sql = query_for('printer-operation-resolution', {
+            'printerId': 123, 'operationToken': token, 'requestId': 'test-request-1'
+        })
+        self.assertIn('r.operation_token='+"'"+token+"'", sql)
+        self.assertIn("r.request_id='test-request-1'", sql)
+        for field in ('operation_type', 'request_id', 'outcome', 'sender_stopped', 'provider_work_settled', 'actor_id', 'reason'):
+            self.assertIn(field, sql)
+        self.assertNotIn("'operationToken',r.operation_token", sql)
+        for ids in (
+            {'printerId': 123, 'operationToken': 'not-a-token', 'requestId': 'test-request-1'},
+            {'printerId': 123, 'operationToken': token, 'requestId': "x' OR 1=1 --"},
+        ):
+            with self.subTest(ids=ids), self.assertRaises(ValueError):
+                query_for('printer-operation-resolution', ids)
+
     def test_product_oracle_reports_order_reward_snapshot(self):
         sql = query_for('product', {'productId': 101})
         self.assertIn("'giveIntegral',give_integral", sql)

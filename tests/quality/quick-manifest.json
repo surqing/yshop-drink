@@ -21,7 +21,7 @@
   "tests/quality/test_e2e_environment.py": 18,
   "tests/quality/test_e2e_publish.py": 9,
   "tests/quality/test_e2e_support.py": 10,
-  "tests/quality/test_e2e_oracle_contract.py": 9,
+  "tests/quality/test_e2e_oracle_contract.py": 10,
   "tests/quality/test_evidence.py": 50,
   "tests/quality/test_merge_scope.py": 50,
   "tests/quality/test_owned_resources.py": 16,

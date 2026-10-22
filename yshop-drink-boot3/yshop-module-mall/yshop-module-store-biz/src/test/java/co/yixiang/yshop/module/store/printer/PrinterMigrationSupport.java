@@ -2,6 +2,7 @@ package co.yixiang.yshop.module.store.printer;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import java.nio.file.*;
 import java.util.*;
 import java.util.regex.*;
@@ -18,6 +19,9 @@ final class PrinterMigrationSupport {
             ||!user.matches("qa_printer_[a-f0-9]{16}")) throw new IllegalStateException("OWNED_DATABASE_REQUIRED");
         return new JdbcTemplate(new DriverManagerDataSource(url,user,p.getProperty("password")));
     }
+    static SingleConnectionDataSource mysqlSingleConnection() throws Exception {
+        return new SingleConnectionDataSource(mysql().getDataSource().getConnection(),true);
+    }
     static void migrate(JdbcTemplate jdbc,boolean mysql) throws Exception {
         String sql=Files.readString(Path.of("../../sql/migrations/2026-10-05-printer-management.sql"));
         // H2 cannot model MySQL information_schema / enforced checks. Only MySQL acceptance
@@ -26,42 +30,41 @@ final class PrinterMigrationSupport {
             .replaceAll(" CHARACTER SET ascii COLLATE ascii_bin", "")
             .replaceAll(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4(?: COLLATE=utf8mb4_0900_ai_ci)?", "")
             .replaceAll("b'([01])'", "$1");
-        String delimiter=";"; StringBuilder statement=new StringBuilder();
-        for(String line:sql.split("\\R")) {
-            String trimmed=line.trim();
-            if(trimmed.startsWith("--")||trimmed.isEmpty()) continue;
-            if(trimmed.startsWith("DELIMITER ")) { delimiter=trimmed.substring(10).trim();continue; }
-            statement.append(line).append('\n');
-            String pending=statement.toString().trim();
-            if(pending.endsWith(delimiter)) {jdbc.execute(pending.substring(0,pending.length()-delimiter.length()));statement.setLength(0);}
-        }
-        if(!statement.toString().isBlank()) throw new IllegalStateException("UNTERMINATED_MIGRATION");
+        try {executeDelimited(jdbc,sql);}
+        finally {if(mysql) jdbc.execute("DROP PROCEDURE IF EXISTS quality_check_printer_management");}
         String jobs=Files.readString(Path.of("../../sql/migrations/2026-10-22-order-print-job.sql"));
         if(!mysql) jobs=jobs.replaceAll(" CHARACTER SET ascii COLLATE ascii_bin", "")
             .replaceAll(" ON UPDATE CURRENT_TIMESTAMP", "")
             .replaceAll(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "");
         jdbc.execute(jobs.trim().replaceAll(";+$", ""));
         String claims=Files.readString(Path.of("../../sql/migrations/2026-10-22-order-print-device-claim.sql"));
-        if(!mysql) claims=claims.replaceAll(" CHARACTER SET ascii COLLATE ascii_bin", "")
+        if(!mysql) claims=claims.replaceAll("(?s)-- MYSQL_PREFLIGHT_BEGIN.*?-- MYSQL_PREFLIGHT_END", "")
+            .replaceAll(" CHARACTER SET ascii COLLATE ascii_bin", "")
             .replaceAll(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "");
         claims=claims.replaceAll("(?m)^\\s*--.*$","");
-        for(String claimSql:claims.split(";")) {
-            String executable=claimSql.trim();
-            if(!executable.isEmpty()) jdbc.execute(executable);
-        }
+        try {executeDelimited(jdbc,claims);}
+        finally {if(mysql) jdbc.execute("DROP PROCEDURE IF EXISTS quality_prepare_order_print_device_claim");}
         String recovery=Files.readString(Path.of("../../sql/migrations/2026-10-22-printer-operation-recovery.sql"));
         if(!mysql) recovery=recovery.replaceAll("(?s)-- MYSQL_PREFLIGHT_BEGIN.*?-- MYSQL_PREFLIGHT_END", "")
             .replaceAll(" CHARACTER SET ascii COLLATE ascii_bin", "")
             .replaceAll(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "");
-        for(String line:recovery.split("\\R")) {
+        try {executeDelimited(jdbc,recovery);}
+        finally {if(mysql) jdbc.execute("DROP PROCEDURE IF EXISTS quality_prepare_printer_operation_recovery");}
+    }
+    private static void executeDelimited(JdbcTemplate jdbc,String sql) {
+        String delimiter=";"; StringBuilder statement=new StringBuilder();
+        for(String line:sql.split("\\R")) {
             String trimmed=line.trim();
             if(trimmed.startsWith("--")||trimmed.isEmpty()) continue;
             if(trimmed.startsWith("DELIMITER ")) {delimiter=trimmed.substring(10).trim();continue;}
             statement.append(line).append('\n');
             String pending=statement.toString().trim();
-            if(pending.endsWith(delimiter)) {jdbc.execute(pending.substring(0,pending.length()-delimiter.length()));statement.setLength(0);}
+            if(pending.endsWith(delimiter)) {
+                jdbc.execute(pending.substring(0,pending.length()-delimiter.length()));
+                statement.setLength(0);
+            }
         }
-        if(!statement.toString().isBlank()) throw new IllegalStateException("UNTERMINATED_RECOVERY_MIGRATION");
+        if(!statement.toString().isBlank()) throw new IllegalStateException("UNTERMINATED_MIGRATION");
     }
     static void recoveryOnly(JdbcTemplate jdbc) throws Exception {
         String recovery=Files.readString(Path.of("../../sql/migrations/2026-10-22-printer-operation-recovery.sql"));

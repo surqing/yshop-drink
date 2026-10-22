@@ -1198,6 +1198,13 @@ async function printerUnknown(f: Flow) {
     expect(await f.api('GET', pendingPath)).toBeNull()
     expect(state()).toMatchObject({ operationType: null, operationRequestId: null,
       operationTokenPresent: 0, operationResolutionCount: 1, jobState: 'UNKNOWN' })
+    const actorId = (await f.api('GET', '/admin-api/system/auth/get-permission-info')).user.id
+    const resolution = f.oracle('printer-operation-resolution', {
+      printerId: device, operationToken: pending.operationToken, requestId
+    })
+    expect(resolution).toHaveLength(1)
+    expect(resolution[0]).toEqual({ operationType: 'TEST_PRINT', requestId, outcome: 'TEST_PRINT_UNKNOWN',
+      senderStopped: 1, providerWorkSettled: 1, actorId, reason: body.reason })
     expect(counters()).toEqual(count)
   })
   await f.check('explicit-status-refresh', async () => {
