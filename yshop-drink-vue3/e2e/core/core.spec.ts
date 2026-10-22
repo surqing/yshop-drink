@@ -1176,6 +1176,30 @@ async function printerUnknown(f: Flow) {
     await f.api('GET', `${prefix}/status?id=${device}`)
     expect(state()).toEqual(before); expect(counters()).toEqual(count)
   })
+  await f.check('unknown-test-print-recovery-audited', async () => {
+    const pendingPath = `${prefix}/operation/pending?id=${device}`
+    const pending = await f.api('GET', pendingPath)
+    expect(pending).toMatchObject({ printerId: device, operationType: 'TEST_PRINT', requestId })
+    expect(pending.operationToken).toMatch(/^[0-9a-f-]{36}$/i)
+    const before = state(), count = counters()
+    expect(before).toMatchObject({ operationType: 'TEST_PRINT', operationRequestId: requestId,
+      operationTokenPresent: 1, operationResolutionCount: 0, jobState: 'UNKNOWN' })
+
+    const body = { id: device, operationToken: pending.operationToken,
+      reason: '供应商确认发送已停止且打印工作已结清', senderStopped: true, providerWorkSettled: true }
+    const denied = await f.api('POST', `${prefix}/operation/resolve`, { ...body, providerWorkSettled: false }, f.adminToken, false)
+    expect(denied.code).not.toBe(0)
+    expect(state()).toEqual(before)
+    expect((await f.api('GET', pendingPath)).operationToken).toBe(pending.operationToken)
+
+    expect(await f.api('POST', `${prefix}/operation/resolve`, body)).toMatchObject({
+      printerId: device, operationToken: pending.operationToken, operationType: 'TEST_PRINT', outcome: 'TEST_PRINT_UNKNOWN'
+    })
+    expect(await f.api('GET', pendingPath)).toBeNull()
+    expect(state()).toMatchObject({ operationType: null, operationRequestId: null,
+      operationTokenPresent: 0, operationResolutionCount: 1, jobState: 'UNKNOWN' })
+    expect(counters()).toEqual(count)
+  })
   await f.check('explicit-status-refresh', async () => {
     const count = counters()
     expect((await f.api('POST', `${prefix}/status/refresh?id=${device}`)).state).toBe('ONLINE')

@@ -3,7 +3,7 @@
 _CHECKS = {
     'score-redemption': ['score-fixture','score-submitted','score-ledger-sql','same-key-replay','different-content-conflict','insufficient-points','exactly-once-sql'],
     'score-retry': ['score-fixture','committed-score-response-lost','original-score-key-replay','exactly-once-sql'],
-    'printer-unknown': ['device-created','unknown-from-explicit-test','query-does-not-send','history-shows-unknown','staff-denied','cached-status-readonly','explicit-status-refresh'],
+    'printer-unknown': ['device-created','unknown-from-explicit-test','query-does-not-send','history-shows-unknown','staff-denied','cached-status-readonly','unknown-test-print-recovery-audited','explicit-status-refresh'],
     'pickup-contact': ['pickup-created','contact-sql','admin-contact','same-key-contact-conflict','confirmed-submission','cancel-restores-once','identity-sql'],
     'auth-session': ['admin-login','invalid-provider-proof','sms-login','sms-invalid-and-reused',
                      'expired-session','logout-revokes-access','identity-sql'],

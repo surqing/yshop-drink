@@ -105,7 +105,11 @@ def query_for(name, ids):
         device=number(ids.get('printerId'))
         return ("SELECT JSON_OBJECT('state',p.device_state,'checkedAt',p.state_checked_at,'authorization',p.authorization,"
                 "'jobs',(SELECT COUNT(*) FROM yshop_printer_test_job WHERE printer_id=p.id),"
-                "'jobState',(SELECT MAX(state) FROM yshop_printer_test_job WHERE printer_id=p.id)) FROM yshop_printer p WHERE id="+device+';')
+                "'jobState',(SELECT MAX(state) FROM yshop_printer_test_job WHERE printer_id=p.id),"
+                "'operationType',p.authorization_operation_type,'operationRequestId',p.authorization_operation_request_id,"
+                "'operationTokenPresent',CAST(p.authorization_operation IS NOT NULL AS UNSIGNED),"
+                "'operationResolutionCount',(SELECT COUNT(*) FROM yshop_printer_operation_resolution r WHERE r.tenant_id=p.tenant_id AND r.printer_id=p.id)) "
+                "FROM yshop_printer p WHERE p.id="+device+';')
     if name=='order':
         return "SELECT JSON_OBJECT('id',id,'memberId',uid,'shopId',shop_id,'amount',pay_price,'paid',paid,'status',status,'deleted',CAST(deleted AS UNSIGNED),'couponId',coupon_id,'quantity',total_num,'remark',remark) FROM yshop_store_order WHERE order_id="+order_id(ids.get('orderId'))+';'
     if name=='order-lines':
