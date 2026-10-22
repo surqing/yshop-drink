@@ -21,7 +21,7 @@
   "tests/quality/test_e2e_environment.py": 18,
   "tests/quality/test_e2e_publish.py": 9,
   "tests/quality/test_e2e_support.py": 7,
-  "tests/quality/test_evidence.py": 49,
+  "tests/quality/test_evidence.py": 50,
   "tests/quality/test_merge_scope.py": 48,
   "tests/quality/test_owned_resources.py": 16,
   "tests/quality/test_page_evidence.py": 41,

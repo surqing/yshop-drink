@@ -358,6 +358,17 @@ class ControlledEvidenceFaults(unittest.TestCase):
         registry={'qa.Suite':{'a':1,'b(String)[1]':1,'b(String)[2]':1}}
         self.assertEqual(registry,scoped_cases(registry,['Suite#a','Suite#b','Suite#b']))
 
+    def test_receipt_transaction_mutation_targets_only_two_argument_overload(self):
+        from mutate import OPERATORS, REPO
+        operator=next(item for item in OPERATORS if item[0]=='receipt-transaction-omission')
+        _,relative,before,after,_=operator
+        source=next(REPO.rglob(relative))
+        content=source.read_text()
+        self.assertIn('takeOrder(String orderId, Long uid)',before)
+        self.assertNotIn('expectedVersion',before)
+        self.assertEqual(1,content.count(before))
+        self.assertIn('takeOrder(String orderId, Long uid)',after)
+
     def test_mutation_environment_discards_external_acceptance_overrides(self):
         from mutate import mutation_environment
         source={'PRINTER_ACCEPTANCE_CONFIG':'/outside/printer.properties',
