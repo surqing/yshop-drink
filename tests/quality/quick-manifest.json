@@ -10,7 +10,7 @@
   "tests/e2e-assertions.test.mjs": 6,
   "tests/e2e-expiry-navigation.test.mjs": 3,
   "tests/e2e-mini-guard.test.mjs": 3,
-  "tests/e2e-native-confirmation.test.mjs": 8,
+  "tests/e2e-native-confirmation.test.mjs": 13,
   "tests/payment/prepayment-tools-test.py": 26,
   "tests/printer/api.test.mjs": 1,
   "tests/printer/page.test.mjs": 11,

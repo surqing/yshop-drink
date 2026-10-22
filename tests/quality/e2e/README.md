@@ -30,6 +30,8 @@ local 还需要 macOS、HBuilderX、已登录且启用服务端口的微信开�
 
 `order-cancel` 和 `coupon-release` 还需要可工作的原生确认控件接口。已观察到工具 `2.02.2608080` / SDK `3.17.4` 的 `Native.confirmModal()` 静默返回但不点击确认框；本框架通过真实对话框回调确认是否完成，缺失则报告 `MINI_NATIVE_CONFIRMATION_UNAVAILABLE` / BLOCKED。不会替换 `showModal` 的真实响应或直接调用取消业务方法。可用 `YSHOP_WECHAT_CLI` 指向兼容工具；macOS 可显式用 `YSHOP_E2E_NATIVE_ADAPTER=applescript` 启用 AppleScript/JXA 辅助功能适配器（默认关闭）。需要用户事先允许系统脚本及辅助功能权限。脚本通过 macOS ApplicationServices 的正式 AX 接口读取树和执行 AXPress，避免 System Events 对 WebArea URL 的转换错误及逐属性 IPC 开销。它只在官方接口未产生真实确认回调时，对唯一 `E2E-<runId>` 窗口核对顶部 WebArea 的完整私有项目路径、runId、取消文案和唯一确认链接后执行 AXPress；不使用全局键盘、坐标或业务回调替身。报告记录实际适配器使用；真实取消 API、UI 和 SQL 验证仍为必选。若 `osascript` 报“不允许辅助访问”，请由用户在系统设置中授权，不会自动修改系统权限。
 
+每次取消确认都会在该 run 的私有输出中留下 `native-confirmation-route-private.json`，区分官方 `confirmModal()` 回调和 AXPress 后的真实业务回调；显式启用辅助功能适配器时还会写 `native-confirmation-accessibility-private.json`，记录官方进程 PID/匹配数、AX 窗口总数与标题、runId/完整项目路径归属、WebArea URL 数和匹配数、确认节点匹配数、AXPress 结果或具体阻塞码。零窗口、多归属窗口、外来窗口、路径不符或确认节点不唯一均会 fail closed。诊断只枚举该官方进程的窗口，不读取其他进程的窗口，也不会自动更改系统权限；无真实回调仍保持 BLOCKED。官方回调成功或未显式启用辅助功能适配器时，AX 字段会明确记为 `NOT_COLLECTED`，不会为收集诊断而隐式访问辅助功能。
+
 运行时不要修改工作树。源码 SHA、内容摘要和产物哈希必须匹配；改变源码会使正在运行的结果无效。构建凭证不匹配时重新构建，不能使用旧 JAR 或旧 Surefire 报告。小程序从当前源码重新生成私有副本并核验编译哈希。
 
 ## 场景和边界
