@@ -63,14 +63,15 @@ BEGIN
     SELECT COUNT(DISTINCT INDEX_NAME) INTO claim_index_count FROM information_schema.STATISTICS
       WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_order_print_device_claim';
     SELECT COUNT(*) INTO matched_claim_indexes FROM (
-      SELECT INDEX_NAME,NON_UNIQUE,GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS index_columns
+      SELECT INDEX_NAME,NON_UNIQUE,GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS index_columns,
+             SUM(SUB_PART IS NOT NULL) AS prefix_column_count
         FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_order_print_device_claim'
         GROUP BY INDEX_NAME,NON_UNIQUE
     ) indexes_found
-    WHERE (INDEX_NAME='PRIMARY' AND NON_UNIQUE=0 AND index_columns='printer_id')
-       OR (INDEX_NAME='uk_order_print_device_claim_job' AND NON_UNIQUE=0 AND index_columns='tenant_id,job_id')
+    WHERE (INDEX_NAME='PRIMARY' AND NON_UNIQUE=0 AND index_columns='printer_id' AND prefix_column_count=0)
+       OR (INDEX_NAME='uk_order_print_device_claim_job' AND NON_UNIQUE=0 AND index_columns='tenant_id,job_id' AND prefix_column_count=0)
        OR (INDEX_NAME IN ('fk_order_print_device_claim_printer','idx_order_print_device_claim_printer')
-           AND NON_UNIQUE=1 AND index_columns='printer_id,tenant_id');
+           AND NON_UNIQUE=1 AND index_columns='printer_id,tenant_id' AND prefix_column_count=0);
     SELECT COUNT(*) INTO claim_fk_count FROM information_schema.REFERENTIAL_CONSTRAINTS
       WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='yshop_order_print_device_claim';
     SELECT COUNT(*) INTO matched_claim_fk_count FROM information_schema.REFERENTIAL_CONSTRAINTS
@@ -147,14 +148,15 @@ BEGIN
     SELECT COUNT(DISTINCT INDEX_NAME) INTO resolution_index_count FROM information_schema.STATISTICS
       WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_order_print_device_claim_resolution';
     SELECT COUNT(*) INTO matched_resolution_indexes FROM (
-      SELECT INDEX_NAME,NON_UNIQUE,GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS index_columns
+      SELECT INDEX_NAME,NON_UNIQUE,GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS index_columns,
+             SUM(SUB_PART IS NOT NULL) AS prefix_column_count
         FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_order_print_device_claim_resolution'
         GROUP BY INDEX_NAME,NON_UNIQUE
     ) indexes_found
-    WHERE (INDEX_NAME='PRIMARY' AND NON_UNIQUE=0 AND index_columns='id')
-       OR (INDEX_NAME='uk_print_claim_resolution_request' AND NON_UNIQUE=0 AND index_columns='tenant_id,request_key')
-       OR (INDEX_NAME='uk_print_claim_resolution_job' AND NON_UNIQUE=0 AND index_columns='tenant_id,job_id')
-       OR (INDEX_NAME='idx_print_claim_resolution_printer' AND NON_UNIQUE=1 AND index_columns='tenant_id,printer_id,create_time');
+    WHERE (INDEX_NAME='PRIMARY' AND NON_UNIQUE=0 AND index_columns='id' AND prefix_column_count=0)
+       OR (INDEX_NAME='uk_print_claim_resolution_request' AND NON_UNIQUE=0 AND index_columns='tenant_id,request_key' AND prefix_column_count=0)
+       OR (INDEX_NAME='uk_print_claim_resolution_job' AND NON_UNIQUE=0 AND index_columns='tenant_id,job_id' AND prefix_column_count=0)
+       OR (INDEX_NAME='idx_print_claim_resolution_printer' AND NON_UNIQUE=1 AND index_columns='tenant_id,printer_id,create_time' AND prefix_column_count=0);
     SELECT COUNT(*) INTO resolution_fk_count FROM information_schema.REFERENTIAL_CONSTRAINTS
       WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='yshop_order_print_device_claim_resolution';
     SELECT COUNT(*) INTO resolution_trigger_count FROM information_schema.TRIGGERS

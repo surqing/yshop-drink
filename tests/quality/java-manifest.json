@@ -1053,6 +1053,7 @@
     "cascadingOrderPrintDeviceClaimForeignKeyIsRejected": 1,
     "orderPrintDeviceClaimCreateTimeOnUpdateIsRejected": 1,
     "missingOrderPrintDeviceClaimResolutionJobUniquenessIsRejected": 1,
+    "prefixedOrderPrintDeviceClaimResolutionRequestUniquenessIsRejected": 1,
     "missingOrderPrintDeviceClaimResolutionCreateTimeDefaultIsRejected": 1,
     "nonTransactionalOrderPrintDeviceClaimResolutionIsRejected": 1,
     "wrongFifteenColumnResolutionTableIsRejectedBeforeSchemaChanges": 1,

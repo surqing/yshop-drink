@@ -136,6 +136,12 @@ class PrinterMigrationDatabaseTest {
         migrate(); jdbc.execute("ALTER TABLE yshop_order_print_device_claim_resolution DROP INDEX uk_print_claim_resolution_job");
         rejectedUnchanged();
     }
+    @Test void prefixedOrderPrintDeviceClaimResolutionRequestUniquenessIsRejected() throws Exception {
+        migrate();
+        jdbc.execute("ALTER TABLE yshop_order_print_device_claim_resolution DROP INDEX uk_print_claim_resolution_request");
+        jdbc.execute("ALTER TABLE yshop_order_print_device_claim_resolution ADD UNIQUE KEY uk_print_claim_resolution_request (tenant_id,request_key(8))");
+        rejectedUnchanged();
+    }
     @Test void missingOrderPrintDeviceClaimResolutionCreateTimeDefaultIsRejected() throws Exception {
         migrate(); jdbc.execute("ALTER TABLE yshop_order_print_device_claim_resolution ALTER COLUMN create_time DROP DEFAULT");
         rejectedUnchanged();
