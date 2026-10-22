@@ -30,6 +30,10 @@
     }
     const record = { path: url.slice(base.length).split('?')[0], method: options.method || 'GET' }
     if (url.endsWith('/order/create') || url.endsWith('/score-order/submit')) record.data = typeof options.data === 'string' ? JSON.parse(options.data) : JSON.parse(JSON.stringify(options.data || {}))
+    if (url.endsWith('/order/take')) {
+      const body = typeof options.data === 'string' ? JSON.parse(options.data) : options.data || {}
+      record.data = { uni: body.uni, expectedVersion: body.expectedVersion, requestKey: body.requestKey }
+    }
     state.requests.push(record); save()
     const success = options.success
     options.success = function (response) {

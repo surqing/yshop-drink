@@ -101,4 +101,31 @@ class E2eAcceptanceTest(unittest.TestCase):
     def test_outer_cleanup_error_rejected(self):
         self.reports[0]['cleanupErrors']=['MINI_PROJECT_CLOSE_FAILED'];self.reject()
 
+    def test_new_real_page_workflows_are_registered_with_exact_scope(self):
+        local=listing('local');ci=listing('ci')
+        by_local={scenario['id']:scenario for scenario in local['scenarios']}
+        by_ci={scenario['id']:scenario for scenario in ci['scenarios']}
+        self.assertTrue({'pickup-fulfillment','store-statistics','order-print-jobs'}.issubset(by_local))
+        self.assertEqual(set(by_local),set(by_ci))
+        self.assertIn('mini',by_local['pickup-fulfillment']['requiredCapabilities'])
+        self.assertNotIn('mini',by_local['store-statistics']['requiredCapabilities'])
+        self.assertNotIn('mini',by_local['order-print-jobs']['requiredCapabilities'])
+        for name in ('pickup-fulfillment','store-statistics','order-print-jobs'):
+            self.assertEqual('api-admin',by_ci[name]['variant'])
+            self.assertEqual('mini-admin' if name=='pickup-fulfillment' else 'api-admin',by_local[name]['variant'])
+            self.assertEqual(len(by_local[name]['expectedCheckIds']),len(set(by_local[name]['expectedCheckIds'])))
+        exact={
+            'pickup-fulfillment':['product-created-for-points','pickup-order-created','payment-confirmed','work-page-waiting',
+                'two-staff-conflict','accept-through-work-page','prepare-through-work-page','ready-through-work-page',
+                'collect-replay','collected-reward-sql'],
+            'store-statistics':['two-store-orders-paid','date-window-is-half-open','headquarters-summary-page',
+                'store-a-summary-reconcile','store-b-summary-reconcile','details-reconcile-sql',
+                'shop-switch-ignores-stale-summary','branch-a-page-scope','branch-b-page-scope','branch-cannot-read-foreign-shop'],
+            'order-print-jobs':['unbound-order-waits-on-real-page','offline-device-waits-on-real-page','order-history-on-real-page',
+                'unknown-refresh-readonly','manual-reprint-audited','cross-store-print-denied','print-job-sql-audit']}
+        local_only={'pickup-fulfillment':['mini-initial-status','mini-accepted-status','mini-ready-and-collect','mini-collected-status']}
+        for name,checks in exact.items():
+            self.assertEqual(checks,by_ci[name]['expectedCheckIds'])
+            self.assertEqual(checks+local_only.get(name,[]),by_local[name]['expectedCheckIds'])
+
 if __name__=='__main__':unittest.main()

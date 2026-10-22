@@ -139,7 +139,8 @@ def run(repo, output, profile, scenario=None):
                      'profile':profile,'planned':plan['scenarios'],'output':str(root),
                      'accounts':{'admin':{'username':'qualityadmin','password':'syntheticQA12'},
                                  'staff':{'username':'qualitystaff','password':'syntheticQA12'},
-                                 'staffB':{'username':'qualitystaffb','password':'syntheticQA12'}}}
+                                 'staffB':{'username':'qualitystaffb','password':'syntheticQA12'},
+                                 'staffC':{'username':'qualitystaffc','password':'syntheticQA12'}}}
             if needs_mini:
                 report['stage']='MINI_BUILD';write_reports(root,report)
                 from mini_pages import prepare_mini

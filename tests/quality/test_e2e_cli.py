@@ -68,10 +68,10 @@ class E2eCliTest(unittest.TestCase):
             report=json.loads(result.stdout)
             self.assertEqual('local',report['profile'])
             self.assertEqual(['score-redemption','score-retry','printer-unknown','pickup-contact','auth-session','catalog-order','store-isolation','order-retry',
-                              'order-cancel','coupon-release','coupon-complete'],
+                              'order-cancel','coupon-release','coupon-complete','pickup-fulfillment','store-statistics','order-print-jobs'],
                              [s['id'] for s in report['scenarios']])
             for scenario in report['scenarios']:
-                if scenario['id']=='printer-unknown':
+                if scenario['id'] in ('printer-unknown','store-statistics','order-print-jobs'):
                     self.assertEqual('api-admin',scenario['variant'])
                     self.assertNotIn('mini',scenario['requiredCapabilities'])
                 else:
@@ -84,7 +84,7 @@ class E2eCliTest(unittest.TestCase):
         self.assertEqual(0,result.returncode,result.stderr)
         report=json.loads(result.stdout)
         self.assertEqual('NOT_RUN',report['miniStatus'])
-        self.assertEqual(11,len(report['scenarios']))
+        self.assertEqual(14,len(report['scenarios']))
         self.assertTrue(all(s['variant']=='api-admin' for s in report['scenarios']))
 
     def test_filtered_list_contains_only_requested_scenario(self):

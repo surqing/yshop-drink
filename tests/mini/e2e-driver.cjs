@@ -242,6 +242,26 @@ class MiniDriver {
     const row = await this.couponRow(page, title)
     return row.text()
   }
+  async orderDetail(orderId) {
+    const page = await this.mini.navigateTo('/pages-order/orders/detail?id=' + encodeURIComponent(orderId))
+    await until(() => page.$('.order-detail-page'))
+    return page
+  }
+  async pickupStatus(page) {
+    return (await until(() => page.$('.order-detail-page'))).text()
+  }
+  async collectPickupOrder(page) {
+    const before = (await this.state()).requests.filter(row => row.path === '/app-api/order/take').length
+    const component = await until(() => page.$('.fixed-bottom uv-button'))
+    const button = await until(() => component.$('button'))
+    await button.tap()
+    const request = await until(async () => {
+      const rows = (await this.state()).requests.filter(row => row.path === '/app-api/order/take')
+      return rows.length > before && rows.at(-1).responseCode !== undefined ? rows.at(-1) : null
+    })
+    await until(async () => (await this.pickupStatus(page)).includes('已取餐'))
+    return request
+  }
   async screenshot(name = 'failure.png') { await this.mini.screenshot({ path: path.join(this.output, name) }) }
   async diagnostics() {
     const pages = await this.mini.pageStack()

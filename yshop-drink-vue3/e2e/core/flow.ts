@@ -168,7 +168,7 @@ export class Flow {
     await library.getByRole('button', { name: '确 定', exact: true }).click()
     await expect(library).toBeHidden()
   }
-  async createProductUI() {
+  async createProductUI(giveIntegral = 0) {
     await this.page.goto('/mall/products')
     await this.page.getByRole('button', { name: '新增', exact: true }).click()
     const dialog = this.page.getByRole('dialog').filter({ hasText: '基本信息' })
@@ -191,6 +191,7 @@ export class Flow {
     await editor.fill('Synthetic E2E product details')
     await expect(editor).toContainText('Synthetic E2E product details')
     await dialog.getByRole('tab', { name: '营销设置', exact: true }).click()
+    await dialog.getByPlaceholder('请输入获得积分').fill(String(giveIntegral))
     const pending = this.page.waitForResponse(r => r.url().endsWith('/admin-api/product/store-product/create') && r.request().method() === 'POST')
     await dialog.getByRole('button', { name: '保 存', exact: true }).click()
     const submitted = await pending

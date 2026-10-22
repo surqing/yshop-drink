@@ -34,7 +34,17 @@ local 还需要 macOS、HBuilderX、已登录且启用服务端口的微信开�
 
 ## 场景和边界
 
-完整集合为 11 个必需场景：`score-redemption`、`score-retry`、`printer-unknown`、`pickup-contact`、`auth-session`、`catalog-order`、`store-isolation`、`order-retry`、`order-cancel`、`coupon-release`、`coupon-complete`。local 中 10 个场景使用官方 Mini 并标为 `mini-admin`；`printer-unknown` 使用后台页面和后端，标为 `api-admin`，其单场景运行明确 Mini NOT_RUN。ci 的 11 个场景均为 `api-admin`，小程序明确 NOT_RUN。
+完整集合为 14 个必需场景：`score-redemption`、`score-retry`、`printer-unknown`、`pickup-contact`、`auth-session`、`catalog-order`、`store-isolation`、`order-retry`、`order-cancel`、`coupon-release`、`coupon-complete`、`pickup-fulfillment`、`store-statistics`、`order-print-jobs`。local 中 11 个场景使用官方 Mini 并标为 `mini-admin`；`printer-unknown`、`store-statistics`、`order-print-jobs` 使用真实后台页面和所属后端，标为 `api-admin`，Mini 明确 NOT_RUN。ci 的 14 个场景均为 `api-admin`，小程序明确 NOT_RUN。
+
+新增页面场景范围如下：
+
+| 场景 | 真实页面与业务证据 | profile 边界 |
+|---|---|---|
+| `pickup-fulfillment` | 履约后台真实接单、制作、待取页面；两店员并发时用版本冲突验证只成功一次；SQL 核对领取日志和积分奖励一次。local 还用真实 Mini 详情页核对已接单/待取/已取，并由 Mini 发起领取请求后用完全相同的请求编号重放。 | local 会执行 Mini 页面检查；ci 使用真实订单 API 完成领取请求，Mini NOT_RUN。支付完成走所属命令桥调用真实支付最终化服务，未调用支付供应商。 |
+| `store-statistics` | 履约/统计真实后台页；总部及 A/B 店分支登录，页面汇总和明细与只读 SQL 对账；校验 UI 当日结束日期转换为后端排他上界、切店旧响应不会覆盖新门店；分支读取其他门店统计和明细应被拒绝。 | 两个 profile 都使用真实浏览器后台与所属 API；不包含 Mini。 |
+| `order-print-jobs` | 打印管理真实后台页；订单接单生成待处理事件，检查未绑定和离线状态；本地状态刷新使任务进入发送流程，所属假打印机返回不确定超时；页面刷新 UNKNOWN 后核对服务调用计数不变；页面填写原因创建人工重打，SQL 核对父任务、原因、创建人及冻结小票快照；分店读取总部任务应被拒绝。 | 两个 profile 都使用真实浏览器后台与所属 API；只用测试 classpath 中的假厂商与显式 worker poll 命令，不连接真实打印机、不发送实体小票。 |
+
+CI 和本机 `ci` profile 能证明后台页面、所属 API 与 SQL 范围。只有完整 `local` 才执行官方 Mini；三项新增页面本身不依赖 Mini。Mini 原生运行、真实支付通知协议、实体打印机出纸和真实打印厂商均不在这些场景的证据范围内。每项检查以该轮 `report.json` 为准；无法执行或没有真实证据的检查保持 NOT_RUN/BLOCKED，不可从 manifest 或 `--list` 推导通过。
 
 认证从空会话开始。自动化只替换微信平台凭据、手机号授权事件和短信发送渠道；会员绑定、验证码生命周期、token、业务服务、事务和数据库真实运行。未知微信公众号或支付 SDK 操作直接失败。合成完成通过私有子进程命令桥调用真实完成服务，不经供应商，不直接写 SQL 改已支付状态。真实微信身份、真机、真实短信、支付通知协议和真实支付均不在验收范围内。
 

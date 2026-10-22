@@ -1,5 +1,6 @@
 """Named read-only SQL observations, under a SELECT-only run-owned account."""
 import argparse
+import datetime
 import json
 from pathlib import Path
 import re
@@ -19,7 +20,66 @@ def order_id(value):
     return "'"+value+"'"
 
 
+def date_range(ids):
+    values=[]
+    for key in ('from','to'):
+        value=ids.get(key)
+        if not isinstance(value,str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}',value):
+            raise ValueError('DATE_RANGE_INVALID')
+        try: parsed=datetime.date.fromisoformat(value)
+        except ValueError: raise ValueError('DATE_RANGE_INVALID') from None
+        if parsed.isoformat()!=value: raise ValueError('DATE_RANGE_INVALID')
+        values.append(parsed)
+    start,end=values
+    if end<=start or (end-start).days>366:
+        raise ValueError('DATE_RANGE_INVALID')
+    return start.isoformat()+' 00:00:00',end.isoformat()+' 00:00:00'
+
+
+def shop_filter(ids):
+    value=ids.get('shopId')
+    return '' if value is None else ' AND shop_id='+number(value)
+
+
 def query_for(name, ids):
+    if name in ('store-summary','store-summary-details'):
+        start,end=date_range(ids);shop=shop_filter(ids)
+        scope='shop_id IS NOT NULL AND COALESCE(tenant_id,0)=0'+shop
+        paid=scope+" AND paid=1 AND pay_time>='"+start+"' AND pay_time<'"+end+"' AND refund_status IN (0,1,2) AND is_system_del=0 AND deleted=0"
+        if name=='store-summary-details':
+            return ("SELECT JSON_OBJECT('id',id,'orderId',order_id,'shopId',shop_id,'payTime',DATE_FORMAT(pay_time,'%Y-%m-%d %H:%i:%s'),"
+                    "'payPrice',pay_price,'refundStatus',refund_status,'refundPrice',refund_price,'totalNum',total_num,'fulfillmentStatus',fulfillment_status) "
+                    "FROM yshop_store_order WHERE "+paid+" ORDER BY pay_time DESC,id DESC LIMIT 100;")
+        queue=scope+" AND paid=1 AND refund_status=0 AND is_system_del=0 AND deleted=0 AND order_type='takein' AND fulfillment_status IN ('WAIT_ACCEPT','ACCEPTED','PREPARING','READY')"
+        return ("SELECT JSON_OBJECT('paidOrderCount',(SELECT COUNT(*) FROM yshop_store_order WHERE "+paid+"),"
+                "'grossPaidAmount',(SELECT COALESCE(SUM(pay_price),0) FROM yshop_store_order WHERE "+paid+"),"
+                "'soldQuantity',(SELECT COALESCE(SUM(total_num),0) FROM yshop_store_order WHERE "+paid+"),"
+                "'refundOrderCount',(SELECT COUNT(*) FROM yshop_store_order WHERE "+paid+" AND refund_status IN (1,2)),"
+                "'refundPendingCount',(SELECT COUNT(*) FROM yshop_store_order WHERE "+paid+" AND refund_status=1),"
+                "'refundCompletedCount',(SELECT COUNT(*) FROM yshop_store_order WHERE "+paid+" AND refund_status=2),"
+                "'refundAmount',(SELECT COALESCE(SUM(refund_price),0) FROM yshop_store_order WHERE "+paid+" AND refund_status IN (1,2)),"
+                "'waitAcceptQueueCount',(SELECT COUNT(*) FROM yshop_store_order WHERE "+queue+" AND fulfillment_status='WAIT_ACCEPT'),"
+                "'acceptedQueueCount',(SELECT COUNT(*) FROM yshop_store_order WHERE "+queue+" AND fulfillment_status='ACCEPTED'),"
+                "'preparingQueueCount',(SELECT COUNT(*) FROM yshop_store_order WHERE "+queue+" AND fulfillment_status='PREPARING'),"
+                "'readyQueueCount',(SELECT COUNT(*) FROM yshop_store_order WHERE "+queue+" AND fulfillment_status='READY'));")
+    if name=='fulfillment-state':
+        oid=order_id(ids.get('orderId'))
+        return ("SELECT JSON_OBJECT('id',o.id,'orderId',o.order_id,'memberId',o.uid,'shopId',o.shop_id,'paid',o.paid,"
+                "'fulfillmentStatus',o.fulfillment_status,'fulfillmentVersion',o.fulfillment_version,'rewardPoints',o.gain_integral,'memberPoints',u.integral,"
+                "'collectActions',(SELECT COUNT(*) FROM yshop_order_fulfillment_log l WHERE l.order_id=o.id AND l.action='COLLECT'),"
+                "'rewardBillCount',(SELECT COUNT(*) FROM yshop_user_bill b WHERE b.uid=o.uid AND b.link_id=CAST(o.id AS CHAR) AND b.title='购买商品赠送积分' AND b.pm=1 AND b.deleted=0),"
+                "'rewardBillPoints',(SELECT COALESCE(SUM(b.number),0) FROM yshop_user_bill b WHERE b.uid=o.uid AND b.link_id=CAST(o.id AS CHAR) AND b.title='购买商品赠送积分' AND b.pm=1 AND b.deleted=0)) "
+                "FROM yshop_store_order o JOIN yshop_user u ON u.id=o.uid WHERE o.order_id="+oid+" AND o.deleted=0;")
+    if name=='print-jobs':
+        oid=order_id(ids.get('orderId'))
+        order="(SELECT id FROM yshop_store_order WHERE order_id="+oid+")"
+        return ("SELECT row_json FROM ("
+                "SELECT id AS sort_id,JSON_OBJECT('kind','JOB','id',id,'eventId',event_id,'orderId',order_id,'shopId',shop_id,'printerId',printer_id,"
+                "'purpose',purpose,'state',state,'errorCode',last_error,'attempts',attempts,'parentJobId',parent_job_id,'reprintReason',reprint_reason,'createdBy',created_by,'payloadSnapshot',payload_snapshot) AS row_json "
+                "FROM yshop_order_print_job WHERE order_id="+order+" UNION ALL "
+                "SELECT -id AS sort_id,JSON_OBJECT('kind','EVENT','id',-id,'eventId',id,'orderId',order_id,'shopId',shop_id,'printerId',NULL,"
+                "'purpose',NULL,'state',state,'errorCode',last_error,'attempts',attempts,'parentJobId',NULL,'reprintReason',NULL,'createdBy',NULL,'payloadSnapshot',payload_snapshot) AS row_json "
+                "FROM yshop_order_fulfillment_print_event WHERE order_id="+order+") AS print_rows ORDER BY sort_id;")
     if name=='order-contact':
         return "SELECT JSON_OBJECT('memberId',uid,'userPhone',user_phone) FROM yshop_store_order WHERE order_id="+order_id(ids.get('orderId'))+';'
     if name=='score-state':
@@ -47,7 +107,7 @@ def query_for(name, ids):
     if name=='inventory':
         return "SELECT JSON_OBJECT('stock',stock,'skuId',id,'productId',product_id,'price',price) FROM yshop_store_product_attr_value WHERE id="+number(ids.get('skuId'))+';'
     if name=='product':
-        return "SELECT JSON_OBJECT('id',id,'shopId',shop_id,'version',catalog_version,'name',store_name,'stock',stock) FROM yshop_store_product WHERE id="+number(ids.get('productId'))+';'
+        return "SELECT JSON_OBJECT('id',id,'shopId',shop_id,'version',catalog_version,'name',store_name,'stock',stock,'giveIntegral',give_integral) FROM yshop_store_product WHERE id="+number(ids.get('productId'))+';'
     if name=='coupon-right':
         return "SELECT JSON_OBJECT('id',id,'couponId',coupon_id,'memberId',user_id,'status',status,'reservedOrderId',reserved_order_id,'redeemedOrderId',redeemed_order_id,'redeemedAt',redeemed_at) FROM yshop_coupon_user WHERE id="+number(ids.get('rightId'))+';'
     if name=='coupon-count':
@@ -79,8 +139,14 @@ def read_oracle(context, name, ids):
         raise ValueError('ORACLE_OWNERSHIP_MISMATCH')
     result=subprocess.run(['docker','exec','-i',container,'mysql','--defaults-extra-file=/run/oracle.cnf',schema,'-N','--raw'],
                           input=query,text=True,capture_output=True,timeout=30)
-    if result.returncode:raise RuntimeError('ORACLE_QUERY_FAILED')
+    if result.returncode:raise OracleQueryFailed(result.stderr)
     return [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+
+
+class OracleQueryFailed(RuntimeError):
+    def __init__(self, private_diagnostic):
+        super().__init__('ORACLE_QUERY_FAILED')
+        self.private_diagnostic=private_diagnostic
 
 
 def main():
@@ -91,6 +157,10 @@ def main():
         return 0
     except Exception as error:
         # Never emit DB stderr, connection details or input data to public reporter output.
+        if isinstance(error,OracleQueryFailed):
+            private_log=Path(args.context).with_name('oracle-private.log')
+            private_log.write_text(error.private_diagnostic)
+            private_log.chmod(0o600)
         print(json.dumps({'status':'FAILED','reasonType':type(error).__name__}),file=sys.stderr)
         return 1
 

@@ -40,6 +40,8 @@ public final class OwnedE2eApplication {
     static final Set<String> CODES=ConcurrentHashMap.newKeySet();
     static final java.util.concurrent.atomic.AtomicInteger PRINT_CALLS=new java.util.concurrent.atomic.AtomicInteger();
     static final java.util.concurrent.atomic.AtomicInteger STATUS_CALLS=new java.util.concurrent.atomic.AtomicInteger();
+    static final java.util.concurrent.atomic.AtomicReference<co.yixiang.yshop.module.store.service.printer.PrinterModels.DeviceState> PRINTER_STATE=
+            new java.util.concurrent.atomic.AtomicReference<>(co.yixiang.yshop.module.store.service.printer.PrinterModels.DeviceState.ONLINE);
 
     public static void main(String[] args) throws Exception {
         if(!OWNER.matches("[a-f0-9]{32}") || !ROOT.resolve("commands-"+OWNER).toFile().isDirectory())
@@ -103,7 +105,7 @@ public final class OwnedE2eApplication {
         public void authorize(String id,String name,Map<String,String> configuration) {throw new IllegalStateException("OWNED_PRINTER_NO_AUTH");}
         public void deauthorize(String id) {throw new IllegalStateException("OWNED_PRINTER_NO_AUTH");}
         public co.yixiang.yshop.module.store.service.printer.PrinterModels.DeviceState status(String id) {
-            STATUS_CALLS.incrementAndGet();return co.yixiang.yshop.module.store.service.printer.PrinterModels.DeviceState.ONLINE;
+            STATUS_CALLS.incrementAndGet();return PRINTER_STATE.get();
         }
         public co.yixiang.yshop.module.store.service.printer.PrinterModels.PrintResult print(String id,String request,
                 co.yixiang.yshop.module.store.service.printer.PrinterModels.Receipt receipt) {
@@ -190,6 +192,14 @@ public final class OwnedE2eApplication {
                     if(!OWNER.equals(command.path("owner").asText()) || !id.equals(command.path("commandId").asText()))throw new IllegalArgumentException("FOREIGN_COMMAND");
                     String action=command.path("action").asText();
                     if(action.equals("printer-counters")) {
+                        reply.put("printCalls",PRINT_CALLS.get());reply.put("statusCalls",STATUS_CALLS.get());
+                    } else if(action.equals("printer-state")) {
+                        String state=command.path("state").asText();
+                        if(!Set.of("ONLINE","OFFLINE","PAPER_OUT","UNKNOWN").contains(state))throw new IllegalArgumentException("INVALID_TEST_PRINTER_STATE");
+                        PRINTER_STATE.set(co.yixiang.yshop.module.store.service.printer.PrinterModels.DeviceState.valueOf(state));
+                        reply.put("state",state);
+                    } else if(action.equals("order-print-poll")) {
+                        context.getBean(co.yixiang.yshop.module.store.service.printer.OrderPrintJobWorker.class).poll();
                         reply.put("printCalls",PRINT_CALLS.get());reply.put("statusCalls",STATUS_CALLS.get());
                     } else if(action.equals("token-lifetime")) {
                         int seconds=command.path("seconds").asInt();

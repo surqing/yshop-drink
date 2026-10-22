@@ -491,6 +491,307 @@ async function pickupContact(f: Flow) {
   })
 }
 
+function shanghaiDate(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(date).reduce((values: Record<string, string>, part) => { values[part.type] = part.value; return values }, {})
+  return `${parts.year}-${parts.month}-${parts.day}`
+}
+function nextIsoDate(value: string) {
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10)
+}
+async function openWorkPage(f: Flow, page: any, account: any) {
+  await f.login(page, account)
+  await page.goto('/mall/store-order-work')
+  await expect(page.getByText('订单实付额（毛额）')).toBeVisible()
+}
+async function workOrder(page: any, orderId: string, tabLabel?: string) {
+  if (tabLabel) {
+    const tab = page.getByRole('tab', { name: tabLabel, exact: true })
+    if (await tab.getAttribute('aria-selected') !== 'true') {
+      const pendingTab = page.waitForResponse(r => r.url().includes('/admin-api/order/store-order/page') && r.request().method() === 'GET')
+      await tab.click(); await pendingTab
+    }
+  }
+  await page.getByPlaceholder('请输入订单号').fill(orderId)
+  const pending = page.waitForResponse(r => r.url().includes('/admin-api/order/store-order/page') && r.request().method() === 'GET')
+  await page.getByRole('button', { name: '搜索', exact: true }).click()
+  const result = await (await pending).json(); expect(result.code).toBe(0)
+  const card = page.locator('.box-card').first()
+  await expect(card).toBeVisible()
+  return card
+}
+function fulfillmentState(f: Flow, orderId: string) { return f.oracle('fulfillment-state', { orderId })[0] }
+
+async function pickupFulfillment(f: Flow) {
+  let product: any, order: any, memberToken = '', collectRequest: any, beforeCollect: any
+  const staffContexts: any[] = []
+  let pageA: any, pageB: any, workOwner: any
+  try {
+    await f.check('product-created-for-points', async () => {
+      product = await f.createProductUI(5)
+      expect(Number(f.oracle('product', { productId: product.id })[0].giveIntegral)).toBeGreaterThan(0)
+    })
+    await f.check('pickup-order-created', async () => {
+      memberToken = await f.member()
+      if (local) {
+        await f.mini.selectStore('QA Shop A'); await f.mini.addProduct(product.name)
+        const checkout = await f.mini.checkout(); order = await f.mini.submit(checkout)
+      } else order = await f.createOrder(product, memberToken)
+      expect(order.orderId).toBeTruthy()
+      expect(Number(f.oracle('order', { orderId: order.orderId })[0].paid)).toBe(0)
+    })
+    await f.check('payment-confirmed', () => {
+      f.bridge('complete', { orderId: order.orderId })
+      const state = fulfillmentState(f, order.orderId)
+      expect(state.paid).toBe(1); expect(state.fulfillmentStatus).toBe('WAIT_ACCEPT'); expect(state.fulfillmentVersion).toBe(1)
+    })
+    if (local) await f.check('mini-initial-status', async () => {
+      const detail = await f.mini.orderDetail(order.orderId)
+      await expect.poll(async () => f.mini.pickupStatus(detail)).toContain('待接单')
+    })
+    const contextA = await f.browser.newContext({ baseURL: f.baseURL, serviceWorkers: 'block' }); staffContexts.push(contextA)
+    const contextB = await f.browser.newContext({ baseURL: f.baseURL, serviceWorkers: 'block' }); staffContexts.push(contextB)
+    pageA = await contextA.newPage(); pageB = await contextB.newPage()
+    await Promise.all([openWorkPage(f, pageA, context.accounts.staff), openWorkPage(f, pageB, context.accounts.staffC)])
+    await f.check('work-page-waiting', async () => {
+      const card = await workOrder(pageA, order.orderId, '待接单')
+      await expect(card).toContainText('待接单'); await expect(card.getByRole('button', { name: '接单', exact: true })).toBeVisible()
+    })
+    await f.check('two-staff-conflict', async () => {
+      const cardA = await workOrder(pageA, order.orderId, '待接单')
+      const cardB = await workOrder(pageB, order.orderId, '待接单')
+      const responses = [pageA, pageB].map(page => page.waitForResponse(r => r.url().includes('/admin-api/order/store-order/fulfillment/transition') && r.request().method() === 'POST'))
+      await Promise.all([cardA.getByRole('button', { name: '接单', exact: true }).click(), cardB.getByRole('button', { name: '接单', exact: true }).click()])
+      const results = await Promise.all(responses.map(async response => (await (await response).json()).code))
+      expect(results.filter(code => code === 0)).toHaveLength(1)
+      expect(results.filter(code => code !== 0)).toHaveLength(1)
+      const state = fulfillmentState(f, order.orderId)
+      expect(state.fulfillmentStatus).toBe('ACCEPTED'); expect(state.fulfillmentVersion).toBe(2)
+      expect(f.oracle('print-jobs', { orderId: order.orderId })).toHaveLength(1)
+    })
+    await f.check('accept-through-work-page', async () => {
+      const card = await workOrder(pageA, order.orderId, '已接单')
+      await expect(card).toContainText('已接单')
+      expect(fulfillmentState(f, order.orderId).fulfillmentStatus).toBe('ACCEPTED')
+      workOwner = pageA
+    })
+    if (local) await f.check('mini-accepted-status', async () => {
+      const detail = await f.mini.orderDetail(order.orderId)
+      await expect.poll(async () => f.mini.pickupStatus(detail)).toContain('已接单')
+    })
+    await f.check('prepare-through-work-page', async () => {
+      const card = await workOrder(workOwner, order.orderId, '已接单')
+      const pending = workOwner.waitForResponse((r: any) => r.url().includes('/fulfillment/transition') && r.request().method() === 'POST')
+      await card.getByRole('button', { name: '开始制作', exact: true }).click()
+      expect((await (await pending).json()).code).toBe(0)
+      expect(fulfillmentState(f, order.orderId).fulfillmentStatus).toBe('PREPARING')
+    })
+    await f.check('ready-through-work-page', async () => {
+      const card = await workOrder(workOwner, order.orderId, '制作中')
+      const pending = workOwner.waitForResponse((r: any) => r.url().includes('/fulfillment/transition') && r.request().method() === 'POST')
+      await card.getByRole('button', { name: '完成制作', exact: true }).click()
+      expect((await (await pending).json()).code).toBe(0)
+      expect(fulfillmentState(f, order.orderId).fulfillmentStatus).toBe('READY')
+      beforeCollect = fulfillmentState(f, order.orderId)
+    })
+    if (local) await f.check('mini-ready-and-collect', async () => {
+      await f.mini.mini.navigateTo('/pages-order/orders/orders')
+      const detail = await f.mini.orderDetail(order.orderId)
+      await expect.poll(async () => f.mini.pickupStatus(detail)).toContain('待取餐')
+      collectRequest = await f.mini.collectPickupOrder(detail)
+      expect(collectRequest.responseCode).toBe(0)
+      expect(collectRequest.data.expectedVersion).toBe(4)
+    })
+    await f.check('collect-replay', async () => {
+      if (local) await f.api('POST', '/app-api/order/take', collectRequest.data, memberToken)
+      else {
+        collectRequest = { uni: order.orderId, expectedVersion: 4, requestKey: `e2e-collect-${key()}` }
+        await f.api('POST', '/app-api/order/take', collectRequest, memberToken)
+        await f.api('POST', '/app-api/order/take', collectRequest, memberToken)
+      }
+      const state = fulfillmentState(f, order.orderId)
+      expect(state.fulfillmentStatus).toBe('COLLECTED'); expect(state.fulfillmentVersion).toBe(5)
+      expect(state.collectActions).toBe(1)
+    })
+    await f.check('collected-reward-sql', () => {
+      const state = fulfillmentState(f, order.orderId)
+      expect(state.rewardBillCount).toBe(1)
+      expect(Number(state.rewardBillPoints)).toBe(Number(state.rewardPoints))
+      expect(Number(state.memberPoints) - Number(beforeCollect.memberPoints)).toBe(Number(state.rewardPoints))
+    })
+    if (local) await f.check('mini-collected-status', async () => {
+      await f.mini.mini.navigateTo('/pages-order/orders/orders')
+      const detail = await f.mini.orderDetail(order.orderId)
+      await expect.poll(async () => f.mini.pickupStatus(detail)).toContain('已取餐')
+    })
+  } finally {
+    await Promise.all(staffContexts.map(c => c.close()))
+  }
+}
+
+async function loadWorkSummary(page: any) {
+  const pending = page.waitForResponse((r: any) => r.url().includes('/admin-api/order/store-order/store-summary?') && r.request().method() === 'GET')
+  await page.goto('/mall/store-order-work')
+  const response = await pending; const result = await response.json(); expect(result.code).toBe(0)
+  await expect(page.getByText('订单实付额（毛额）')).toBeVisible()
+  return { data: result.data, url: response.url() }
+}
+function summaryParams(url: string) {
+  const params = new URL(url).searchParams
+  return { from: params.get('from') || '', to: params.get('to') || '', shopId: params.get('shopId') || undefined }
+}
+function assertSummaryMatchesSql(actual: any, expected: any) {
+  for (const field of ['paidOrderCount', 'soldQuantity', 'refundOrderCount', 'refundPendingCount', 'refundCompletedCount',
+    'waitAcceptQueueCount', 'acceptedQueueCount', 'preparingQueueCount', 'readyQueueCount']) {
+    expect(Number(actual[field]), field).toBe(Number(expected[field]))
+  }
+  for (const field of ['grossPaidAmount', 'refundAmount']) expect(Number(actual[field]).toFixed(2), field).toBe(Number(expected[field]).toFixed(2))
+}
+function statsCard(page: any, title: string) {
+  return page.locator('.el-statistic').filter({ has: page.locator('.el-statistic__head').getByText(title, { exact: true }) })
+    .locator('.el-statistic__content')
+}
+async function chooseStatsShop(page: any, name: string) {
+  const formItem = page.locator('.el-form-item').filter({ hasText: '统计门店' })
+  await formItem.locator('.el-select').click()
+  const pending = page.waitForResponse((r: any) => r.url().includes('/admin-api/order/store-order/store-summary?') && r.request().method() === 'GET')
+  await page.getByRole('option', { name, exact: true }).click()
+  const response = await pending; const result = await response.json(); expect(result.code).toBe(0)
+  return { data: result.data, url: response.url() }
+}
+async function storeStatistics(f: Flow) {
+  let memberA = '', memberB = ''
+  let orderA: any, orderB: any, summaryAll: any, allParams: any
+  const branchContexts: any[] = []
+  const branchTokens: Record<number, string> = {}
+  try {
+    await f.check('two-store-orders-paid', async () => {
+      memberA = await f.member(); memberB = await f.member(2)
+      const [productA, productB] = await Promise.all([f.createProduct(101, 'stats-a', 19), f.createProduct(102, 'stats-b', 23)])
+      orderA = await f.createOrder(productA, memberA); orderB = await f.createOrder(productB, memberB)
+      f.bridge('complete', { orderId: orderA.orderId }); f.bridge('complete', { orderId: orderB.orderId })
+      expect(f.oracle('order', { orderId: orderA.orderId })[0]).toMatchObject({ shopId: 101, paid: 1 })
+      expect(f.oracle('order', { orderId: orderB.orderId })[0]).toMatchObject({ shopId: 102, paid: 1 })
+    })
+    await f.check('date-window-is-half-open', async () => {
+      const loaded = await loadWorkSummary(f.page); summaryAll = loaded.data; allParams = summaryParams(loaded.url)
+      const today = shanghaiDate()
+      expect(allParams.from).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      expect(allParams.to).toBe(nextIsoDate(today))
+      expect(allParams.from <= today).toBe(true)
+      expect(allParams.shopId).toBeUndefined()
+      const sql = f.oracle('store-summary', allParams)[0]
+      assertSummaryMatchesSql(summaryAll, sql)
+      const fromMillis = Date.parse(`${allParams.from}T00:00:00+08:00`)
+      const toMillis = Date.parse(`${allParams.to}T00:00:00+08:00`)
+      expect(toMillis - fromMillis).toBeGreaterThan(0)
+      expect(allParams.to).toBe(nextIsoDate(today))
+    })
+    await f.check('headquarters-summary-page', async () => {
+      expect(summaryAll.headquarters).toBe(true); expect(summaryAll.authorizedShopIds).toBeNull()
+      const shops = await f.api('GET', '/admin-api/order/store-order/store-summary/shops')
+      expect(shops.map((shop: any) => Number(shop.id))).toEqual(expect.arrayContaining([101, 102]))
+      const expected = f.oracle('store-summary', allParams)[0]
+      assertSummaryMatchesSql(summaryAll, expected)
+      await expect(statsCard(f.page, '已付订单数')).toContainText(String(summaryAll.paidOrderCount))
+    })
+    let shopA: any, shopB: any
+    await f.check('store-a-summary-reconcile', async () => {
+      shopA = await chooseStatsShop(f.page, 'QA Shop A')
+      const params = summaryParams(shopA.url); expect(params.shopId).toBe('101')
+      expect(shopA.data.headquarters).toBe(true)
+      assertSummaryMatchesSql(shopA.data, f.oracle('store-summary', { ...params, shopId: 101 })[0])
+      await expect(statsCard(f.page, '已付订单数')).toContainText(String(shopA.data.paidOrderCount))
+    })
+    await f.check('store-b-summary-reconcile', async () => {
+      shopB = await chooseStatsShop(f.page, 'QA Shop B')
+      const params = summaryParams(shopB.url); expect(params.shopId).toBe('102')
+      expect(shopB.data.headquarters).toBe(true)
+      assertSummaryMatchesSql(shopB.data, f.oracle('store-summary', { ...params, shopId: 102 })[0])
+      await expect(statsCard(f.page, '已付订单数')).toContainText(String(shopB.data.paidOrderCount))
+    })
+    await f.check('details-reconcile-sql', async () => {
+      const loaded = await loadWorkSummary(f.page), params = summaryParams(loaded.url)
+      const pending = f.page.waitForResponse((r: any) => r.url().includes('/admin-api/order/store-order/store-summary/details?') && r.request().method() === 'GET')
+      await f.page.getByText('查看明细', { exact: true }).click()
+      const result = await (await pending).json(); expect(result.code).toBe(0)
+      const actualRows = result.data.list
+      const sqlRows = f.oracle('store-summary-details', params)
+      expect(result.data.total).toBe(sqlRows.length)
+      expect(actualRows.map((row: any) => row.orderId)).toEqual(sqlRows.slice(0, actualRows.length).map((row: any) => row.orderId))
+      for (const order of [orderA, orderB]) expect(sqlRows.some((row: any) => row.orderId === order.orderId)).toBe(true)
+      expect(actualRows.map((row: any) => [Number(row.shopId), Number(row.payPrice), Number(row.totalNum), row.fulfillmentStatus]))
+        .toEqual(sqlRows.slice(0, actualRows.length).map((row: any) => [Number(row.shopId), Number(row.payPrice), Number(row.totalNum), row.fulfillmentStatus]))
+    })
+    await f.check('shop-switch-ignores-stale-summary', async () => {
+      await loadWorkSummary(f.page)
+      let started!: () => void, release!: () => void
+      const startedA = new Promise<void>(resolve => { started = resolve })
+      const gate = new Promise<void>(resolve => { release = resolve })
+      let responseA: any
+      const slowPath = '**/admin-api/order/store-order/store-summary*'
+      const handler = async (route: any) => {
+        const url = new URL(route.request().url())
+        if (url.searchParams.get('shopId') !== '101') return route.fallback()
+        responseA = await route.fetch(); started(); await gate; await route.fulfill({ response: responseA })
+      }
+      await f.page.route(slowPath, handler)
+      try {
+        const selector = f.page.locator('.el-form-item').filter({ hasText: '统计门店' }).locator('.el-select')
+        await selector.click()
+        const requestA = f.page.waitForResponse((r: any) => r.url().includes('/store-summary?') && new URL(r.url()).searchParams.get('shopId') === '101')
+        await f.page.getByRole('option', { name: 'QA Shop A', exact: true }).click()
+        await startedA
+        const storeB = await chooseStatsShop(f.page, 'QA Shop B')
+        const paramsB = summaryParams(storeB.url); expect(paramsB.shopId).toBe('102')
+        const amountB = Number(storeB.data.grossPaidAmount).toFixed(2)
+        await expect(statsCard(f.page, '订单实付额（毛额）')).toContainText(amountB)
+        release()
+        await requestA
+        await expect(statsCard(f.page, '订单实付额（毛额）')).toContainText(amountB)
+        assertSummaryMatchesSql(storeB.data, f.oracle('store-summary', { ...paramsB, shopId: 102 })[0])
+      } finally {
+        release(); await f.page.unroute(slowPath, handler)
+      }
+    })
+    for (const [name, account, ownShop] of [['branch-a-page-scope', context.accounts.staff, 101], ['branch-b-page-scope', context.accounts.staffB, 102]] as any[]) {
+      await f.check(name, async () => {
+        const browserContext = await f.browser.newContext({ baseURL: f.baseURL, serviceWorkers: 'block' }); branchContexts.push(browserContext)
+        const page = await browserContext.newPage()
+        const loaded = await loadWorkSummaryAfterLogin(f, page, account)
+        branchTokens[ownShop] = loaded.token
+        expect(loaded.data.headquarters).toBe(false)
+        expect(loaded.data.authorizedShopIds.map(Number)).toEqual([ownShop])
+        assertSummaryMatchesSql(loaded.data, f.oracle('store-summary', { ...summaryParams(loaded.url), shopId: ownShop })[0])
+        const shops = await f.api('GET', '/admin-api/order/store-order/store-summary/shops', undefined, loaded.token)
+        expect(shops.map((shop: any) => Number(shop.id))).toEqual([ownShop])
+        await expect(statsCard(page, '已付订单数')).toContainText(String(loaded.data.paidOrderCount))
+      })
+    }
+    await f.check('branch-cannot-read-foreign-shop', async () => {
+      for (const [ownShop, foreignShop] of [[101, 102], [102, 101]]) {
+        const token = branchTokens[ownShop]
+        const denied = await f.api('GET', `/admin-api/order/store-order/store-summary?from=${allParams.from}&to=${allParams.to}&shopId=${foreignShop}`, undefined, token, false)
+        expect(denied.code).not.toBe(0)
+        const deniedDetails = await f.api('GET', `/admin-api/order/store-order/store-summary/details?from=${allParams.from}&to=${allParams.to}&shopId=${foreignShop}`, undefined, token, false)
+        expect(deniedDetails.code).not.toBe(0)
+      }
+    })
+  } finally {
+    await Promise.all(branchContexts.map(c => c.close()))
+  }
+}
+
+async function loadWorkSummaryAfterLogin(f: Flow, page: any, account: any) {
+  const token = await f.login(page, account)
+  const pending = page.waitForResponse((r: any) => r.url().includes('/admin-api/order/store-order/store-summary?') && r.request().method() === 'GET')
+  await page.goto('/mall/store-order-work')
+  const response = await pending; const result = await response.json(); expect(result.code).toBe(0)
+  await expect(page.getByText('订单实付额（毛额）')).toBeVisible()
+  return { data: result.data, url: response.url(), token }
+}
+
 async function scoreFixture(f: Flow, score = 100) {
   const token = await f.member()
   const address = { realName: 'Synthetic score', phone: '13800000001', address: 'Owned score street', detail: f.title('address'), isDefault: 1, latitude: '33', longitude: '114' }
@@ -586,6 +887,152 @@ async function scoreRetry(f: Flow) {
   })
   await f.check('exactly-once-sql', () => { assertScoreOnce(before, scoreState(f, fixture.product.id)) })
 }
+async function openOrderPrintJobs(page: any) {
+  const pending = page.waitForResponse((r: any) => r.url().includes('/admin-api/store/order-print-job/page') && r.request().method() === 'GET')
+  await page.goto('/mall/web-print')
+  const tab = page.getByRole('tab', { name: '订单打印任务', exact: true })
+  await tab.click(); const response = await pending
+  expect((await response.json()).code).toBe(0)
+  await expect(page.locator('.el-table').filter({ hasText: '订单取餐信息' })).toBeVisible()
+}
+async function reloadOrderPrintJobs(page: any) {
+  await page.reload()
+  const pending = page.waitForResponse((r: any) => r.url().includes('/admin-api/store/order-print-job/page') && r.request().method() === 'GET')
+  await page.getByRole('tab', { name: '订单打印任务', exact: true }).click()
+  await pending
+  await expect(page.locator('.el-table').filter({ hasText: '订单取餐信息' })).toBeVisible()
+}
+function printOrderRow(page: any, orderCode: string, extraText?: string) {
+  const rows = page.getByRole('row').filter({ hasText: orderCode })
+  return extraText ? rows.filter({ hasText: extraText }) : rows
+}
+function printRows(f: Flow, orderId: string) { return f.oracle('print-jobs', { orderId }) }
+function printCounters(f: Flow) {
+  const value = f.bridge('printer-counters', {})
+  return { printCalls: value.printCalls, statusCalls: value.statusCalls }
+}
+async function refreshPrintRow(page: any, row: any) {
+  const pending = page.waitForResponse((r: any) => r.url().includes('/admin-api/store/order-print-job/refresh') && r.request().method() === 'POST')
+  await row.getByRole('button', { name: '刷新状态', exact: true }).click()
+  const result = await (await pending).json(); expect(result.code).toBe(0)
+  return result.data
+}
+async function orderPrintJobs(f: Flow) {
+  const staffContexts: any[] = []
+  let memberToken = '', product: any, order: any, staffPage: any, printerId = 0, orderCode = '', jobId = 0
+  const printerPrefix = '/admin-api/store/printer'
+  try {
+    await f.check('unbound-order-waits-on-real-page', async () => {
+      const countsBefore = printCounters(f)
+      product = await f.createProduct(101, 'print-jobs', 19)
+      memberToken = await f.member()
+      order = await f.createOrder(product, memberToken)
+      f.bridge('complete', { orderId: order.orderId })
+      const staffContext = await f.browser.newContext({ baseURL: f.baseURL, serviceWorkers: 'block' }); staffContexts.push(staffContext)
+      staffPage = await staffContext.newPage()
+      await openWorkPage(f, staffPage, context.accounts.staff)
+      const card = await workOrder(staffPage, order.orderId, '待接单')
+      const pending = staffPage.waitForResponse((r: any) => r.url().includes('/admin-api/order/store-order/fulfillment/transition') && r.request().method() === 'POST')
+      await card.getByRole('button', { name: '接单', exact: true }).click()
+      expect((await (await pending).json()).code).toBe(0)
+      expect(fulfillmentState(f, order.orderId).fulfillmentStatus).toBe('ACCEPTED')
+      f.bridge('order-print-poll', {})
+      let rows = printRows(f, order.orderId)
+      expect(rows).toHaveLength(1); expect(rows[0]).toMatchObject({ kind: 'EVENT', state: 'WAITING_DEVICE', errorCode: 'NO_BOUND_DEVICE' })
+      const payload = JSON.parse(rows[0].payloadSnapshot); orderCode = payload.orderCode
+      expect(orderCode).toBe(order.orderId)
+      expect(payload.contactPhone).toBe('138****0001')
+      await openOrderPrintJobs(f.page)
+      const row = printOrderRow(f.page, orderCode)
+      await expect(row).toContainText('QA Shop A'); await expect(row).toContainText('等待可用设备')
+      await expect(row).toContainText('门店尚未绑定打印机')
+      expect(printCounters(f)).toEqual(countsBefore)
+    })
+    await f.check('offline-device-waits-on-real-page', async () => {
+      f.bridge('printer-state', { state: 'OFFLINE' })
+      printerId = await f.api('POST', printerPrefix + '/create', {
+        name: f.title('order-printer'), providerCode: 'OWNED_TEST', deviceCode: f.title('device'),
+        model: 'Synthetic', connectionType: 'LAN', enabled: true, configuration: {}
+      })
+      await f.api('PUT', printerPrefix + '/binding', { id: printerId, shopId: 101 })
+      expect((await f.api('POST', `${printerPrefix}/status/refresh?id=${printerId}`)).state).toBe('OFFLINE')
+      await refreshPrintRow(f.page, printOrderRow(f.page, orderCode))
+      await expect(printOrderRow(f.page, orderCode)).toContainText('打印机离线')
+      const event = printRows(f, order.orderId).find((row: any) => row.kind === 'EVENT')
+      expect(event).toMatchObject({ state: 'WAITING_DEVICE', errorCode: 'DEVICE_OFFLINE' })
+      expect(f.oracle('printer-state', { printerId })[0].state).toBe('OFFLINE')
+    })
+    await f.check('order-history-on-real-page', async () => {
+      f.bridge('printer-state', { state: 'ONLINE' })
+      await f.api('POST', `${printerPrefix}/status/refresh?id=${printerId}`)
+      const before = printCounters(f)
+      await refreshPrintRow(f.page, printOrderRow(f.page, orderCode))
+      f.bridge('order-print-poll', {})
+      const rows = printRows(f, order.orderId)
+      const job = rows.find((row: any) => row.kind === 'JOB')
+      expect(job).toMatchObject({ shopId: 101, printerId, state: 'UNKNOWN', errorCode: 'PROVIDER_TIMEOUT', purpose: 'ORDER' })
+      jobId = Number(job.id)
+      await reloadOrderPrintJobs(f.page)
+      await expect(printOrderRow(f.page, orderCode)).toContainText('结果待核对')
+      await expect(printOrderRow(f.page, orderCode)).toContainText(f.title('order-printer'))
+      expect(printCounters(f)).toEqual({ printCalls: before.printCalls + 1, statusCalls: before.statusCalls })
+    })
+    await f.check('unknown-refresh-readonly', async () => {
+      const beforeRows = printRows(f, order.orderId), beforeCounters = printCounters(f)
+      const result = await refreshPrintRow(f.page, printOrderRow(f.page, orderCode))
+      expect(result.id).toBe(jobId); expect(result.state).toBe('UNKNOWN')
+      expect(printRows(f, order.orderId)).toEqual(beforeRows)
+      expect(printCounters(f)).toEqual(beforeCounters)
+      await expect(printOrderRow(f.page, orderCode)).toContainText('结果待核对')
+    })
+    await f.check('manual-reprint-audited', async () => {
+      const beforeCounters = printCounters(f), reason = '顾客反馈未收到小票'
+      const row = printOrderRow(f.page, orderCode)
+      await row.getByRole('button', { name: '人工重打', exact: true }).click()
+      const dialog = f.page.getByRole('dialog').filter({ hasText: '重打会创建关联原任务' })
+      await dialog.getByLabel('重打原因').fill(reason)
+      const pending = f.page.waitForResponse((r: any) => r.url().includes('/admin-api/store/order-print-job/reprint') && r.request().method() === 'POST')
+      await dialog.getByRole('button', { name: '创建重打任务', exact: true }).click()
+      const response = await (await pending).json(); expect(response.code).toBe(0)
+      const reprintId = Number(response.data.id); expect(reprintId).toBeGreaterThan(0)
+      await expect(dialog).toBeHidden()
+      f.bridge('order-print-poll', {})
+      await expect.poll(() => printRows(f, order.orderId).find((value: any) => value.id === reprintId)?.state, { timeout: 20000 }).toBe('UNKNOWN')
+      const rows = printRows(f, order.orderId)
+      const parent = rows.find((value: any) => value.id === jobId), child = rows.find((value: any) => value.id === reprintId)
+      expect(child).toMatchObject({ kind: 'JOB', purpose: 'REPRINT', parentJobId: jobId, reprintReason: reason, createdBy: 101, errorCode: 'PROVIDER_TIMEOUT' })
+      expect(child.payloadSnapshot).toBe(parent.payloadSnapshot)
+      expect(printCounters(f)).toEqual({ printCalls: beforeCounters.printCalls + 1, statusCalls: beforeCounters.statusCalls })
+      await expect(printOrderRow(f.page, orderCode, reason)).toContainText(reason)
+    })
+    await f.check('cross-store-print-denied', async () => {
+      const branchContext = await f.browser.newContext({ baseURL: f.baseURL, serviceWorkers: 'block' }); staffContexts.push(branchContext)
+      const branchPage = await branchContext.newPage()
+      const token = await f.login(branchPage, context.accounts.staffB)
+      const list = await f.api('GET', '/admin-api/store/order-print-job/page?pageNo=1&pageSize=20', undefined, token, false)
+      expect(list.code).toBe(403); expect(list.msg).toContain('仅总部')
+      const get = await f.api('GET', `/admin-api/store/order-print-job/get?id=${jobId}`, undefined, token, false)
+      expect(get.code).toBe(403); expect(get.msg).toContain('仅总部')
+      const reprint = await f.api('POST', '/admin-api/store/order-print-job/reprint',
+        { jobId, requestKey: `cross-store-${key()}`, reason: 'cross-store denial check' }, token, false)
+      expect(reprint.code).toBe(403); expect(reprint.msg).toContain('仅总部')
+    })
+    await f.check('print-job-sql-audit', () => {
+      const rows = printRows(f, order.orderId)
+      expect(rows.filter((value: any) => value.kind === 'EVENT')).toHaveLength(1)
+      const jobs = rows.filter((value: any) => value.kind === 'JOB')
+      expect(jobs).toHaveLength(2)
+      expect(jobs.find((value: any) => value.id === jobId)).toMatchObject({ purpose: 'ORDER', parentJobId: null, reprintReason: null, state: 'UNKNOWN', attempts: 1 })
+      expect(jobs.filter((value: any) => value.purpose === 'REPRINT')).toHaveLength(1)
+      const snapshot = JSON.parse(jobs[0].payloadSnapshot)
+      expect(snapshot.orderCode).toBe(order.orderId); expect(snapshot.contactPhone).toBe('138****0001')
+      expect(snapshot.contactPhone).not.toContain('13800000001')
+      expect(f.oracle('fulfillment-state', { orderId: order.orderId })[0].fulfillmentStatus).toBe('ACCEPTED')
+    })
+  } finally {
+    await Promise.all(staffContexts.map((value: any) => value.close()))
+  }
+}
 async function printerUnknown(f: Flow) {
   let device: number, requestId: string, row: any
   const prefix = '/admin-api/store/printer'
@@ -644,6 +1091,7 @@ async function printerUnknown(f: Flow) {
 
 const scenarios: Record<string, (flow: Flow) => Promise<void>> = {
   'score-redemption': scoreRedemption, 'score-retry': scoreRetry, 'printer-unknown': printerUnknown,
+  'pickup-fulfillment': pickupFulfillment, 'store-statistics': storeStatistics, 'order-print-jobs': orderPrintJobs,
   'pickup-contact': pickupContact, 'auth-session': authSession, 'catalog-order': catalogOrder, 'store-isolation': storeIsolation,
   'order-retry': orderRetry, 'order-cancel': orderCancel,
   'coupon-release': flow => couponFlow(flow, false), 'coupon-complete': flow => couponFlow(flow, true)
