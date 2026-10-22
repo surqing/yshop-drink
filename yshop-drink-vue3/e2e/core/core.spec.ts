@@ -949,20 +949,18 @@ async function orderPrintJobs(f: Flow) {
   try {
     await f.check('unbound-order-waits-on-real-page', async () => {
       const countsBefore = printCounters(f)
-      // The preceding printer-unknown scenario creates this run's owned printer
-      // and leaves it bound. Restore this scenario's explicit unbound precondition.
-      const priorDevices = await f.api('GET', `${printerPrefix}/page?pageNo=1&pageSize=100&shopId=101&name=${encodeURIComponent(f.title('printer'))}`)
-      for (const device of priorDevices.list.filter((value: any) => value.name === f.title('printer')))
-        await f.api('DELETE', `${printerPrefix}/binding?id=${device.id}`)
-      const remainingDevices = await f.api('GET', `${printerPrefix}/page?pageNo=1&pageSize=100&shopId=101&name=${encodeURIComponent(f.title('printer'))}`)
-      expect(remainingDevices.list.filter((value: any) => value.name === f.title('printer'))).toHaveLength(0)
-      product = await f.createProduct(101, 'print-jobs', 19)
+      // Shop B is independent of the preceding printer-unknown scenario. Its
+      // empty binding state gives this test an unbound device precondition
+      // without detaching a printer whose UNKNOWN operation is still busy.
+      const priorDevices = await f.api('GET', `${printerPrefix}/page?pageNo=1&pageSize=100&shopId=102&name=${encodeURIComponent(f.title('printer'))}`)
+      expect(priorDevices.list.filter((value: any) => value.name === f.title('printer'))).toHaveLength(0)
+      product = await f.createProduct(102, 'print-jobs', 19)
       memberToken = await f.member()
       order = await f.createOrder(product, memberToken)
       f.bridge('complete', { orderId: order.orderId })
       const staffContext = await f.browser.newContext({ baseURL: f.baseURL, serviceWorkers: 'block' }); staffContexts.push(staffContext)
       staffPage = await staffContext.newPage()
-      await openWorkPage(f, staffPage, context.accounts.staff)
+      await openWorkPage(f, staffPage, context.accounts.staffB)
       const card = await workOrder(staffPage, order.orderId, '待接单')
       const pending = staffPage.waitForResponse((r: any) => r.url().includes('/admin-api/order/store-order/fulfillment/transition') && r.request().method() === 'POST')
       await card.getByRole('button', { name: '接单', exact: true }).click()
@@ -976,7 +974,7 @@ async function orderPrintJobs(f: Flow) {
       expect(payload.contactPhone).toBe('138****0001')
       await openOrderPrintJobs(f.page)
       const row = printOrderRow(f.page, orderCode)
-      await expect(row).toContainText('QA Shop A'); await expect(row).toContainText('等待可用设备')
+      await expect(row).toContainText('QA Shop B'); await expect(row).toContainText('等待可用设备')
       await expect(row).toContainText('门店尚未绑定打印机')
       expect(printCounters(f)).toEqual(countsBefore)
     })
@@ -986,7 +984,7 @@ async function orderPrintJobs(f: Flow) {
         name: f.title('order-printer'), providerCode: 'OWNED_TEST', deviceCode: f.title('order-printer-device'),
         model: 'Synthetic', connectionType: 'LAN', enabled: true, configuration: {}
       })
-      await f.api('PUT', printerPrefix + '/binding', { id: printerId, shopId: 101 })
+      await f.api('PUT', printerPrefix + '/binding', { id: printerId, shopId: 102 })
       expect((await f.api('POST', `${printerPrefix}/status/refresh?id=${printerId}`)).state).toBe('OFFLINE')
       await refreshPrintRow(f.page, printOrderRow(f.page, orderCode))
       await expect(printOrderRow(f.page, orderCode)).toContainText('打印机离线')
@@ -1002,7 +1000,7 @@ async function orderPrintJobs(f: Flow) {
       f.bridge('order-print-poll', {})
       const rows = printRows(f, order.orderId)
       const job = rows.find((row: any) => row.kind === 'JOB')
-      expect(job).toMatchObject({ shopId: 101, printerId, state: 'UNKNOWN', errorCode: 'PROVIDER_TIMEOUT', purpose: 'ORDER' })
+      expect(job).toMatchObject({ shopId: 102, printerId, state: 'UNKNOWN', errorCode: 'PROVIDER_TIMEOUT', purpose: 'ORDER' })
       jobId = Number(job.id)
       await reloadOrderPrintJobs(f.page)
       await expect(printOrderRow(f.page, orderCode)).toContainText('结果待核对')
@@ -1098,7 +1096,7 @@ async function orderPrintJobs(f: Flow) {
       const beforeRows = printRows(f, order.orderId), beforeCounters = printCounters(f)
       const branchContext = await f.browser.newContext({ baseURL: f.baseURL, serviceWorkers: 'block' }); staffContexts.push(branchContext)
       const branchPage = await branchContext.newPage()
-      const token = await f.login(branchPage, context.accounts.staffB)
+      const token = await f.login(branchPage, context.accounts.staff)
       const list = await f.api('GET', '/admin-api/store/order-print-job/page?pageNo=1&pageSize=20', undefined, token, false)
       expect(list.code).toBe(403); expect(list.msg).toContain('仅总部')
       const get = await f.api('GET', `/admin-api/store/order-print-job/get?id=${jobId}`, undefined, token, false)
