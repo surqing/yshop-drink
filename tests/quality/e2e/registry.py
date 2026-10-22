@@ -26,8 +26,9 @@ _CHECKS = {
                          'shop-switch-ignores-stale-summary','branch-a-page-scope','branch-b-page-scope',
                          'branch-cannot-read-foreign-shop'],
     'order-print-jobs': ['unbound-order-waits-on-real-page','offline-device-waits-on-real-page',
-                         'order-history-on-real-page','unknown-refresh-readonly','manual-reprint-audited',
-                         'cross-store-print-denied','print-job-sql-audit'],
+                         'order-history-on-real-page','unknown-refresh-readonly','recovery-confirmation-gate',
+                         'unknown-recovery-audited','manual-reprint-audited','cross-store-print-denied',
+                         'print-job-sql-audit'],
 }
 _LOCAL = {
     'score-redemption': ['mini-score-page'],

@@ -28,6 +28,8 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.lang.reflect.*;
 import java.nio.file.*;
@@ -214,6 +216,27 @@ public final class OwnedE2eApplication {
                     } else if(action.equals("order-print-poll")) {
                         context.getBean(co.yixiang.yshop.module.store.service.printer.OrderPrintJobWorker.class).poll();
                         reply.put("printCalls",PRINT_CALLS.get());reply.put("statusCalls",STATUS_CALLS.get());
+                    } else if(action.equals("simulate-print-crash")) {
+                        long jobId=command.path("jobId").asLong();
+                        if(jobId<=0)throw new IllegalArgumentException("INVALID_PRINT_JOB");
+                        String leaseToken=UUID.randomUUID().toString();
+                        new TransactionTemplate(context.getBean(PlatformTransactionManager.class)).executeWithoutResult(tx->{
+                            List<Map<String,Object>> jobs=db.queryForList("SELECT tenant_id,shop_id,printer_id,state,purpose,lease_expires_at "
+                                    +"FROM yshop_order_print_job WHERE id=? FOR UPDATE",jobId);
+                            if(jobs.size()!=1)throw new IllegalArgumentException("OWNED_PRINT_JOB_REQUIRED");
+                            Map<String,Object> job=jobs.get(0);
+                            if(!"ORDER".equals(job.get("purpose"))||!"UNKNOWN".equals(job.get("state"))||job.get("lease_expires_at")!=null)
+                                throw new IllegalArgumentException("UNKNOWN_UNLEASED_ORDER_JOB_REQUIRED");
+                            Integer claims=db.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim WHERE tenant_id=? AND job_id=?",
+                                    Integer.class,job.get("tenant_id"),jobId);
+                            if(claims==null||claims!=0)throw new IllegalArgumentException("PRINT_CLAIM_ALREADY_PRESENT");
+                            if(db.update("UPDATE yshop_order_print_job SET last_error='WORKER_LEASE_EXPIRED',lease_token=?,"
+                                    +"lease_expires_at=NULL,next_attempt_at=NULL,update_time=CURRENT_TIMESTAMP WHERE id=? AND state='UNKNOWN' AND purpose='ORDER'",
+                                    leaseToken,jobId)!=1)throw new IllegalStateException("PRINT_JOB_FIXTURE_CONFLICT");
+                            db.update("INSERT INTO yshop_order_print_device_claim(tenant_id,printer_id,job_id,lease_token,shop_id) VALUES(?,?,?,?,?)",
+                                    job.get("tenant_id"),job.get("printer_id"),jobId,leaseToken,job.get("shop_id"));
+                        });
+                        reply.put("jobId",jobId);reply.put("claimCreated",true);reply.put("syntheticCrashAftermath",true);
                     } else if(action.equals("token-lifetime")) {
                         int seconds=command.path("seconds").asInt();
                         if(seconds!=2 && seconds!=3600)throw new IllegalArgumentException("INVALID_TEST_TOKEN_LIFETIME");

@@ -3,7 +3,7 @@ import copy
 import time
 import unittest
 from merge_scope import compare_defects, LEGACY_IDS, SECURITY_IDS
-from defect_contract import ASSERTION_FINGERPRINTS, OPEN_FAILURES, load_contract, validate_contract, assertion_fingerprints, HISTORICAL_SOURCE
+from defect_contract import ASSERTION_FINGERPRINTS, OPEN_FAILURES, load_contract, validate_contract, assertion_fingerprints, stable_ast_dump, HISTORICAL_SOURCE
 from pathlib import Path
 import tempfile
 import subprocess
@@ -167,6 +167,16 @@ class MergeScopeTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             bad=Path(folder)/'bad.py';bad.write_text(path.read_text().replace("o['points']=='800.00'","o['points']=='900.00'"))
             with self.assertRaises(ValueError):assertion_fingerprints(bad)
+
+    def test_ast_fingerprint_ignores_empty_python312_type_params(self):
+        import ast
+        node=ast.parse('def sample():\n return 1\n').body[0]
+        original=stable_ast_dump(node)
+        node.type_params=[]
+        self.assertEqual(original,stable_ast_dump(node))
+        if 'type_params' in node._fields:
+            node.type_params=[ast.Name(id='T',ctx=ast.Load())]
+            self.assertNotEqual(original,stable_ast_dump(node))
 
     def test_baseline_and_candidate_business_assertions_stay_identical(self):
         from legacy_baseline import assertion_equivalence

@@ -89,4 +89,15 @@ class TestSupportBoundaryTest(unittest.TestCase):
                 reply=invoke(context,'order-print-poll',{},timeout=1)
             self.assertEqual(3,reply['printCalls']);self.assertEqual(1,reply['statusCalls'])
 
+    def test_crash_fixture_requires_a_positive_owned_job_id(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            owner='a'*32;mailbox=Path(folder)/('commands-'+owner);mailbox.mkdir(mode=0o700)
+            (mailbox/'requests').mkdir();(mailbox/'responses').mkdir()
+            context={'owner':owner,'commandDir':str(mailbox)}
+            for value in (0,-1,'12 OR 1=1',True):
+                with self.subTest(value=value), self.assertRaisesRegex(ValueError,'ENTITY_ID_INVALID'):
+                    invoke(context,'simulate-print-crash',{'jobId':value})
+            self.assertEqual([],list((mailbox/'requests').iterdir()))
+
 if __name__=='__main__':unittest.main()

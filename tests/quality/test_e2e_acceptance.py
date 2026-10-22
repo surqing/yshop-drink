@@ -122,7 +122,8 @@ class E2eAcceptanceTest(unittest.TestCase):
                 'store-a-summary-reconcile','store-b-summary-reconcile','details-reconcile-sql',
                 'shop-switch-ignores-stale-summary','branch-a-page-scope','branch-b-page-scope','branch-cannot-read-foreign-shop'],
             'order-print-jobs':['unbound-order-waits-on-real-page','offline-device-waits-on-real-page','order-history-on-real-page',
-                'unknown-refresh-readonly','manual-reprint-audited','cross-store-print-denied','print-job-sql-audit']}
+                'unknown-refresh-readonly','recovery-confirmation-gate','unknown-recovery-audited','manual-reprint-audited',
+                'cross-store-print-denied','print-job-sql-audit']}
         local_only={'pickup-fulfillment':['mini-initial-status','mini-accepted-status','mini-ready-and-collect','mini-collected-status']}
         for name,checks in exact.items():
             self.assertEqual(checks,by_ci[name]['expectedCheckIds'])

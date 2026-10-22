@@ -917,6 +917,11 @@ async function refreshPrintRow(page: any, row: any) {
   const result = await (await pending).json(); expect(result.code).toBe(0)
   return result.data
 }
+async function checkPrintRecoveryBox(dialog: any, label: string) {
+  const checkbox = dialog.locator('.el-checkbox').filter({ hasText: label })
+  await checkbox.locator('.el-checkbox__inner').click()
+  await expect(checkbox.locator('input[type="checkbox"]')).toBeChecked()
+}
 async function orderPrintJobs(f: Flow) {
   const staffContexts: any[] = []
   let memberToken = '', product: any, order: any, staffPage: any, printerId = 0, orderCode = '', jobId = 0
@@ -978,12 +983,68 @@ async function orderPrintJobs(f: Flow) {
       expect(printCounters(f)).toEqual({ printCalls: before.printCalls + 1, statusCalls: before.statusCalls })
     })
     await f.check('unknown-refresh-readonly', async () => {
+      f.bridge('simulate-print-crash', { jobId })
       const beforeRows = printRows(f, order.orderId), beforeCounters = printCounters(f)
+      const beforeRecovery = f.oracle('print-recovery', { jobId })[0]
+      expect(beforeRecovery).toMatchObject({ state: 'UNKNOWN', lastError: 'WORKER_LEASE_EXPIRED', claimCount: 1, resolutionCount: 0 })
+      expect(beforeRecovery.leaseExpiresAt).toBeNull()
       const result = await refreshPrintRow(f.page, printOrderRow(f.page, orderCode))
       expect(result.id).toBe(jobId); expect(result.state).toBe('UNKNOWN')
       expect(printRows(f, order.orderId)).toEqual(beforeRows)
       expect(printCounters(f)).toEqual(beforeCounters)
       await expect(printOrderRow(f.page, orderCode)).toContainText('结果待核对')
+      await expect(printOrderRow(f.page, orderCode)).toContainText('发送进程中断，结果待核对')
+      expect(f.oracle('print-recovery', { jobId })[0]).toMatchObject({ state: 'UNKNOWN', claimCount: 1, resolutionCount: 0 })
+    })
+    await f.check('recovery-confirmation-gate', async () => {
+      const row = printOrderRow(f.page, orderCode)
+      await row.getByRole('button', { name: '核验后释放占用', exact: true }).click()
+      const dialog = f.page.getByRole('dialog').filter({ hasText: '核验后释放打印占用' })
+      await expect(dialog).toBeVisible()
+      await expect(dialog).toContainText('不会自动重发')
+      const confirm = dialog.getByRole('button', { name: '确认核验并释放占用', exact: true })
+      await expect(confirm).toBeDisabled()
+      const reason = '已联系值班员确认旧发送进程退出，并核对设备无出纸'
+      await dialog.getByLabel('处理说明').fill(reason)
+      await expect(confirm).toBeDisabled()
+      await checkPrintRecoveryBox(dialog, '我已确认原发送进程已停止')
+      await expect(confirm).toBeDisabled()
+
+      const rejectedSender = await f.api('POST', '/admin-api/store/order-print-job/resolve-unknown', {
+        jobId, requestKey: `gate_sender_${key()}`, reason, senderStopped: false, notPrintedConfirmed: true
+      }, f.adminToken, false)
+      const rejectedPaper = await f.api('POST', '/admin-api/store/order-print-job/resolve-unknown', {
+        jobId, requestKey: `gate_paper_${key()}`, reason, senderStopped: true, notPrintedConfirmed: false
+      }, f.adminToken, false)
+      expect(rejectedSender.code).not.toBe(0); expect(rejectedPaper.code).not.toBe(0)
+      expect(f.oracle('print-recovery', { jobId })[0]).toMatchObject({ state: 'UNKNOWN', claimCount: 1, resolutionCount: 0 })
+
+      await checkPrintRecoveryBox(dialog, '我已核实打印服务或设备确认未出纸')
+      await expect(confirm).toBeEnabled()
+      await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+      await expect(dialog).toBeHidden()
+    })
+    await f.check('unknown-recovery-audited', async () => {
+      const beforeCounters = printCounters(f), reason = '已联系值班员确认旧发送进程退出，并核对设备无出纸'
+      const row = printOrderRow(f.page, orderCode)
+      await row.getByRole('button', { name: '核验后释放占用', exact: true }).click()
+      const dialog = f.page.getByRole('dialog').filter({ hasText: '核验后释放打印占用' })
+      await dialog.getByLabel('处理说明').fill(reason)
+      await checkPrintRecoveryBox(dialog, '我已确认原发送进程已停止')
+      await checkPrintRecoveryBox(dialog, '我已核实打印服务或设备确认未出纸')
+      const pending = f.page.waitForResponse((r: any) => r.url().includes('/admin-api/store/order-print-job/resolve-unknown') && r.request().method() === 'POST')
+      await dialog.getByRole('button', { name: '确认核验并释放占用', exact: true }).click()
+      const response = await (await pending).json(); expect(response.code).toBe(0)
+      expect(response.data).toMatchObject({ id: jobId, state: 'FAILED', errorCode: 'OPERATOR_CONFIRMED_NOT_PRINTED' })
+      await expect(dialog).toBeHidden()
+      const audit = f.oracle('print-recovery', { jobId })[0]
+      expect(audit).toMatchObject({ jobId, state: 'FAILED', lastError: 'OPERATOR_CONFIRMED_NOT_PRINTED',
+        claimCount: 0, resolutionCount: 1, resolutionOutcome: 'NOT_PRINTED_CONFIRMED_CLAIM_RELEASED',
+        claimWasPresent: 1, resolutionReason: reason, actorId: 101, priorError: 'WORKER_LEASE_EXPIRED' })
+      expect(audit.leaseExpiresAt).toBeNull()
+      expect(printCounters(f)).toEqual(beforeCounters)
+      await expect(printOrderRow(f.page, orderCode)).toContainText('已核实未出纸，等待人工重打')
+      await expect(printOrderRow(f.page, orderCode).getByRole('button', { name: '人工重打', exact: true })).toBeVisible()
     })
     await f.check('manual-reprint-audited', async () => {
       const beforeCounters = printCounters(f), reason = '顾客反馈未收到小票'
@@ -1000,6 +1061,7 @@ async function orderPrintJobs(f: Flow) {
       await expect.poll(() => printRows(f, order.orderId).find((value: any) => value.id === reprintId)?.state, { timeout: 20000 }).toBe('UNKNOWN')
       const rows = printRows(f, order.orderId)
       const parent = rows.find((value: any) => value.id === jobId), child = rows.find((value: any) => value.id === reprintId)
+      expect(parent).toMatchObject({ state: 'FAILED', errorCode: 'OPERATOR_CONFIRMED_NOT_PRINTED' })
       expect(child).toMatchObject({ kind: 'JOB', purpose: 'REPRINT', parentJobId: jobId, reprintReason: reason, createdBy: 101, errorCode: 'PROVIDER_TIMEOUT' })
       expect(child.payloadSnapshot).toBe(parent.payloadSnapshot)
       expect(printCounters(f)).toEqual({ printCalls: beforeCounters.printCalls + 1, statusCalls: beforeCounters.statusCalls })
@@ -1016,18 +1078,23 @@ async function orderPrintJobs(f: Flow) {
       const reprint = await f.api('POST', '/admin-api/store/order-print-job/reprint',
         { jobId, requestKey: `cross-store-${key()}`, reason: 'cross-store denial check' }, token, false)
       expect(reprint.code).toBe(403); expect(reprint.msg).toContain('仅总部')
+      const recovery = await f.api('POST', '/admin-api/store/order-print-job/resolve-unknown',
+        { jobId, requestKey: `cross-recovery-${key()}`, reason: 'cross-store denial check', senderStopped: true, notPrintedConfirmed: true }, token, false)
+      expect(recovery.code).toBe(403); expect(recovery.msg).toContain('仅总部')
     })
     await f.check('print-job-sql-audit', () => {
       const rows = printRows(f, order.orderId)
       expect(rows.filter((value: any) => value.kind === 'EVENT')).toHaveLength(1)
       const jobs = rows.filter((value: any) => value.kind === 'JOB')
       expect(jobs).toHaveLength(2)
-      expect(jobs.find((value: any) => value.id === jobId)).toMatchObject({ purpose: 'ORDER', parentJobId: null, reprintReason: null, state: 'UNKNOWN', attempts: 1 })
+      expect(jobs.find((value: any) => value.id === jobId)).toMatchObject({ purpose: 'ORDER', parentJobId: null, reprintReason: null, state: 'FAILED', errorCode: 'OPERATOR_CONFIRMED_NOT_PRINTED', attempts: 1 })
       expect(jobs.filter((value: any) => value.purpose === 'REPRINT')).toHaveLength(1)
       const snapshot = JSON.parse(jobs[0].payloadSnapshot)
       expect(snapshot.orderCode).toBe(order.orderId); expect(snapshot.contactPhone).toBe('138****0001')
       expect(snapshot.contactPhone).not.toContain('13800000001')
       expect(f.oracle('fulfillment-state', { orderId: order.orderId })[0].fulfillmentStatus).toBe('ACCEPTED')
+      expect(f.oracle('print-recovery', { jobId })[0]).toMatchObject({ claimCount: 0, resolutionCount: 1,
+        resolutionOutcome: 'NOT_PRINTED_CONFIRMED_CLAIM_RELEASED', claimWasPresent: 1, actorId: 101 })
     })
   } finally {
     await Promise.all(staffContexts.map((value: any) => value.close()))

@@ -80,6 +80,17 @@ def query_for(name, ids):
                 "SELECT -id AS sort_id,JSON_OBJECT('kind','EVENT','id',-id,'eventId',id,'orderId',order_id,'shopId',shop_id,'printerId',NULL,"
                 "'purpose',NULL,'state',state,'errorCode',last_error,'attempts',attempts,'parentJobId',NULL,'reprintReason',NULL,'createdBy',NULL,'payloadSnapshot',payload_snapshot) AS row_json "
                 "FROM yshop_order_fulfillment_print_event WHERE order_id="+order+") AS print_rows ORDER BY sort_id;")
+    if name=='print-recovery':
+        job=number(ids.get('jobId'))
+        return ("SELECT JSON_OBJECT('jobId',j.id,'state',j.state,'lastError',j.last_error,'leaseExpiresAt',j.lease_expires_at,"
+                "'claimCount',(SELECT COUNT(*) FROM yshop_order_print_device_claim c WHERE c.tenant_id=j.tenant_id AND c.job_id=j.id),"
+                "'resolutionCount',(SELECT COUNT(*) FROM yshop_order_print_device_claim_resolution r WHERE r.tenant_id=j.tenant_id AND r.job_id=j.id),"
+                "'resolutionOutcome',(SELECT r.outcome FROM yshop_order_print_device_claim_resolution r WHERE r.tenant_id=j.tenant_id AND r.job_id=j.id),"
+                "'claimWasPresent',(SELECT CAST(r.claim_was_present AS UNSIGNED) FROM yshop_order_print_device_claim_resolution r WHERE r.tenant_id=j.tenant_id AND r.job_id=j.id),"
+                "'resolutionReason',(SELECT r.reason FROM yshop_order_print_device_claim_resolution r WHERE r.tenant_id=j.tenant_id AND r.job_id=j.id),"
+                "'actorId',(SELECT r.actor_id FROM yshop_order_print_device_claim_resolution r WHERE r.tenant_id=j.tenant_id AND r.job_id=j.id),"
+                "'priorError',(SELECT r.prior_error FROM yshop_order_print_device_claim_resolution r WHERE r.tenant_id=j.tenant_id AND r.job_id=j.id)) "
+                "FROM yshop_order_print_job j WHERE j.id="+job+";")
     if name=='order-contact':
         return "SELECT JSON_OBJECT('memberId',uid,'userPhone',user_phone) FROM yshop_store_order WHERE order_id="+order_id(ids.get('orderId'))+';'
     if name=='score-state':

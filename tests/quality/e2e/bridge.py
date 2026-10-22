@@ -22,7 +22,7 @@ def validate_context(context):
 
 def invoke(context, action, ids, timeout=60):
     mailbox=validate_context(context)
-    if action not in ('complete','token-lifetime','printer-counters','printer-state','order-print-poll'):
+    if action not in ('complete','token-lifetime','printer-counters','printer-state','order-print-poll','simulate-print-crash'):
         raise ValueError('BRIDGE_ACTION_UNKNOWN')
     if action=='complete' and not re.fullmatch(r'[A-Za-z0-9_-]{1,64}',str(ids.get('orderId',''))):
         raise ValueError('ENTITY_ID_INVALID')
@@ -30,6 +30,8 @@ def invoke(context, action, ids, timeout=60):
         raise ValueError('INVALID_TEST_TOKEN_LIFETIME')
     if action=='printer-state' and ids.get('state') not in ('ONLINE','OFFLINE','PAPER_OUT','UNKNOWN'):
         raise ValueError('INVALID_TEST_PRINTER_STATE')
+    if action=='simulate-print-crash' and (isinstance(ids.get('jobId'),bool) or not re.fullmatch(r'[1-9][0-9]{0,17}',str(ids.get('jobId','')))):
+        raise ValueError('ENTITY_ID_INVALID')
     command_id=uuid.uuid4().hex
     command={**ids,'owner':context['owner'],'commandId':command_id,'action':action}
     request=mailbox/'requests'/(command_id+'.json')

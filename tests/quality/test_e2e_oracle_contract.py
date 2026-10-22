@@ -55,6 +55,20 @@ class E2eOracleContractTest(unittest.TestCase):
         self.assertIn('ORDER BY sort_id', sql)
         self.assertNotIn('ORDER BY id', sql)
 
+    def test_print_recovery_oracle_reads_claim_and_operator_audit(self):
+        sql = query_for('print-recovery', {'jobId': 123})
+        self.assertTrue(sql.lstrip().startswith('SELECT JSON_OBJECT('))
+        self.assertIn('yshop_order_print_device_claim', sql)
+        self.assertIn('yshop_order_print_device_claim_resolution', sql)
+        self.assertIn('claimCount', sql)
+        self.assertIn('resolutionOutcome', sql)
+        self.assertIn('claimWasPresent', sql)
+        self.assertIn('resolutionReason', sql)
+        self.assertIn('prior_error', sql)
+        for value in (0, -1, '123 OR 1=1'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                query_for('print-recovery', {'jobId': value})
+
     def test_product_oracle_reports_order_reward_snapshot(self):
         sql = query_for('product', {'productId': 101})
         self.assertIn("'giveIntegral',give_integral", sql)

@@ -87,6 +87,17 @@ class E2eCliTest(unittest.TestCase):
         self.assertEqual(14,len(report['scenarios']))
         self.assertTrue(all(s['variant']=='api-admin' for s in report['scenarios']))
 
+    def test_f3_recovery_order_and_quick_contracts_are_registered(self):
+        from e2e.registry import listing
+        checks=listing('ci','order-print-jobs')['scenarios'][0]['expectedCheckIds']
+        self.assertEqual(['unbound-order-waits-on-real-page','offline-device-waits-on-real-page','order-history-on-real-page',
+                          'unknown-refresh-readonly','recovery-confirmation-gate','unknown-recovery-audited',
+                          'manual-reprint-audited','cross-store-print-denied','print-job-sql-audit'],checks)
+        self.assertLess(checks.index('unknown-recovery-audited'),checks.index('manual-reprint-audited'))
+        quick=json.loads((REPO/'tests/quality/quick-manifest.json').read_text())
+        self.assertEqual(9,quick['tests/quality/test_e2e_oracle_contract.py'])
+        self.assertEqual(9,quick['tests/quality/test_e2e_support.py'])
+
     def test_filtered_list_contains_only_requested_scenario(self):
         result=self.invoke('E2E','--profile','local','--scenario','order-retry','--list')
         self.assertEqual(0,result.returncode,result.stderr)

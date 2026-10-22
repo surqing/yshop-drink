@@ -48,8 +48,11 @@ def collect(evidence=None, runs=(), mini=None, tools=None, coverage=None):
     if evidence:
         for folder in evidence:reports.update(certified_suites(folder,registry))
     executed={}
-    node_files=sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])
-    python_files=[REPO/name for name in ['tests/quality/test_evidence.py','tests/quality/test_secret_guard.py','tests/quality/test_owned_resources.py','tests/quality/test_page_evidence.py','tests/smoke/test_secret_scan.py','tests/payment/prepayment-tools-test.py']]
+    node_files=sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs'),*REPO.glob('tests/printer/*.test.mjs')])
+    python_files=[REPO/name for name in ['tests/quality/test_merge_scope.py','tests/quality/test_e2e_acceptance.py','tests/quality/test_e2e_publish.py',
+        'tests/quality/test_e2e_support.py','tests/quality/test_e2e_environment.py','tests/quality/test_e2e_cli.py','tests/quality/test_e2e_contract.py',
+        'tests/quality/test_e2e_oracle_contract.py','tests/quality/test_evidence.py','tests/quality/test_secret_guard.py','tests/quality/test_owned_resources.py',
+        'tests/quality/test_page_evidence.py','tests/smoke/test_secret_scan.py','tests/payment/prepayment-tools-test.py']]
     for run in runs:
         r=json.loads(Path(run).read_text())
         for step in r['steps']:

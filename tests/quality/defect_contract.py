@@ -53,6 +53,14 @@ def validate_contract(value):
     return value
 
 
+def stable_ast_dump(node):
+    """Keep fingerprints identical across Python releases with AST schema additions."""
+    value=ast.dump(node,include_attributes=False)
+    # Python 3.12 added FunctionDef.type_params. Empty type parameters carry no
+    # source semantics and were absent from the Python 3.9 baseline dump.
+    return value.replace(', type_params=[]','')
+
+
 def load_contract(repo, identity, revision=None):
     """The validator supplies contracts from source, never from an untrusted report."""
     repo = Path(repo)
@@ -75,7 +83,7 @@ def assertion_fingerprints(path):
     for name in ASSERTION_FINGERPRINTS:
         functions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == name]
         require(len(functions) == 1, 'BASELINE_ASSERTION_FUNCTION_AMBIGUOUS')
-        result[name] = hashlib.sha256(ast.dump(functions[0], include_attributes=False).encode()).hexdigest()
+        result[name] = hashlib.sha256(stable_ast_dump(functions[0]).encode()).hexdigest()
     require(result == ASSERTION_FINGERPRINTS, 'ORIGINAL_BUSINESS_ASSERTION_CHANGED')
     return result
 
