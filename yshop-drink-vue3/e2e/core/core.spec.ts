@@ -662,7 +662,7 @@ async function chooseStatsShop(page: any, name: string) {
 }
 async function storeStatistics(f: Flow) {
   let memberA = '', memberB = ''
-  let orderA: any, orderB: any, summaryAll: any, allParams: any
+  let orderA: any, orderB: any, boundaryStartOrder: any, boundaryEndOrder: any, summaryAll: any, allParams: any
   const branchContexts: any[] = []
   const branchTokens: Record<number, string> = {}
   try {
@@ -670,19 +670,32 @@ async function storeStatistics(f: Flow) {
       memberA = await f.member(); memberB = await f.member(2)
       const [productA, productB] = await Promise.all([f.createProduct(101, 'stats-a', 19), f.createProduct(102, 'stats-b', 23)])
       orderA = await f.createOrder(productA, memberA); orderB = await f.createOrder(productB, memberB)
-      f.bridge('complete', { orderId: orderA.orderId }); f.bridge('complete', { orderId: orderB.orderId })
+      boundaryStartOrder = await f.createOrder(productA, memberA)
+      boundaryEndOrder = await f.createOrder(productB, memberB)
+      for (const order of [orderA, orderB, boundaryStartOrder, boundaryEndOrder]) f.bridge('complete', { orderId: order.orderId })
       expect(f.oracle('order', { orderId: orderA.orderId })[0]).toMatchObject({ shopId: 101, paid: 1 })
       expect(f.oracle('order', { orderId: orderB.orderId })[0]).toMatchObject({ shopId: 102, paid: 1 })
+      expect(f.oracle('order', { orderId: boundaryStartOrder.orderId })[0]).toMatchObject({ shopId: 101, paid: 1 })
+      expect(f.oracle('order', { orderId: boundaryEndOrder.orderId })[0]).toMatchObject({ shopId: 102, paid: 1 })
     })
     await f.check('date-window-is-half-open', async () => {
-      const loaded = await loadWorkSummary(f.page); summaryAll = loaded.data; allParams = summaryParams(loaded.url)
+      const initial = await loadWorkSummary(f.page), initialParams = summaryParams(initial.url)
       const today = shanghaiDate()
-      expect(allParams.from).toMatch(/^\d{4}-\d{2}-\d{2}$/)
-      expect(allParams.to).toBe(nextIsoDate(today))
-      expect(allParams.from <= today).toBe(true)
-      expect(allParams.shopId).toBeUndefined()
+      expect(initialParams.from).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      expect(initialParams.to).toBe(nextIsoDate(today))
+      expect(initialParams.from <= today).toBe(true)
+      expect(initialParams.shopId).toBeUndefined()
+      const fixture = f.bridge('stats-boundary-times', { startOrderId: boundaryStartOrder.orderId,
+        endOrderId: boundaryEndOrder.orderId, fromDate: initialParams.from, toDate: initialParams.to })
+      expect(fixture.startPayTime.startsWith(`${initialParams.from}T00:00`)).toBe(true)
+      expect(fixture.endPayTime.startsWith(`${initialParams.to}T00:00`)).toBe(true)
+      const loaded = await loadWorkSummary(f.page); summaryAll = loaded.data; allParams = summaryParams(loaded.url)
+      expect(allParams).toEqual(initialParams)
       const sql = f.oracle('store-summary', allParams)[0]
       assertSummaryMatchesSql(summaryAll, sql)
+      const boundaryRows = f.oracle('store-summary-details', allParams)
+      expect(boundaryRows.some((row: any) => row.orderId === boundaryStartOrder.orderId)).toBe(true)
+      expect(boundaryRows.some((row: any) => row.orderId === boundaryEndOrder.orderId)).toBe(false)
       const fromMillis = Date.parse(`${allParams.from}T00:00:00+08:00`)
       const toMillis = Date.parse(`${allParams.to}T00:00:00+08:00`)
       expect(toMillis - fromMillis).toBeGreaterThan(0)
@@ -721,6 +734,8 @@ async function storeStatistics(f: Flow) {
       expect(result.data.total).toBe(sqlRows.length)
       expect(actualRows.map((row: any) => row.orderId)).toEqual(sqlRows.slice(0, actualRows.length).map((row: any) => row.orderId))
       for (const order of [orderA, orderB]) expect(sqlRows.some((row: any) => row.orderId === order.orderId)).toBe(true)
+      expect(actualRows.some((row: any) => row.orderId === boundaryStartOrder.orderId)).toBe(true)
+      expect(actualRows.some((row: any) => row.orderId === boundaryEndOrder.orderId)).toBe(false)
       expect(actualRows.map((row: any) => [Number(row.shopId), Number(row.payPrice), Number(row.totalNum), row.fulfillmentStatus]))
         .toEqual(sqlRows.slice(0, actualRows.length).map((row: any) => [Number(row.shopId), Number(row.payPrice), Number(row.totalNum), row.fulfillmentStatus]))
     })
@@ -1075,6 +1090,7 @@ async function orderPrintJobs(f: Flow) {
       await expect(printOrderRow(f.page, orderCode, reason)).toContainText(reason)
     })
     await f.check('cross-store-print-denied', async () => {
+      const beforeRows = printRows(f, order.orderId), beforeCounters = printCounters(f)
       const branchContext = await f.browser.newContext({ baseURL: f.baseURL, serviceWorkers: 'block' }); staffContexts.push(branchContext)
       const branchPage = await branchContext.newPage()
       const token = await f.login(branchPage, context.accounts.staffB)
@@ -1088,6 +1104,8 @@ async function orderPrintJobs(f: Flow) {
       const recovery = await f.api('POST', '/admin-api/store/order-print-job/resolve-unknown',
         { jobId, requestKey: `cross-recovery-${key()}`, reason: 'cross-store denial check', senderStopped: true, notPrintedConfirmed: true }, token, false)
       expect(recovery.code).toBe(403); expect(recovery.msg).toContain('仅总部')
+      expect(printRows(f, order.orderId)).toEqual(beforeRows)
+      expect(printCounters(f)).toEqual(beforeCounters)
     })
     await f.check('print-job-sql-audit', () => {
       const rows = printRows(f, order.orderId)

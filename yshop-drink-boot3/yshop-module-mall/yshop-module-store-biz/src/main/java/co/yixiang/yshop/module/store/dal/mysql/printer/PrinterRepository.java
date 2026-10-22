@@ -98,9 +98,25 @@ public class PrinterRepository {
         jdbc.update("UPDATE yshop_printer SET authorization='UNKNOWN',authorization_operation=?,authorization_operation_at=CURRENT_TIMESTAMP,last_error='RESULT_UNKNOWN',updater=? WHERE tenant_id=? AND id=?",
                 operation,String.valueOf(actor),d.tenantId,d.id);
     }
+    /** Persist a short-lived exclusive provider operation without holding a DB lock during I/O. */
+    public void beginOperation(Device d,String operation,long actor) {
+        jdbc.update("UPDATE yshop_printer SET authorization_operation=?,authorization_operation_at=CURRENT_TIMESTAMP,updater=? WHERE tenant_id=? AND id=?",
+                operation,String.valueOf(actor),d.tenantId,d.id);
+    }
+    public void releaseOperation(Device d,String operation) {
+        if(jdbc.update("UPDATE yshop_printer SET authorization_operation=NULL,authorization_operation_at=NULL "
+                +"WHERE tenant_id=? AND id=? AND authorization_operation=?",d.tenantId,d.id,operation)!=1)
+            throw new PrinterFailure("PRINTER_BUSY",false);
+    }
     public void status(Device d,DeviceState state,String error,LocalDateTime time) {
         jdbc.update("UPDATE yshop_printer SET device_state=?,state_checked_at=?,last_error=? WHERE tenant_id=? AND id=?",
                 state.name(),time,error,d.tenantId,d.id);
+    }
+    public void finishStatusOperation(Device d,String operation,DeviceState state,String error,LocalDateTime time) {
+        if(jdbc.update("UPDATE yshop_printer SET device_state=?,state_checked_at=?,last_error=?,authorization_operation=NULL,"
+                +"authorization_operation_at=NULL WHERE tenant_id=? AND id=? AND authorization_operation=?",
+                state.name(),time,error,d.tenantId,d.id,operation)!=1)
+            throw new PrinterFailure("PRINTER_BUSY",false);
     }
     public void delete(Device d,long actor) {
         jdbc.update("UPDATE yshop_printer SET deleted=1,enabled=0,updater=?,update_time=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=?",
@@ -126,11 +142,16 @@ public class PrinterRepository {
                 (rs,row)->rs.getLong(1),shopId);
         List<Long> bound=new ArrayList<>();
         for(long printerId:candidates) {
-            if(jdbc.query("SELECT id FROM yshop_printer WHERE id=? FOR UPDATE",(rs,row)->rs.getLong(1),printerId).isEmpty()) continue;
+            List<Device> locked=jdbc.query("SELECT * FROM yshop_printer WHERE id=? FOR UPDATE",this::map,printerId);
+            if(locked.isEmpty()) continue;
+            Device device=locked.get(0);
             // Current read after acquiring the printer lock; stale snapshot rows
             // are discarded if a concurrent unbind already committed.
             if(jdbc.query("SELECT shop_id FROM yshop_printer_binding WHERE printer_id=? AND shop_id=? FOR UPDATE",
                     (rs,row)->rs.getLong(1),printerId,shopId).isEmpty()) continue;
+            if(device.authorizationOperation!=null&&device.authorizationOperationAt!=null
+                    &&device.authorizationOperationAt.isAfter(LocalDateTime.now().minusMinutes(1)))
+                throw new PrinterFailure("PRINTER_BUSY",false);
             if(dispatchClaimed(printerId)) throw new PrinterFailure("PRINTER_BUSY",false);
             bound.add(printerId);
         }

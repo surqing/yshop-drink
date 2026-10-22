@@ -100,4 +100,19 @@ class TestSupportBoundaryTest(unittest.TestCase):
                     invoke(context,'simulate-print-crash',{'jobId':value})
             self.assertEqual([],list((mailbox/'requests').iterdir()))
 
+    def test_statistics_boundary_fixture_requires_two_owned_order_ids_and_dates(self):
+        with tempfile.TemporaryDirectory() as folder:
+            owner='a'*32;mailbox=Path(folder)/('commands-'+owner);mailbox.mkdir(mode=0o700)
+            (mailbox/'requests').mkdir();(mailbox/'responses').mkdir()
+            context={'owner':owner,'commandDir':str(mailbox)}
+            invalid=[
+                {'startOrderId':'owned-1;DELETE','endOrderId':'owned-2','fromDate':'2026-10-01','toDate':'2026-10-02'},
+                {'startOrderId':'owned-1','endOrderId':'owned-1','fromDate':'2026-10-01','toDate':'2026-10-02'},
+                {'startOrderId':'owned-1','endOrderId':'owned-2','fromDate':'2026-10-03','toDate':'2026-10-02'},
+            ]
+            for value in invalid:
+                with self.subTest(value=value), self.assertRaises(ValueError):
+                    invoke(context,'stats-boundary-times',value)
+            self.assertEqual([],list((mailbox/'requests').iterdir()))
+
 if __name__=='__main__':unittest.main()

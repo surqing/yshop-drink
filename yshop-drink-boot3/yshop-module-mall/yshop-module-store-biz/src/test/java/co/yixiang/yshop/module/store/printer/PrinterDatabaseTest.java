@@ -13,6 +13,7 @@ import org.springframework.jdbc.datasource.*;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.context.annotation.*;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -154,6 +155,45 @@ class PrinterDatabaseTest {
         assertEquals(0,jdbc.queryForObject("SELECT deleted+0 FROM system_menu WHERE id=2308",Integer.class));
         assertEquals(1,jdbc.queryForObject("SELECT deleted+0 FROM system_menu WHERE id=2313",Integer.class));
         assertEquals(3,jdbc.queryForObject("SELECT COUNT(*) FROM system_menu WHERE permission IN ('store:web-print:authorize','store:web-print:binding','store:web-print:test')",Integer.class));
+    }
+
+    @Test void providerSessionCallsRunOutsideDatabaseTransactions() {
+        List<Boolean> transactionStates=new CopyOnWriteArrayList<>();
+        java.util.concurrent.atomic.AtomicReference<PrinterService> serviceRef=new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.atomic.AtomicLong printerRef=new java.util.concurrent.atomic.AtomicLong();
+        Runnable recordTransaction=()->transactionStates.add(TransactionSynchronizationManager.isActualTransactionActive());
+        PrinterSession session=new PrinterSession() {
+            public void authorize(String code,String name,Map<String,String> configuration) { recordTransaction.run(); }
+            public void deauthorize(String code) { recordTransaction.run(); }
+            public DeviceState status(String code) {
+                recordTransaction.run();
+                assertEquals("PRINTER_BUSY",assertThrows(PrinterFailure.class,()->serviceRef.get().unbind(printerRef.get())).getMessage());
+                return DeviceState.ONLINE;
+            }
+            public PrintResult print(String code,String requestId,Receipt receipt) {
+                recordTransaction.run();
+                assertEquals("PRINTER_BUSY",assertThrows(PrinterFailure.class,()->serviceRef.get().unbind(printerRef.get())).getMessage());
+                return new PrintResult("synthetic-provider-job");
+            }
+        };
+        PrinterProvider provider=new PrinterProvider() {
+            public ProviderInfo info() { return new ProviderInfo("TX_BOUNDARY","Transaction boundary fixture",List.of("CLOUD"),
+                    List.of(new Field("terminalKey","Key",true,true)),new Capabilities(true,true,true,true),true,true); }
+            public void validate(String code,String connection,Map<String,String> configuration) {}
+            public PrinterSession openSession() { recordTransaction.run(); return session; }
+        };
+        PrinterService local=new PrinterService(repo,new PrinterProviderRegistry(List.of(provider)),cipher,
+                new TransactionTemplate(manager),printerAccess,false);
+        long id=local.save(new SaveRequest(null,"transaction-boundary","TX_BOUNDARY","transaction-boundary-device","","CLOUD",true,
+                Map.of("terminalKey","synthetic")),false);
+        serviceRef.set(local); printerRef.set(id);
+
+        assertEquals(Authorization.AUTHORIZED,local.authorize(id,false).authorization());
+        assertEquals(DeviceState.ONLINE,local.status(id).state());
+        assertEquals(JobState.ACCEPTED,local.test(new TestRequest(id,"transaction-boundary-0001")).state());
+        assertEquals(Authorization.UNAUTHORIZED,local.authorize(id,true).authorization());
+
+        assertEquals(List.of(false,false,false,false,false,false,false,false),transactionStates);
     }
 
     @Test void committedAcceptanceSurvivesWorkerRestart() {

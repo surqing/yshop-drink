@@ -35,6 +35,7 @@ import java.lang.reflect.*;
 import java.nio.file.*;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -237,6 +238,30 @@ public final class OwnedE2eApplication {
                                     job.get("tenant_id"),job.get("printer_id"),jobId,leaseToken,job.get("shop_id"));
                         });
                         reply.put("jobId",jobId);reply.put("claimCreated",true);reply.put("syntheticCrashAftermath",true);
+                    } else if(action.equals("stats-boundary-times")) {
+                        String startOrder=command.path("startOrderId").asText();
+                        String endOrder=command.path("endOrderId").asText();
+                        LocalDate from=LocalDate.parse(command.path("fromDate").asText());
+                        LocalDate to=LocalDate.parse(command.path("toDate").asText());
+                        if(!startOrder.matches("[A-Za-z0-9_-]{1,64}")||!endOrder.matches("[A-Za-z0-9_-]{1,64}")
+                                ||startOrder.equals(endOrder)||!to.isAfter(from))
+                            throw new IllegalArgumentException("INVALID_STATS_BOUNDARY_FIXTURE");
+                        Integer eligible=db.queryForObject("SELECT COUNT(*) FROM yshop_store_order WHERE order_id IN (?,?) "
+                                +"AND paid=1 AND shop_id IN (101,102) AND COALESCE(tenant_id,0)=0 AND deleted=0 "
+                                +"AND create_time>=DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 1 DAY)",Integer.class,startOrder,endOrder);
+                        if(eligible==null||eligible!=2)throw new IllegalArgumentException("OWNED_PAID_STATS_ORDERS_REQUIRED");
+                        new TransactionTemplate(context.getBean(PlatformTransactionManager.class)).executeWithoutResult(tx->{
+                            if(db.update("UPDATE yshop_store_order SET pay_time=? WHERE order_id=? AND paid=1 "
+                                            +"AND shop_id IN (101,102) AND COALESCE(tenant_id,0)=0 AND deleted=0",
+                                    from.atStartOfDay(),startOrder)!=1)
+                                throw new IllegalStateException("START_BOUNDARY_ORDER_UPDATE_FAILED");
+                            if(db.update("UPDATE yshop_store_order SET pay_time=? WHERE order_id=? AND paid=1 "
+                                            +"AND shop_id IN (101,102) AND COALESCE(tenant_id,0)=0 AND deleted=0",
+                                    to.atStartOfDay(),endOrder)!=1)
+                                throw new IllegalStateException("END_BOUNDARY_ORDER_UPDATE_FAILED");
+                        });
+                        reply.put("startOrderId",startOrder);reply.put("startPayTime",from.atStartOfDay().toString());
+                        reply.put("endOrderId",endOrder);reply.put("endPayTime",to.atStartOfDay().toString());
                     } else if(action.equals("token-lifetime")) {
                         int seconds=command.path("seconds").asInt();
                         if(seconds!=2 && seconds!=3600)throw new IllegalArgumentException("INVALID_TEST_TOKEN_LIFETIME");

@@ -994,6 +994,7 @@
     "authorizationCrashIntentIsDurableAndRecoverable": 1,
     "statusFailuresAreUnknownInsteadOfOffline": 1,
     "cachedStatusQueryNeverPreparesProviderOrChangesDatabase": 1,
+    "providerSessionCallsRunOutsideDatabaseTransactions": 1,
     "testPrintingIsIdempotentAndTimeoutDoesNotResubmit": 1,
     "testPrintCrashKeepsIntentAndCannotRepeatExternalCall": 1,
     "concurrentBindingKeepsOneOwner": 1,

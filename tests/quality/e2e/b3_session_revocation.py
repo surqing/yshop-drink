@@ -28,7 +28,8 @@ from .support import TestSupport
 PRINTER_TABLES = (
     'yshop_printer', 'yshop_printer_binding', 'yshop_printer_test_job',
     'yshop_order_print_job', 'yshop_order_fulfillment_print_event',
-    'yshop_printer_provider_token',
+    'yshop_printer_provider_token', 'yshop_order_print_device_claim',
+    'yshop_order_print_device_claim_resolution',
 )
 PRINTER_FIXTURE_COUNTS = {
     'yshop_printer': 1,
@@ -37,6 +38,8 @@ PRINTER_FIXTURE_COUNTS = {
     'yshop_order_print_job': 0,
     'yshop_order_fulfillment_print_event': 0,
     'yshop_printer_provider_token': 0,
+    'yshop_order_print_device_claim': 0,
+    'yshop_order_print_device_claim_resolution': 0,
 }
 HQ_USER_ID = 910104
 HQ_ROLE_ID = 910104
@@ -45,6 +48,7 @@ ALLOWED_ROUTES = {
     ('GET', '/admin-api/system/auth/get-permission-info'),
     ('GET', '/admin-api/store/printer/page'),
     ('GET', '/admin-api/store/printer/get'),
+    ('POST', '/admin-api/store/printer/test-print'),
     ('POST', '/admin-api/system/permission/assign-role-menu'),
     ('POST', '/admin-api/system/permission/assign-user-role'),
 }
@@ -84,9 +88,28 @@ def printer_snapshot(environment):
     return values
 
 
+def printer_rows_snapshot(environment):
+    # Capture mutable authorization, binding, job and claim fields without
+    # exposing encrypted credentials, provider tokens or claim lease tokens.
+    queries = {
+        'yshop_printer': "SELECT CONCAT_WS('|',id,tenant_id,name,provider_code,device_code,enabled,deleted,authorization,"
+                         "device_state,COALESCE(last_error,''),COALESCE(authorization_operation,'')) FROM yshop_printer ORDER BY id;",
+        'yshop_printer_binding': "SELECT CONCAT_WS('|',tenant_id,printer_id,shop_id) FROM yshop_printer_binding ORDER BY tenant_id,printer_id;",
+        'yshop_printer_test_job': "SELECT CONCAT_WS('|',tenant_id,request_id,printer_id,state,COALESCE(provider_job_id,''),COALESCE(error_code,'')) "
+                                  "FROM yshop_printer_test_job ORDER BY tenant_id,request_id;",
+        'yshop_order_print_device_claim': "SELECT CONCAT_WS('|',tenant_id,printer_id,job_id,shop_id) "
+                                          "FROM yshop_order_print_device_claim ORDER BY tenant_id,printer_id;",
+        'yshop_order_print_device_claim_resolution': "SELECT CONCAT_WS('|',tenant_id,printer_id,job_id,request_key,outcome,"
+                                                       "claim_was_present,actor_id,COALESCE(prior_error,'')) "
+                                                       "FROM yshop_order_print_device_claim_resolution ORDER BY tenant_id,job_id;",
+    }
+    return {table: environment.sql(query).splitlines() for table, query in queries.items()}
+
+
 def side_effect_snapshot(environment):
     return {
         'printerTables': printer_snapshot(environment),
+        'printerRows': printer_rows_snapshot(environment),
         'userRoleIds': environment.sql(
             f'SELECT COALESCE(GROUP_CONCAT(role_id ORDER BY role_id),\'\') FROM system_user_role WHERE user_id={HQ_USER_ID} AND deleted=0;'
         ).strip(),
@@ -251,11 +274,14 @@ def run(repo, output):
               {'printerTables': baseline_db, 'denial': denial_evidence(missing_menu),
                'fakePrinterCounters': provider_counts(baseline_vendor)})
 
+        test_menu_id = int(environment.sql(
+            "SELECT id FROM system_menu WHERE permission='store:web-print:test' AND parent_id=2308 AND deleted=0;"
+        ).strip())
         assigned_menu = data(api('POST', '/admin-api/system/permission/assign-role-menu',
-                                 {'roleId': HQ_ROLE_ID, 'menuIds': [2309]}, admin))
+                                 {'roleId': HQ_ROLE_ID, 'menuIds': [2309, test_menu_id]}, admin))
         check('real permission route grants the missing printer query menu',
               assigned_menu is True and environment.sql(
-                  f'SELECT COUNT(*) FROM system_role_menu WHERE role_id={HQ_ROLE_ID} AND menu_id=2309;').strip() == '1')
+                  f'SELECT COUNT(*) FROM system_role_menu WHERE role_id={HQ_ROLE_ID} AND menu_id IN (2309,{test_menu_id});').strip() == '2')
 
         page = api('GET', '/admin-api/store/printer/page?pageNo=1&pageSize=10', token=hq_token)
         page_data = page.get('envelope', {}).get('data', {}) if isinstance(page.get('envelope'), dict) else {}
@@ -299,6 +325,22 @@ def run(repo, output):
               {'before': resource_before, 'after': resource_after,
                'denial': denial_evidence(cross_tenant_printer),
                'fakePrinterCounters': provider_counts(resource_vendor_after)})
+
+        operation_before = side_effect_snapshot(environment)
+        operation_vendor_before = invoke(environment.context() | support.context(), 'printer-counters', {})
+        cross_tenant_test_print = api('POST', '/admin-api/store/printer/test-print',
+                                      {'id': 9001, 'requestId': 'b3-cross-tenant-0001'}, token=hq_token)
+        operation_after = side_effect_snapshot(environment)
+        operation_vendor_after = invoke(environment.context() | support.context(), 'printer-counters', {})
+        check('tenant-901 token cannot test-print tenant-0 printer with no DB or provider side effects',
+              denied(cross_tenant_test_print, expected_application_codes=(1008016100,)) and
+              denial_evidence(cross_tenant_test_print).get('applicationMessage') == '打印机不存在' and
+              operation_before == operation_after and
+              provider_counts(operation_vendor_before) == provider_counts(operation_vendor_after) and
+              operation_vendor_after.get('printCalls') == 0 and operation_vendor_after.get('statusCalls') == 0,
+              {'before': operation_before, 'after': operation_after,
+               'denial': denial_evidence(cross_tenant_test_print),
+               'fakePrinterCounters': provider_counts(operation_vendor_after)})
 
         roles_before = environment.sql(f'SELECT role_id FROM system_user_role WHERE user_id={HQ_USER_ID} ORDER BY role_id;').strip()
         check('headquarters role is present before route revocation', roles_before == str(HQ_ROLE_ID))
