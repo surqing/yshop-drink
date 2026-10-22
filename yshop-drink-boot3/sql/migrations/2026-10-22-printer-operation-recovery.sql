@@ -66,21 +66,21 @@ BEGIN
       WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer_operation_resolution';
     SELECT COUNT(*) INTO matched_resolution_columns FROM (
       SELECT 'id' AS column_name,'bigint' AS column_type,'NO' AS nullable,
-        '' AS column_name_charset,'' AS column_collation,'auto_increment' AS extra
-      UNION ALL SELECT 'tenant_id','bigint','NO','','',''
-      UNION ALL SELECT 'printer_id','bigint','NO','','',''
-      UNION ALL SELECT 'operation_token','varchar(36)','NO','ascii','ascii_bin',''
-      UNION ALL SELECT 'operation_type','varchar(32)','NO','ascii','ascii_bin',''
-      UNION ALL SELECT 'request_id','varchar(64)','YES','ascii','ascii_bin',''
-      UNION ALL SELECT 'operation_at','datetime','NO','','',''
-      UNION ALL SELECT 'prior_authorization','varchar(20)','NO','utf8mb4','utf8mb4_0900_ai_ci',''
-      UNION ALL SELECT 'prior_device_state','varchar(20)','NO','utf8mb4','utf8mb4_0900_ai_ci',''
-      UNION ALL SELECT 'outcome','varchar(40)','NO','ascii','ascii_bin',''
-      UNION ALL SELECT 'reason','varchar(500)','NO','utf8mb4','utf8mb4_0900_ai_ci',''
-      UNION ALL SELECT 'sender_stopped','tinyint(1)','NO','','',''
-      UNION ALL SELECT 'provider_work_settled','tinyint(1)','NO','','',''
-      UNION ALL SELECT 'actor_id','bigint','NO','','',''
-      UNION ALL SELECT 'create_time','datetime','NO','','',''
+        '' AS column_name_charset,'' AS column_collation,'auto_increment' AS extra,'' AS default_value
+      UNION ALL SELECT 'tenant_id','bigint','NO','','','',''
+      UNION ALL SELECT 'printer_id','bigint','NO','','','',''
+      UNION ALL SELECT 'operation_token','varchar(36)','NO','ascii','ascii_bin','',''
+      UNION ALL SELECT 'operation_type','varchar(32)','NO','ascii','ascii_bin','',''
+      UNION ALL SELECT 'request_id','varchar(64)','YES','ascii','ascii_bin','',''
+      UNION ALL SELECT 'operation_at','datetime','NO','','','',''
+      UNION ALL SELECT 'prior_authorization','varchar(20)','NO','utf8mb4','utf8mb4_0900_ai_ci','',''
+      UNION ALL SELECT 'prior_device_state','varchar(20)','NO','utf8mb4','utf8mb4_0900_ai_ci','',''
+      UNION ALL SELECT 'outcome','varchar(40)','NO','ascii','ascii_bin','',''
+      UNION ALL SELECT 'reason','varchar(500)','NO','utf8mb4','utf8mb4_0900_ai_ci','',''
+      UNION ALL SELECT 'sender_stopped','tinyint(1)','NO','','','',''
+      UNION ALL SELECT 'provider_work_settled','tinyint(1)','NO','','','',''
+      UNION ALL SELECT 'actor_id','bigint','NO','','','',''
+      UNION ALL SELECT 'create_time','datetime','NO','','','DEFAULT_GENERATED','CURRENT_TIMESTAMP'
     ) expected
     JOIN information_schema.COLUMNS actual
       ON actual.TABLE_SCHEMA=DATABASE() AND actual.TABLE_NAME='yshop_printer_operation_resolution'
@@ -88,7 +88,10 @@ BEGIN
       AND actual.IS_NULLABLE=expected.nullable
       AND COALESCE(actual.CHARACTER_SET_NAME,'')=expected.column_name_charset
       AND COALESCE(actual.COLLATION_NAME,'')=expected.column_collation
-      AND (expected.extra='' OR actual.EXTRA=expected.extra);
+      AND ((expected.default_value='' AND actual.COLUMN_DEFAULT IS NULL)
+        OR (expected.default_value='CURRENT_TIMESTAMP'
+          AND UPPER(REPLACE(COALESCE(actual.COLUMN_DEFAULT,''),' ','')) IN ('CURRENT_TIMESTAMP','CURRENT_TIMESTAMP()')))
+      AND actual.EXTRA=expected.extra;
     SELECT COUNT(DISTINCT INDEX_NAME) INTO resolution_indexes FROM information_schema.STATISTICS
       WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer_operation_resolution';
     SELECT COUNT(*) INTO matched_resolution_indexes FROM (

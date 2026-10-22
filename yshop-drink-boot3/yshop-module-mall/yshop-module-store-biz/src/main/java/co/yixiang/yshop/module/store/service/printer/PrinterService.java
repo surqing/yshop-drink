@@ -360,7 +360,7 @@ public class PrinterService {
                 return repo.job(tenant,request.requestId());
             }
             repo.finishJob(tenant,request.requestId(),resultState,resultProviderId,resultError);
-            repo.releaseOperation(d,operation);
+            if(resultState!=JobState.UNKNOWN) repo.releaseOperation(d,operation);
             return repo.job(tenant,request.requestId());
         });
     }

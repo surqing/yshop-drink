@@ -91,6 +91,12 @@ class PrinterMigrationDatabaseTest {
     @Test void priorAuthorizationDefaultIsRejectedByRecoveryMigrationAlone() throws Exception {
         migrate(); jdbc.execute("ALTER TABLE yshop_printer ALTER authorization_operation_prior_authorization SET DEFAULT 'AUTHORIZED'"); rejectedRecoveryUnchanged();
     }
+    @Test void missingOperationResolutionCreateTimeDefaultIsRejectedByRecoveryMigrationAlone() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_printer_operation_resolution ALTER COLUMN create_time DROP DEFAULT"); rejectedRecoveryUnchanged();
+    }
+    @Test void operationResolutionCreateTimeOnUpdateIsRejectedByRecoveryMigrationAlone() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_printer_operation_resolution MODIFY create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP"); rejectedRecoveryUnchanged();
+    }
     @Test void partialOperationResolutionTableIsRejectedBeforeSchemaChanges() throws Exception {
         migrate(); jdbc.execute("DROP TABLE yshop_printer_operation_resolution");
         jdbc.execute("CREATE TABLE yshop_printer_operation_resolution(id bigint PRIMARY KEY) ENGINE=InnoDB");

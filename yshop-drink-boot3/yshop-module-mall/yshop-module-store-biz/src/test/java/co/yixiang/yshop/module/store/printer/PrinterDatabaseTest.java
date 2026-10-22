@@ -915,6 +915,28 @@ class PrinterDatabaseTest {
         assertEquals(JobState.UNKNOWN,service.test(unknown).state()); assertEquals(JobState.UNKNOWN,service.test(unknown).state()); assertEquals(2,fake.printCalls.get());
         assertEquals(2L,service.jobs(id,1,10).getTotal());
     }
+    @Test void unknownTestPrintKeepsDeviceBusyUntilAuditedRecovery() {
+        long id=device("4000000001"); service.authorize(id,false);
+        fake.printFailure=new PrinterFailure("PROVIDER_TIMEOUT",true);
+        TestRequest request=new TestRequest(id,"test-unknown-recovery-01");
+        assertEquals(JobState.UNKNOWN,service.test(request).state());
+
+        PendingOperation pending=service.pendingOperation(id);
+        assertNotNull(pending);
+        assertEquals("TEST_PRINT",pending.operationType());
+        assertEquals(request.requestId(),pending.requestId());
+        assertThrows(PrinterFailure.class,()->service.bind(new BindingRequest(id,1L)));
+
+        var resolved=service.resolveOperation(new ResolveOperationRequest(id,pending.operationToken(),
+                "已人工确认测试打印发送停止且供应商工作结束",true,true));
+        assertEquals("TEST_PRINT_UNKNOWN",resolved.outcome());
+        assertNull(service.pendingOperation(id));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_printer_operation_resolution WHERE tenant_id=1 AND printer_id=? AND request_id=?",
+                Integer.class,id,request.requestId()));
+        service.bind(new BindingRequest(id,1L));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_printer_binding WHERE tenant_id=1 AND printer_id=? AND shop_id=1",
+                Integer.class,id));
+    }
     @Test void testPrintCrashKeepsIntentAndCannotRepeatExternalCall() {
         long id=device("4000000001"); service.authorize(id,false); fake.crash=true;
         TestRequest request=new TestRequest(id,"test-request-crash01"); assertThrows(IllegalStateException.class,()->service.test(request));

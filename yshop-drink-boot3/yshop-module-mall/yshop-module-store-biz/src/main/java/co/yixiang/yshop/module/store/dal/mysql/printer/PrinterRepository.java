@@ -152,7 +152,7 @@ public class PrinterRepository {
     public int recoverSubmittingTestJob(Device d,String requestId) {
         if(requestId==null) return 0;
         return jdbc.update("UPDATE yshop_printer_test_job SET state='UNKNOWN',provider_job_id=NULL,error_code='RESULT_UNKNOWN' "
-                +"WHERE tenant_id=? AND printer_id=? AND request_id=? AND state='SUBMITTING'",d.tenantId,d.id,requestId);
+                +"WHERE tenant_id=? AND printer_id=? AND request_id=? AND state IN ('SUBMITTING','UNKNOWN')",d.tenantId,d.id,requestId);
     }
     public void clearOperation(Device d,String operation) {
         if(jdbc.update("UPDATE yshop_printer SET authorization_operation=NULL,authorization_operation_at=NULL,authorization_operation_type=NULL,authorization_operation_request_id=NULL,authorization_operation_prior_authorization=NULL "
