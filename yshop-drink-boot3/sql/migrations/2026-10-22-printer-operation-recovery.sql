@@ -6,6 +6,9 @@ DELIMITER $$
 CREATE PROCEDURE quality_prepare_printer_operation_recovery()
 BEGIN
   DECLARE operation_columns INT DEFAULT 0;
+  DECLARE matched_operation_columns INT DEFAULT 0;
+  DECLARE prior_authorization_columns INT DEFAULT 0;
+  DECLARE matched_prior_authorization_columns INT DEFAULT 0;
   DECLARE resolution_tables INT DEFAULT 0;
   DECLARE resolution_columns INT DEFAULT 0;
   DECLARE matched_resolution_columns INT DEFAULT 0;
@@ -21,8 +24,40 @@ BEGIN
   SELECT COUNT(*) INTO operation_columns FROM information_schema.COLUMNS
     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer'
       AND COLUMN_NAME IN ('authorization_operation_type','authorization_operation_request_id');
-  IF operation_columns NOT IN (0,2) THEN
+  SELECT COUNT(*) INTO prior_authorization_columns FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer'
+      AND COLUMN_NAME='authorization_operation_prior_authorization';
+  IF operation_columns NOT IN (0,2) OR prior_authorization_columns NOT IN (0,1)
+      OR (operation_columns=0 AND prior_authorization_columns=1) THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='PRINTER_RECOVERY_SCHEMA_MISMATCH';
+  END IF;
+  IF operation_columns=2 THEN
+    SELECT COUNT(*) INTO matched_operation_columns FROM (
+      SELECT 'authorization_operation_type' AS column_name,'varchar(32)' AS column_type,
+        'YES' AS nullable,'utf8mb4' AS column_charset,'utf8mb4_0900_ai_ci' AS column_collation
+      UNION ALL SELECT 'authorization_operation_request_id','varchar(64)','YES','ascii','ascii_bin'
+    ) expected
+    JOIN information_schema.COLUMNS actual
+      ON actual.TABLE_SCHEMA=DATABASE() AND actual.TABLE_NAME='yshop_printer'
+      AND actual.COLUMN_NAME=expected.column_name AND LOWER(actual.COLUMN_TYPE)=expected.column_type
+      AND actual.IS_NULLABLE=expected.nullable AND actual.COLUMN_DEFAULT IS NULL
+      AND COALESCE(actual.CHARACTER_SET_NAME,'')=expected.column_charset
+      AND COALESCE(actual.COLLATION_NAME,'')=expected.column_collation AND actual.EXTRA='';
+    IF matched_operation_columns<>2 THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='PRINTER_RECOVERY_SCHEMA_MISMATCH';
+    END IF;
+  END IF;
+  IF prior_authorization_columns=1 THEN
+    SELECT COUNT(*) INTO matched_prior_authorization_columns FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer'
+        AND COLUMN_NAME='authorization_operation_prior_authorization'
+        AND LOWER(COLUMN_TYPE)='varchar(20)' AND IS_NULLABLE='YES'
+        AND COLUMN_DEFAULT IS NULL
+        AND COALESCE(CHARACTER_SET_NAME,'')='utf8mb4'
+        AND COALESCE(COLLATION_NAME,'')='utf8mb4_0900_ai_ci' AND EXTRA='';
+    IF matched_prior_authorization_columns<>1 THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='PRINTER_RECOVERY_SCHEMA_MISMATCH';
+    END IF;
   END IF;
   SELECT COUNT(*) INTO resolution_tables FROM information_schema.TABLES
     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer_operation_resolution';
@@ -91,7 +126,11 @@ BEGIN
   IF operation_columns=0 THEN
     ALTER TABLE yshop_printer
       ADD COLUMN authorization_operation_type varchar(32) DEFAULT NULL AFTER authorization_operation_at,
-      ADD COLUMN authorization_operation_request_id varchar(64) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL AFTER authorization_operation_type;
+      ADD COLUMN authorization_operation_request_id varchar(64) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL AFTER authorization_operation_type,
+      ADD COLUMN authorization_operation_prior_authorization varchar(20) DEFAULT NULL AFTER authorization_operation_request_id;
+  ELSEIF prior_authorization_columns=0 THEN
+    ALTER TABLE yshop_printer
+      ADD COLUMN authorization_operation_prior_authorization varchar(20) DEFAULT NULL AFTER authorization_operation_request_id;
   END IF;
 END$$
 DELIMITER ;

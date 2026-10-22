@@ -63,6 +63,26 @@ final class PrinterMigrationSupport {
         }
         if(!statement.toString().isBlank()) throw new IllegalStateException("UNTERMINATED_RECOVERY_MIGRATION");
     }
+    static void recoveryOnly(JdbcTemplate jdbc) throws Exception {
+        String recovery=Files.readString(Path.of("../../sql/migrations/2026-10-22-printer-operation-recovery.sql"));
+        String delimiter=";"; StringBuilder statement=new StringBuilder();
+        try {
+            for(String line:recovery.split("\\R")) {
+                String trimmed=line.trim();
+                if(trimmed.startsWith("--")||trimmed.isEmpty()) continue;
+                if(trimmed.startsWith("DELIMITER ")) {delimiter=trimmed.substring(10).trim();continue;}
+                statement.append(line).append('\n');
+                String pending=statement.toString().trim();
+                if(pending.endsWith(delimiter)) {
+                    jdbc.execute(pending.substring(0,pending.length()-delimiter.length()));
+                    statement.setLength(0);
+                }
+            }
+            if(!statement.toString().isBlank()) throw new IllegalStateException("UNTERMINATED_RECOVERY_MIGRATION");
+        } finally {
+            jdbc.execute("DROP PROCEDURE IF EXISTS quality_prepare_printer_operation_recovery");
+        }
+    }
     static void upstream(JdbcTemplate jdbc) throws Exception {
         for(String table:List.of("yshop_printer_operation_resolution","yshop_order_print_device_claim_resolution","yshop_order_print_device_claim","yshop_order_print_job","yshop_printer_binding","yshop_printer_test_job","yshop_printer_provider_token","yshop_printer","system_menu","yshop_store_shop")) jdbc.execute("DROP TABLE IF EXISTS "+table);
         String source=Files.readString(Path.of("../../sql/yixiang-drink-open.sql"));

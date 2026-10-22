@@ -259,14 +259,45 @@ class PrinterDatabaseTest {
         assertEquals(0,fake.printCalls.get());
     }
 
+    @Test void unexpectedProviderExceptionKeepsClaimUntilAuditedResolution() {
+        long event=insertPrintEvent("provider-crash-claim-event-01",1L); long printer=readyPrinter(1L,"4000000996");
+        var worker=newWorker(); worker.processPendingEvents();
+        long job=jdbc.queryForObject("SELECT id FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",Long.class,event);
+        fake.crash=true;
+        assertThrows(IllegalStateException.class,worker::dispatchPendingJobs);
+        assertEquals(1,fake.printCalls.get());
+        assertEquals("SENDING",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE id=?",String.class,job));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim WHERE printer_id=?",Integer.class,printer));
+        jdbc.update("UPDATE yshop_order_print_job SET lease_expires_at=? WHERE id=?",LocalDateTime.now().minusMinutes(2),job);
+        assertEquals(1,worker.recoverExpiredJobs());
+        assertEquals("UNKNOWN",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE id=?",String.class,job));
+        assertEquals("PRINTER_BUSY",assertThrows(PrinterFailure.class,()->service.unbind(printer)).getMessage());
+        fake.crash=false;
+        var jobs=new OrderPrintJobService(jdbc,manager,service,worker);
+        var resolved=jobs.resolveUnknown(new OrderPrintJobService.ResolveUnknownRequest(job,"crash-claim-resolve-001",
+                "已停止旧发送进程并与打印端核实没有出纸",true,true));
+        assertEquals("FAILED",resolved.state());
+        assertEquals("NOT_PRINTED_CONFIRMED_CLAIM_RELEASED",jdbc.queryForObject(
+                "SELECT outcome FROM yshop_order_print_device_claim_resolution WHERE tenant_id=1 AND job_id=?",String.class,job));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim WHERE printer_id=?",Integer.class,printer));
+        worker.dispatchPendingJobs();
+        assertEquals(1,fake.printCalls.get());
+    }
+
     @Test void unknownNeverAutoResends() {
-        long event=insertPrintEvent("unknown-event-0001",1L); readyPrinter(1L,"4000000992");
+        long event=insertPrintEvent("unknown-event-0001",1L); long printer=readyPrinter(1L,"4000000992");
         var worker=newWorker(); worker.processPendingEvents();
         fake.printFailure=new PrinterFailure("PROVIDER_TIMEOUT",true);
         worker.dispatchPendingJobs();
         assertEquals(1,fake.printCalls.get());
         assertEquals("UNKNOWN",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",String.class,event));
-        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim",Integer.class));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim",Integer.class));
+        assertEquals("PRINTER_BUSY",assertThrows(PrinterFailure.class,()->service.unbind(printer)).getMessage());
+        long secondEvent=insertPrintEvent("unknown-device-blocked-event-01",1L);
+        worker.processPendingEvents(); worker.dispatchPendingJobs();
+        long secondJob=jdbc.queryForObject("SELECT id FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",Long.class,secondEvent);
+        assertEquals("PENDING",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE id=?",String.class,secondJob));
+        assertEquals(1,fake.printCalls.get());
         fake.printFailure=null;
         worker.processPendingEvents(); worker.recoverExpiredJobs(); worker.dispatchPendingJobs();
         assertEquals(1,fake.printCalls.get());
@@ -278,11 +309,15 @@ class PrinterDatabaseTest {
         var resolved=jobs.resolveUnknown(new OrderPrintJobService.ResolveUnknownRequest(job,"unknown-resolution-key-01",
                 "确认厂商请求已结束且核实没有出纸",true,true));
         assertEquals("FAILED",resolved.state());
-        assertEquals("NOT_PRINTED_CONFIRMED_NO_CLAIM",jdbc.queryForObject(
+        assertEquals("NOT_PRINTED_CONFIRMED_CLAIM_RELEASED",jdbc.queryForObject(
                 "SELECT outcome FROM yshop_order_print_device_claim_resolution WHERE job_id=?",String.class,job));
+        jdbc.update("UPDATE yshop_order_print_job SET next_attempt_at=CURRENT_TIMESTAMP WHERE id=?",secondJob);
+        worker.dispatchPendingJobs();
+        assertEquals("ACCEPTED",jdbc.queryForObject("SELECT state FROM yshop_order_print_job WHERE id=?",String.class,secondJob));
+        assertEquals(2,fake.printCalls.get());
         jobs.reprint(new OrderPrintJobService.ReprintRequest(job,"unknown-confirmed-reprint-01","核实未出纸后重打"));
         worker.dispatchPendingJobs();
-        assertEquals(2,fake.printCalls.get());
+        assertEquals(3,fake.printCalls.get());
     }
 
     @Test void expiredUnknownJobDoesNotAutoReleaseDeviceReservation() {
@@ -782,6 +817,14 @@ class PrinterDatabaseTest {
                 new ResolveOperationRequest(id,pending.operationToken(),"重复恢复不能再写审计",true,true))).getMessage());
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_printer_operation_resolution WHERE tenant_id=1 AND printer_id=? AND operation_token=?",Integer.class,id,pending.operationToken()));
         fake.crash=false; assertEquals(Authorization.AUTHORIZED,service.authorize(id,false).authorization());
+        fake.crash=true;
+        assertThrows(IllegalStateException.class,()->service.authorize(id,true));
+        PendingOperation deauthorization=service.pendingOperation(id);
+        assertEquals("DEAUTHORIZE",deauthorization.operationType());
+        fake.crash=false;
+        service.resolveOperation(new ResolveOperationRequest(id,deauthorization.operationToken(),"已核实撤权调用已结束",true,true));
+        assertEquals("AUTHORIZED",jdbc.queryForObject("SELECT prior_authorization FROM yshop_printer_operation_resolution WHERE tenant_id=1 AND printer_id=? AND operation_token=?",
+                String.class,id,deauthorization.operationToken()));
     }
     @Test void activeProviderCallRemainsBusyAfterIntentTimestampExpires() throws Exception {
         long id=device("4000000001"); service.bind(new BindingRequest(id,1L));
@@ -1108,7 +1151,7 @@ class PrinterDatabaseTest {
         public ProviderInfo info() { return new ProviderInfo(code,code,requiresAuthorization?List.of("CLOUD"):List.of("USB","LAN"),List.of(new Field("terminalKey","密钥",true,false)),new Capabilities(requiresAuthorization,requiresAuthorization,true,true),true,requiresAuthorization); }
         public void validate(String device,String connection,Map<String,String> config) {}
         public void authorize(String device,String name,Map<String,String> config) { authorizeCalls.incrementAndGet(); if(crash) throw new IllegalStateException("SIMULATED_CRASH"); if(authorizeFailure!=null) throw authorizeFailure; }
-        public void deauthorize(String device) {}
+        public void deauthorize(String device) { if(crash) throw new IllegalStateException("SIMULATED_CRASH"); }
         public DeviceState status(String device) { beforeStatus.run();if(statusFailure!=null) throw statusFailure;return deviceState; }
         public PrintResult print(String device,String request,Receipt receipt) { printCalls.incrementAndGet(); receipts.add(receipt); beforePrint.run(); if(crash) throw new IllegalStateException("SIMULATED_CRASH"); if(printFailure!=null) throw printFailure; assertEquals(1,receipt.copies()); return new PrintResult("123456789"); }
     }

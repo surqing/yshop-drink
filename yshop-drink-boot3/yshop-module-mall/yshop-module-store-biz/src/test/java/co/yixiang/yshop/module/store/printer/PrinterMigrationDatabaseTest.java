@@ -25,6 +25,11 @@ class PrinterMigrationDatabaseTest {
         assertThrows(Exception.class,this::migrate);
         assertEquals(before,snapshot(),"Rejected migration must preserve all business DDL, rows, and menus");
     }
+    void rejectedRecoveryUnchanged() throws Exception {
+        var before=snapshot();
+        assertThrows(Exception.class,()->PrinterMigrationSupport.recoveryOnly(jdbc));
+        assertEquals(before,snapshot(),"Rejected recovery migration must preserve all business DDL, rows, and menus");
+    }
     @Test void firstMigrationAndCompleteRepeatPreserveLegacyDataAndRoleAssignments() throws Exception {
         jdbc.execute("CREATE TABLE system_role_menu (role_id bigint,menu_id bigint) ENGINE=InnoDB");
         try {
@@ -51,20 +56,40 @@ class PrinterMigrationDatabaseTest {
     @Test void existingPrinterSchemaUpgradePreservesOperationAndAddsRecoveryAudit() throws Exception {
         migrate();
         String token="12345678-1234-1234-1234-123456789012";
-        jdbc.update("INSERT INTO yshop_printer(id,tenant_id,name,provider_code,device_code,connection_type,authorization,authorization_operation,authorization_operation_at) "
-                +"VALUES(1,7,'synthetic pending','SYNTHETIC','legacy-pending-device','CLOUD','UNKNOWN',?,NOW())",token);
+        jdbc.update("INSERT INTO yshop_printer(id,tenant_id,name,provider_code,device_code,connection_type,authorization,authorization_operation,authorization_operation_at,authorization_operation_type,authorization_operation_request_id) "
+                +"VALUES(1,7,'synthetic pending','SYNTHETIC','legacy-pending-device','CLOUD','UNKNOWN',?,NOW(),'DEAUTHORIZE','legacy-revoke-request')",token);
         jdbc.execute("DROP TABLE yshop_printer_operation_resolution");
-        jdbc.execute("ALTER TABLE yshop_printer DROP COLUMN authorization_operation_request_id, DROP COLUMN authorization_operation_type");
+        jdbc.execute("ALTER TABLE yshop_printer DROP COLUMN authorization_operation_prior_authorization");
         migrate();
         assertEquals(token,jdbc.queryForObject("SELECT authorization_operation FROM yshop_printer WHERE id=1",String.class));
         assertEquals("UNKNOWN",jdbc.queryForObject("SELECT authorization FROM yshop_printer WHERE id=1",String.class));
-        assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer' "
-                +"AND COLUMN_NAME IN ('authorization_operation_type','authorization_operation_request_id')",Integer.class));
+        assertEquals("DEAUTHORIZE",jdbc.queryForObject("SELECT authorization_operation_type FROM yshop_printer WHERE id=1",String.class));
+        assertEquals("legacy-revoke-request",jdbc.queryForObject("SELECT authorization_operation_request_id FROM yshop_printer WHERE id=1",String.class));
+        assertEquals(3,jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer' "
+                +"AND COLUMN_NAME IN ('authorization_operation_type','authorization_operation_request_id','authorization_operation_prior_authorization')",Integer.class));
+        assertNull(jdbc.queryForObject("SELECT authorization_operation_prior_authorization FROM yshop_printer WHERE id=1",String.class));
         assertEquals("InnoDB",jdbc.queryForObject("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer_operation_resolution'",String.class));
         var complete=snapshot(); migrate(); assertEquals(complete,snapshot());
+
+        jdbc.execute("DROP TABLE yshop_printer_operation_resolution");
+        jdbc.execute("ALTER TABLE yshop_printer DROP COLUMN authorization_operation_request_id, DROP COLUMN authorization_operation_type, DROP COLUMN authorization_operation_prior_authorization");
+        migrate();
+        assertEquals(token,jdbc.queryForObject("SELECT authorization_operation FROM yshop_printer WHERE id=1",String.class));
+        assertEquals(3,jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_printer' "
+                +"AND COLUMN_NAME IN ('authorization_operation_type','authorization_operation_request_id','authorization_operation_prior_authorization')",Integer.class));
+        var rebuilt=snapshot(); migrate(); assertEquals(rebuilt,snapshot());
     }
     @Test void partialRecoveryMetadataIsRejectedBeforeSchemaChanges() throws Exception {
-        migrate(); jdbc.execute("ALTER TABLE yshop_printer DROP COLUMN authorization_operation_request_id"); rejectedUnchanged();
+        migrate(); jdbc.execute("ALTER TABLE yshop_printer DROP COLUMN authorization_operation_request_id"); rejectedRecoveryUnchanged();
+    }
+    @Test void wrongOperationTypeDefinitionIsRejectedByRecoveryMigrationAlone() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_printer MODIFY authorization_operation_type varchar(31) DEFAULT NULL"); rejectedRecoveryUnchanged();
+    }
+    @Test void wrongOperationRequestIdCollationIsRejectedByRecoveryMigrationAlone() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_printer MODIFY authorization_operation_request_id varchar(64) CHARACTER SET ascii COLLATE ascii_general_ci DEFAULT NULL"); rejectedRecoveryUnchanged();
+    }
+    @Test void priorAuthorizationDefaultIsRejectedByRecoveryMigrationAlone() throws Exception {
+        migrate(); jdbc.execute("ALTER TABLE yshop_printer ALTER authorization_operation_prior_authorization SET DEFAULT 'AUTHORIZED'"); rejectedRecoveryUnchanged();
     }
     @Test void partialOperationResolutionTableIsRejectedBeforeSchemaChanges() throws Exception {
         migrate(); jdbc.execute("DROP TABLE yshop_printer_operation_resolution");

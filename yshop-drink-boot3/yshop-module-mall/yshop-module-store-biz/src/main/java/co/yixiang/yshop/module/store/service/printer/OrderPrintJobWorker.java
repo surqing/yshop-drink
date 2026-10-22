@@ -168,34 +168,42 @@ public class OrderPrintJobWorker {
     }
 
     private void finish(Claim claim, PrinterService.OrderPrintAttempt attempt) {
-        if (attempt.result() != null) {
-            jdbc.update("UPDATE yshop_order_print_job SET state='ACCEPTED',provider_job_id=?,last_error=NULL,"
-                    + "lease_expires_at=NULL,update_time=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND state IN ('SENDING','UNKNOWN')",
-                    attempt.result().providerJobId(), claim.id(), claim.leaseToken());
-            return;
-        }
-        PrinterFailure failure = attempt.failure();
-        String error = failure == null ? "PRINT_FAILED" : failure.getMessage();
-        if (attempt.submitted()) {
-            String state = failure != null && failure.uncertain() ? "UNKNOWN" : "FAILED";
-            jdbc.update("UPDATE yshop_order_print_job SET state=?,last_error=?,lease_expires_at=NULL,update_time=CURRENT_TIMESTAMP "
-                    + "WHERE id=? AND lease_token=? AND state IN ('SENDING','UNKNOWN')", state, error, claim.id(), claim.leaseToken());
-            return;
-        }
-        if (failure != null && ("PRINTER_NOT_BOUND".equals(error) || "WORKER_LEASE_EXPIRED".equals(error))) {
-            jdbc.update("UPDATE yshop_order_print_job SET state='FAILED',last_error=?,lease_expires_at=NULL,next_attempt_at=NULL,"
-                    + "update_time=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND state='SENDING'", error, claim.id(), claim.leaseToken());
-            return;
-        }
-        if (claim.attempts() < MAX_ATTEMPTS) {
-            long delay = Math.min(900L, 15L << Math.min(claim.attempts(), 6));
-            jdbc.update("UPDATE yshop_order_print_job SET state='PENDING',last_error=?,lease_expires_at=NULL,"
-                    + "next_attempt_at=TIMESTAMPADD(SECOND,?,CURRENT_TIMESTAMP),update_time=CURRENT_TIMESTAMP "
-                    + "WHERE id=? AND lease_token=? AND state='SENDING'", error, delay, claim.id(), claim.leaseToken());
-        } else {
-            jdbc.update("UPDATE yshop_order_print_job SET state='FAILED',last_error=?,lease_expires_at=NULL,"
-                    + "update_time=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND state='SENDING'", error, claim.id(), claim.leaseToken());
-        }
+        tx.executeWithoutResult(status -> {
+            boolean releaseDeviceClaim = false;
+            if (attempt.result() != null) {
+                releaseDeviceClaim = jdbc.update("UPDATE yshop_order_print_job SET state='ACCEPTED',provider_job_id=?,last_error=NULL,"
+                                + "lease_expires_at=NULL,update_time=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND state IN ('SENDING','UNKNOWN')",
+                        attempt.result().providerJobId(), claim.id(), claim.leaseToken()) == 1;
+            } else {
+                PrinterFailure failure = attempt.failure();
+                String error = failure == null ? "PROVIDER_RESULT_UNKNOWN" : failure.getMessage();
+                if (attempt.submitted()) {
+                    String state = failure == null || failure.uncertain() ? "UNKNOWN" : "FAILED";
+                    int changed = jdbc.update("UPDATE yshop_order_print_job SET state=?,last_error=?,lease_expires_at=NULL,update_time=CURRENT_TIMESTAMP "
+                                    + "WHERE id=? AND lease_token=? AND state IN ('SENDING','UNKNOWN')",
+                            state, error, claim.id(), claim.leaseToken());
+                    releaseDeviceClaim = changed == 1 && "FAILED".equals(state);
+                } else if (failure != null && ("PRINTER_NOT_BOUND".equals(error) || "WORKER_LEASE_EXPIRED".equals(error))) {
+                    jdbc.update("UPDATE yshop_order_print_job SET state='FAILED',last_error=?,lease_expires_at=NULL,next_attempt_at=NULL,"
+                                    + "update_time=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND state='SENDING'",
+                            error, claim.id(), claim.leaseToken());
+                } else if (claim.attempts() < MAX_ATTEMPTS) {
+                    long delay = Math.min(900L, 15L << Math.min(claim.attempts(), 6));
+                    jdbc.update("UPDATE yshop_order_print_job SET state='PENDING',last_error=?,lease_expires_at=NULL,"
+                                    + "next_attempt_at=TIMESTAMPADD(SECOND,?,CURRENT_TIMESTAMP),update_time=CURRENT_TIMESTAMP "
+                                    + "WHERE id=? AND lease_token=? AND state='SENDING'",
+                            error, delay, claim.id(), claim.leaseToken());
+                } else {
+                    jdbc.update("UPDATE yshop_order_print_job SET state='FAILED',last_error=?,lease_expires_at=NULL,"
+                                    + "update_time=CURRENT_TIMESTAMP WHERE id=? AND lease_token=? AND state='SENDING'",
+                            error, claim.id(), claim.leaseToken());
+                }
+            }
+            if (releaseDeviceClaim && jdbc.update("DELETE FROM yshop_order_print_device_claim "
+                    + "WHERE tenant_id=? AND printer_id=? AND job_id=? AND lease_token=?",
+                    claim.tenantId(),claim.printerId(),claim.id(),claim.leaseToken()) != 1)
+                throw new PrinterFailure("PRINTER_DISPATCH_CLAIM_LOST",true);
+        });
     }
 
     private Receipt receipt(String snapshot) {

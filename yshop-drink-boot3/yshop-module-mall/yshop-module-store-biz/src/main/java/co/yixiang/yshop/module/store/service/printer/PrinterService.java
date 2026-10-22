@@ -198,8 +198,6 @@ public class PrinterService {
             return new OrderPrintAttempt(true,prepared.session().print(d.deviceCode,origin,receipt),null);
         } catch(PrinterFailure failure) {
             return new OrderPrintAttempt(true,null,failure);
-        } finally {
-            tx.executeWithoutResult(status->repo.releaseOrderPrintDevice(tenantId,printerId,jobId,leaseToken));
         }
     }
     private boolean expired(LocalDateTime created) {
@@ -410,7 +408,9 @@ public class PrinterService {
             };
             if("TEST_PRINT".equals(pending.operationType())&&repo.recoverSubmittingTestJob(device,pending.requestId())!=1)
                 throw new PrinterFailure("PRINTER_OPERATION_NOT_RECOVERABLE",false);
-            repo.insertOperationResolution(device,pending,device.authorization.name(),device.state.name(),outcome,request.reason(),actor);
+            String priorAuthorization=device.authorizationOperationPriorAuthorization;
+            if(priorAuthorization==null) priorAuthorization=Authorization.UNKNOWN.name();
+            repo.insertOperationResolution(device,pending,priorAuthorization,device.state.name(),outcome,request.reason(),actor);
             repo.resolveProviderOperation(device,request.operationToken(),pending.operationType(),actor);
             repo.clearOperation(device,request.operationToken());
             return new OperationResolutionResult(device.id,request.operationToken(),pending.operationType(),outcome,LocalDateTime.now());
