@@ -349,18 +349,13 @@ class MiniDriver {
   async collectPickupOrder(page) {
     const before = (await this.state()).requests.filter(row => row.path === '/app-api/order/take').length
     let stage = 'locating-footer-buttons'
-    let component = null
     let button = null
     let request
     try {
-      component = await until(() => page.$('.fixed-bottom uv-button'))
-      const componentWxml = await component.outerWxml()
-      if (!componentWxml.includes('确认取餐')) throw Error('PICKUP_BUTTON_SELECTOR_MISMATCH')
-      stage = 'pickup-component-verified'
-      button = await until(() => page.getElementByXpath('//text[text()="确认取餐"]'))
-      if (!(await button.outerWxml()).includes('确认取餐')) throw Error('PICKUP_BUTTON_LABEL_SELECTOR_MISMATCH')
+      button = await until(() => page.$('.fixed-bottom .uv-button'))
+      if (!(await button.outerWxml()).includes('确认取餐')) throw Error('PICKUP_BUTTON_SELECTOR_MISMATCH')
       stage = 'pickup-native-button-verified'
-      await until(async () => !(await component.$('.uv-button-wrapper--dis')))
+      if (await button.property('disabled')) throw Error('PICKUP_BUTTON_DISABLED')
       stage = 'pickup-button-enabled'
       await button.tap()
       stage = 'pickup-button-tapped'
@@ -377,10 +372,10 @@ class MiniDriver {
         currentPage: (await this.mini.currentPage())?.path,
         pageId: page.id,
         footer: await read(async () => (await page.$('.fixed-bottom'))?.outerWxml()),
-        pickupButton: await read(() => component?.outerWxml()),
-        pickupButtonLabel: await read(() => button?.outerWxml()),
-        pickupButtonLabelSize: await read(() => button?.size()),
-        pickupButtonLabelOffset: await read(() => button?.offset()),
+        pickupButton: await read(async () => (await page.$('.fixed-bottom'))?.outerWxml()),
+        pickupButtonNative: await read(() => button?.outerWxml()),
+        pickupButtonSize: await read(() => button?.size()),
+        pickupButtonOffset: await read(() => button?.offset()),
         requestCountBefore: before,
         requestCountAfter: state.requests.filter(row => row.path === '/app-api/order/take').length,
       }
