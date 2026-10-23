@@ -119,7 +119,7 @@
 
   <Dialog v-model="recoveryVisible" title="核验后释放打印占用" width="560px">
     <el-alert
-      title="此操作只用于进程中断后的 UNKNOWN 任务。必须先确认原发送进程已停止，并通过设备或打印服务核实没有出纸。系统会记录操作人和原因，不会自动重发。"
+      title="此操作只用于进程中断后的 UNKNOWN 任务。必须先确认原发送进程已停止，再根据设备或打印服务核验结果选择已出纸或未出纸。系统会记录操作人和原因，结案后不会自动重发；确认已出纸的任务也不能人工重打。"
       type="error"
       :closable="false"
       show-icon
@@ -142,10 +142,11 @@
           我已确认原发送进程已停止
         </el-checkbox>
       </el-form-item>
-      <el-form-item label="打印结果">
-        <el-checkbox v-model="notPrintedConfirmed" :disabled="!!recoveryRequestKey">
-          我已核实打印服务或设备确认未出纸
-        </el-checkbox>
+      <el-form-item label="核验结果">
+        <el-radio-group v-model="recoveryResolution" :disabled="!!recoveryRequestKey">
+          <el-radio label="NOT_PRINTED">打印服务或设备确认未出纸</el-radio>
+          <el-radio label="PRINTED">设备或现场确认已出纸</el-radio>
+        </el-radio-group>
       </el-form-item>
     </el-form>
     <el-alert v-if="recoveryError" title="释放未完成。重试会沿用同一请求编号；请勿在未核实结果时释放占用。" type="warning" :closable="false" />
@@ -154,9 +155,9 @@
       <el-button
         type="danger"
         :loading="recovering"
-        :disabled="!recoveryReason.trim() || !senderStopped || !notPrintedConfirmed"
+        :disabled="!recoveryReason.trim() || !senderStopped || !recoveryResolution"
         @click="submitRecovery"
-      >确认核验并释放占用</el-button>
+      >确认核验结果并释放占用</el-button>
     </template>
   </Dialog>
 </template>
@@ -197,7 +198,8 @@ const errorLabels: Record<string, string> = {
   PRINTER_NOT_BOUND: '原打印机已解绑',
   DEVICE_NOT_ONLINE: '打印机当前未在线',
   UNSUPPORTED_OPERATION: '设备不支持订单打印',
-  OPERATOR_CONFIRMED_NOT_PRINTED: '已核实未出纸，等待人工重打'
+  OPERATOR_CONFIRMED_NOT_PRINTED: '已核实未出纸，等待人工重打',
+  OPERATOR_CONFIRMED_PRINTED: '人工核验确认已出纸'
 }
 const errorText = (code: string) => errorLabels[code] || '操作未完成，请检查设备'
 const displayTime = (value: Api.PrinterTime) => formatDate(new Date(value))
@@ -249,7 +251,7 @@ async function refresh(row: Api.OrderPrintJob) {
 }
 
 function canReprint(row: Api.OrderPrintJob) {
-  if (row.state === 'UNKNOWN') return false
+  if (row.state === 'UNKNOWN' || row.errorCode === 'OPERATOR_CONFIRMED_PRINTED') return false
   return ['ACCEPTED', 'FAILED', 'UNKNOWN'].includes(row.state)
 }
 
@@ -319,7 +321,7 @@ const recoveryVisible = ref(false)
 const recoveryTarget = ref<Api.OrderPrintJob>()
 const recoveryReason = ref('')
 const senderStopped = ref(false)
-const notPrintedConfirmed = ref(false)
+const recoveryResolution = ref<'NOT_PRINTED' | 'PRINTED' | ''>('')
 const recoveryRequestKey = ref('')
 const recovering = ref(false)
 const recoveryError = ref(false)
@@ -331,25 +333,25 @@ function openRecovery(row: Api.OrderPrintJob) {
   const saved = sessionStorage.getItem(recoveryStorageKey.value)
   if (saved) {
     try {
-      const pending = JSON.parse(saved) as { requestKey: string; reason: string }
+      const pending = JSON.parse(saved) as { requestKey: string; reason: string; resolution?: 'NOT_PRINTED' | 'PRINTED' }
       recoveryRequestKey.value = pending.requestKey
       recoveryReason.value = pending.reason
       senderStopped.value = true
-      notPrintedConfirmed.value = true
+      recoveryResolution.value = pending.resolution || 'NOT_PRINTED'
       recoveryError.value = true
     } catch {
       sessionStorage.removeItem(recoveryStorageKey.value)
       recoveryRequestKey.value = ''
       recoveryReason.value = ''
       senderStopped.value = false
-      notPrintedConfirmed.value = false
+      recoveryResolution.value = ''
       recoveryError.value = false
     }
   } else {
     recoveryRequestKey.value = ''
     recoveryReason.value = ''
     senderStopped.value = false
-    notPrintedConfirmed.value = false
+    recoveryResolution.value = ''
     recoveryError.value = false
   }
   recoveryVisible.value = true
@@ -358,10 +360,10 @@ function openRecovery(row: Api.OrderPrintJob) {
 async function submitRecovery() {
   const target = recoveryTarget.value
   const reason = maskPhones(recoveryReason.value.trim())
-  if (!target || !reason || !senderStopped.value || !notPrintedConfirmed.value || recovering.value) return
+  if (!target || !reason || !senderStopped.value || !recoveryResolution.value || recovering.value) return
   if (!recoveryRequestKey.value) {
     recoveryRequestKey.value = `resolve_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`
-    sessionStorage.setItem(recoveryStorageKey.value, JSON.stringify({ requestKey: recoveryRequestKey.value, reason }))
+    sessionStorage.setItem(recoveryStorageKey.value, JSON.stringify({ requestKey: recoveryRequestKey.value, reason, resolution: recoveryResolution.value }))
   }
   recovering.value = true
   recoveryError.value = false
@@ -371,10 +373,13 @@ async function submitRecovery() {
       requestKey: recoveryRequestKey.value,
       reason,
       senderStopped: true,
-      notPrintedConfirmed: true
+      notPrintedConfirmed: recoveryResolution.value === 'NOT_PRINTED',
+      printedConfirmed: recoveryResolution.value === 'PRINTED'
     })
     sessionStorage.removeItem(recoveryStorageKey.value)
-    message.success('已记录核验并释放设备占用；如需补打，请使用人工重打')
+    message.success(recoveryResolution.value === 'PRINTED'
+      ? '已记录确认出纸并释放设备占用；原任务不会重发'
+      : '已记录确认未出纸并释放设备占用；如需补打，请使用人工重打')
     recoveryVisible.value = false
     await load()
   } catch {

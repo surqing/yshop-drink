@@ -76,6 +76,7 @@ export interface ResolveUnknownRequest {
   reason: string
   senderStopped: boolean
   notPrintedConfirmed: boolean
+  printedConfirmed: boolean
 }
 export interface ShopOption {
   id: number

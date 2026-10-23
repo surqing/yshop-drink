@@ -56,7 +56,9 @@ class PrinterControllerTest {
             actions = new ArrayList<>(actions);
             actions.addAll(List.of(new Action("query",()->orderJobs.page(1,20,null)),
                     new Action("query",()->orderJobs.get(1L)),new Action("query",()->orderJobs.refresh(1L)),
-                    new Action("test",()->orderJobs.reprint(new OrderPrintJobService.ReprintRequest(1L,"manual-reprint-0001","synthetic reason")))));
+                    new Action("test",()->orderJobs.reprint(new OrderPrintJobService.ReprintRequest(1L,"manual-reprint-0001","synthetic reason"))),
+                    new Action("test",()->orderJobs.resolveUnknown(new OrderPrintJobService.ResolveUnknownRequest(
+                            1L,"manual-recovery-0001","synthetic printed confirmation",true,false,true)))));
             for(Action action:actions) {
                 permissions.allowed=Set.of(); clearInvocations(service,orderJobService);
                 assertThrows(AccessDeniedException.class,action.call()::run); verifyNoInteractions(service,orderJobService);
@@ -86,6 +88,12 @@ class PrinterControllerTest {
                 .content("{\"jobId\":-1,\"requestKey\":\"short\",\"reason\":\"\"}"))
                 .andExpect(status().isBadRequest());
         verifyNoInteractions(orderJobs);
+        orderMvc.perform(post("/store/order-print-job/resolve-unknown").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"jobId\":1,\"requestKey\":\"printed-recovery-0001\",\"reason\":\"设备确认已出纸\","
+                        +"\"senderStopped\":true,\"notPrintedConfirmed\":false,\"printedConfirmed\":true}"))
+                .andExpect(status().isOk());
+        verify(orderJobs).resolveUnknown(argThat(request -> request.printedConfirmed()
+                && !request.notPrintedConfirmed() && request.senderStopped()));
     }
     @Test void statusGetIsCachedAndRefreshUsesExplicitPost() throws Exception {
         PrinterService service=mock(PrinterService.class);

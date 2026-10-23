@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   shops: vi.fn(),
   refreshOrderPrintJob: vi.fn(),
   reprintOrderPrintJob: vi.fn(),
+  resolveUnknownOrderPrintJob: vi.fn(),
   error: vi.fn(),
   success: vi.fn()
 }))
@@ -36,12 +37,13 @@ beforeEach(() => {
   mocks.shops.mockResolvedValue([{ id: 3, name: '测试门店' }])
   mocks.refreshOrderPrintJob.mockResolvedValue(row)
   mocks.reprintOrderPrintJob.mockResolvedValue(row)
+  mocks.resolveUnknownOrderPrintJob.mockResolvedValue({ ...row, state: 'ACCEPTED' })
   ;(globalThis as any).useMessage = () => mocks
   wrapper = shallowMount(OrderPrintJobs, { global: { stubs: {
     ContentWrap: true, Dialog: true, Pagination: true, Icon: true,
     'el-alert': true, 'el-form': true, 'el-form-item': true, 'el-select': true,
     'el-option': true, 'el-button': true, 'el-table': true, 'el-table-column': true,
-    'el-tag': true, 'el-input': true
+    'el-tag': true, 'el-input': true, 'el-checkbox': true, 'el-radio-group': true, 'el-radio': true
   }, directives: { loading() {}, hasPermi() {} } } })
 })
 
@@ -74,4 +76,23 @@ test('network failure retries a manual reprint with the same masked request', as
   expect(mocks.reprintOrderPrintJob.mock.calls[1][0]).toEqual(firstRequest)
   expect(sessionStorage.getItem(`order-print-reprint:${row.id}`)).toBeNull()
   expect(state().reprintVisible).toBe(false)
+})
+
+test('confirmed printed recovery releases an unknown job with an audited printed disposition', async () => {
+  await flushPromises()
+  state().openRecovery(row)
+  state().recoveryReason = '设备端核实已出纸，旧发送进程已停止'
+  state().senderStopped = true
+  state().recoveryResolution = 'PRINTED'
+
+  await state().submitRecovery()
+
+  expect(mocks.resolveUnknownOrderPrintJob).toHaveBeenCalledWith(expect.objectContaining({
+    jobId: row.id,
+    reason: '设备端核实已出纸，旧发送进程已停止',
+    senderStopped: true,
+    notPrintedConfirmed: false,
+    printedConfirmed: true
+  }))
+  expect(state().recoveryVisible).toBe(false)
 })

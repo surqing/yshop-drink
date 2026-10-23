@@ -292,6 +292,46 @@ class OrderFulfillmentDatabaseTest {
         verifyNoInteractions(rewards);
     }
 
+    @Test void legacyMemberCanConfirmOnlyReadyHistoricalPickupAndRewardOnce() {
+        insertOrder("LEGACY", 0, 1, 1); jdbc.update("UPDATE yshop_store_order SET status=1 WHERE id=?", orderId); login(1, 1);
+
+        var first = transaction(() -> service.legacyMemberTake(orderId, 1L));
+        var replay = transaction(() -> service.legacyMemberTake(orderId, 1L));
+
+        assertEquals("COLLECTED", first.status()); assertEquals(1, first.version()); assertTrue(first.applied());
+        assertEquals(first.status(), replay.status()); assertEquals(first.version(), replay.version()); assertFalse(replay.applied());
+        assertEquals("COLLECTED", state());
+        assertEquals(3, jdbc.queryForObject("SELECT status FROM yshop_store_order WHERE id=?", Integer.class, orderId));
+        assertEquals("LEGACY", jdbc.queryForObject("SELECT from_status FROM yshop_order_fulfillment_log WHERE order_id=?", String.class, orderId));
+        assertEquals("MEMBER", jdbc.queryForObject("SELECT actor_type FROM yshop_order_fulfillment_log WHERE order_id=?", String.class, orderId));
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_fulfillment_log WHERE order_id=?", Integer.class, orderId));
+        verify(rewards, times(1)).award(any(StoreOrderDO.class));
+    }
+
+    @Test void legacyMemberCannotConfirmHistoricalPickupStillInPreparation() {
+        insertOrder("LEGACY", 0, 1, 1); jdbc.update("UPDATE yshop_store_order SET status=0 WHERE id=?", orderId); login(1, 1);
+
+        var failure = assertThrows(ServiceException.class, () -> transaction(() -> service.legacyMemberTake(orderId, 1L)));
+
+        assertEquals(FULFILLMENT_STATE_CONFLICT.getCode(), failure.getCode());
+        assertEquals("LEGACY", state());
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_fulfillment_log", Integer.class));
+        verifyNoInteractions(rewards);
+    }
+
+    @Test void legacyStaffCanCloseHistoricalPickupWithActorAudit() {
+        insertOrder("LEGACY", 0, 1, 1); jdbc.update("UPDATE yshop_store_order SET status=0 WHERE id=?", orderId); login(101, 2);
+
+        var result = transaction(() -> service.legacyStaffTake(orderId));
+
+        assertEquals("COLLECTED", result.status()); assertEquals(1, result.version()); assertTrue(result.applied());
+        assertEquals("COLLECTED", state());
+        assertEquals(3, jdbc.queryForObject("SELECT status FROM yshop_store_order WHERE id=?", Integer.class, orderId));
+        assertEquals(101L, jdbc.queryForObject("SELECT actor_id FROM yshop_order_fulfillment_log WHERE order_id=?", Long.class, orderId));
+        assertEquals("STAFF", jdbc.queryForObject("SELECT actor_type FROM yshop_order_fulfillment_log WHERE order_id=?", String.class, orderId));
+        verify(rewards, times(1)).award(any(StoreOrderDO.class));
+    }
+
     @Test void collectAwardsOnce() {
         insertOrder("READY", 4, 1, 1); login(1, 1);
         var first = transaction(() -> service.transitionMember(orderId, 1L, "COLLECT", 4, "collect-request-0001"));

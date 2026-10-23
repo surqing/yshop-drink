@@ -370,6 +370,10 @@ class PrinterDatabaseTest {
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim_resolution WHERE tenant_id=1 AND job_id=?",Integer.class,job));
         assertEquals(1L,jdbc.queryForObject("SELECT actor_id FROM yshop_order_print_device_claim_resolution WHERE job_id=?",Long.class,job));
         assertEquals("NOT_PRINTED_CONFIRMED_CLAIM_RELEASED",jdbc.queryForObject("SELECT outcome FROM yshop_order_print_device_claim_resolution WHERE job_id=?",String.class,job));
+        assertEquals("PRINT_RECOVERY_CONFIRMATION_REQUIRED",assertThrows(PrinterFailure.class,()->jobs.resolveUnknown(
+                new OrderPrintJobService.ResolveUnknownRequest(job,"resolve-no-outcome-0001","尚未核验结果",true,false,false))).getMessage());
+        assertEquals("PRINT_RECOVERY_CONFIRMATION_REQUIRED",assertThrows(PrinterFailure.class,()->jobs.resolveUnknown(
+                new OrderPrintJobService.ResolveUnknownRequest(job,"resolve-two-outcomes-001","结果不能同时成立",true,true,true))).getMessage());
         assertEquals("REQUEST_CONFLICT",assertThrows(PrinterFailure.class,()->jobs.resolveUnknown(
                 new OrderPrintJobService.ResolveUnknownRequest(job,"resolve-unknown-confirm-01","不同操作说明",true,true))).getMessage());
 
@@ -377,6 +381,43 @@ class PrinterDatabaseTest {
         worker.dispatchPendingJobs();
         assertEquals(1,fake.printCalls.get());
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_job WHERE parent_job_id=?",Integer.class,job));
+    }
+
+    @Test void confirmedPrintedUnknownJobIsAuditedAndReleasedWithoutResendOrReprint() throws Exception {
+        long event=insertPrintEvent("operator-confirmed-printed-0001",1L);
+        long printer=readyPrinter(1L,"4000000989");
+        var worker=newWorker(); worker.processPendingEvents();
+        long job=jdbc.queryForObject("SELECT id FROM yshop_order_print_job WHERE tenant_id=1 AND event_id=?",Long.class,event);
+        fake.crash=true;
+        assertThrows(IllegalStateException.class,worker::dispatchPendingJobs);
+        assertEquals(1,fake.printCalls.get());
+        jdbc.update("UPDATE yshop_order_print_job SET lease_expires_at=? WHERE id=?",LocalDateTime.now().minusMinutes(2),job);
+        assertEquals(1,worker.recoverExpiredJobs());
+        fake.crash=false;
+
+        var request=new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+                "{\"jobId\":"+job+",\"requestKey\":\"printed-recovery-request-01\","
+                        +"\"reason\":\"设备端确认已出纸且旧发送进程已停止\",\"senderStopped\":true,"
+                        +"\"notPrintedConfirmed\":false,\"printedConfirmed\":true}",
+                OrderPrintJobService.ResolveUnknownRequest.class);
+        var jobs=new OrderPrintJobService(jdbc,manager,service,worker);
+        var resolved=jobs.resolveUnknown(request);
+        var replay=jobs.resolveUnknown(request);
+
+        assertEquals("ACCEPTED",resolved.state());
+        assertEquals("OPERATOR_CONFIRMED_PRINTED",resolved.errorCode());
+        assertEquals(resolved.id(),replay.id());
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM yshop_order_print_device_claim WHERE printer_id=?",Integer.class,printer));
+        assertEquals("PRINTED_CONFIRMED_CLAIM_RELEASED",jdbc.queryForObject(
+                "SELECT outcome FROM yshop_order_print_device_claim_resolution WHERE tenant_id=1 AND job_id=?",String.class,job));
+        assertEquals(1L,jdbc.queryForObject("SELECT actor_id FROM yshop_order_print_device_claim_resolution WHERE job_id=?",Long.class,job));
+        assertEquals("REQUEST_CONFLICT",assertThrows(PrinterFailure.class,()->jobs.resolveUnknown(
+                new OrderPrintJobService.ResolveUnknownRequest(job,"printed-recovery-request-01",
+                        "同一请求编号不能改为未出纸",true,true,false))).getMessage());
+        assertEquals("PRINT_ALREADY_CONFIRMED",assertThrows(PrinterFailure.class,()->jobs.reprint(
+                new OrderPrintJobService.ReprintRequest(job,"printed-recovery-reprint-01","结果已核验出纸"))).getMessage());
+        worker.dispatchPendingJobs();
+        assertEquals(1,fake.printCalls.get());
     }
 
     @Test void printerReboundDuringSessionPreparationCannotReceiveOldShopOrder() throws Exception {

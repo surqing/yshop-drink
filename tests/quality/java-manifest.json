@@ -386,7 +386,10 @@
     "realRewardWriteFailureRollsBackMemberOrderAndAudit": 1,
     "acceptedPickupPersistsFrozenPrintEvent": 1,
     "nonMobilePhoneSnapshotRevealsAtMostLastFourDigits": 1,
-    "acceptanceEventFailureRollsBackTransitionAndAudit": 1
+    "acceptanceEventFailureRollsBackTransitionAndAudit": 1,
+    "legacyMemberCanConfirmOnlyReadyHistoricalPickupAndRewardOnce": 1,
+    "legacyMemberCannotConfirmHistoricalPickupStillInPreparation": 1,
+    "legacyStaffCanCloseHistoricalPickupWithActorAudit": 1
   },
   "co.yixiang.yshop.module.order.fulfillment.AppOrderTakeCompatibilityTest": {
     "oldPickupClientUsesGuardedLegacyTransition": 1,
@@ -1034,6 +1037,7 @@
     "requestLookupCannotMixDevicesEvenInsideTheSameTenant": 1,
     "devicesWithoutAuthorizationUseUsbAndLanThroughTheSameBusinessService": 1,
     "orderPrintSupportsLocalDeviceThatDoesNotRequireAuthorization": 1,
+    "confirmedPrintedUnknownJobIsAuditedAndReleasedWithoutResendOrReprint": 1,
     "twentyRequestsShareTwoConnectionsWithoutNestedTokenTransactions": 1
   },
   "co.yixiang.yshop.module.store.printer.PrinterMigrationDatabaseTest": {

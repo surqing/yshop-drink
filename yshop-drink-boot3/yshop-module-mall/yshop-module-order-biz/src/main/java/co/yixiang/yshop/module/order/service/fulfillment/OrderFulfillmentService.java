@@ -132,14 +132,24 @@ public class OrderFulfillmentService {
         if (order.paid() != 1 || order.refundStatus() != 0 || order.systemDeleted() != 0 || !"takein".equals(order.orderType()))
             throw stateConflict();
         if (expectedVersion != null && expectedVersion != order.fulfillmentVersion()) throw exception(FULFILLMENT_VERSION_CONFLICT);
-        if (!expectedFrom(action).equals(order.fulfillmentStatus())) throw stateConflict();
+        boolean legacyCompletion = legacy && "COLLECT".equals(action)
+                && "LEGACY".equals(order.fulfillmentStatus()) && order.fulfillmentVersion() == 0;
+        if (legacyCompletion) {
+            // A member may confirm only an order the old API presented as ready to collect.
+            // The staff endpoint is an explicit, shop-authorized confirmation of pickup.
+            if ("MEMBER".equals(actorType) && order.status() != 1) throw stateConflict();
+            if ("STAFF".equals(actorType) && (order.status() < 0 || order.status() > 2)) throw stateConflict();
+        } else if (!expectedFrom(action).equals(order.fulfillmentStatus())) {
+            throw stateConflict();
+        }
 
-        int nextVersion = order.fulfillmentVersion() + 1;
-        if (jdbc.update("UPDATE yshop_store_order SET fulfillment_status=?,fulfillment_version=?,status=CASE WHEN ?='COLLECTED' THEN 3 ELSE status END,update_time=CURRENT_TIMESTAMP WHERE id=? AND paid=1 AND refund_status=0 AND is_system_del=0 AND deleted=0 AND order_type='takein' AND fulfillment_status=? AND fulfillment_version=?",
-                next, nextVersion, next, order.id(), order.fulfillmentStatus(), order.fulfillmentVersion()) != 1)
+        int nextVersion = legacyCompletion ? 1 : order.fulfillmentVersion() + 1;
+        String fromStatus = legacyCompletion ? "LEGACY" : order.fulfillmentStatus();
+        if (jdbc.update("UPDATE yshop_store_order SET fulfillment_status=?,fulfillment_version=?,status=CASE WHEN ?='COLLECTED' THEN 3 ELSE status END,update_time=CURRENT_TIMESTAMP WHERE id=? AND paid=1 AND refund_status=0 AND is_system_del=0 AND deleted=0 AND order_type='takein' AND fulfillment_status=? AND fulfillment_version=? AND status=?",
+                next, nextVersion, next, order.id(), order.fulfillmentStatus(), order.fulfillmentVersion(), order.status()) != 1)
             throw exception(FULFILLMENT_VERSION_CONFLICT);
         try {
-            insertAction(order.id(), requestKey, requestHash, action, order.fulfillmentStatus(), next, expectedVersion, nextVersion, actorId, actorType);
+            insertAction(order.id(), requestKey, requestHash, action, fromStatus, next, expectedVersion, nextVersion, actorId, actorType);
         } catch (DataIntegrityViolationException duplicate) {
             throw idempotencyConflict();
         }

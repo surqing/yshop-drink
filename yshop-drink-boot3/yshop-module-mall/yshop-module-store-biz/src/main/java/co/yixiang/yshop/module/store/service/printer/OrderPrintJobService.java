@@ -97,14 +97,15 @@ public class OrderPrintJobService {
                 if (!requestHash.equals(priorHash)) throw new PrinterFailure("REQUEST_CONFLICT", false);
                 return prior;
             }
-            Parent parent = jdbc.query("SELECT id,event_id,event_key,order_id,shop_id,printer_id,printer_name_snapshot,provider_code_snapshot,device_code_snapshot,state,payload_snapshot FROM yshop_order_print_job WHERE tenant_id=? AND id=? FOR UPDATE",
+            Parent parent = jdbc.query("SELECT id,event_id,event_key,order_id,shop_id,printer_id,printer_name_snapshot,provider_code_snapshot,device_code_snapshot,state,last_error,payload_snapshot FROM yshop_order_print_job WHERE tenant_id=? AND id=? FOR UPDATE",
                     (rs, row) -> new Parent(rs.getLong("id"), rs.getLong("event_id"), rs.getString("event_key"), rs.getLong("order_id"),
                             rs.getLong("shop_id"), rs.getLong("printer_id"), rs.getString("printer_name_snapshot"),
                             rs.getString("provider_code_snapshot"), rs.getString("device_code_snapshot"), rs.getString("state"),
-                            rs.getString("payload_snapshot")), tenant, parentId).stream().findFirst().orElse(null);
+                            rs.getString("last_error"), rs.getString("payload_snapshot")), tenant, parentId).stream().findFirst().orElse(null);
             if (parent == null) throw new PrinterFailure("PRINT_JOB_NOT_FOUND", false);
             if (!List.of("ACCEPTED", "FAILED", "UNKNOWN").contains(parent.state())) throw new PrinterFailure("JOB_NOT_REPRINTABLE", false);
             if("UNKNOWN".equals(parent.state())) throw new PrinterFailure("PRINT_RECOVERY_REQUIRED",false);
+            if("OPERATOR_CONFIRMED_PRINTED".equals(parent.lastError())) throw new PrinterFailure("PRINT_ALREADY_CONFIRMED",false);
             int bound = jdbc.queryForObject("SELECT COUNT(*) FROM yshop_printer p JOIN yshop_printer_binding b "
                     + "ON b.tenant_id=p.tenant_id AND b.printer_id=p.id WHERE p.tenant_id=? AND p.id=? AND p.deleted=0 AND b.shop_id=?",
                     Integer.class, tenant, parent.printerId(), parent.shopId());
@@ -125,15 +126,17 @@ public class OrderPrintJobService {
         });
     }
 
-    /** Explicitly resolve a crashed, expired send only after an operator verifies no print occurred. */
+    /** Resolve a crashed send only after its sender stopped and an operator verified the physical outcome. */
     public JobView resolveUnknown(ResolveUnknownRequest request) {
         long tenant=printerAccess.requireHeadquartersTenant();
         Long actor=SecurityFrameworkUtils.getLoginUserId();
         if(actor==null) throw new PrinterFailure("HEADQUARTERS_ONLY",false);
-        if(!request.senderStopped()||!request.notPrintedConfirmed())
+        boolean printed=request.printedConfirmed();
+        if(!request.senderStopped()||request.notPrintedConfirmed()==printed)
             throw new PrinterFailure("PRINT_RECOVERY_CONFIRMATION_REQUIRED",false);
         String reason=maskPhones(request.reason().trim());
-        String requestHash=hash(tenant+"|"+request.jobId()+"|NOT_PRINTED_CONFIRMED|"+reason);
+        String disposition=printed?"PRINTED_CONFIRMED":"NOT_PRINTED_CONFIRMED";
+        String requestHash=hash(tenant+"|"+request.jobId()+"|"+disposition+"|"+reason);
         return tx.execute(status->{
             List<Resolution> prior=jdbc.query("SELECT job_id,request_hash FROM yshop_order_print_device_claim_resolution "
                     +"WHERE tenant_id=? AND request_key=? FOR UPDATE",
@@ -166,13 +169,15 @@ public class OrderPrintJobService {
             if(!claims.isEmpty()&&(claims.get(0).jobId()!=target.id()||!Objects.equals(claims.get(0).leaseToken(),target.leaseToken())))
                 throw new PrinterFailure("PRINT_CLAIM_NOT_FOUND",false);
 
-            String outcome=claims.isEmpty()?"NOT_PRINTED_CONFIRMED_NO_CLAIM":"NOT_PRINTED_CONFIRMED_CLAIM_RELEASED";
+            String outcome=disposition+(claims.isEmpty()?"_NO_CLAIM":"_CLAIM_RELEASED");
             jdbc.update("INSERT INTO yshop_order_print_device_claim_resolution(tenant_id,printer_id,job_id,request_key,request_hash,outcome,claim_was_present,reason,actor_id,prior_error) "
                     +"VALUES(?,?,?,?,?,?,?, ?,?,?)",tenant,target.printerId(),target.id(),request.requestKey(),requestHash,outcome,
                     !claims.isEmpty(),reason,actor,target.lastError());
-            if(jdbc.update("UPDATE yshop_order_print_job SET state='FAILED',last_error='OPERATOR_CONFIRMED_NOT_PRINTED',"
+            String finalState=printed?"ACCEPTED":"FAILED";
+            String finalError=printed?"OPERATOR_CONFIRMED_PRINTED":"OPERATOR_CONFIRMED_NOT_PRINTED";
+            if(jdbc.update("UPDATE yshop_order_print_job SET state=?,last_error=?,"
                     +"lease_token=NULL,lease_expires_at=NULL,update_time=CURRENT_TIMESTAMP WHERE tenant_id=? AND id=? AND state='UNKNOWN'",
-                    tenant,target.id())!=1)
+                    finalState,finalError,tenant,target.id())!=1)
                 throw new PrinterFailure("PRINT_JOB_STATE_CONFLICT",false);
             if(!claims.isEmpty()&&jdbc.update("DELETE FROM yshop_order_print_device_claim WHERE tenant_id=? AND printer_id=? AND job_id=? AND lease_token=?",
                     tenant,target.printerId(),target.id(),target.leaseToken())!=1)
@@ -233,10 +238,15 @@ public class OrderPrintJobService {
             @NotBlank @Pattern(regexp="[A-Za-z0-9_-]{16,64}") String requestKey,
             @NotBlank @Size(max=255) String reason,
             @AssertTrue boolean senderStopped,
-            @AssertTrue boolean notPrintedConfirmed) {}
+            boolean notPrintedConfirmed,
+            boolean printedConfirmed) {
+        public ResolveUnknownRequest(Long jobId,String requestKey,String reason,boolean senderStopped,boolean notPrintedConfirmed) {
+            this(jobId,requestKey,reason,senderStopped,notPrintedConfirmed,false);
+        }
+    }
 
     private record Parent(long id,long eventId,String eventKey,long orderId,long shopId,long printerId,String printerName,
-            String providerCode,String deviceCode,String state,String payload) {}
+            String providerCode,String deviceCode,String state,String lastError,String payload) {}
     private record Resolution(long jobId,String requestHash) {}
     private record RecoveryTarget(long id,long printerId,String state,String lastError,String leaseToken,Timestamp leaseExpiresAt) {}
     private record Claim(long jobId,String leaseToken) {}
