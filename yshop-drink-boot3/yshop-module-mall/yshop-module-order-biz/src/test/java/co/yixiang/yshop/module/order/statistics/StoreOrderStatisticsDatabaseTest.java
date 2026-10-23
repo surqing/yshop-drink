@@ -11,7 +11,6 @@ import co.yixiang.yshop.module.system.api.permission.PermissionApi;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -114,7 +113,7 @@ class StoreOrderStatisticsDatabaseTest {
         long id = orderBase + ++nextOrder;
         jdbc.update("INSERT INTO yshop_store_order(id,order_id,uid,shop_id,tenant_id,order_type,paid,status,refund_status,refund_price,pay_price,pay_time,total_num,is_system_del,deleted,fulfillment_status,pay_type,mark,cost,create_time) VALUES(?,?,?,?,?,'takein',?,0,?,?,?,?,?,0,0,?,'synthetic','Synthetic order',0,CURRENT_TIMESTAMP)",
                 id, "stats-" + id, 1L, shopId, tenant, paid, refundStatus, new BigDecimal(refundPrice), new BigDecimal(payPrice),
-                payTime == null ? null : Timestamp.valueOf(LocalDateTime.parse(payTime)), quantity, fulfillment);
+                payTime == null ? null : LocalDateTime.parse(payTime), quantity, fulfillment);
         return id;
     }
 
