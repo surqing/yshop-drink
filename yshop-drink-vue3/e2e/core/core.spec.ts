@@ -553,7 +553,8 @@ async function pickupFulfillment(f: Flow) {
     const contextA = await f.browser.newContext({ baseURL: f.baseURL, serviceWorkers: 'block' }); staffContexts.push(contextA)
     const contextB = await f.browser.newContext({ baseURL: f.baseURL, serviceWorkers: 'block' }); staffContexts.push(contextB)
     pageA = await contextA.newPage(); pageB = await contextB.newPage()
-    await Promise.all([openWorkPage(f, pageA, context.accounts.staff), openWorkPage(f, pageB, context.accounts.staffC)])
+    await f.check('work-page-staff-a', () => openWorkPage(f, pageA, context.accounts.staff))
+    await f.check('work-page-staff-c', () => openWorkPage(f, pageB, context.accounts.staffC))
     await f.check('work-page-waiting', async () => {
       const card = await workOrder(pageA, order.orderId, '待接单')
       await expect(card).toContainText('待接单'); await expect(card.getByRole('button', { name: '接单', exact: true })).toBeVisible()

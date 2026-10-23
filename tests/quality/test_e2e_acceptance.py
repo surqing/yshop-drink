@@ -115,7 +115,8 @@ class E2eAcceptanceTest(unittest.TestCase):
             self.assertEqual('mini-admin' if name=='pickup-fulfillment' else 'api-admin',by_local[name]['variant'])
             self.assertEqual(len(by_local[name]['expectedCheckIds']),len(set(by_local[name]['expectedCheckIds'])))
         exact={
-            'pickup-fulfillment':['product-created-for-points','pickup-order-created','payment-confirmed','work-page-waiting',
+            'pickup-fulfillment':['product-created-for-points','pickup-order-created','payment-confirmed',
+                'work-page-staff-a','work-page-staff-c','work-page-waiting',
                 'two-staff-conflict','accept-through-work-page','prepare-through-work-page','ready-through-work-page',
                 'collect-replay','collected-reward-sql'],
             'store-statistics':['two-store-orders-paid','date-window-is-half-open','headquarters-summary-page',
