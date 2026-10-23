@@ -942,9 +942,14 @@ async function checkPrintRecoveryBox(dialog: any, label: string) {
   await checkbox.locator('.el-checkbox__inner').click()
   await expect(checkbox.locator('input[type="checkbox"]')).toBeChecked()
 }
+async function selectPrintRecoveryOption(dialog: any, label: string) {
+  const radio = dialog.locator('.el-radio').filter({ hasText: label })
+  await radio.locator('.el-radio__inner').click()
+  await expect(radio.locator('input[type="radio"]')).toBeChecked()
+}
 async function orderPrintJobs(f: Flow) {
   const staffContexts: any[] = []
-  let memberToken = '', product: any, order: any, staffPage: any, printerId = 0, orderCode = '', jobId = 0
+  let memberToken = '', product: any, order: any, staffPage: any, printerId = 0, orderCode = '', jobId = 0, reprintId = 0
   const printerPrefix = '/admin-api/store/printer'
   try {
     await f.check('unbound-order-waits-on-real-page', async () => {
@@ -1027,7 +1032,7 @@ async function orderPrintJobs(f: Flow) {
       const dialog = f.page.getByRole('dialog').filter({ hasText: '核验后释放打印占用' })
       await expect(dialog).toBeVisible()
       await expect(dialog).toContainText('不会自动重发')
-      const confirm = dialog.getByRole('button', { name: '确认核验并释放占用', exact: true })
+      const confirm = dialog.getByRole('button', { name: '确认核验结果并释放占用', exact: true })
       await expect(confirm).toBeDisabled()
       const reason = '已联系值班员确认旧发送进程退出，并核对设备无出纸'
       await dialog.getByLabel('处理说明').fill(reason)
@@ -1044,7 +1049,7 @@ async function orderPrintJobs(f: Flow) {
       expect(rejectedSender.code).not.toBe(0); expect(rejectedPaper.code).not.toBe(0)
       expect(f.oracle('print-recovery', { jobId })[0]).toMatchObject({ state: 'UNKNOWN', claimCount: 1, resolutionCount: 0 })
 
-      await checkPrintRecoveryBox(dialog, '我已核实打印服务或设备确认未出纸')
+      await selectPrintRecoveryOption(dialog, '打印服务或设备确认未出纸')
       await expect(confirm).toBeEnabled()
       await dialog.getByRole('button', { name: '关闭', exact: true }).click()
       await expect(dialog).toBeHidden()
@@ -1056,10 +1061,12 @@ async function orderPrintJobs(f: Flow) {
       const dialog = f.page.getByRole('dialog').filter({ hasText: '核验后释放打印占用' })
       await dialog.getByLabel('处理说明').fill(reason)
       await checkPrintRecoveryBox(dialog, '我已确认原发送进程已停止')
-      await checkPrintRecoveryBox(dialog, '我已核实打印服务或设备确认未出纸')
+      await selectPrintRecoveryOption(dialog, '打印服务或设备确认未出纸')
       const pending = f.page.waitForResponse((r: any) => r.url().includes('/admin-api/store/order-print-job/resolve-unknown') && r.request().method() === 'POST')
-      await dialog.getByRole('button', { name: '确认核验并释放占用', exact: true }).click()
-      const response = await (await pending).json(); expect(response.code).toBe(0)
+      await dialog.getByRole('button', { name: '确认核验结果并释放占用', exact: true }).click()
+      const responseEvent = await pending
+      expect(responseEvent.request().postDataJSON()).toMatchObject({ notPrintedConfirmed: true, printedConfirmed: false })
+      const response = await responseEvent.json(); expect(response.code).toBe(0)
       expect(response.data).toMatchObject({ id: jobId, state: 'FAILED', errorCode: 'OPERATOR_CONFIRMED_NOT_PRINTED' })
       await expect(dialog).toBeHidden()
       const audit = f.oracle('print-recovery', { jobId })[0]
@@ -1080,7 +1087,7 @@ async function orderPrintJobs(f: Flow) {
       const pending = f.page.waitForResponse((r: any) => r.url().includes('/admin-api/store/order-print-job/reprint') && r.request().method() === 'POST')
       await dialog.getByRole('button', { name: '创建重打任务', exact: true }).click()
       const response = await (await pending).json(); expect(response.code).toBe(0)
-      const reprintId = Number(response.data.id); expect(reprintId).toBeGreaterThan(0)
+      reprintId = Number(response.data.id); expect(reprintId).toBeGreaterThan(0)
       await expect(dialog).toBeHidden()
       f.bridge('order-print-poll', {})
       await expect.poll(() => printRows(f, order.orderId).find((value: any) => value.id === reprintId)?.state, { timeout: 20000 }).toBe('UNKNOWN')
@@ -1091,6 +1098,42 @@ async function orderPrintJobs(f: Flow) {
       expect(child.payloadSnapshot).toBe(parent.payloadSnapshot)
       expect(printCounters(f)).toEqual({ printCalls: beforeCounters.printCalls + 1, statusCalls: beforeCounters.statusCalls })
       await expect(printOrderRow(f.page, orderCode, reason)).toContainText(reason)
+    })
+    await f.check('printed-confirmation-closes-without-resend', async () => {
+      const beforeCounters = printCounters(f), reason = '现场确认已出纸，旧发送进程已停止'
+      await reloadOrderPrintJobs(f.page)
+      const row = printOrderRow(f.page, orderCode, '顾客反馈未收到小票')
+      await expect(row).toContainText('结果待核对')
+      await row.getByRole('button', { name: '核验后释放占用', exact: true }).click()
+      const dialog = f.page.getByRole('dialog').filter({ hasText: '核验后释放打印占用' })
+      await dialog.getByLabel('处理说明').fill(reason)
+      await checkPrintRecoveryBox(dialog, '我已确认原发送进程已停止')
+      const confirm = dialog.getByRole('button', { name: '确认核验结果并释放占用', exact: true })
+      await expect(confirm).toBeDisabled()
+      await selectPrintRecoveryOption(dialog, '设备或现场确认已出纸')
+      await expect(confirm).toBeEnabled()
+      const pending = f.page.waitForResponse((r: any) => r.url().includes('/admin-api/store/order-print-job/resolve-unknown') && r.request().method() === 'POST')
+      await confirm.click()
+      const responseEvent = await pending
+      expect(responseEvent.request().postDataJSON()).toMatchObject({ notPrintedConfirmed: false, printedConfirmed: true })
+      const response = await responseEvent.json(); expect(response.code).toBe(0)
+      expect(response.data).toMatchObject({ id: reprintId, state: 'ACCEPTED', errorCode: 'OPERATOR_CONFIRMED_PRINTED' })
+      await expect(dialog).toBeHidden()
+      const audit = f.oracle('print-recovery', { jobId: reprintId })[0]
+      expect(audit).toMatchObject({ state: 'ACCEPTED', lastError: 'OPERATOR_CONFIRMED_PRINTED',
+        claimCount: 0, resolutionCount: 1, resolutionOutcome: 'PRINTED_CONFIRMED_CLAIM_RELEASED',
+        claimWasPresent: 1, resolutionReason: reason, actorId: 101 })
+      expect(audit.leaseExpiresAt).toBeNull()
+      expect(printCounters(f)).toEqual(beforeCounters)
+      const resolvedRow = printOrderRow(f.page, orderCode, '顾客反馈未收到小票')
+      await expect(resolvedRow).toContainText('人工核验确认已出纸')
+      await expect(resolvedRow.getByRole('button', { name: '人工重打', exact: true })).toHaveCount(0)
+      const denied = await f.api('POST', '/admin-api/store/order-print-job/reprint', {
+        jobId: reprintId, requestKey: `printed-recovery-reprint-${key()}`, reason: '已确认出纸，不应重打'
+      }, f.adminToken, false)
+      expect(denied.code).not.toBe(0)
+      expect(printRows(f, order.orderId).filter((value: any) => value.kind === 'JOB')).toHaveLength(2)
+      expect(printCounters(f)).toEqual(beforeCounters)
     })
     await f.check('cross-store-print-denied', async () => {
       const beforeRows = printRows(f, order.orderId), beforeCounters = printCounters(f)
@@ -1115,14 +1158,19 @@ async function orderPrintJobs(f: Flow) {
       expect(rows.filter((value: any) => value.kind === 'EVENT')).toHaveLength(1)
       const jobs = rows.filter((value: any) => value.kind === 'JOB')
       expect(jobs).toHaveLength(2)
-      expect(jobs.find((value: any) => value.id === jobId)).toMatchObject({ purpose: 'ORDER', parentJobId: null, reprintReason: null, state: 'FAILED', errorCode: 'OPERATOR_CONFIRMED_NOT_PRINTED', attempts: 1 })
+      const parent = jobs.find((value: any) => value.id === jobId)
+      const child = jobs.find((value: any) => value.id === reprintId)
+      expect(parent).toMatchObject({ purpose: 'ORDER', parentJobId: null, reprintReason: null, state: 'FAILED', errorCode: 'OPERATOR_CONFIRMED_NOT_PRINTED', attempts: 1 })
+      expect(child).toMatchObject({ purpose: 'REPRINT', parentJobId: jobId, state: 'ACCEPTED', errorCode: 'OPERATOR_CONFIRMED_PRINTED' })
       expect(jobs.filter((value: any) => value.purpose === 'REPRINT')).toHaveLength(1)
-      const snapshot = JSON.parse(jobs[0].payloadSnapshot)
+      const snapshot = JSON.parse(parent.payloadSnapshot)
       expect(snapshot.orderCode).toBe(order.orderId); expect(snapshot.contactPhone).toBe('138****0001')
       expect(snapshot.contactPhone).not.toContain('13800000001')
       expect(f.oracle('fulfillment-state', { orderId: order.orderId })[0].fulfillmentStatus).toBe('ACCEPTED')
       expect(f.oracle('print-recovery', { jobId })[0]).toMatchObject({ claimCount: 0, resolutionCount: 1,
         resolutionOutcome: 'NOT_PRINTED_CONFIRMED_CLAIM_RELEASED', claimWasPresent: 1, actorId: 101 })
+      expect(f.oracle('print-recovery', { jobId: reprintId })[0]).toMatchObject({ claimCount: 0, resolutionCount: 1,
+        resolutionOutcome: 'PRINTED_CONFIRMED_CLAIM_RELEASED', claimWasPresent: 1, actorId: 101 })
     })
   } finally {
     await Promise.all(staffContexts.map((value: any) => value.close()))
