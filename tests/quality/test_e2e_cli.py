@@ -92,7 +92,8 @@ class E2eCliTest(unittest.TestCase):
         checks=listing('ci','order-print-jobs')['scenarios'][0]['expectedCheckIds']
         self.assertEqual(['unbound-order-waits-on-real-page','offline-device-waits-on-real-page','order-history-on-real-page',
                           'unknown-refresh-readonly','recovery-confirmation-gate','unknown-recovery-audited',
-                          'manual-reprint-audited','cross-store-print-denied','print-job-sql-audit'],checks)
+                          'manual-reprint-audited','printed-confirmation-closes-without-resend',
+                          'cross-store-print-denied','print-job-sql-audit'],checks)
         self.assertLess(checks.index('unknown-recovery-audited'),checks.index('manual-reprint-audited'))
         quick=json.loads((REPO/'tests/quality/quick-manifest.json').read_text())
         self.assertEqual(10,quick['tests/quality/test_e2e_oracle_contract.py'])
