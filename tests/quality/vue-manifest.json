@@ -40,6 +40,7 @@
   ],
   "tests/store-order-print-jobs.test.ts": [
     "refreshing an unknown job reads state without submitting a print",
-    "network failure retries a manual reprint with the same masked request"
+    "network failure retries a manual reprint with the same masked request",
+    "confirmed printed recovery releases an unknown job with an audited printed disposition"
   ]
 }
