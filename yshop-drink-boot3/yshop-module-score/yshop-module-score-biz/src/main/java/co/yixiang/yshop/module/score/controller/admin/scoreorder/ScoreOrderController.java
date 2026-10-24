@@ -24,6 +24,7 @@ import co.yixiang.yshop.module.score.controller.admin.scoreorder.vo.*;
 import co.yixiang.yshop.module.score.dal.dataobject.scoreorder.ScoreOrderDO;
 import co.yixiang.yshop.module.score.convert.scoreorder.ScoreOrderConvert;
 import co.yixiang.yshop.module.score.service.scoreorder.ScoreOrderService;
+import co.yixiang.yshop.module.score.controller.common.vo.ScoreOrderTakeReqVO;
 
 @Tag(name = "管理后台 - 积分商城订单")
 @RestController
@@ -87,11 +88,11 @@ public class ScoreOrderController {
         ExcelUtils.write(response, "积分商城订单.xls", "数据", ScoreOrderExcelVO.class, datas);
     }
 
-    @GetMapping("/take")
+    @PostMapping("/take")
     @Operation(summary = "收货")
     @PreAuthorize("@ss.hasPermission('score:order:update')")
-    public CommonResult<Boolean> take(@RequestParam("id") Long id) {
-        orderService.takeOrder(id);
+    public CommonResult<Boolean> take(@Valid @RequestBody ScoreOrderTakeReqVO reqVO) {
+        orderService.takeOrder(reqVO.getId());
         return success(true);
     }
 

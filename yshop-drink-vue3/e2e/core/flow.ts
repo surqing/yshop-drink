@@ -73,7 +73,7 @@ export class Flow {
     expect((await info.json()).qualityOwner).toBe(context.owner)
     this.stage = 'ADMIN_LOGIN'; this.save()
     this.adminToken = await this.login()
-    if (context.profile === 'local') {
+    if (context.profile === 'local' && this.selected.requiredCapabilities.includes('mini')) {
       const { MiniDriver } = require(join(context.repo, 'tests/mini/e2e-driver.cjs'))
       this.stage = 'MINI_LAUNCH'; this.save()
       this.mini = await MiniDriver.launch(context.mini, join(context.output, `mini-${this.id}`))
@@ -168,7 +168,7 @@ export class Flow {
     await library.getByRole('button', { name: '确 定', exact: true }).click()
     await expect(library).toBeHidden()
   }
-  async createProductUI() {
+  async createProductUI(giveIntegral = 0) {
     await this.page.goto('/mall/products')
     await this.page.getByRole('button', { name: '新增', exact: true }).click()
     const dialog = this.page.getByRole('dialog').filter({ hasText: '基本信息' })
@@ -191,6 +191,7 @@ export class Flow {
     await editor.fill('Synthetic E2E product details')
     await expect(editor).toContainText('Synthetic E2E product details')
     await dialog.getByRole('tab', { name: '营销设置', exact: true }).click()
+    await dialog.getByPlaceholder('请输入获得积分').fill(String(giveIntegral))
     const pending = this.page.waitForResponse(r => r.url().endsWith('/admin-api/product/store-product/create') && r.request().method() === 'POST')
     await dialog.getByRole('button', { name: '保 存', exact: true }).click()
     const submitted = await pending

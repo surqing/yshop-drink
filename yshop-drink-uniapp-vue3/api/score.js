@@ -17,7 +17,8 @@ export function scoreShopIndex(data) {
  * 提交
  */
 export function scoreShopExchange(data) {
-  return api.post('/score-order/submit', data, { login: true })
+  // The current confirmation page exchanges exactly one item per durable intent.
+  return api.post('/score-order/submit', { ...data, num: 1 }, { login: true })
 }
 
 /**
@@ -38,7 +39,7 @@ export function scoreShopOrderDetail(data) {
  * 确认收货
  */
 export function scoreShopReceive(data) {
-  return api.get('/score-order/take', data, { login: true })
+  return api.post('/score-order/take', data, { login: true })
 }
 
 

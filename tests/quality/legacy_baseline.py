@@ -22,36 +22,21 @@ import urllib.error
 import urllib.request
 import uuid
 
-BASELINE = 'fa39ef2b854eb21655390866090f61b0c4d52a11'
-MIGRATIONS = ['payment-credential-columns.sql', '2026-10-03-payment-finalization.sql',
-              '2026-10-03-wallet-ledger.sql', '2026-10-04-payment-attempt.sql',
-              '2026-10-04-wechat-v3.sql', '2026-10-04-payment-live-readiness.sql',
-              '2026-10-08-multistore-ordering.sql', '2026-10-08-product-catalog.sql']
-ASSERTION_FUNCTIONS = ('reset', 'reward', 'state', 'quantity', 'stock',
-                       'unlisted', 'zero', 'ledger', 'phone')
+from defect_contract import (assertion_fingerprints, load_contract, migrations_for_source)
 
 
 def assertion_equivalence(reference, launcher):
-    """Reject future fixture, request or business assertion drift before resources."""
-    trees = [ast.parse(path.read_text()) for path in (reference, launcher)]
-    hashes = {}
-    for name in ASSERTION_FUNCTIONS:
-        matches = [[node for node in ast.walk(tree)
-                    if isinstance(node, ast.FunctionDef) and node.name == name] for tree in trees]
-        if any(len(nodes) != 1 for nodes in matches):
-            raise RuntimeError('BASELINE_ASSERTION_FUNCTION_AMBIGUOUS:' + name)
-        bodies = [ast.dump(nodes[0], include_attributes=False) for nodes in matches]
-        if bodies[0] != bodies[1]:
-            raise RuntimeError('BASELINE_ASSERTION_DRIFT:' + name)
-        hashes[name] = hashlib.sha256(bodies[0].encode()).hexdigest()
-    return hashes
+    original = assertion_fingerprints(reference)
+    if assertion_fingerprints(launcher) != original:
+        raise RuntimeError('BASELINE_ASSERTION_DRIFT')
+    return original
 
 
 class ControlledInterrupted(BaseException):
     pass
 
 
-def archive_identity(repo, source, manifest):
+def archive_identity(repo, source, manifest, sha):
     """Use source_identity's sorted names+NUL+bytes digest on archive files only."""
     digest = hashlib.sha256()
     for name, expected in sorted(manifest.items()):
@@ -59,13 +44,14 @@ def archive_identity(repo, source, manifest):
         if hashlib.sha256(content).hexdigest() != expected:
             raise RuntimeError('BASELINE_PRODUCTION_SOURCE_CHANGED:' + name)
         digest.update(name.encode() + b'\0' + content)
-    return {'sourceSha': BASELINE, 'sourceDigest': digest.hexdigest()}
+    return {'sourceSha': sha, 'sourceDigest': digest.hexdigest()}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repo', default=str(Path(__file__).resolve().parents[2]))
     parser.add_argument('--output', required=True)
+    parser.add_argument('--base', required=True, help='Exact baseline revision; no implicit historic baseline')
     parser.add_argument('--offline', action='store_true', help='Use an already populated Maven cache')
     args = parser.parse_args()
     os.umask(0o077)
@@ -76,7 +62,8 @@ def main():
     root.mkdir(parents=True, mode=0o700, exist_ok=False)
     source = root / 'source'
     source.mkdir(mode=0o700)
-    archive = subprocess.check_output(['git', 'archive', BASELINE], cwd=repo)
+    sha = subprocess.check_output(['git', 'rev-parse', '--verify', args.base+'^{commit}'], cwd=repo, text=True).strip()
+    archive = subprocess.check_output(['git', 'archive', sha], cwd=repo)
     (root / 'source.tar').write_bytes(archive)
     manifest = {}
     with tarfile.open(fileobj=io.BytesIO(archive)) as bundle:
@@ -86,10 +73,12 @@ def main():
             if member.isfile():
                 manifest[member.name] = hashlib.sha256(bundle.extractfile(member).read()).hexdigest()
         bundle.extractall(source)
-    identity = archive_identity(repo, source, manifest)
+    identity = archive_identity(repo, source, manifest, sha)
     (root / 'source-manifest.json').write_text(json.dumps(manifest, sort_keys=True, indent=2))
     from evidence import source_identity, execute
     harness_identity = source_identity(repo)
+    contract = load_contract(repo, identity, sha)
+    migrations = migrations_for_source(source)
     runid = uuid.uuid4().hex
     report = {**identity, 'baselineSource': identity, 'harnessSource': harness_identity,
               'runId': runid, 'owner': runid, 'startedAt': time.time(),
@@ -97,7 +86,7 @@ def main():
               'cases': [], 'status': 'INCONCLUSIVE', 'cleanup': 'NOT_RUN', 'complete': False,
               'testScriptSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
               'referenceTestScriptSha256': hashlib.sha256((repo/'tests/defects/http_red.py').read_bytes()).hexdigest(),
-              'migrations': MIGRATIONS, 'seedInsertRowsCopied': 0,
+              'migrations': migrations, 'defectContract': contract, 'seedInsertRowsCopied': 0,
               'financialProviderRequests': {'value': 0, 'scope': 'this loopback HTTP harness path guard only', 'globalNetworkMeasured': False}}
     env = None
     cleanup_phase = False
@@ -112,7 +101,7 @@ def main():
     signal.signal(signal.SIGTERM, interrupted)
     signal.signal(signal.SIGINT, interrupted)
     try:
-        report['assertionFunctionsSameAst'] = assertion_equivalence(repo/'tests/defects/http_red.py', Path(__file__))
+        report['assertionFingerprints'] = assertion_equivalence(repo/'tests/defects/http_red.py', Path(__file__))
         command = ['mvn', '-B', *(['-o'] if args.offline else []), '-DskipTests', 'package']
         if os.environ.get('YSHOP_MAVEN_REPOSITORY'):
             command += ['-Dmaven.repo.local=' + os.environ['YSHOP_MAVEN_REPOSITORY']]
@@ -125,12 +114,12 @@ def main():
         build['result'] = 'PASS' if result == 0 and build['modules'] == 55 and 'BUILD SUCCESS' in text else 'FAIL'
         if build['result'] != 'PASS':
             raise RuntimeError('BASELINE_FULL_REACTOR_BUILD_FAILED')
-        archive_identity(repo, source, manifest)
+        archive_identity(repo, source, manifest, sha)
         jar = source/'yshop-drink-boot3/yshop-server/target/yshop-server.jar'
         report['artifactHash'] = report['backendArtifactHash'] = hashlib.sha256(jar.read_bytes()).hexdigest()
         import e2e.environment as lifecycle
         # Baseline's own migration set; never import a candidate-only migration.
-        lifecycle.MIGRATIONS = MIGRATIONS
+        lifecycle.MIGRATIONS = migrations
         env = lifecycle.OwnedEnvironment(source, root/'owned', identity=identity, owner=runid, run_id=runid)
         def fixtures(owned, config):
             owned.sql("INSERT INTO yshop_store_product(id,shop_id,image,slider_image,store_name,store_info,keyword,cate_id,stock,sales,is_show,is_integral) VALUES(9101,101,'','','Synthetic item','','','101',10,0,1,0); INSERT INTO yshop_store_product_attr_value(id,product_id,sku,stock,sales,price,cost) VALUES(9101,9101,'默认',10,0,16,0);")
@@ -155,8 +144,12 @@ def main():
         sql("INSERT INTO yshop_user_address(id,uid,real_name,address,phone,detail,create_time,tenant_id) VALUES(9101,101,'Synthetic A','Synthetic street A','13800000101','Unit A',NOW(),0),(9102,102,'Synthetic B','Synthetic street B','13800000102','Unit B',NOW(),0);")
         sql("INSERT INTO yshop_score_product(id,title,image,images,`desc`,score,stock,sales,is_switch) VALUES(9101,'Synthetic reward','','','Synthetic only',100,10,0,1);")
         def reset(stock=10, listed=1, points=1000):
+            if contract['scoreIdempotencyRequired']: sql('DELETE FROM yshop_score_submission WHERE uid=101')
             sql("DELETE FROM yshop_score_order WHERE product_id=9101; DELETE FROM yshop_user_bill WHERE uid=101 AND category='integral'; UPDATE yshop_score_product SET stock="+str(stock)+",sales=0,is_switch="+str(listed)+" WHERE id=9101; UPDATE yshop_user SET integral="+str(points)+" WHERE id=101;")
-        def reward(num='1', address='9101'): return api('POST','/app-api/score-order/submit',{'productId':'9101','addressId':address,'num':num},token)
+        def reward(num='1', address='9101'):
+            payload={'productId':'9101','addressId':address,'num':num}
+            if contract['scoreIdempotencyRequired']: payload['idempotencyKey']=uuid.uuid4().hex
+            return api('POST','/app-api/score-order/submit',payload,token)
         def state(o,r):
             o.update(code=r['code'],orders=n('SELECT COUNT(*) FROM yshop_score_order WHERE product_id=9101'),stock=n('SELECT stock FROM yshop_score_product WHERE id=9101'),points=scalar('SELECT integral FROM yshop_user WHERE id=101'))
         def case(id,title,fn):
@@ -224,7 +217,7 @@ def main():
         if env is not None:
             receipt=env.close();report['cleanupReceipt']={**receipt,'owner':runid,'runId':runid};report['cleanup']='PASSED' if receipt['status']=='PASSED' else 'FAILED'
         else: report['cleanup']='PASSED';report['cleanupReceipt']={'status':'PASSED','containersRemoved':0,'anonymousVolumesRemoved':0,'ownershipChecked':True}
-        try:report['sourceUnchanged']=archive_identity(repo,source,manifest)==identity
+        try:report['sourceUnchanged']=archive_identity(repo,source,manifest,sha)==identity
         except Exception:report['sourceUnchanged']=False
         report['harnessUnchanged']=source_identity(repo)==harness_identity
         report.update(endedAt=time.time(),complete=True)

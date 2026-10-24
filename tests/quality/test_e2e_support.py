@@ -72,4 +72,47 @@ class TestSupportBoundaryTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'BRIDGE_REPLY_FOREIGN'):
                     invoke(context,'complete',{'orderId':'owned-123'},timeout=1)
 
+    def test_order_print_poll_bridge_action_is_run_scoped(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            owner='a'*32;mailbox=Path(folder)/('commands-'+owner);mailbox.mkdir(mode=0o700)
+            (mailbox/'requests').mkdir();(mailbox/'responses').mkdir()
+            context={'owner':owner,'commandDir':str(mailbox)}
+            def respond(_):
+                requests=list((mailbox/'requests').glob('*.json'))
+                if not requests:return
+                command=json.loads(requests[0].read_text())
+                self.assertEqual('order-print-poll',command['action'])
+                (mailbox/'responses'/requests[0].name).write_text(json.dumps({
+                    'owner':owner,'commandId':command['commandId'],'status':'PASSED','printCalls':3,'statusCalls':1}))
+            with patch('e2e.bridge.time.sleep',side_effect=respond):
+                reply=invoke(context,'order-print-poll',{},timeout=1)
+            self.assertEqual(3,reply['printCalls']);self.assertEqual(1,reply['statusCalls'])
+
+    def test_crash_fixture_requires_a_positive_owned_job_id(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            owner='a'*32;mailbox=Path(folder)/('commands-'+owner);mailbox.mkdir(mode=0o700)
+            (mailbox/'requests').mkdir();(mailbox/'responses').mkdir()
+            context={'owner':owner,'commandDir':str(mailbox)}
+            for value in (0,-1,'12 OR 1=1',True):
+                with self.subTest(value=value), self.assertRaisesRegex(ValueError,'ENTITY_ID_INVALID'):
+                    invoke(context,'simulate-print-crash',{'jobId':value})
+            self.assertEqual([],list((mailbox/'requests').iterdir()))
+
+    def test_statistics_boundary_fixture_requires_two_owned_order_ids_and_dates(self):
+        with tempfile.TemporaryDirectory() as folder:
+            owner='a'*32;mailbox=Path(folder)/('commands-'+owner);mailbox.mkdir(mode=0o700)
+            (mailbox/'requests').mkdir();(mailbox/'responses').mkdir()
+            context={'owner':owner,'commandDir':str(mailbox)}
+            invalid=[
+                {'startOrderId':'owned-1;DELETE','endOrderId':'owned-2','fromDate':'2026-10-01','toDate':'2026-10-02'},
+                {'startOrderId':'owned-1','endOrderId':'owned-1','fromDate':'2026-10-01','toDate':'2026-10-02'},
+                {'startOrderId':'owned-1','endOrderId':'owned-2','fromDate':'2026-10-03','toDate':'2026-10-02'},
+            ]
+            for value in invalid:
+                with self.subTest(value=value), self.assertRaises(ValueError):
+                    invoke(context,'stats-boundary-times',value)
+            self.assertEqual([],list((mailbox/'requests').iterdir()))
+
 if __name__=='__main__':unittest.main()

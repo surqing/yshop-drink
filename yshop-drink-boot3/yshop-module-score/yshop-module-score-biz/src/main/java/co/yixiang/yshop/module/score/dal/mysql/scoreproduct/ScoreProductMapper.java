@@ -19,6 +19,10 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 public interface ScoreProductMapper extends BaseMapperX<ScoreProductDO> {
 
+    default ScoreProductDO lockById(Long id) {
+        return selectOne(new LambdaQueryWrapperX<ScoreProductDO>().eq(ScoreProductDO::getId, id).last("FOR UPDATE"));
+    }
+
     default PageResult<ScoreProductDO> selectPage(ScoreProductPageReqVO reqVO) {
         return selectPage(reqVO, new LambdaQueryWrapperX<ScoreProductDO>()
                 .eqIfPresent(ScoreProductDO::getTitle, reqVO.getTitle())
@@ -55,7 +59,7 @@ public interface ScoreProductMapper extends BaseMapperX<ScoreProductDO> {
      * @return
      */
     @Update("update yshop_score_product set stock=stock-#{num}, sales=sales+#{num}" +
-            " where id=#{productId} and stock >= #{num}")
+            " where id=#{productId} and deleted=0 and is_switch=1 and stock >= #{num} and sales <= 2147483647-#{num}")
     int decStockIncSales(@Param("num") Integer num, @Param("productId") Long productId);
 
 }

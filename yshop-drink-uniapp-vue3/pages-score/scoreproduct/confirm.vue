@@ -38,87 +38,110 @@
 				<text class="font-size-medium">积分抵扣</text>
 				<text class="font-size-medium">{{ product.score }}</text>
 			</view>
-			<view class="text-right font-size-lg mt-5 text-color-assist">合计:<text class="font-size-medium text-color-base ">¥{{ product.score }}</text></view>
+			<view class="text-right font-size-lg mt-5 text-color-assist">本次消耗 <text class="font-size-medium text-color-base ">{{ product.score }} 积分</text></view>
 		</view>
 	</view>
+    <view v-if="feedback" class="px-2 mt-2 score-product-confirm__feedback" role="status">{{ feedback }}</view>
+    <view v-if="submissionState === 'unknown'" class="px-2 mt-2" @click="viewOrders">查看兑换记录（确认原兑换结果后再发起新兑换）</view>
 	<view class="fixed-bottom flex justify-between align-center bg-white ">
-		<view class="mx-2 ont-weight-light">合计:<text class="text-danger">￥{{ product.score }}积分</text></view>
-		<view><uv-button type="warning" :color="scoreProductAccent" :customStyle="customStyle" size="large" text="立即兑换" @click="submit"></uv-button></view>
+		<view class="mx-2 ont-weight-light">本次消耗 <text class="text-danger">{{ product.score }} 积分</text></view>
+		<view><uv-button class="score-product-confirm__submit" type="warning" :color="scoreProductAccent" :customStyle="customStyle" size="large" :text="buttonText" :disabled="submissionState === 'submitting' || submissionState === 'success' || recoveryBlocked" :loading="submissionState === 'submitting'" @click="submit"></uv-button></view>
 	</view>
 	<uv-toast ref="uToast" />
 </template>
 
 <script setup>
-import {
-  ref,
-  computed,
-  getCurrentInstance
-} from 'vue'
-import { onReachBottom,onLoad,onPullDownRefresh} from '@dcloudio/uni-app'
-import {
-  scoreShopExchange,
-  scoreShopDetail
-} from '@/api/score'
+import { ref, computed, getCurrentInstance } from 'vue'
+import { onLoad, onShow } from '@dcloudio/uni-app'
+import { scoreShopExchange } from '@/api/score'
+import { createScoreSubmission } from '@/utils/score-submission.mjs'
 import cookie from '@/utils/cookie'
 import { useMainStore } from '@/store/store'
 import { storeToRefs } from 'pinia'
-const { proxy } = getCurrentInstance();
+const { proxy } = getCurrentInstance()
 const main = useMainStore()
-const { address,isLogin} = storeToRefs(main)
-
-const title = ref("确认订单")
-const product = ref({})
-
+const { address: selectedAddress, member, isLogin } = storeToRefs(main)
+const title = ref('确认订单')
+const selectedProduct = ref({})
+const submissionState = ref('ready')
+const feedback = ref('')
+const recoveryBlocked = ref(false)
+const originalIntent = ref(null)
+let submission, activeMember
+const locked = computed(() => ['submitting','unknown'].includes(submissionState.value))
+const product = computed(() => locked.value && originalIntent.value?.display?.product || selectedProduct.value)
+const address = computed(() => locked.value && originalIntent.value?.display?.address || selectedAddress.value)
 const scoreProductAccent = '#ffcc00'
-
-const customStyle = computed(() => {
-	return {
-		paddingLeft: '60rpx',
-		paddingRight: '60rpx'
-	}
-})
-
+const customStyle = computed(() => ({paddingLeft:'60rpx',paddingRight:'60rpx'}))
+const buttonText = computed(() => ({ready:'立即兑换',submitting:'兑换提交中',unknown:'原请求重试',failed:'重试兑换',success:'兑换成功'})[submissionState.value])
+const updateView = () => {
+  submissionState.value = submission.state
+  feedback.value = submission.message
+  originalIntent.value = submission.intent
+}
+const syncMember = () => {
+  if (!isLogin.value || !member.value?.id) {
+    submission = null
+    activeMember = null
+    originalIntent.value = null
+    submissionState.value = 'ready'
+    recoveryBlocked.value = true
+    feedback.value = '请登录后兑换'
+    return
+  }
+  const uid = String(member.value.id)
+  if (uid === activeMember && submission) return
+  activeMember = uid
+  recoveryBlocked.value = false
+  try {
+    submission = createScoreSubmission({storage:uni,memberId:uid,send:scoreShopExchange,onChange:()=> {
+      if (String(member.value?.id) === uid) updateView()
+    }})
+    updateView()
+  } catch {
+    submission = null
+    submissionState.value = 'unknown'
+    originalIntent.value = null
+    recoveryBlocked.value = true
+    feedback.value = '原兑换记录需要确认，请先查看兑换记录，勿重复兑换'
+  }
+}
 onLoad(() => {
-	console.debug('[checkout] address selected:', !!address.value?.id)
-	if(!isLogin.value) {
-		uni.navigateTo({url: '/pages-user/login/login'})
-	}
-	product.value = cookie.get('score_product')
-	
+  selectedProduct.value = cookie.get('score_product') || {}
+  syncMember()
+  if (!isLogin.value) uni.navigateTo({url:'/pages-user/login/login'})
 })
-
-// 选择地址
+onShow(syncMember)
+const viewOrders = () => uni.navigateTo({url:'/pages-score/scoreproduct/order'})
 const chooseAddress = () => {
-	uni.navigateTo({
-		url: '/pages-user/address/address?is_choose=true&scene=scoreShop'
-	})
+  if (locked.value) {
+    proxy.$refs.uToast.show({message:'请先确认原兑换结果，当前请求地址已保留',type:'warning'})
+    return
+  }
+  uni.navigateTo({url:'/pages-user/address/address?is_choose=true&scene=scoreShop'})
 }
-
-// 提交
-const submit = async() => {
-	if (!address.value.id) {
-		proxy.$refs.uToast.show({
-			message: '请选择收货地址',
-			type: 'warning',
-		})
-		return
-	}
-	let data = await scoreShopExchange({
-		productId: product.value.id,
-		addressId: address.value.id,
-		num: 1
-	})
-
-	if (data) {
-		cookie.remove('score_product')
-		setTimeout(function() {
-			uni.navigateTo({
-				url: '/pages-score/scoreproduct/order'
-			})
-		}, 1000)
-	}
+const submit = async () => {
+  syncMember()
+  if (!submission || recoveryBlocked.value || ['submitting','success'].includes(submissionState.value)) return
+  const current = submission
+  const uid = activeMember
+  try {
+    // Unknown requests always replay their persisted snapshot, even if page caches changed.
+    if (!locked.value) current.begin({productId:product.value.id,addressId:address.value?.id,num:1},
+      {product:product.value,address:address.value})
+    const result = await current.submit()
+    if (result === true && String(member.value?.id) === uid && current === submission) {
+      cookie.remove('score_product')
+      uni.showToast({title:'兑换成功',icon:'success'})
+      setTimeout(viewOrders,1000)
+    }
+  } catch (error) {
+    if (String(member.value?.id) !== uid || current !== submission) return
+    if (error?.message === 'SCORE_PARAM_INVALID') feedback.value = '请选择商品和收货地址'
+    else if (error?.message === 'UNRESOLVED_SCORE_INTENT') feedback.value = '请先确认原兑换结果，不能更换本次请求'
+    else if (!current.message) feedback.value = '暂时无法保存兑换请求，请稍后重试'
+  }
 }
-
 </script>
 
 <style lang="scss" scoped>

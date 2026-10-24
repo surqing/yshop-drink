@@ -86,6 +86,9 @@ public interface AppStoreOrderService extends IService<StoreOrderDO> {
      */
     void takeOrder(String orderId,Long uid);
 
+    /** Versioned pickup collection; delivery still follows its existing receipt path. */
+    void takeOrder(String orderId, Long uid, Integer expectedVersion, String requestKey);
+
     /**
      * 申请退款
      * @param explain 退款备注

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Portable controlled gate: own MySQL/Redis/TLS, no pre-existing private services."""
-import argparse,json,os,secrets,subprocess,sys,time,uuid
+import argparse,json,os,re,secrets,subprocess,sys,time,uuid
 from pathlib import Path
 from evidence import Evidence,execute,manifest,source_identity
 from owned_resources import remove_owned,failed_report
@@ -13,7 +13,7 @@ def main():
     owner=uuid.uuid4().hex;mysql='yshop-quality-heavy-'+owner;redis=mysql+'-redis'
     identity=source_identity();env=os.environ.copy();steps=[]
     report={**identity,'runId':owner,'result':'FAIL','cleanup':'NOT_RUN','steps':steps,
-            'selectedScope':a.scope,'notSelected':[] if a.scope=='full' else [{'name':n,'status':'NOT_RUN'} for n in ['mysql-business','mysql-financial','mysql-auth','mysql-member-identity','redis']],
+            'selectedScope':a.scope,'notSelected':[] if a.scope=='full' else [{'name':n,'status':'NOT_RUN'} for n in ['mysql-business','mysql-financial','mysql-auth','mysql-member-identity','mysql-score','mysql-printer','redis']],
             'startedAt':time.time(),'scope':'owned Docker MySQL/Redis/auth/synthetic HTTPS; GUI/Mini excluded',
             'paymentRequests':{'value':0,'evidence':'DECLARED_SYNTHETIC_TRANSPORT_ONLY','globalNetworkMeasured':False}}
     def private(name,text):
@@ -70,6 +70,38 @@ def main():
         e=r.get('evidence',{})
         if e.get('tests')!=expected or not e.get('exactNamesChecked'):raise RuntimeError('MEMBER_IDENTITY_CASES_MISSING')
         return {'tests':expected,'cleanup':'PASS','runId':r['runId']}
+    def score_report():
+        r=json.loads((root/'score/report.json').read_text())
+        expected={k:v for k,v in manifest(REPO).items() if k.rsplit('.',1)[-1] in {'ScoreOrderAdminUpdateDatabaseTest','ScoreOrderDatabaseTest','ScoreReceiptConcurrencyDatabaseTest','ScoreSubmissionDatabaseTest'}}
+        if (len(expected)!=4 or r.get('result')!='PASS' or r.get('cleanup')!='PASS'
+            or r.get('complete') is not True or r.get('sourceUnchanged') is not True
+            or not re.fullmatch('[a-f0-9]{32}',r.get('runId',''))
+            or r.get('owner')!=r.get('runId') or any(r.get(k)!=v for k,v in identity.items())):
+            raise RuntimeError('SCORE_REPORT_INVALID')
+        evidence=r.get('evidence',{})
+        if (evidence.get('cases')!=expected or not evidence.get('exactNamesChecked')
+            or any(evidence.get(k)!=v for k,v in identity.items())):
+            raise RuntimeError('SCORE_CASES_MISSING')
+        resources=r.get('resources',{})
+        if resources.get('ownershipChecked') is not True or resources.get('containersRemoved')!=1:
+            raise RuntimeError('SCORE_CLEANUP_REQUIRED')
+        return {'tests':evidence['tests'],'cleanup':'PASS','runId':r['runId']}
+    def printer_report():
+        r=json.loads((root/'printer/report.json').read_text())
+        expected={k:v for k,v in manifest(REPO).items() if k.rsplit('.',1)[-1] in {'PrinterDatabaseTest','PrinterMigrationDatabaseTest'}}
+        if (len(expected)!=2 or r.get('result')!='PASS' or r.get('cleanup')!='PASS'
+            or r.get('complete') is not True or r.get('sourceUnchanged') is not True
+            or not re.fullmatch('[a-f0-9]{32}',r.get('runId','')) or r.get('owner')!=r.get('runId')
+            or any(r.get(k)!=v for k,v in identity.items())):
+            raise RuntimeError('PRINTER_REPORT_INVALID')
+        evidence=r.get('evidence',{})
+        if (evidence.get('cases')!=expected or not evidence.get('exactNamesChecked')
+            or any(evidence.get(k)!=v for k,v in identity.items())):
+            raise RuntimeError('PRINTER_CASES_MISSING')
+        resources=r.get('resources',{})
+        if resources.get('ownershipChecked') is not True or resources.get('containersRemoved')!=1:
+            raise RuntimeError('PRINTER_CLEANUP_REQUIRED')
+        return {'tests':evidence['tests'],'cleanup':'PASS','runId':r['runId']}
     try:
         if os.getuid()==0:raise RuntimeError('NONROOT_TEST_LAUNCHER_REQUIRED')
         pw=secrets.token_hex(24);rpw=secrets.token_hex(24)
@@ -95,10 +127,12 @@ def main():
         redis_config=private('redis.properties','url=redis://127.0.0.1:'+rbind['HostPort']+'\npassword='+rpw+'\n')
         env.update(YSHOP_COUPON_REDIS_ACCEPTANCE='true',YSHOP_COUPON_REDIS_CONFIG=str(redis_config))
         if a.scope=='full':
-            command('mysql-business',[sys.executable,'tests/business/mysql-acceptance.py','--coupon'],lambda:acceptance_log('mysql-business',{'OrderingDatabaseTest','CatalogDatabaseTest','CatalogEditingMysqlAcceptance','CouponDatabaseTest'}))
+            command('mysql-business',[sys.executable,'tests/business/mysql-acceptance.py','--coupon'],lambda:acceptance_log('mysql-business',{'OrderingDatabaseTest','OrderFulfillmentDatabaseTest','AppOrderTakeCompatibilityTest','StoreOrderStatisticsDatabaseTest','CatalogDatabaseTest','CatalogEditingMysqlAcceptance','CouponDatabaseTest'}))
             command('mysql-financial',[sys.executable,'tests/payment/mysql-acceptance.py','--coupon'],lambda:acceptance_log('mysql-financial',{'PaymentDatabaseTest','WalletDatabaseTest','PaymentAttemptDatabaseTest','WechatV3DatabaseTest','PaymentLiveReadinessDatabaseTest','LiveMerchantPreflightDatabaseTest','PaymentCancellationDatabaseTest','CouponPaymentDatabaseTest'}))
             command('mysql-auth',[sys.executable,'tests/quality/auth-mysql.py','--output',str(root/'auth')],auth_report)
             command('mysql-member-identity',[sys.executable,'tests/quality/member-score-mysql.py','--output',str(root/'member-identity')],identity_report)
+            command('mysql-score',[sys.executable,'tests/score/mysql-acceptance.py','--output',str(root/'score')],score_report)
+            command('mysql-printer',[sys.executable,'tests/printer/mysql-acceptance.py','--output',str(root/'printer')],printer_report)
             ev=Evidence(root/'redis-evidence');selected={k:v for k,v in manifest(REPO).items() if k.endswith('.CouponCodeRedisAcceptanceTest')}
             from acceptance_support import maven_command
             cmd=maven_command(REPO.parent)+['-f','yshop-drink-boot3/yshop-module-mall/yshop-module-order-biz/pom.xml','-Pmysql-acceptance','test','-Dtest=CouponCodeRedisAcceptanceTest','-Dsurefire.failIfNoSpecifiedTests=true']+ev.arguments(selected)

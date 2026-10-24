@@ -20,11 +20,18 @@ REPO=Path(__file__).resolve().parents[2]
 # Every operator is explicit and must match exactly once. Redundant defence removal can survive;
 # this is reported rather than counted as a kill or hidden from the denominator.
 OPERATORS=[
+ ('score-quantity-total', 'AppScoreOrderServiceImpl.java', 'Math.multiplyExact(scoreProductDO.getScore(), quantity)', 'scoreProductDO.getScore()', 'ScoreOrderDatabaseTest#quantityTwoChargesTotalAndRecordsPostDebitBalance'),
+ ('score-stock-rowcount', 'AppScoreOrderServiceImpl.java', 'if (scoreProductMapper.decStockIncSales(quantity, productId) != 1)', 'if (scoreProductMapper.decStockIncSales(quantity, productId) < 0)', 'ScoreOrderDatabaseTest#zeroAffectedRowsAtEveryWriteRollBackEverything'),
+ ('score-listing-check', 'AppScoreOrderServiceImpl.java', '!Integer.valueOf(1).equals(scoreProductDO.getIsSwitch())', 'false', 'ScoreOrderDatabaseTest#unavailableProductRejectsWithoutEffects'),
+ ('score-ledger-after-balance', 'AppScoreOrderServiceImpl.java', 'cost, after, totalScore +', 'cost, before, totalScore +', 'ScoreOrderDatabaseTest#quantityTwoChargesTotalAndRecordsPostDebitBalance'),
+ ('score-request-unique', '2026-10-19-score-submission.sql', 'PRIMARY KEY(uid,idempotency_key)', 'KEY idx_score_submission_replay(uid,idempotency_key)', 'ScoreSubmissionDatabaseTest#sameIntentRepeatedReturnsOriginalSuccessWithoutSecondMovement'),
+ ('pickup-contact-digest', 'OrderPlacementService.java', 'List.of("order-contact-v2", canonical, contact)', 'List.of("order-contact-v2", canonical, "")', 'OrderingDatabaseTest#changingPickupContactWithSameKeyConflictsWithoutAnotherOrder'),
+ ('printer-get-readonly', 'PrinterService.java', 'return new StatusResult(d.state,d.stateCheckedAt,d.lastError);', 'return status(id);', 'PrinterDatabaseTest#cachedStatusQueryNeverPreparesProviderOrChangesDatabase'),
  ('member-completion-grant-bypass', 'MemberAuthServiceImpl.java', 'if(!MemberIdentityPolicy.complete(user))throw MemberIdentityPolicy.completionRequired();', '/* mutation: incomplete SMS grants */;', 'MemberAuthServiceTest#phoneOnlySmsIsRejectedBeforeTokenGrant'),
  ('member-incomplete-token-bypass', 'OAuth2PrincipalMapper.java', 'THEN status ELSE NULL END', 'THEN status ELSE status END', 'MemberIdentityMysqlAcceptanceTest'),
  ('member-client-openid-principal', 'MemberAuthServiceImpl.java', 'var hint=userMapper.selectByMobile(phone);\n            if(hint==null)throw MemberIdentityPolicy.completionRequired();\n            MemberUserDO user=requireEnabled(userMapper.lockById(hint.getId()));\n            if(!phone.equals(user.getMobile()))throw MemberIdentityPolicy.conflict();', 'var hint=userMapper.selectByProvider(request.getOpenid(),true);\n            if(hint==null)throw MemberIdentityPolicy.completionRequired();\n            MemberUserDO user=requireEnabled(userMapper.lockById(hint.getId()));', 'MemberIdentityMysqlAcceptanceTest'),
  ('member-stale-mobile-write','MemberUserDO.java','@TableField(updateStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)\n    private String mobile;','@TableField\n    private String mobile;','MemberIdentityMysqlAcceptanceTest'),
- ('receipt-transaction-omission','AppStoreOrderServiceImpl.java','@Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, rollbackFor = Exception.class)\n    public void takeOrder','/* mutation: omitted receipt transaction */\n    public void takeOrder','MemberIdentityMysqlAcceptanceTest'),
+ ('receipt-transaction-omission','AppStoreOrderServiceImpl.java','@Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, rollbackFor = Exception.class)\n    public void takeOrder(String orderId, Long uid)','/* mutation: omitted receipt transaction */\n    public void takeOrder(String orderId, Long uid)','MemberIdentityMysqlAcceptanceTest'),
  ('auth-admin-reenable-revocation','AdminUserServiceImpl.java','oauth2Tokens.revokeUserTokens(id, co.yixiang.yshop.framework.common.enums.UserTypeEnum.ADMIN.getValue());','/* mutation: omitted admin family revocation */;','OAuth2LifecycleDatabaseTest'),
  ('inventory-repeat-release','OrderPlacementService.java','> 0) return;','> 0 && false) return;','OrderingDatabaseTest'),
  ('cross-store-price','OrderPlacementService.java','BigDecimal basePrice=money(sku.get("price"));','BigDecimal basePrice=money(jdbc.queryForObject("SELECT v.price FROM yshop_store_product_attr_value v JOIN yshop_store_product p ON p.id=v.product_id WHERE p.shop_id<>? AND p.deleted=0 ORDER BY v.id LIMIT 1", Object.class, shopId));','OrderingDatabaseTest'),
@@ -77,7 +84,7 @@ def scoped_cases(registry, selectors):
         name=matches[0]
         cases={k:v for k,v in registry[name].items() if not method or k.split('(',1)[0].split('[',1)[0]==method}
         if not cases:raise RuntimeError('MUTATION_METHOD_NOT_REGISTERED')
-        selected[name]=cases
+        selected.setdefault(name,{}).update(cases)
     return selected
 
 
@@ -85,11 +92,22 @@ def classify_mutation(failures, errors):
     # Runtime initialization/SQL/transport errors invalidate attribution even if other tests assert.
     return 'ASSERTION_FAILURE' if failures > 0 and errors == 0 else 'INCONCLUSIVE'
 
+MUTATION_ENV_OVERRIDES = (
+    'YSHOP_ACCEPTANCE_CONFIG', 'YSHOP_ORDERING_ACCEPTANCE_CONFIG',
+    'YSHOP_INGRESS_BASE_URL', 'YSHOP_COUPON_REDIS_ACCEPTANCE',
+    'YSHOP_SCORE_ACCEPTANCE_CONFIG', 'YSHOP_SCORE_ACCEPTANCE_H2',
+    'PRINTER_ACCEPTANCE_CONFIG', 'YSHOP_PRINTER_ACCEPTANCE_CONFIG',
+)
+
+def mutation_environment(source=None):
+    """Remove caller-owned external acceptance targets from isolated mutation runs."""
+    env=dict(os.environ if source is None else source)
+    for key in MUTATION_ENV_OVERRIDES:env.pop(key,None)
+    return env
+
 def run(output, only=None):
     output.mkdir(parents=True,exist_ok=False,mode=0o700)
-    env=os.environ.copy()
-    for key in ['YSHOP_ACCEPTANCE_CONFIG','YSHOP_ORDERING_ACCEPTANCE_CONFIG','YSHOP_INGRESS_BASE_URL','YSHOP_COUPON_REDIS_ACCEPTANCE']:
-        env.pop(key,None)
+    env=mutation_environment()
     operators=[x for x in OPERATORS if only is None or x[0] in only]
     if not operators:raise RuntimeError('NO_MUTATIONS_SELECTED')
     registry=manifest(REPO)
@@ -130,6 +148,8 @@ def run(output, only=None):
             selected=scoped_cases(registry,suites)
             owners={str(f.parents[len(Path('src/test/java/'+k.replace('.', '/')+'.java').parts)-1].relative_to(boot)) for k in selected for f in boot.glob('**/src/test/java/'+k.replace('.', '/')+'.java')}
             if not owners:raise RuntimeError('NO_TEST_OWNERS')
+            if any(selector.startswith(('ScoreOrderDatabaseTest','ScoreSubmissionDatabaseTest','PrinterDatabaseTest')) for selector in suites):
+                owners={'yshop-server'}
             command=[maven,'-pl',','.join(sorted(owners)),'-am','test','-Dtest='+','.join(suites),'-Dsurefire.failIfNoSpecifiedTests=false']
             if env.get('YSHOP_MAVEN_REPOSITORY'):command+=['-Dmaven.repo.local='+env['YSHOP_MAVEN_REPOSITORY']]
             # failIfNoSpecifiedTests=false applies ONLY to upstream reactor modules with no selected
@@ -158,7 +178,7 @@ def run(output, only=None):
         if baseline!='PASS':raise RuntimeError('ORIGINAL_TEST_BASELINE_FAILED')
         for name,filename,before,after,suite in operators:
             selector=suite+('#'+TARGET_METHODS[name] if name in TARGET_METHODS else '')
-            files=list(boot.glob('**/src/main/java/**/'+filename))
+            files=list(boot.glob('sql/migrations/'+filename)) if filename.endswith('.sql') else list(boot.glob('**/src/main/java/**/'+filename))
             if len(files)!=1:
                 results.append({'mutation':name,'result':'INAPPLICABLE','reason':'SOURCE_NOT_UNIQUE'});continue
             file=files[0];original=file.read_text();count=original.count(before)

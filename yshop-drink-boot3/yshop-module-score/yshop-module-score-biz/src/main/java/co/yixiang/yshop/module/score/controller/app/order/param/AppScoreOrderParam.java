@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * <p>
@@ -28,8 +29,12 @@ public class AppScoreOrderParam {
     private String addressId;
 
     @Schema(description = "数量", required = true)
+    @NotBlank(message = "请输入兑换数量")
+    @Pattern(regexp = "[0-9]+", message = "兑换数量必须为正整数")
     private String num;
 
-
-
+    @Schema(description = "本次兑换请求键", required = true)
+    @NotBlank(message = "请更新小程序后重试兑换")
+    @Pattern(regexp = "[A-Za-z0-9_-]{16,64}", message = "兑换请求键无效，请更新小程序后重试")
+    private String idempotencyKey;
 }

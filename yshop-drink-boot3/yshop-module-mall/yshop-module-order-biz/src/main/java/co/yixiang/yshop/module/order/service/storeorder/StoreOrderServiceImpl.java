@@ -30,6 +30,7 @@ import co.yixiang.yshop.module.order.enums.OrderLogEnum;
 import co.yixiang.yshop.module.order.enums.PayTypeEnum;
 import co.yixiang.yshop.module.order.enums.UpdateOrderEnum;
 import co.yixiang.yshop.module.order.service.storeorderstatus.StoreOrderStatusService;
+import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService;
 import co.yixiang.yshop.module.product.service.storeproduct.AppStoreProductService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.egzosn.pay.common.bean.RefundOrder;
@@ -83,6 +84,8 @@ public class StoreOrderServiceImpl implements StoreOrderService {
     @Resource
     private AppStoreOrderService appStoreOrderService;
     @Resource
+    private OrderFulfillmentService orderFulfillmentService;
+    @Resource
     private MemberUserService userService;
     @Resource
     private WeixinNoticeProducer weixinNoticeProducer;
@@ -113,75 +116,59 @@ public class StoreOrderServiceImpl implements StoreOrderService {
     }
 
     @Override
+    @Transactional(isolation = org.springframework.transaction.annotation.Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public void updateStoreOrder(StoreOrderUpdateReqVO updateReqVO) {
-        // 校验存在
-        // 更新
-        StoreOrderDO updateObj2 = storeOrderMapper.selectById(updateReqVO.getId());
-        if (updateObj2 == null) throw exception(STORE_ORDER_NOT_EXISTS);
-        StoreOrderDO updateObj = StoreOrderDO.builder().id(updateObj2.getId()).uid(updateObj2.getUid())
-                .orderId(updateObj2.getOrderId()).orderType(updateObj2.getOrderType()).deliveryName(updateReqVO.getDeliveryName())
-                .deliveryId(updateReqVO.getDeliveryId()).deliveryType(updateReqVO.getDeliveryType())
+        // A stale admin page is only an ID hint; every write is based on the current locked row.
+        StoreOrderDO current = storeOrderMapper.lockAdminOrder(updateReqVO.getId());
+        if (current == null) throw exception(STORE_ORDER_NOT_EXISTS);
+        StoreOrderDO updateObj = StoreOrderDO.builder().id(current.getId())
+                .deliveryName(updateReqVO.getDeliveryName()).deliveryId(updateReqVO.getDeliveryId())
+                .deliveryType(updateReqVO.getDeliveryType())
                 .remark(updateReqVO.getRemark()).build();
-        if (UpdateOrderEnum.ORDER_SEND.getValue().equals(updateReqVO.getUpdateType())
-                && (!Integer.valueOf(1).equals(updateObj2.getPaid()) || !Integer.valueOf(0).equals(updateObj2.getRefundStatus())))
-            throw exception(ORDER_STATUS_ERROR);
+        if (UpdateOrderEnum.ORDER_SEND.getValue().equals(updateReqVO.getUpdateType())) {
+            if (!Integer.valueOf(1).equals(current.getPaid())
+                    || !Integer.valueOf(0).equals(current.getRefundStatus())
+                    || !Integer.valueOf(0).equals(current.getIsSystemDel())) {
+                throw exception(ORDER_STATUS_ERROR);
+            }
 
-        //发货自取模式 直接收货
-        if(UpdateOrderEnum.ORDER_SEND.getValue().equals(updateReqVO.getUpdateType())
-                && updateObj.getOrderType().equals(OrderLogEnum.ORDER_TAKE_IN.getValue())){
-           this.takeStoreOrder(updateObj.getId());
-            //todo 异步打印小票 商业版本才有 官网购买：https://www.yixiang.co
+            // Legacy pickup completion goes through the same READY-only transition service.
+            if (OrderLogEnum.ORDER_TAKE_IN.getValue().equals(current.getOrderType())) {
+                orderFulfillmentService.legacyStaffTake(current.getId());
+                return;
+            }
 
-           return;
-        }
-        //发货-外卖模式
-        if(UpdateOrderEnum.ORDER_SEND.getValue().equals(updateReqVO.getUpdateType())
-                && updateObj.getOrderType().equals(OrderLogEnum.ORDER_TAKE_OUT.getValue())){
-            updateObj.setStatus(OrderInfoEnum.STATUS_1.getValue());
-            //todo 异步打印小票 商业版本才有 官网购买：https://www.yixiang.co
+            // Delivery may only advance from the initial paid state. The conditional write
+            // repeats the predicate so stale or concurrent requests cannot reopen an order.
+            if (!OrderLogEnum.isDeliveryOrderType(current.getOrderType())
+                    || !OrderInfoEnum.STATUS_0.getValue().equals(current.getStatus())) {
+                throw exception(ORDER_STATUS_ERROR);
+            }
+            String deliveryName = updateReqVO.getDeliveryName() != null ? updateReqVO.getDeliveryName() : current.getDeliveryName();
+            String deliveryId = updateReqVO.getDeliveryId() != null ? updateReqVO.getDeliveryId() : current.getDeliveryId();
+            String deliveryType = updateReqVO.getDeliveryType() != null ? updateReqVO.getDeliveryType() : current.getDeliveryType();
+            String remark = updateReqVO.getRemark() != null ? updateReqVO.getRemark() : current.getRemark();
+            if (storeOrderMapper.markDispatched(current.getId(), current.getUid(), deliveryName,
+                    deliveryId, deliveryType, remark) != 1) {
+                throw exception(ORDER_STATUS_ERROR);
+            }
+            storeOrderStatusService.create(current.getUid(), current.getId(), OrderLogEnum.DELIVERY_GOODS.getValue(),
+                    "已发货 快递公司：" + deliveryName + "快递单号：" + deliveryId);
 
-        }
-        //堂食模式
-        if(UpdateOrderEnum.ORDER_SEND.getValue().equals(updateReqVO.getUpdateType())
-                && updateObj.getOrderType().equals(OrderLogEnum.ORDER_TAKE_DESK.getValue())){
-
-            //todo 异步打印小票 商业版本才有 官网购买：https://www.yixiang.co
-
-        }
-        storeOrderMapper.updateById(updateObj);
-
-        if(UpdateOrderEnum.ORDER_SEND.getValue().equals(updateReqVO.getUpdateType())){
-            //增加状态
-            storeOrderStatusService.create(updateObj.getUid(),updateObj.getId(), OrderLogEnum.DELIVERY_GOODS.getValue(),
-                    "已发货 快递公司：" + updateObj.getDeliveryName() + "快递单号：" + updateObj.getDeliveryId());
-
-            MemberUserDO userInfo = userService.getUser(updateObj.getUid());
-            //发送消息队列进行推送消息
-//            if(userInfo.getLoginType().equals(AppFromEnum.ROUNTINE.getValue())){
-//                weixinNoticeProducer.sendNoticeMessage(updateObj.getUid(), WechatTempateEnum.DELIVERY_SUCCESS.getValue(),
-//                        WechatTempateEnum.SUBSCRIBE.getValue(),updateObj.getOrderId(),
-//                        updateObj.getPayPrice().toString(),"",updateObj.getDeliveryName(),
-//                        updateObj.getDeliveryId());
-//            }else if(userInfo.getLoginType().equals(AppFromEnum.WECHAT.getValue())){
-//                weixinNoticeProducer.sendNoticeMessage(updateObj.getUid(),WechatTempateEnum.PAY_SUCCESS.getValue(),
-//                        WechatTempateEnum.TEMPLATES.getValue(),updateObj.getOrderId(),
-//                        updateObj.getPayPrice().toString(),"",updateObj.getDeliveryName(),
-//                        updateObj.getDeliveryId());
-//            }
-
-            //延时队列 1小时候自动收货
+            // Preserve the existing auto-confirm schedule, but enqueue only after a real transition.
             try {
                 RBlockingDeque<Object> blockingDeque = redissonClient.getBlockingDeque(ShopConstants.REDIS_ORDER_OUTTIME_UNCONFIRM);
                 RDelayedQueue<Object> delayedQueue = redissonClient.getDelayedQueue(blockingDeque);
-                delayedQueue.offer(OrderMsg.builder().orderId(updateObj.getOrderId()).build(), ShopConstants.ORDER_OUTTIME_UNCONFIRM, TimeUnit.MINUTES);
+                delayedQueue.offer(OrderMsg.builder().orderId(current.getOrderId()).build(), ShopConstants.ORDER_OUTTIME_UNCONFIRM, TimeUnit.MINUTES);
                 String s = TimeUnit.SECONDS.toSeconds(ShopConstants.ORDER_OUTTIME_UNCONFIRM) + "分钟";
                 log.info("添加延时队列成功 ，延迟时间：" + s);
             } catch (Exception e) {
                 log.error(e.getMessage());
             }
-
+            return;
         }
-
+        // Ordinary logistics/remark edits never rewrite order state or trigger rewards/queues.
+        storeOrderMapper.updateById(updateObj);
     }
 
     @Override
@@ -208,6 +195,11 @@ public class StoreOrderServiceImpl implements StoreOrderService {
     @Override
     public void takeStoreOrder(Long id) {
         StoreOrderDO storeOrderDO = storeOrderMapper.selectById(id);
+        if (storeOrderDO == null) throw exception(STORE_ORDER_NOT_EXISTS);
+        if (OrderLogEnum.ORDER_TAKE_IN.getValue().equals(storeOrderDO.getOrderType())) {
+            orderFulfillmentService.legacyStaffTake(id);
+            return;
+        }
         appStoreOrderService.takeOrder(storeOrderDO.getOrderId(),storeOrderDO.getUid());
     }
 
@@ -233,6 +225,7 @@ public class StoreOrderServiceImpl implements StoreOrderService {
 
         storeOrderRespVO.setStatusStr(this.handleOrderStatus(storeOrderRespVO.getPaid()
                 ,storeOrderRespVO.getStatus(),storeOrderRespVO.getRefundStatus(),storeOrderRespVO.getIsSystemDel()));
+        storeOrderRespVO.setFulfillmentTimeline(orderFulfillmentService.history(id));
         return storeOrderRespVO;
     }
 

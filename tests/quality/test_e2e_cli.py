@@ -10,6 +10,15 @@ import unittest
 REPO = Path(os.environ.get('YSHOP_E2E_TEST_REPO', Path(__file__).resolve().parents[2]))
 
 class E2eCliTest(unittest.TestCase):
+    def test_order_fulfillment_suite_uses_the_separate_mysql_acceptance_gate(self):
+        quality_dir = str(REPO / 'tests/quality')
+        sys.path.insert(0, quality_dir)
+        try:
+            from run import CONDITIONAL
+            self.assertIn('OrderFulfillmentDatabaseTest', CONDITIONAL)
+        finally:
+            sys.path.remove(quality_dir)
+
     def test_complete_capability_blockage_is_not_business_failure(self):
         from e2e.runner import scenario_failure
         cases=[{'id':'a','status':'PASSED'},{'id':'b','status':'BLOCKED'}]
@@ -60,17 +69,23 @@ class E2eCliTest(unittest.TestCase):
         return subprocess.run([sys.executable, str(REPO/'tests/quality/run.py'), *arguments],
                               cwd=REPO, text=True, capture_output=True, timeout=20)
 
-    def test_local_lists_seven_mini_variants_without_creating_output(self):
+    def test_local_lists_registered_mini_variants_without_creating_output(self):
         with tempfile.TemporaryDirectory() as folder:
             output=Path(folder)/'must-not-exist'
             result=self.invoke('E2E','--profile','local','--list','--output',str(output))
             self.assertEqual(0,result.returncode,result.stderr)
             report=json.loads(result.stdout)
             self.assertEqual('local',report['profile'])
-            self.assertEqual(['auth-session','catalog-order','store-isolation','order-retry',
-                              'order-cancel','coupon-release','coupon-complete'],
+            self.assertEqual(['score-redemption','score-retry','printer-unknown','pickup-contact','auth-session','catalog-order','store-isolation','order-retry',
+                              'order-cancel','coupon-release','coupon-complete','pickup-fulfillment','store-statistics','order-print-jobs'],
                              [s['id'] for s in report['scenarios']])
-            self.assertTrue(all(s['variant']=='mini-admin' for s in report['scenarios']))
+            for scenario in report['scenarios']:
+                if scenario['id'] in ('printer-unknown','store-statistics','order-print-jobs'):
+                    self.assertEqual('api-admin',scenario['variant'])
+                    self.assertNotIn('mini',scenario['requiredCapabilities'])
+                else:
+                    self.assertEqual('mini-admin',scenario['variant'])
+                    self.assertIn('mini',scenario['requiredCapabilities'])
             self.assertFalse(output.exists())
 
     def test_ci_lists_api_variants_and_marks_mini_not_run(self):
@@ -78,13 +93,31 @@ class E2eCliTest(unittest.TestCase):
         self.assertEqual(0,result.returncode,result.stderr)
         report=json.loads(result.stdout)
         self.assertEqual('NOT_RUN',report['miniStatus'])
-        self.assertEqual(7,len(report['scenarios']))
+        self.assertEqual(14,len(report['scenarios']))
         self.assertTrue(all(s['variant']=='api-admin' for s in report['scenarios']))
+
+    def test_f3_recovery_order_and_quick_contracts_are_registered(self):
+        from e2e.registry import listing
+        checks=listing('ci','order-print-jobs')['scenarios'][0]['expectedCheckIds']
+        self.assertEqual(['unbound-order-waits-on-real-page','offline-device-waits-on-real-page','order-history-on-real-page',
+                          'unknown-refresh-readonly','recovery-confirmation-gate','unknown-recovery-audited',
+                          'manual-reprint-audited','printed-confirmation-closes-without-resend',
+                          'cross-store-print-denied','print-job-sql-audit'],checks)
+        self.assertLess(checks.index('unknown-recovery-audited'),checks.index('manual-reprint-audited'))
+        quick=json.loads((REPO/'tests/quality/quick-manifest.json').read_text())
+        self.assertEqual(10,quick['tests/quality/test_e2e_oracle_contract.py'])
+        self.assertEqual(10,quick['tests/quality/test_e2e_support.py'])
 
     def test_filtered_list_contains_only_requested_scenario(self):
         result=self.invoke('E2E','--profile','local','--scenario','order-retry','--list')
         self.assertEqual(0,result.returncode,result.stderr)
         self.assertEqual(['order-retry'],[s['id'] for s in json.loads(result.stdout)['scenarios']])
+        printer=self.invoke('E2E','--profile','local','--scenario','printer-unknown','--list')
+        self.assertEqual(0,printer.returncode,printer.stderr)
+        plan=json.loads(printer.stdout)
+        self.assertEqual('NOT_RUN',plan['miniStatus'])
+        self.assertEqual('backend-admin-subset',plan['scope'])
+        self.assertEqual('api-admin',plan['scenarios'][0]['variant'])
 
     def test_missing_official_tools_blocks_local_without_ci_fallback(self):
         with tempfile.TemporaryDirectory() as folder:

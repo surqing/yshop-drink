@@ -5,15 +5,18 @@ from pathlib import Path
 p=argparse.ArgumentParser();p.add_argument('--repo',default=str(Path(__file__).resolve().parents[2]));p.add_argument('--output',required=True);p.add_argument('--repeat',type=int,choices=range(1,11),default=2);a=p.parse_args()
 repo=Path(a.repo).resolve();sys.path.insert(0,str(repo/'tests/quality'))
 from evidence import source_identity
+from defect_contract import load_contract, assertion_fingerprints
 from backend_artifact import verify_artifact
 from loopback_ports import backend_pair
-identity=source_identity(repo);artifact=verify_artifact(repo/'yshop-drink-boot3/yshop-server/target/yshop-server.jar',repo/'.quality/backend-build.json',identity)
+identity=source_identity(repo);contract=load_contract(repo,identity);artifact=verify_artifact(repo/'yshop-drink-boot3/yshop-server/target/yshop-server.jar',repo/'.quality/backend-build.json',identity)
 root=Path(a.output).resolve()
 if root.is_relative_to(repo):raise RuntimeError('PRIVATE_OUTPUT_OUTSIDE_SOURCE_REQUIRED')
 root.mkdir(parents=True,mode=0o700,exist_ok=False);os.umask(0o077)
 runid=uuid.uuid4().hex;port=backend_pair();owned=root/'owned';base='http://127.0.0.1:'+str(port)
 report={**identity,'runId':runid,'startedAt':time.time(),'scope':'real HTTP and owned MySQL; synthetic members/points only','cases':[],'cleanup':'NOT_RUN','status':'INCONCLUSIVE','financialProviderRequests':{'value':0,'scope':'this loopback HTTP harness path guard only','globalNetworkMeasured':False},'testScriptSha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
 report['backendArtifactHash']=artifact['artifactHash']
+report['defectContract']=contract
+report['assertionFingerprints']=assertion_fingerprints(Path(__file__))
 log=(root/'launcher-private.log').open('w')
 child=subprocess.Popen([sys.executable,'tests/quality/business-backend.py','--output',str(owned),'--port',str(port),'--hold-for-device','900'],cwd=repo,env=os.environ.copy(),stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
 def save(): (root/'report.json').write_text(json.dumps(report,indent=2,ensure_ascii=False))
@@ -55,8 +58,12 @@ try:
  sql("INSERT INTO yshop_user_address(id,uid,real_name,address,phone,detail,create_time,tenant_id) VALUES(9101,101,'Synthetic A','Synthetic street A','13800000101','Unit A',NOW(),0),(9102,102,'Synthetic B','Synthetic street B','13800000102','Unit B',NOW(),0);")
  sql("INSERT INTO yshop_score_product(id,title,image,images,`desc`,score,stock,sales,is_switch) VALUES(9101,'Synthetic reward','','','Synthetic only',100,10,0,1);")
  def reset(stock=10,listed=1,points=1000):
+  if contract['scoreIdempotencyRequired']:sql('DELETE FROM yshop_score_submission WHERE uid=101')
   sql("DELETE FROM yshop_score_order WHERE product_id=9101; DELETE FROM yshop_user_bill WHERE uid=101 AND category='integral'; UPDATE yshop_score_product SET stock="+str(stock)+",sales=0,is_switch="+str(listed)+" WHERE id=9101; UPDATE yshop_user SET integral="+str(points)+" WHERE id=101;")
- def reward(num='1',address='9101'):return api('POST','/app-api/score-order/submit',{'productId':'9101','addressId':address,'num':num},token)
+ def reward(num='1',address='9101'):
+  payload={'productId':'9101','addressId':address,'num':num}
+  if contract['scoreIdempotencyRequired']:payload['idempotencyKey']=uuid.uuid4().hex
+  return api('POST','/app-api/score-order/submit',payload,token)
  def state(o,r):
   o.update(code=r['code'],orders=n('SELECT COUNT(*) FROM yshop_score_order WHERE product_id=9101'),stock=n('SELECT stock FROM yshop_score_product WHERE id=9101'),points=scalar('SELECT integral FROM yshop_user WHERE id=101'))
  def profile(o):
@@ -132,6 +139,7 @@ finally:
   report['cleanupReceipt']={'status':report['cleanup'],'runId':runid,'owner':report.get('owner'),**launch.get('resources',{}),'errors':[] if launch.get('cleanup')=='PASS' else ['OWNED_LAUNCHER_CLEANUP_FAILED']}
  report['sourceUnchanged']=source_identity(repo)==identity;report['endedAt']=time.time();report['complete']=True
  if report['cleanup']!='PASSED' or not report['sourceUnchanged']:report['status']='INCONCLUSIVE'
+ report['exitCode']=0 if report['status']=='PASSED' else 1
  save()
 print(json.dumps({'status':report['status'],'cases':len(report['cases']),'cleanup':report['cleanup'],'report':str(root/'report.json')}))
 sys.exit(0 if report['status']=='PASSED' else 1)

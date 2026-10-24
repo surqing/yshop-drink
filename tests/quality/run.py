@@ -16,7 +16,7 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 from evidence import Evidence, execute, manifest, workspace, source_identity
-from page_evidence import overall_status, status_of, browser_receipt
+from page_evidence import overall_status, status_of, browser_receipt, printer_browser_receipt
 
 REPO = Path(__file__).resolve().parents[2]
 BOOT = REPO / 'yshop-drink-boot3'
@@ -113,7 +113,10 @@ def discover_quick_suites():
     return paths
 
 
-CONDITIONAL = {'MemberIdentityMysqlAcceptanceTest','CouponCodeRedisAcceptanceTest','CallbackIngressEndToEndTest','CatalogEditingMysqlAcceptance'}
+# These suites belong to separate owned-database acceptance gates. In
+# particular, OrderFulfillmentDatabaseTest includes MySQL-only migration
+# assertions that are intentionally skipped by its generic H2 execution.
+CONDITIONAL = {'PrinterMigrationDatabaseTest','MemberIdentityMysqlAcceptanceTest','CouponCodeRedisAcceptanceTest','CallbackIngressEndToEndTest','CatalogEditingMysqlAcceptance','OrderFulfillmentDatabaseTest'}
 
 
 def source_digest():
@@ -203,15 +206,20 @@ class Runner:
             ev=Evidence(self.root/'java-evidence')
             cmd=[self.maven,'-Pquality-coverage','test','-Dtest='+','.join(k.rsplit('.',1)[-1] for k in expected),'-Dsurefire.failIfNoSpecifiedTests=true']
             if self.env.get('YSHOP_MAVEN_REPOSITORY'):cmd+=['-Dmaven.repo.local='+self.env['YSHOP_MAVEN_REPOSITORY']]
+            cwd=mod
+            if mod==BOOT/'yshop-server':
+                cmd[1:1]=['-pl','yshop-server','-am']
+                cmd=[arg.replace('-Dsurefire.failIfNoSpecifiedTests=true','-Dsurefire.failIfNoSpecifiedTests=false') for arg in cmd]
+                cwd=BOOT
             cmd+=ev.arguments(expected)+['-Djacoco.destFile='+str(ev.root/'coverage.exec')]
-            self.step('java-'+mod.name,cmd,mod,validator=lambda log,ev=ev:ev.validate(),diagnostic=ev.diagnostics)
+            self.step('java-'+mod.name,cmd,cwd,validator=lambda log,ev=ev:ev.validate(),diagnostic=ev.diagnostics)
 
     def quick(self):
         self.env['NODE_V8_COVERAGE']=str(self.root/'node-v8')
         expected=json.loads((REPO/'tests/quality/quick-manifest.json').read_text())
-        files=sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])
-        planned=[str(f.relative_to(REPO)) for f in sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs')])]
-        planned+=['tests/quality/test_merge_scope.py','tests/quality/test_e2e_acceptance.py','tests/quality/test_e2e_publish.py','tests/quality/test_e2e_support.py','tests/quality/test_e2e_environment.py','tests/quality/test_e2e_cli.py','tests/quality/test_e2e_contract.py','tests/quality/test_evidence.py','tests/quality/test_secret_guard.py','tests/quality/test_owned_resources.py','tests/quality/test_page_evidence.py','tests/smoke/test_secret_scan.py','tests/payment/prepayment-tools-test.py']
+        files=sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs'),*REPO.glob('tests/printer/*.test.mjs')])
+        planned=[str(f.relative_to(REPO)) for f in sorted([*REPO.glob('tests/*.test.mjs'),*REPO.glob('tests/business/*-test.mjs'),*REPO.glob('tests/printer/*.test.mjs')])]
+        planned+=['tests/quality/test_merge_scope.py','tests/quality/test_e2e_acceptance.py','tests/quality/test_e2e_publish.py','tests/quality/test_e2e_support.py','tests/quality/test_e2e_environment.py','tests/quality/test_e2e_cli.py','tests/quality/test_e2e_contract.py','tests/quality/test_e2e_oracle_contract.py','tests/quality/test_ingress.py','tests/quality/test_evidence.py','tests/quality/test_secret_guard.py','tests/quality/test_owned_resources.py','tests/quality/test_page_evidence.py','tests/smoke/test_secret_scan.py','tests/payment/prepayment-tools-test.py']
         require_suites(planned,expected,discover_quick_suites())
         for index,file in enumerate(files):
             def node_evidence(log):
@@ -220,7 +228,7 @@ class Runner:
                 require_count(counts['tests'],expected[str(file.relative_to(REPO))])
                 return counts
             self.step('node-'+str(index),[shutil.which('node') or 'node','--experimental-default-type=module','--test','--test-reporter=tap',str(file)],timeout=180,validator=node_evidence)
-        for index,file in enumerate([REPO/'tests/quality/test_merge_scope.py',REPO/'tests/quality/test_e2e_acceptance.py',REPO/'tests/quality/test_e2e_publish.py',REPO/'tests/quality/test_e2e_support.py',REPO/'tests/quality/test_e2e_environment.py',REPO/'tests/quality/test_e2e_cli.py',REPO/'tests/quality/test_e2e_contract.py',REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/quality/test_owned_resources.py',REPO/'tests/quality/test_page_evidence.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']):
+        for index,file in enumerate([REPO/'tests/quality/test_merge_scope.py',REPO/'tests/quality/test_e2e_acceptance.py',REPO/'tests/quality/test_e2e_publish.py',REPO/'tests/quality/test_e2e_support.py',REPO/'tests/quality/test_e2e_environment.py',REPO/'tests/quality/test_e2e_cli.py',REPO/'tests/quality/test_e2e_contract.py',REPO/'tests/quality/test_e2e_oracle_contract.py',REPO/'tests/quality/test_ingress.py',REPO/'tests/quality/test_evidence.py',REPO/'tests/quality/test_secret_guard.py',REPO/'tests/quality/test_owned_resources.py',REPO/'tests/quality/test_page_evidence.py',REPO/'tests/smoke/test_secret_scan.py',REPO/'tests/payment/prepayment-tools-test.py']):
             def python_evidence(log):
                 text=log.read_text();match=re.search(r'Ran (\d+) tests? in',text)
                 if not match or int(match[1])==0 or not re.search(r'^OK$',text,re.M):raise RuntimeError('PYTHON_REPORT_INCOMPLETE_OR_SKIPPED')
@@ -254,6 +262,17 @@ class Runner:
         self.step('browser-pages',['pnpm','exec','playwright','test','--config','playwright.config.ts',*expected],REPO/'yshop-drink-vue3',timeout=600,
             validator=lambda log:browser_receipt(output/'receipt.json',started,{'sourceSha':self.source_sha,'sourceDigest':self.digest},self.id,[n for names in expected.values() for n in names]))
 
+        printer_expected=json.loads((REPO/'tests/quality/printer-browser-manifest.json').read_text())
+        script=REPO/'tests/printer/browser-acceptance.cjs'
+        actual=re.findall(r"check\(\s*['\"]([^'\"]+)['\"]",script.read_text())
+        if actual!=printer_expected:raise RuntimeError('PRINTER_BROWSER_MANIFEST_SOURCE_MISMATCH')
+        printer_output=self.root/'printer-browser'
+        printer_started=time.time()
+        script_hash=hashlib.sha256(script.read_bytes()).hexdigest()
+        self.step('printer-browser-pages',[shutil.which('node') or 'node',str(script),str(printer_output)],timeout=600,
+            validator=lambda log:printer_browser_receipt(printer_output/'report.json',printer_started,
+                {'sourceSha':self.source_sha,'sourceDigest':self.digest},self.id,printer_expected,script_hash))
+
     def cross_end(self, performance=False, mini=False):
         from backend_artifact import verify_artifact
         try:verify_artifact(BOOT/'yshop-server/target/yshop-server.jar',REPO/'.quality/backend-build.json',
@@ -284,7 +303,7 @@ class Runner:
         identity={'sourceSha':self.source_sha,'sourceDigest':self.digest}
         def verified(log):
             report=json.loads((output/'report.json').read_text())
-            expected=['mysql-business','mysql-financial','mysql-auth','mysql-member-identity','redis','synthetic-tls']
+            expected=['mysql-business','mysql-financial','mysql-auth','mysql-member-identity','mysql-score','mysql-printer','redis','synthetic-tls']
             if (report.get('result')!='PASS' or report.get('cleanup')!='PASS' or not report.get('sourceUnchanged')
                 or any(report.get(k)!=v for k,v in identity.items())
                 or [s.get('name') for s in report.get('steps',[])]!=expected

@@ -468,7 +468,13 @@ const getShopList = async(res) => {
 			shop.notice = shop.status == 1 ? shop.notice : '店铺营业时间为:' + formatDateTime(shop.startTime,'hh:mm')+' - '+formatDateTime(shop.endTime,'hh:mm') +
 			'，不在营业时间内无法下单';
 			// 设置店铺信息
-			main.SET_STORE(shop);
+			try {
+				main.SET_STORE(shop);
+			} catch (error) {
+				if (error?.message !== 'ORDER_SUBMISSION_PENDING') throw error
+				uni.showToast({ title: '上次订单尚未确认，请先重试或查看订单列表', icon: 'none' })
+				return
+			}
 			let mygoods = await menuGoods({
 				shopId: shop.id
 			});

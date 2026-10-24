@@ -9,6 +9,7 @@ import json
 import shutil
 import subprocess
 import tempfile
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[2] / 'scripts/payment'
 sys.path.insert(0, str(SCRIPTS))
@@ -21,12 +22,21 @@ def module(name):
     return value
 
 
+def payment_module(name):
+    path = Path(__file__).resolve().parent / (name + '.py')
+    spec = importlib.util.spec_from_file_location(name, path)
+    value = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(value)
+    return value
+
+
 harness = module('acceptance-harness')
 clock = module('clock-evidence')
 provision = module('provision-merchant')
 deployment = module('verify-deployment')
 history = module('match-history-export')
 verified_build = module('build-verified-backend')
+mysql_acceptance = payment_module('mysql-acceptance')
 
 
 class Evidence(unittest.TestCase):
@@ -51,6 +61,21 @@ class Evidence(unittest.TestCase):
         self.assertFalse(provision.allowed_admin_origin('https://localhost:48444'))
         self.assertTrue(provision.allowed_admin_origin('https://localhost:48444',synthetic=True))
         self.assertTrue(provision.allowed_admin_origin('https://localhost:48443'))
+        with patch.object(provision,'owned_synthetic_ca',return_value=True) as verify_ca:
+            self.assertTrue(provision.allowed_admin_origin('https://localhost:49124',synthetic=True,ca_file='synthetic-ca.pem'))
+        verify_ca.assert_called_once_with('synthetic-ca.pem')
+
+    def test_legacy_prepayment_ingress_requires_owned_proxy_evidence(self):
+        env = {
+            'YSHOP_INGRESS_BASE_URL': 'https://localhost:48443',
+            'YSHOP_INGRESS_CA': '/tmp/synthetic-ca.pem',
+        }
+        with patch.dict(mysql_acceptance.os.environ, env, clear=True), \
+                patch.object(mysql_acceptance.sys, 'argv', ['mysql-acceptance.py', '--prepayment']), \
+                patch.object(mysql_acceptance, 'database_helper') as database_helper:
+            with self.assertRaisesRegex(RuntimeError, 'SYNTHETIC_LOOPBACK_INGRESS_REQUIRED'):
+                mysql_acceptance.main()
+        database_helper.assert_not_called()
 
     def test_synthetic_origin_does_not_allow_public_or_unsafe_urls(self):
         for url in ['http://localhost:48444','https://example.invalid:48444','https://user@localhost:48444','https://localhost:48444?x=1','https://localhost:48444/#fragment','https://localhost:48445']:

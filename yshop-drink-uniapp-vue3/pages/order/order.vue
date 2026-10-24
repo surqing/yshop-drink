@@ -20,8 +20,13 @@
 							<view class="font-size-sm text-color-assist">取餐号：{{ item.numberId }}</view>
 							<view class="font-size-sm text-color-assist">订单编号：{{ item.orderId }}</view>
 						</view>
-						<view class="font-size-lg text-color-primary">
-							{{ item.statusDto.title }}
+						<view class="d-flex flex-column align-items-end">
+							<view class="font-size-lg text-color-primary">
+								{{ item.orderType == 'takein' ? pickupStatusView(item).primary : item.statusDto.title }}
+							</view>
+							<view v-if="item.orderType == 'takein' && pickupStatusView(item).showFulfillmentSeparately" class="font-size-sm text-color-assist">
+								履约状态：{{ pickupStatusView(item).fulfillment }}
+							</view>
 						</view>
 					</view>
 				</list-cell>
@@ -48,12 +53,13 @@
 						</view>
 						<view class="d-flex align-items-center justify-content-end order-item__actions">
 							<button
-								v-if="item.paid > 0 && item.status < 2 && item.refundStatus == 0"
+								v-if="canReceive(item) && item.paid > 0 && item.refundStatus == 0"
 								class="order-item__btn"
+								:disabled="receivingOrderId == item.id"
 								plain
 								size="mini"
 								@tap.stop="receive(item)"
-							>确认收到餐</button>
+							>{{ item.orderType == 'takein' ? '确认取餐' : '确认收到餐' }}</button>
 							<button class="order-item__btn" plain size="mini" @tap="detail(item.orderId)">订单详情</button>
 						</view>
 					</view>
@@ -74,6 +80,7 @@ import { useMainStore } from '@/store/store'
 import { storeToRefs } from 'pinia'
 import { onLoad,onPullDownRefresh,onReachBottom} from '@dcloudio/uni-app'
 import { formatDateTime,kmUnit } from '@/utils/util'
+import { pickupStatusView } from '@/utils/pickup-order-status.mjs'
 import {
   orderGetOrders,
   orderReceive
@@ -104,6 +111,10 @@ const tabList = ref([{
 )
 const current = ref(0)
 const type = ref(-1)
+const receivingOrderId = ref(null)
+const canReceive = (order) => order.orderType == 'takein'
+	? order.fulfillmentStatus == 'READY'
+	: order.status < 2
 
 const goodsNum = computed(() => { //计算单个饮品添加到购物车的数量
 	return (goods) => {
@@ -157,9 +168,22 @@ const detail = (id) => {
 }
 // 确认收到货
 const receive  = async(order) => {
-	let data = await orderReceive({uni:order.orderId});
-	if (data) {
+	if (!canReceive(order) || receivingOrderId.value != null) return
+	receivingOrderId.value = order.id
+	try {
+		let data = await orderReceive({
+			uni: order.orderId,
+			...(order.orderType == 'takein' ? {
+				expectedVersion: order.fulfillmentVersion,
+				requestKey: `collect-${order.id}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+			} : {})
+		});
+		if (data) await getOrders(true)
+	} catch {
 		await getOrders(true)
+		uni.showToast({ title: '订单状态已刷新', icon: 'none' })
+	} finally {
+		receivingOrderId.value = null
 	}
 }
 	

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Loopback-only real Nginx/TLS ingress. Synthetic CA is never added to system trust."""
 import argparse
+import hashlib
 import io
 import json
 import os
@@ -57,13 +58,18 @@ def run():
         if state['Config'].get('Labels', {}).get('project') != 'yshop-drink-phase5h':
             raise ValueError()
         command([DOCKER, 'rm', '-f', NAME])
+    folder = PRIVATE / 'ingress'
+    claim = folder / 'ingress-target.json'
+    claim.unlink(missing_ok=True)
     if a.action == 'stop':
         print(json.dumps({'result': 'STOPPED'}))
         return 0
-    folder = PRIVATE / 'ingress'
     certificates(folder)
     config = (REPO / 'scripts/payment/callback-nginx.conf').read_text()
-    config = config.replace('host.docker.internal:48081', 'host.docker.internal:' + str(a.upstream_port))
+    upstream_marker = 'host.docker.internal:48081'
+    if config.count(upstream_marker) != 3:
+        raise ValueError()
+    config = config.replace(upstream_marker, 'host.docker.internal:' + str(a.upstream_port))
     target = folder / 'nginx.conf'
     target.write_text(config)
     target.chmod(0o600)
@@ -107,6 +113,10 @@ def run():
         time.sleep(0.2)
     if not verified:
         raise RuntimeError()
+    server_digest = hashlib.sha256(ssl.PEM_cert_to_DER_cert((folder / 'server.pem').read_text())).hexdigest()
+    private_json(claim, {'owner': NAME, 'port': 48443, 'serverCertSha256': server_digest,
+                         'upstreamPort': a.upstream_port,
+                         'configSha256': hashlib.sha256(config.encode()).hexdigest()})
     private_json(folder / 'state.json', {'image': IMAGE, 'upstreamPort': a.upstream_port,
                  'https': 'https://localhost:48443', 'systemTrustChanged': False,
                  'accessLogging': False, 'bodyOrSignatureLogging': False, 'publicIngress': False})

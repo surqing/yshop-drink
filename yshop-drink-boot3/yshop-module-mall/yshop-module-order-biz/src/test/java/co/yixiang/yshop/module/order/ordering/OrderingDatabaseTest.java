@@ -210,6 +210,7 @@ class OrderingDatabaseTest {
         var p = new AppOrderParam();
         p.setShopId("1");
         p.setOrderType("takein");
+        p.setMobile("13800000123");
         p.setGettime(0);
         p.setProductId(List.of("1"));
         p.setSpec(List.of("SKU1"));
@@ -217,6 +218,97 @@ class OrderingDatabaseTest {
         p.setCouponId("0");
         p.setIdempotencyKey(UUID.randomUUID().toString());
         return p;
+    }
+
+    @Test
+    void pickupKeepsEditedTrimmedContactWithoutChangingMemberIdentity() {
+        db.update("UPDATE yshop_user SET mobile='13800000101' WHERE id=1");
+        String before=db.queryForObject("SELECT mobile FROM yshop_user WHERE id=1",String.class);
+        var p=request();p.setMobile(" 13800000999 ");String id=place(p);
+        assertEquals("13800000999",db.queryForObject("SELECT user_phone FROM yshop_store_order WHERE order_id=?",String.class,id));
+        assertEquals(before,db.queryForObject("SELECT mobile FROM yshop_user WHERE id=1",String.class));
+    }
+
+    @Test
+    void invalidPickupContactHasNoOrderOrInventorySideEffects() {
+        for(String phone:Arrays.asList(null,"","  ","abc","1380000000","138000000001","138-0000-0001")) {
+            var p=request();p.setMobile(phone);
+            var error=assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,()->place(p));
+            assertEquals("INVALID_PICKUP_CONTACT",error.getMessage());
+            assertEquals(0,count("SELECT COUNT(*) FROM yshop_store_order"));
+            assertEquals(0,count("SELECT COUNT(*) FROM yshop_order_submission"));
+            assertEquals(10,count("SELECT stock FROM yshop_store_product WHERE id=1"));
+            assertEquals(10,count("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        }
+    }
+
+    @Test
+    void changingPickupContactWithSameKeyConflictsWithoutAnotherOrder() {
+        var p=request();String id=place(p);p.setMobile("13800000999");
+        var error=assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,()->place(p));
+        assertEquals("ORDER_IDEMPOTENCY_CONFLICT",error.getMessage());
+        assertEquals(1,count("SELECT COUNT(*) FROM yshop_store_order"));
+        assertEquals("13800000123",db.queryForObject("SELECT user_phone FROM yshop_store_order WHERE order_id=?",String.class,id));
+        assertEquals(9,count("SELECT stock FROM yshop_store_product WHERE id=1"));
+    }
+
+    String legacyContactHash(AppOrderParam p) throws Exception {
+        String canonical=co.yixiang.yshop.framework.common.util.json.JsonUtils.toJsonString(
+            List.of(1L,p.getOrderType(),Objects.toString(p.getAddressId(),"0"),Objects.toString(p.getCouponId(),"0"),0,"",List.of(List.of(1L,"SKU1",1))));
+        return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+            .digest(canonical.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
+    @Test
+    void legacyPickupWithMissingContactRequiresExistingOrderReview() throws Exception {
+        var p=request();String id=place(p);
+        db.update("UPDATE yshop_order_submission SET request_hash=? WHERE uid=1 AND idempotency_key=?",legacyContactHash(p),p.getIdempotencyKey());
+        db.update("UPDATE yshop_store_order SET user_phone='' WHERE order_id=?",id);
+        var error=assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,()->place(p));
+        assertEquals("ORDER_CONTACT_RECONFIRM_REQUIRED",error.getMessage());
+        assertEquals(1,count("SELECT COUNT(*) FROM yshop_store_order"));
+        assertEquals("",db.queryForObject("SELECT user_phone FROM yshop_store_order WHERE order_id=?",String.class,id));
+        assertEquals(9,count("SELECT stock FROM yshop_store_product WHERE id=1"));
+    }
+
+    @Test
+    void legacyPickupCanReplayOnlySameStoredContact() throws Exception {
+        var p=request();String id=place(p);
+        db.update("UPDATE yshop_order_submission SET request_hash=? WHERE uid=1 AND idempotency_key=?",legacyContactHash(p),p.getIdempotencyKey());
+        db.update("UPDATE yshop_store_order SET user_phone=? WHERE order_id=?",p.getMobile(),id);
+        assertEquals(id,place(p));p.setMobile("13800000999");
+        var error=assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,()->place(p));
+        assertEquals("ORDER_CONTACT_RECONFIRM_REQUIRED",error.getMessage());
+        assertEquals(1,count("SELECT COUNT(*) FROM yshop_store_order"));
+    }
+
+    @Test
+    void legacyDeliveryReplaysOriginalAddressContactDespiteClientContactChanges() throws Exception {
+        db.update("UPDATE yshop_store_shop SET distance=1,min_price=0,delivery_price=0 WHERE id=1");
+        db.update("INSERT INTO yshop_user_address(id,uid,real_name,address,phone,detail"+(mysql?",create_time":"")+") VALUES(1,1,'Synthetic','Owned street','13800000101','Unit A'"+(mysql?",CURRENT_TIMESTAMP":"")+")");
+        var p=request();p.setOrderType("takeout");p.setAddressId("1");p.setMobile("ignored delivery input");
+        String expected=db.queryForObject("SELECT phone FROM yshop_user_address WHERE id=1",String.class);
+        String id=place(p);
+        db.update("UPDATE yshop_order_submission SET request_hash=? WHERE uid=1 AND idempotency_key=?",legacyContactHash(p),p.getIdempotencyKey());
+        db.update("UPDATE yshop_user_address SET phone='13800000999' WHERE id=1");
+        p.setMobile(null);
+        assertEquals(id,place(p));
+        assertEquals(expected,db.queryForObject("SELECT user_phone FROM yshop_store_order WHERE order_id=?",String.class,id));
+        assertEquals(1,count("SELECT COUNT(*) FROM yshop_store_order"));
+        assertEquals(9,count("SELECT stock FROM yshop_store_product WHERE id=1"));
+    }
+
+    @Test
+    void committedSubmissionCanBeConfirmedWithoutChangingLegacyContact() throws Exception {
+        var p=request();String id=place(p);
+        db.update("UPDATE yshop_order_submission SET request_hash=? WHERE uid=1 AND idempotency_key=?",legacyContactHash(p),p.getIdempotencyKey());
+        db.update("UPDATE yshop_store_order SET user_phone='' WHERE order_id=?",id);
+        assertEquals(id,orders.submissionResult(1L,p.getIdempotencyKey()).get("orderId"));
+        assertEquals("",db.queryForObject("SELECT user_phone FROM yshop_store_order WHERE order_id=?",String.class,id));
+        assertEquals(1,count("SELECT COUNT(*) FROM yshop_store_order"));
+        assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,()->orders.submissionResult(2L,p.getIdempotencyKey()));
+        assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,()->orders.submissionResult(1L,"not-a-key"));
+        assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,()->orders.submissionResult(1L,"unconfirmed_key_12345"));
     }
 
     String place(AppOrderParam p) {
@@ -388,7 +480,7 @@ class OrderingDatabaseTest {
                                 false);
         var p =
                 mapper.readValue(
-                        "{\"shopId\":\"1\",\"orderType\":\"takein\",\"productId\":[\"1\"],\"spec\":[\"SKU1\"],\"number\":[\"1\"],\"price\":0.01,\"amount\":0,\"idempotencyKey\":\"synthetic_price_ignored\"}",
+                        "{\"shopId\":\"1\",\"orderType\":\"takein\",\"mobile\":\"13800000123\",\"productId\":[\"1\"],\"spec\":[\"SKU1\"],\"number\":[\"1\"],\"price\":0.01,\"amount\":0,\"idempotencyKey\":\"synthetic_price_ignored\"}",
                         AppOrderParam.class);
         String id = place(p);
         assertEquals(
@@ -1100,7 +1192,7 @@ class OrderingDatabaseTest {
                         .paid(0)
                         .orderType("takein")
                         .build();
-        when(mapper.selectById(oid)).thenReturn(original);
+        when(mapper.lockAdminOrder(oid)).thenReturn(original);
         var service = new co.yixiang.yshop.module.order.service.storeorder.StoreOrderServiceImpl();
         ReflectionTestUtils.setField(service, "storeOrderMapper", mapper);
         var input =
@@ -1120,8 +1212,8 @@ class OrderingDatabaseTest {
                         co.yixiang.yshop.module.order.dal.dataobject.storeorder.StoreOrderDO.class);
         verify(mapper).updateById(update.capture());
         var safe = update.getValue();
-        assertEquals(1L, safe.getUid());
-        assertEquals(id, safe.getOrderId());
+        assertNull(safe.getUid());
+        assertNull(safe.getOrderId());
         assertNull(safe.getShopId());
         assertNull(safe.getPaid());
         assertNull(safe.getPayPrice());

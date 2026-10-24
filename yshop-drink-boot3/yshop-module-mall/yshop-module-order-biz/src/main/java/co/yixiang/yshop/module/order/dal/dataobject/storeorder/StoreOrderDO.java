@@ -270,6 +270,12 @@ public class StoreOrderDO extends BaseDO {
      */
     private Long numberId;
 
+    /** Independent pickup fulfillment state. Historical orders remain LEGACY. */
+    private String fulfillmentStatus;
+
+    /** Monotonic version used to reject stale store/member commands. */
+    private Integer fulfillmentVersion;
+
     private String outTradeNo;
 
 

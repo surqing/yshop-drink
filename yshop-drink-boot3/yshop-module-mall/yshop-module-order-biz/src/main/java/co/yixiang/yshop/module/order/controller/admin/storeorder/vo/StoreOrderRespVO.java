@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.*;
 import java.time.LocalDateTime;
 import java.util.List;
+import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService.FulfillmentLogView;
 
 @Schema(description = "管理后台 - 订单 Response VO")
 @Data
@@ -27,6 +28,12 @@ public class StoreOrderRespVO extends StoreOrderBaseVO {
 
     @Schema(description = "订单状态", required = true)
     private String StatusStr;
+
+    private String fulfillmentStatus;
+
+    private Integer fulfillmentVersion;
+
+    private List<FulfillmentLogView> fulfillmentTimeline;
 
 
 

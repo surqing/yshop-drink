@@ -21,6 +21,29 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 public interface ScoreOrderMapper extends BaseMapperX<ScoreOrderDO> {
 
+    @Update("UPDATE yshop_score_order SET express_sn = #{expressSn}, express_number = #{expressNumber}, "
+            + "express_company = #{expressCompany}, have_delivered = 1, update_time = CURRENT_TIMESTAMP "
+            + "WHERE id = #{id} AND have_paid = 1 AND status = 1 AND have_delivered = 0 "
+            + "AND have_received = 0 AND deleted = 0")
+    int dispatchIfAwaiting(@Param("id") Long id,
+                           @Param("expressSn") String expressSn,
+                           @Param("expressNumber") String expressNumber,
+                           @Param("expressCompany") String expressCompany);
+
+    @Update("UPDATE yshop_score_order SET have_received = 1, update_time = CURRENT_TIMESTAMP "
+            + "WHERE id = #{id} AND uid = #{uid} AND have_paid = 1 AND status = 1 "
+            + "AND have_delivered = 1 AND have_received = 0 AND deleted = 0")
+    int receiveIfDispatched(@Param("id") Long id, @Param("uid") Long uid);
+
+    @Update("UPDATE yshop_score_order SET have_received = 1, update_time = CURRENT_TIMESTAMP "
+            + "WHERE id = #{id} AND have_paid = 1 AND status = 1 AND have_delivered = 1 "
+            + "AND have_received = 0 AND deleted = 0")
+    int receiveDispatched(@Param("id") Long id);
+
+    @Update("UPDATE yshop_score_order SET deleted = 1, update_time = CURRENT_TIMESTAMP "
+            + "WHERE id = #{id} AND have_paid = 0 AND deleted = 0")
+    int deleteIfUnpaid(@Param("id") Long id);
+
     default PageResult<ScoreOrderDO> selectPage(ScoreOrderPageReqVO reqVO) {
         LambdaQueryWrapperX<ScoreOrderDO> wrapper = new LambdaQueryWrapperX();
         wrapper.eqIfPresent(ScoreOrderDO::getOrderId, reqVO.getOrderId())

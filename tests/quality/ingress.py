@@ -13,8 +13,32 @@ import sys
 import tarfile
 import uuid
 from evidence import workspace, source_identity
+from ingress_target import CALLBACK_UPSTREAM_PORT, expected_proxy_config
 REPO=Path(__file__).resolve().parents[2]
 IMAGE='nginx@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94'
+
+def allocate_proxy_port():
+    with socket.socket(socket.AF_INET,socket.SOCK_STREAM) as probe:
+        probe.bind(('127.0.0.1',0))
+        return probe.getsockname()[1]
+
+def linux_proxy_config(config,port):
+    if not isinstance(port,int) or not 1<=port<=65535:
+        raise ValueError('PROXY_PORT_INVALID')
+    listener='listen 8443 ssl;'
+    if listener not in config:
+        raise ValueError('PROXY_LISTEN_DIRECTIVE_REQUIRED')
+    return config.replace(listener,
+                          f'listen 127.0.0.1:{port} ssl;\n        listen [::1]:{port} ssl;')
+
+def classify_proxy_exit(log):
+    text=log.decode(errors='replace') if isinstance(log,bytes) else str(log)
+    text=text.lower()
+    if 'address already in use' in text or 'address in use' in text:
+        return 'OWNED_TLS_PORT_CONFLICT'
+    if 'permission denied' in text:
+        return 'OWNED_TLS_PROXY_PERMISSION_DENIED'
+    return 'OWNED_TLS_PROXY_EXITED'
 
 def main():
     folder=Path(os.environ['YSHOP_SYNTHETIC_TLS_DIR']).resolve()
@@ -23,23 +47,23 @@ def main():
     if 'yshop synthetic local CA' not in subject:raise RuntimeError('SYNTHETIC_CA_REQUIRED')
     subprocess.run(['openssl','verify','-CAfile',str(folder/'ca.pem'),str(folder/'server.pem')],capture_output=True,check=True)
     name='yshop-quality-ingress-'+uuid.uuid4().hex[:12];volume=name+'-tls'
+    proxy_port=allocate_proxy_port()
     def docker(*argv,**kwargs):return subprocess.run(['docker',*argv],capture_output=True,check=True,timeout=60,**kwargs).stdout
     volume_created=container_created=False
     try:
         docker('volume','create','--label','quality.owner='+name,volume);volume_created=True
         archive=io.BytesIO()
         linux=sys.platform.startswith('linux')
-        config=(REPO/'scripts/payment/callback-nginx.conf').read_text().replace('host.docker.internal:48081','127.0.0.1:48881' if linux else 'host.docker.internal:48881')
+        config=expected_proxy_config(proxy_port, platform=sys.platform).decode()
         # Linux host networking preserves the test backend's loopback-only binding.
         # Docker Desktop has its own host DNS/proxy; overriding it causes 502.
-        if linux:config=config.replace('listen 8443 ssl;', 'listen 127.0.0.1:48444 ssl;\n        listen [::1]:48444 ssl;')
         with tarfile.open(fileobj=archive,mode='w') as out:
             for file in ['server.pem','server-key.pem','nginx.conf']:
                 data=config.encode() if file=='nginx.conf' else (folder/file).read_bytes()
                 info=tarfile.TarInfo(file);info.size=len(data);info.uid=101;info.gid=101;info.mode=0o600
                 out.addfile(info,io.BytesIO(data))
         docker('run','--rm','-i','--network','none','--entrypoint','sh','-v',volume+':/tls',IMAGE,'-c','tar xf - -C /tls',input=archive.getvalue())
-        docker('create','--name',name,'--label','quality.owner='+name,*(['--network','host'] if linux else []),'--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--user','101:101','--tmpfs','/tmp:rw,nosuid,nodev,noexec,mode=1777',*([] if linux else ['-p','127.0.0.1:48444:8443']),'-v',volume+':/tls:ro','--entrypoint','nginx',IMAGE,'-c','/tls/nginx.conf','-g','daemon off;');container_created=True
+        docker('create','--name',name,'--label','quality.owner='+name,*(['--network','host'] if linux else []),'--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--user','101:101','--tmpfs','/tmp:rw,nosuid,nodev,noexec,mode=1777',*( [] if linux else ['-p',f'127.0.0.1:{proxy_port}:8443']),'-v',volume+':/tls:ro','--entrypoint','nginx',IMAGE,'-c','/tls/nginx.conf','-g','daemon off;');container_created=True
         docker('start',name)
         context=ssl.create_default_context(cafile=str(folder/'ca.pem'))
         expected=hashlib.sha256(ssl.PEM_cert_to_DER_cert((folder/'server.pem').read_text())).digest()
@@ -49,9 +73,9 @@ def main():
             if not state['State']['Running']:
                 logs=subprocess.run(['docker','logs',name],capture_output=True,timeout=60)
                 private=folder/'ingress-private.log';private.write_bytes(logs.stdout+logs.stderr);private.chmod(0o600)
-                raise RuntimeError('OWNED_TLS_PROXY_EXITED')
+                raise RuntimeError(classify_proxy_exit(logs.stdout+logs.stderr))
             try:
-                with socket.create_connection(('localhost',48444),timeout=2) as connection:
+                with socket.create_connection(('127.0.0.1',proxy_port),timeout=2) as connection:
                     with context.wrap_socket(connection,server_hostname='localhost') as tls:
                         if hashlib.sha256(tls.getpeercert(binary_form=True)).digest()!=expected:
                             raise RuntimeError('OWNED_TLS_CERTIFICATE_MISMATCH')
@@ -59,10 +83,17 @@ def main():
             except (OSError,ssl.SSLError):
                 if time.monotonic()>=deadline:raise RuntimeError('OWNED_TLS_PROXY_NOT_READY')
                 time.sleep(.1)
-        env=os.environ.copy();env['YSHOP_INGRESS_BASE_URL']='https://localhost:48444';env['YSHOP_INGRESS_CA']=str(folder/'ca.pem')
+        claim=folder/'ingress-target.json'
+        claim.write_text(json.dumps({'owner':name,'port':proxy_port,'serverCertSha256':expected.hex(),
+                                     'upstreamPort':CALLBACK_UPSTREAM_PORT,
+                                     'configSha256':hashlib.sha256(config.encode()).hexdigest()}))
+        claim.chmod(0o600)
+        env=os.environ.copy();env['YSHOP_INGRESS_BASE_URL']=f'https://localhost:{proxy_port}';env['YSHOP_INGRESS_CA']=str(folder/'ca.pem')
+        env['YSHOP_INGRESS_OWNER']=name
         result=subprocess.run([sys.executable,str(REPO/'tests/payment/mysql-acceptance.py'),'--prepayment','--ingress-only'],env=env,timeout=780)
         if result.returncode:raise RuntimeError('SYNTHETIC_INGRESS_TEST_FAILED')
     finally:
+        (folder/'ingress-target.json').unlink(missing_ok=True)
         try:
             if container_created:
                 state=json.loads(docker('inspect',name))[0]
@@ -79,7 +110,8 @@ def main():
 if __name__=='__main__':
     try:main()
     except Exception as exc:
-        safe={'OWNED_TLS_PROXY_EXITED','OWNED_TLS_PROXY_NOT_READY','OWNED_TLS_CERTIFICATE_MISMATCH','SYNTHETIC_INGRESS_TEST_FAILED'}
+        safe={'OWNED_TLS_PROXY_EXITED','OWNED_TLS_PORT_CONFLICT','OWNED_TLS_PROXY_PERMISSION_DENIED',
+              'OWNED_TLS_PROXY_NOT_READY','OWNED_TLS_CERTIFICATE_MISMATCH','SYNTHETIC_INGRESS_TEST_FAILED'}
         reason=str(exc) if isinstance(exc,RuntimeError) and str(exc) in safe else 'INGRESS_OPERATION_FAILED'
         diagnostic={'runId':uuid.uuid4().hex,**source_identity(),'result':'FAIL','reasonCode':reason,
                     'reports':[],'failures':[{'stage':'SYNTHETIC_TLS','reasonCode':reason,'exceptionTypes':[type(exc).__name__]}],'missingSuites':[]}

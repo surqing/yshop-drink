@@ -93,6 +93,7 @@
         </dependency>
 
 
+
         <!-- 服务保障相关 -->
         <dependency>
             <groupId>co.yixiang.boot</groupId>
@@ -103,7 +104,14 @@
         <dependency><groupId>io.lettuce</groupId><artifactId>lettuce-core</artifactId><scope>test</scope></dependency>
     </dependencies>
 
-    <profiles><profile><id>mysql-acceptance</id><dependencies>
+    <profiles>
+        <profile><id>score-test-fixtures</id>
+            <activation><property><name>maven.test.skip</name><value>!true</value></property></activation>
+            <dependencies>
+                <dependency><groupId>co.yixiang.boot</groupId><artifactId>yshop-module-score-biz</artifactId><version>${revision}</version><type>test-jar</type><classifier>tests</classifier><scope>test</scope></dependency>
+            </dependencies>
+        </profile>
+        <profile><id>mysql-acceptance</id><dependencies>
         <dependency><groupId>com.mysql</groupId><artifactId>mysql-connector-j</artifactId><version>8.3.0</version><scope>test</scope></dependency>
     </dependencies></profile></profiles>
 

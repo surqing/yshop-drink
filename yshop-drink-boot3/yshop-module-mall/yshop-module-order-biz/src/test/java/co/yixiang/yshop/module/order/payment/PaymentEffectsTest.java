@@ -14,6 +14,7 @@ import co.yixiang.yshop.module.order.dal.mysql.storeorder.StoreOrderMapper;
 import co.yixiang.yshop.module.order.enums.*;
 import co.yixiang.yshop.module.order.service.payment.*;
 import co.yixiang.yshop.module.order.service.storeorder.AsyncStoreOrderService;
+import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService;
 import co.yixiang.yshop.module.order.service.storeordercartinfo.StoreOrderCartInfoService;
 import co.yixiang.yshop.module.order.service.storeorderstatus.StoreOrderStatusService;
 import org.junit.jupiter.api.*;
@@ -29,7 +30,7 @@ class PaymentEffectsTest {
     @BeforeEach void setup() {
         users=mock(MemberUserService.class);statistics=mock(AsyncStoreOrderService.class);
         orders=mock(StoreOrderMapper.class);carts=mock(StoreOrderCartInfoService.class);notices=mock(WeixinNoticeProducer.class);
-        effects=new PaymentEffects(users,mock(UserBillService.class),mock(StoreOrderStatusService.class),statistics,carts,orders,notices);
+        effects=new PaymentEffects(users,mock(UserBillService.class),mock(StoreOrderStatusService.class),statistics,carts,orders,notices,mock(OrderFulfillmentService.class));
         order=new PaymentOrder();order.setUid(101L);order.setId(201L);order.setOrderId("synthetic-order");
         member=new MemberUserDO();member.setId(101L);member.setLoginType(AppFromEnum.ROUNTINE.getValue());
         detail=new StoreOrderDO();detail.setOrderType("takein");detail.setNumberId(7L);detail.setShopName("Synthetic A");

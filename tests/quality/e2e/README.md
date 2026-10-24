@@ -30,11 +30,23 @@ local 还需要 macOS、HBuilderX、已登录且启用服务端口的微信开�
 
 `order-cancel` 和 `coupon-release` 还需要可工作的原生确认控件接口。已观察到工具 `2.02.2608080` / SDK `3.17.4` 的 `Native.confirmModal()` 静默返回但不点击确认框；本框架通过真实对话框回调确认是否完成，缺失则报告 `MINI_NATIVE_CONFIRMATION_UNAVAILABLE` / BLOCKED。不会替换 `showModal` 的真实响应或直接调用取消业务方法。可用 `YSHOP_WECHAT_CLI` 指向兼容工具；macOS 可显式用 `YSHOP_E2E_NATIVE_ADAPTER=applescript` 启用 AppleScript/JXA 辅助功能适配器（默认关闭）。需要用户事先允许系统脚本及辅助功能权限。脚本通过 macOS ApplicationServices 的正式 AX 接口读取树和执行 AXPress，避免 System Events 对 WebArea URL 的转换错误及逐属性 IPC 开销。它只在官方接口未产生真实确认回调时，对唯一 `E2E-<runId>` 窗口核对顶部 WebArea 的完整私有项目路径、runId、取消文案和唯一确认链接后执行 AXPress；不使用全局键盘、坐标或业务回调替身。报告记录实际适配器使用；真实取消 API、UI 和 SQL 验证仍为必选。若 `osascript` 报“不允许辅助访问”，请由用户在系统设置中授权，不会自动修改系统权限。
 
+每次取消确认都会在该 run 的私有输出中留下 `native-confirmation-route-private.json`，区分官方 `confirmModal()` 回调和 AXPress 后的真实业务回调；显式启用辅助功能适配器时还会写 `native-confirmation-accessibility-private.json`，记录官方进程 PID/匹配数、AX 窗口总数与标题、runId/完整项目路径归属、WebArea URL 数和匹配数、确认节点匹配数、AXPress 结果或具体阻塞码。零窗口、多归属窗口、外来窗口、路径不符或确认节点不唯一均会 fail closed。诊断只枚举该官方进程的窗口，不读取其他进程的窗口，也不会自动更改系统权限；无真实回调仍保持 BLOCKED。官方回调成功或未显式启用辅助功能适配器时，AX 字段会明确记为 `NOT_COLLECTED`，不会为收集诊断而隐式访问辅助功能。
+
 运行时不要修改工作树。源码 SHA、内容摘要和产物哈希必须匹配；改变源码会使正在运行的结果无效。构建凭证不匹配时重新构建，不能使用旧 JAR 或旧 Surefire 报告。小程序从当前源码重新生成私有副本并核验编译哈希。
 
 ## 场景和边界
 
-七组必需场景为 `auth-session`、`catalog-order`、`store-isolation`、`order-retry`、`order-cancel`、`coupon-release`、`coupon-complete`。local 标为 `mini-admin`；ci 标为 `api-admin`，小程序明确 NOT_RUN。
+完整集合为 14 个必需场景：`score-redemption`、`score-retry`、`printer-unknown`、`pickup-contact`、`auth-session`、`catalog-order`、`store-isolation`、`order-retry`、`order-cancel`、`coupon-release`、`coupon-complete`、`pickup-fulfillment`、`store-statistics`、`order-print-jobs`。local 中 11 个场景使用官方 Mini 并标为 `mini-admin`；`printer-unknown`、`store-statistics`、`order-print-jobs` 使用真实后台页面和所属后端，标为 `api-admin`，Mini 明确 NOT_RUN。ci 的 14 个场景均为 `api-admin`，小程序明确 NOT_RUN。
+
+新增页面场景范围如下：
+
+| 场景 | 真实页面与业务证据 | profile 边界 |
+|---|---|---|
+| `pickup-fulfillment` | 履约后台真实接单、制作、待取页面；分别核对两名店员的真实登录和工作页，再同时提交接单请求并用版本冲突验证只成功一次；SQL 核对领取日志和积分奖励一次。local 还用真实 Mini 详情页核对已接单/待取/已取，并由 Mini 发起领取请求后用完全相同的请求编号重放。 | local 会执行 Mini 页面检查；ci 使用真实订单 API 完成领取请求，Mini NOT_RUN。支付完成走所属命令桥调用真实支付最终化服务，未调用支付供应商。 |
+| `store-statistics` | 履约/统计真实后台页；总部及 A/B 店分支登录，页面汇总和明细与只读 SQL 对账；校验 UI 当日结束日期转换为后端排他上界。两笔由本次 owned support JVM 的 `complete` 命令成功完成并记录为 run-owned 的订单，由 test-support 命令分别放在 `from 00:00` 和排他 `to 00:00`；页面明细验证起点包含、终点排除。夹具拒绝仅凭近期已付订单号修改日期。另验证切店旧响应不会覆盖新门店；分支读取其他门店统计和明细应被拒绝。 | 两个 profile 都使用真实浏览器后台与所属 API；不包含 Mini。test-support 仅修改这两笔合成订单的 `pay_time`，不写支付、退款或资金流水。 |
+| `order-print-jobs` | 打印管理真实后台页；订单接单生成待处理事件，检查未绑定和离线状态；本地状态刷新使任务进入发送流程，所属假打印机返回不确定超时；页内刷新 UNKNOWN 后核对打印/状态调用计数、任务记录及持久设备 claim 均不变化；验证原因、原发送进程已停止、确认未出纸三项门槛，逐项缺失时直接请求也被拒绝；页面核验释放后 SQL 核对 claim 删除、操作者/原因/原错误审计；只在释放后从页面创建关联人工重打，SQL 核对父子关系、原因、创建人及冻结小票快照；分店读取、重打和恢复总部任务均应被拒绝。 | 两个 profile 都使用真实浏览器后台与所属 API；只用测试 classpath 中的假厂商与显式 worker poll 命令，不连接真实打印机、不发送实体小票。测试桥将真实 fake provider 产生的 UNKNOWN 任务置为过期发送租约并调用生产 worker 的到期恢复路径；既有持久 claim 保留在 DB 中供恢复门禁验证。该合成步骤仅模拟 worker 中断时的租约状态，恢复确认、API 服务和审计均通过真实页面/API/SQL验证。 |
+
+CI 和本机 `ci` profile 能证明后台页面、所属 API 与 SQL 范围。只有完整 `local` 才执行官方 Mini；三项新增页面本身不依赖 Mini。Mini 原生运行、真实支付通知协议、实体打印机出纸和真实打印厂商均不在这些场景的证据范围内。每项检查以该轮 `report.json` 为准；无法执行或没有真实证据的检查保持 NOT_RUN/BLOCKED，不可从 manifest 或 `--list` 推导通过。
 
 认证从空会话开始。自动化只替换微信平台凭据、手机号授权事件和短信发送渠道；会员绑定、验证码生命周期、token、业务服务、事务和数据库真实运行。未知微信公众号或支付 SDK 操作直接失败。合成完成通过私有子进程命令桥调用真实完成服务，不经供应商，不直接写 SQL 改已支付状态。真实微信身份、真机、真实短信、支付通知协议和真实支付均不在验收范围内。
 

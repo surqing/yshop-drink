@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "defects": {
+    "D002": "FIXED",
+    "D003": "FIXED",
+    "D005": "FIXED",
+    "D006": "FIXED",
+    "D007": "FIXED",
+    "D008": "FIXED"
+  },
+  "scoreIdempotencyRequired": true
+}

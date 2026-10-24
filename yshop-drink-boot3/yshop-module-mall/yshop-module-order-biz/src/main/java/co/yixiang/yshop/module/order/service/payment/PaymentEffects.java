@@ -11,6 +11,7 @@ import co.yixiang.yshop.module.order.enums.*;
 import co.yixiang.yshop.module.order.service.storeorder.AsyncStoreOrderService;
 import co.yixiang.yshop.module.order.service.storeordercartinfo.StoreOrderCartInfoService;
 import co.yixiang.yshop.module.order.service.storeorderstatus.StoreOrderStatusService;
+import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
@@ -32,6 +33,7 @@ public class PaymentEffects {
     private final StoreOrderCartInfoService carts;
     private final StoreOrderMapper orders;
     private final WeixinNoticeProducer notifications;
+    private final OrderFulfillmentService fulfillment;
 
     public PaymentEffects(
             MemberUserService users,
@@ -40,7 +42,8 @@ public class PaymentEffects {
             AsyncStoreOrderService statistics,
             StoreOrderCartInfoService carts,
             StoreOrderMapper orders,
-            WeixinNoticeProducer notifications) {
+            WeixinNoticeProducer notifications,
+            OrderFulfillmentService fulfillment) {
         this.users = users;
         this.bills = bills;
         this.statuses = statuses;
@@ -48,9 +51,11 @@ public class PaymentEffects {
         this.carts = carts;
         this.orders = orders;
         this.notifications = notifications;
+        this.fulfillment = fulfillment;
     }
 
     public void apply(PaymentOrder order, String payType) {
+        fulfillment.initializePaidPickup(order);
         users.incPayCount(order.getUid());
         statuses.create(
                 order.getUid(),

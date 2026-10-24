@@ -75,4 +75,12 @@
 
     </dependencies>
 
+    <profiles><profile><id>mysql-acceptance</id><dependencies>
+        <dependency><groupId>com.mysql</groupId><artifactId>mysql-connector-j</artifactId><version>8.3.0</version><scope>test</scope></dependency>
+    </dependencies></profile></profiles>
+    <build><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><version>3.5.0</version>
+        <executions><execution><id>score-test-fixture</id><phase>process-test-classes</phase><goals><goal>test-jar</goal></goals>
+            <configuration><includes><include>**/ScoreOrderDatabaseFixture*.class</include></includes></configuration>
+        </execution></executions>
+    </plugin></plugins></build>
 </project>

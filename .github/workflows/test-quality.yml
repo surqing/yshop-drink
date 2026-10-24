@@ -9,13 +9,13 @@ concurrency:
   cancel-in-progress: true
 jobs:
   regression-scope:
-    # Raw legacy failures stay FAILED; only exact baseline equivalence can pass this job.
+    # Source-bound repair states retain open failures and require every fixed defect to pass.
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
       YSHOP_PAY_WECHAT_V3_ENABLED: 'false'
       YSHOP_PAY_WECHAT_V3_RECONCILIATION_ENABLED: 'false'
-      BASE_REF: ${{ github.event.pull_request.base.sha || 'fa39ef2b854eb21655390866090f61b0c4d52a11' }}
+      BASE_REF: ${{ github.event.pull_request.base.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,14 +43,18 @@ jobs:
       - name: Execute baseline and candidate without relabelling raw failures
         run: |
           python3 - <<'PY'
-          import os,subprocess,sys
+          import json,os,subprocess,sys
           root=os.environ['RUNNER_TEMP']
           for script,output in [('tests/quality/legacy_baseline.py','scope-baseline'),('tests/defects/http_red.py','scope-candidate')]:
-              result=subprocess.run([sys.executable,script,'--output',root+'/'+output])
-              if result.returncode!=1:
-                  raise SystemExit('Expected preserved raw FAILED exit; scope validator must independently certify every case')
+              args=[sys.executable,script,'--output',root+'/'+output]
+              if output=='scope-baseline': args+=['--base',os.environ['BASE_REF']]
+              result=subprocess.run(args)
+              with open(root+'/'+output+'/report.json') as handle: report=json.load(handle)
+              expected=0 if report['status']=='PASSED' else 1
+              if report['status'] not in ('PASSED','FAILED') or result.returncode!=expected or report.get('exitCode')!=expected:
+                  raise SystemExit('Raw suite status/exit invalid; scope validator must certify every case')
           PY
-      - name: Require exact known failures, unchanged business states and passing security controls
+      - name: Require source-bound repairs, unchanged open failures and passing security controls
         run: python3 tests/quality/merge_scope.py --baseline "$RUNNER_TEMP/scope-baseline/report.json" --candidate "$RUNNER_TEMP/scope-candidate/report.json" --base "$BASE_REF" --output "$RUNNER_TEMP/scope-certificate.json"
       - name: Preserve safe raw statuses and separate scope certificate
         if: always()
@@ -147,6 +151,10 @@ jobs:
         env:
           BASE_REF: ${{ github.event.pull_request.base.sha || 'HEAD^' }}
         run: python3 tests/quality/secret_guard.py --base "$BASE_REF"
+      - name: Vue dependencies for Quick and frontend suites
+        if: ${{ !cancelled() }}
+        working-directory: yshop-drink-vue3
+        run: pnpm install --frozen-lockfile
       - name: Quick tests and deliberate runner failures
         if: ${{ !cancelled() }}
         run: python3 tests/quality/run.py QUICK --output "$RUNNER_TEMP/quality"
@@ -175,10 +183,6 @@ jobs:
           cli=Path.home()/'.m2/repository/org/jacoco/org.jacoco.cli/0.8.12/org.jacoco.cli-0.8.12-nodeps.jar'
           subprocess.run([sys.executable,'tests/quality/coverage.py','--run',str(candidates[0]),'--cli',str(cli),'--output',str(root/'coverage')],check=True)
           PYTHON
-      - name: Vue dependencies
-        if: ${{ !cancelled() }}
-        working-directory: yshop-drink-vue3
-        run: pnpm install --frozen-lockfile
       - name: Frontend logic, actual coupon component and V8 coverage
         if: ${{ !cancelled() }}
         run: python3 tests/quality/run.py frontend --output "$RUNNER_TEMP/frontend"

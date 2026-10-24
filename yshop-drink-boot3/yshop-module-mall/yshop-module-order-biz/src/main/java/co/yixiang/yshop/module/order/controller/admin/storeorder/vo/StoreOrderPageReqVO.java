@@ -48,6 +48,8 @@ public class StoreOrderPageReqVO extends PageParam {
     @Schema(description = "订单类型", example = "desk")
     private String orderType;
 
+    private String fulfillmentStatus;
+
     @Schema(description = "桌面id")
     private Integer deskId;
 

@@ -146,4 +146,40 @@ class PageEvidenceTest(unittest.TestCase):
             bad=copy.deepcopy(r);bad[key]=value;self.path.write_text(json.dumps(bad))
             with self.assertRaises(RuntimeError):mini_receipt(self.path,self.started,self.identity,'run',['one'])
 
+class PrinterBrowserReceiptTest(unittest.TestCase):
+    def setUp(self):
+        import hashlib
+        self.folder=tempfile.TemporaryDirectory();self.addCleanup(self.folder.cleanup)
+        self.root=Path(self.folder.name);self.path=self.root/'report.json';self.started=time.time()-1
+        self.identity={'sourceSha':'sha','sourceDigest':'digest'};self.owner='a'*32
+        (self.root/'page.png').write_bytes(b'synthetic screenshot')
+        self.value={**self.identity,'runId':'run','owner':self.owner,'result':'PASS','cleanup':'PASS',
+            'complete':True,'sourceUnchanged':True,'startedAt':self.started+.1,'endedAt':self.started+.2,
+            'checks':['one','two'],'fixture':{'owner':self.owner},'loopbackPort':12345,
+            'resources':{'owner':self.owner,'browserClosed':True,'contextClosed':True,'serverExited':True,'portReleased':True,'previewPid':1234,'ownedLoopbackOnly':True,'ownershipHandshakeChecked':True},
+            'scriptSha256':'script','realProviderRequests':0,'blockedExternalOrigins':[],
+            'artifacts':[{'path':'page.png','sha256':hashlib.sha256(b'synthetic screenshot').hexdigest()}]}
+    def verify(self,value=None):
+        from page_evidence import printer_browser_receipt
+        self.path.write_text(json.dumps(value or self.value))
+        return printer_browser_receipt(self.path,self.started,self.identity,'run',['one','two'],'script')
+    def test_printer_receipt_accepts_exact_fresh_source_and_owned_cleanup(self):
+        self.assertEqual(2,self.verify()['tests'])
+    def test_printer_receipt_rejects_claimed_cleanup_without_owned_resource_receipts(self):
+        for field,value in [('resources',{}),('cleanup','FAIL'),('sourceUnchanged',False),('complete',False)]:
+            bad=copy.deepcopy(self.value);bad[field]=value
+            with self.assertRaises(RuntimeError):self.verify(bad)
+        for key in ['browserClosed','contextClosed','serverExited','portReleased']:
+            bad=copy.deepcopy(self.value);bad['resources'][key]=False
+            with self.assertRaises(RuntimeError):self.verify(bad)
+    def test_printer_receipt_rejects_omissions_duplicates_wrong_source_or_owner(self):
+        for field,value in [('checks',['one']),('checks',['one','one']),('sourceDigest','old'),('runId','foreign'),('fixture',{'owner':'b'*32}),('scriptSha256','old-script'),('realProviderRequests',1),('blockedExternalOrigins',['external'])]:
+            bad=copy.deepcopy(self.value);bad[field]=value
+            with self.assertRaises(RuntimeError):self.verify(bad)
+    def test_printer_receipt_rejects_tampered_or_escaping_artifacts(self):
+        (self.root/'page.png').write_bytes(b'tampered')
+        with self.assertRaises(RuntimeError):self.verify()
+        bad=copy.deepcopy(self.value);bad['artifacts'][0]['path']='../page.png'
+        with self.assertRaises(RuntimeError):self.verify(bad)
+
 if __name__=='__main__':unittest.main()

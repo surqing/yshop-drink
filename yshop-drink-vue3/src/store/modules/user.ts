@@ -5,6 +5,8 @@ import { CACHE_KEY, useCache, deleteUserCache } from '@/hooks/web/useCache'
 import { getInfo, loginOut } from '@/api/login'
 
 const { wsCache } = useCache()
+// Refresh cached permissions once after restoring the printer menu on upgrade.
+const USER_INFO_CACHE_VERSION = 'printer-management-v1'
 
 interface UserVO {
   id: number
@@ -54,14 +56,14 @@ export const useUserStore = defineStore('admin-user', {
         return null
       }
       let userInfo = wsCache.get(CACHE_KEY.USER)
-      if (!userInfo) {
+      if (!userInfo || userInfo.menuCacheVersion !== USER_INFO_CACHE_VERSION) {
         userInfo = await getInfo()
       }
       this.permissions = userInfo.permissions
       this.roles = userInfo.roles
       this.user = userInfo.user
       this.isSetUser = true
-      wsCache.set(CACHE_KEY.USER, userInfo)
+      wsCache.set(CACHE_KEY.USER, { ...userInfo, menuCacheVersion: USER_INFO_CACHE_VERSION })
       wsCache.set(CACHE_KEY.ROLE_ROUTERS, userInfo.menus)
     },
     async setUserAvatarAction(avatar: string) {

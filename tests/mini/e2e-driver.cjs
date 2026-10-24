@@ -1,6 +1,12 @@
 const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto')
 const { launchOfficial } = require('./official-launch.cjs')
+const { confirmWithAccessibility, confirmationPath } = require('./native-confirmation.cjs')
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+function saveNativeConfirmationRoute(output, route) {
+  const file = path.join(output, 'native-confirmation-route-private.json')
+  fs.writeFileSync(file, JSON.stringify(route, null, 2) + '\n', { mode: 0o600 })
+  try { fs.chmodSync(file, 0o600) } catch (_) { /* Creation mode remains the fallback. */ }
+}
 async function until(read, timeout = 15000) {
   const deadline = Date.now() + timeout
   while (Date.now() < deadline) { const result = await read(); if (result) return result; await sleep(150) }
@@ -86,6 +92,47 @@ class MiniDriver {
     try { await until(async () => (await this.mini.currentPage()).path !== 'pages-user/login/login') }
     catch { throw Error('MINI_LOGIN_RETURN_TIMEOUT') }
   }
+  async scoreCheckout(product, address) {
+    const detail = await this.mini.navigateTo(`/pages-score/scoreproduct/detail?id=${product.id}`)
+    await until(async () => (await (await detail.$('.score-product-detail__title'))?.text()) === product.title)
+    await (await detail.$('.score-product-detail__btn')).tap()
+    let page = await until(async () => { const value=await this.mini.currentPage(); return value.path==='pages-score/scoreproduct/confirm'?value:null })
+    await until(() => page.$('.score-product-confirm'))
+    const addresses = await this.mini.navigateTo('/pages-user/address/address?is_choose=true&scene=scoreShop')
+    const card = await until(async () => {
+      for (const value of await addresses.$$('.address-page__card')) if ((await value.text()).includes(address.detail)) return value
+      return null
+    })
+    await card.tap()
+    page=await until(async () => {const value=await this.mini.currentPage();return value.path==='pages-score/scoreproduct/confirm'?value:null})
+    await until(async () => (await (await page.$('.score-product-confirm')).text()).includes(address.phone))
+    return page
+  }
+  async scoreSubmit(page, { loseResponse=false }={}) {
+    if(loseResponse) await this.mini.evaluate(()=>wx.setStorageSync('__e2eFault',{dropNextScoreResponse:true}))
+    const before=(await this.state()).requests.filter(r=>r.path==='/app-api/score-order/submit').length
+    const component=await until(()=>page.$('.score-product-confirm__submit'))
+    const button=await until(()=>component.$('button'))
+    await until(async()=>!(await component.$('.uv-button-wrapper--dis')))
+    await button.tap()
+    let request
+    try {request=await until(async()=>{
+      const rows=(await this.state()).requests.filter(r=>r.path==='/app-api/score-order/submit')
+      return rows.length>before && rows.at(-1).responseCode!==undefined?rows.at(-1):null
+    })} catch(error) {
+      // Keep diagnostics private and bounded; never call a page/component submit handler.
+      const read=async fn=>{try{return await fn()}catch(failure){return `UNAVAILABLE:${failure.message}`}}
+      const probe={pageId:page.id,currentPageId:(await this.mini.currentPage())?.id,
+        footer:await read(async()=>(await page.$('.fixed-bottom'))?.outerWxml()),
+        button:await read(()=>button.outerWxml()),
+        requestCount:(await this.state()).requests.filter(r=>r.path==='/app-api/score-order/submit').length}
+      fs.writeFileSync(path.join(this.output,'score-submit-private.json'),JSON.stringify(probe,null,2),{mode:0o600})
+      throw error
+    }
+    if(loseResponse) await until(async()=>(await this.state()).scoreDropped)
+    else if(request.responseCode===0) await until(async()=>(await this.mini.currentPage()).path==='pages-score/scoreproduct/order')
+    return request
+  }
   async selectStore(name) {
     const page = await this.mini.navigateTo('/pages-checkout/shop/shop')
     const items = await until(async () => { const values = await page.$$('.shop-page__item'); return values.length ? values : null })
@@ -154,6 +201,40 @@ class MiniDriver {
   async cancel() {
     const page = await this.mini.currentPage()
     const before = await this.state()
+    const route = {
+      runId: this.context.runId,
+      project: this.context.project,
+      officialMethod: 'miniprogram-automator.native().confirmModal()',
+      officialAttempted: true,
+      officialReturned: false,
+      officialFailureCode: null,
+      callbackCountBefore: before.nativeModalsConfirmed,
+      callbackCountAfterOfficial: null,
+      callbackCountAfterAccessibility: null,
+      callbackObserved: false,
+      adapter: this.context.nativeAdapter || 'disabled',
+      accessibilityAttempted: false,
+      accessibilityActionCompleted: false,
+      accessibilityFailureCode: null,
+      accessibilityReceipt: 'native-confirmation-accessibility-private.json',
+      accessibilityDiagnostics: {
+        collection: 'NOT_COLLECTED',
+        pid: null,
+        processMatchCount: null,
+        axWindowsStatusCode: null,
+        windowTotal: null,
+        windows: null,
+        ownedWindowCount: null,
+        webAreaCount: null,
+        webAreaUrls: null,
+        projectPathMatchCount: null,
+        dialogScopeCount: null,
+        confirmationNodeMatchCount: null
+      },
+      confirmationPath: 'NO_CONFIRMED_PATH',
+      result: 'IN_PROGRESS',
+      failureCode: null
+    }
     const component = await until(() => page.$('.order-cancel-button'))
     const button = await until(() => component.$('button'))
     const offset = await button.offset()
@@ -161,18 +242,74 @@ class MiniDriver {
     this.lifecycle('cancel-button-visible')
     await button.tap()
     await until(async () => (await this.state()).nativeModalsOpened > before.nativeModalsOpened)
-    await this.mini.native().confirmModal()
-    if (this.context.nativeAdapter === 'applescript') {
-      await sleep(300)
-      if ((await this.state()).nativeModalsConfirmed <= before.nativeModalsConfirmed) {
-        const { confirmWithAccessibility } = require('./native-confirmation.cjs')
-        await confirmWithAccessibility(this.context, this.output)
+    saveNativeConfirmationRoute(this.output, route)
+    try {
+      await this.mini.native().confirmModal()
+      route.officialReturned = true
+    } catch (error) {
+      route.officialFailureCode = error && (error.code || error.name) || 'OFFICIAL_NATIVE_CONFIRM_FAILED'
+      route.failureCode = 'OFFICIAL_NATIVE_CONFIRM_FAILED'
+      route.result = 'BLOCKED'
+      saveNativeConfirmationRoute(this.output, route)
+      throw error
+    }
+    await sleep(300)
+    let state = await this.state()
+    route.callbackCountAfterOfficial = state.nativeModalsConfirmed
+    route.callbackObserved = state.nativeModalsConfirmed > before.nativeModalsConfirmed
+    if (!route.callbackObserved && this.context.nativeAdapter === 'applescript') {
+      route.accessibilityAttempted = true
+      route.accessibilityDiagnostics.collection = 'IN_PROGRESS'
+      saveNativeConfirmationRoute(this.output, route)
+      try {
+        const accessibility = await confirmWithAccessibility(this.context, this.output)
+        route.accessibilityActionCompleted = accessibility.result === 'AXPRESS_COMPLETED'
+        route.accessibilityDiagnostics = { collection: 'COLLECTED', ...accessibility }
         this.evidence.nativeConfirmationAdapter = 'macos-applescript-accessibility'
         this.evidence.nativeAccessibilityPresses = (this.evidence.nativeAccessibilityPresses || 0) + 1
+      } catch (error) {
+        route.accessibilityFailureCode = error && error.code || 'ACCESSIBILITY_CONFIRMATION_FAILED'
+        if (error && error.diagnostics) route.accessibilityDiagnostics = { collection: 'COLLECTED', ...error.diagnostics }
+        route.failureCode = 'MINI_NATIVE_CONFIRMATION_UNAVAILABLE'
+        route.confirmationPath = confirmationPath({
+          accessibilityAttempted: true,
+          accessibilityActionCompleted: false,
+          callbackObserved: false
+        })
+        route.result = 'BLOCKED'
+        saveNativeConfirmationRoute(this.output, route)
+        throw Error('MINI_NATIVE_CONFIRMATION_UNAVAILABLE')
+      }
+      state = await this.state()
+      route.callbackCountAfterAccessibility = state.nativeModalsConfirmed
+      route.callbackObserved = state.nativeModalsConfirmed > before.nativeModalsConfirmed
+    }
+    if (!route.callbackObserved) {
+      try {
+        await until(async () => (await this.state()).nativeModalsConfirmed > before.nativeModalsConfirmed)
+        state = await this.state()
+        route.callbackObserved = state.nativeModalsConfirmed > before.nativeModalsConfirmed
+        if (route.accessibilityAttempted) route.callbackCountAfterAccessibility = state.nativeModalsConfirmed
+      } catch {
+        route.failureCode = 'MINI_NATIVE_CONFIRMATION_UNAVAILABLE'
+        route.confirmationPath = confirmationPath({
+          accessibilityAttempted: route.accessibilityAttempted,
+          accessibilityActionCompleted: route.accessibilityActionCompleted,
+          callbackObserved: false
+        })
+        route.result = 'BLOCKED'
+        saveNativeConfirmationRoute(this.output, route)
+        throw Error('MINI_NATIVE_CONFIRMATION_UNAVAILABLE')
       }
     }
-    try { await until(async () => (await this.state()).nativeModalsConfirmed > before.nativeModalsConfirmed) }
-    catch { throw Error('MINI_NATIVE_CONFIRMATION_UNAVAILABLE') }
+    route.confirmationPath = confirmationPath({
+      nativeCallbackObserved: route.callbackCountAfterOfficial > before.nativeModalsConfirmed,
+      accessibilityAttempted: route.accessibilityAttempted,
+      accessibilityActionCompleted: route.accessibilityActionCompleted,
+      callbackObserved: route.callbackObserved
+    })
+    route.result = 'CONFIRMED_BY_REAL_CALLBACK'
+    saveNativeConfirmationRoute(this.output, route)
     this.lifecycle('cancel-confirmed')
     await until(async () => (await this.mini.currentPage()).path === 'pages/order/order')
   }
@@ -201,6 +338,57 @@ class MiniDriver {
     const row = await this.couponRow(page, title)
     return row.text()
   }
+  async orderDetail(orderId) {
+    const page = await this.mini.navigateTo('/pages-order/orders/detail?id=' + encodeURIComponent(orderId))
+    await until(() => page.$('.order-detail-page'))
+    return page
+  }
+  async pickupStatus(page) {
+    return (await until(() => page.$('.order-detail-page'))).text()
+  }
+  async collectPickupOrder(page) {
+    const before = (await this.state()).requests.filter(row => row.path === '/app-api/order/take').length
+    let stage = 'reading-footer'
+    let footer = null
+    let button = null
+    let request
+    try {
+      footer = await until(() => page.$('.fixed-bottom'))
+      const footerWxml = await footer.outerWxml()
+      if (footerWxml.includes('uv-button-wrapper--dis')) throw Error('PICKUP_BUTTON_DISABLED')
+      stage = 'footer-enabled'
+      button = await until(() => page.getElementByXpath('//text[text()="确认取餐"]'))
+      if (!(await button.outerWxml()).includes('确认取餐')) throw Error('PICKUP_BUTTON_SELECTOR_MISMATCH')
+      stage = 'pickup-label-verified'
+      stage = 'pickup-button-enabled'
+      await button.tap()
+      stage = 'pickup-button-tapped'
+      this.lifecycle('pickup-button-tapped')
+      request = await until(async () => {
+        const rows = (await this.state()).requests.filter(row => row.path === '/app-api/order/take')
+        return rows.length > before && rows.at(-1).responseCode !== undefined ? rows.at(-1) : null
+      })
+    } catch (error) {
+      const read = async fn => { try { return await fn() } catch (failure) { return `UNAVAILABLE:${failure.message}` } }
+      const state = await this.state()
+      const probe = {
+        stage,
+        currentPage: (await this.mini.currentPage())?.path,
+        pageId: page.id,
+        footer: await read(async () => (await page.$('.fixed-bottom'))?.outerWxml()),
+        pickupButton: await read(() => footer?.outerWxml()),
+        pickupButtonNative: await read(() => button?.outerWxml()),
+        pickupButtonSize: await read(() => button?.size()),
+        pickupButtonOffset: await read(() => button?.offset()),
+        requestCountBefore: before,
+        requestCountAfter: state.requests.filter(row => row.path === '/app-api/order/take').length,
+      }
+      fs.writeFileSync(path.join(this.output, 'pickup-collect-private.json'), JSON.stringify(probe, null, 2), { mode: 0o600 })
+      throw error
+    }
+    await until(async () => (await this.pickupStatus(page)).includes('已取餐'))
+    return request
+  }
   async screenshot(name = 'failure.png') { await this.mini.screenshot({ path: path.join(this.output, name) }) }
   async diagnostics() {
     const pages = await this.mini.pageStack()
@@ -215,7 +403,8 @@ class MiniDriver {
     if (!this.mini) return
     try {
       await this.mini.evaluate(() => {
-        for (const key of ['accessToken', 'userinfo', 'selectedStore', 'cart', 'checkoutSubmission', 'mycoupon', '__e2eState', '__e2eFault']) wx.removeStorageSync(key)
+        for (const key of ['accessToken', 'userinfo', 'selectedStore', 'cart', 'checkoutSubmission', 'checkoutSubmissionByMember', 'checkoutLegacySubmission', 'mycoupon', 'score_product', '__e2eState', '__e2eFault']) wx.removeStorageSync(key)
+        for (const key of wx.getStorageInfoSync().keys) if (key.startsWith('scoreSubmission:v1:')) wx.removeStorageSync(key)
       })
       await this.mini.close()
     } finally { this.mini = null }

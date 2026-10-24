@@ -220,7 +220,15 @@ class EvidenceFaultInjection(unittest.TestCase):
         for folder in ['business','payment']:
             source=(Path(__file__).parents[1]/folder/'mysql-acceptance.py').read_text()
             self.assertGreater(source.index('print(json.dumps(summary))'),source.index('DROP DATABASE'))
-            self.assertNotIn('failIfNoSpecifiedTests=false',source)
+            if folder == 'payment':
+                self.assertNotIn('failIfNoSpecifiedTests=false',source)
+
+    def test_business_mysql_runner_compiles_checkout_dependencies_and_checks_exact_suites(self):
+        source=(Path(__file__).parents[1]/'business'/'mysql-acceptance.py').read_text()
+        self.assertIn("'-am'",source)
+        self.assertIn("'-Dsurefire.failIfNoSpecifiedTests=false'",source)
+        self.assertIn('evidence.arguments(expected)',source)
+        self.assertIn('evidence.validate()',source)
 
 class AcceptanceLifecycleFaultInjection(unittest.TestCase):
     def runner(self, folder):
@@ -242,13 +250,17 @@ class AcceptanceLifecycleFaultInjection(unittest.TestCase):
                 if provision_failure and sql.startswith(provision_failure):raise RuntimeError('SYNTHETIC_PROVISION_FAILURE')
                 if sql.startswith('SELECT VERSION'):return '8.0.46'
                 if sql.startswith('SELECT COUNT(*) FROM information_schema.SCHEMATA') or sql.startswith('SELECT COUNT(*) FROM mysql.user'):return '1' if residual else '0'
-                if sql.startswith('SELECT COUNT(*)'):return '17\t17' if folder=='business' else '12\t12'
+                if sql.startswith('SELECT COUNT(*)'):return '18\t18' if folder=='business' else '12\t12'
                 if sql.startswith('DROP') and cleanup_failure:raise RuntimeError('SYNTHETIC_CLEANUP_FAILURE')
                 return ''
             fake=SimpleNamespace(mysql=mysql)
             spec=SimpleNamespace(loader=SimpleNamespace(exec_module=lambda value:None))
             ev=Mock();ev.id='synthetic-run';ev.arguments.return_value=[];ev.validate.return_value={'tests':80,'sourceSha':'synthetic','sourceDigest':'synthetic'}
-            expected={'synthetic.OrderingDatabaseTest':{'invariant':1}} if folder=='business' else {'synthetic.PaymentDatabaseTest':{'invariant':1}}
+            expected=({'synthetic.OrderingDatabaseTest':{'invariant':1},
+                       'synthetic.OrderFulfillmentDatabaseTest':{'invariant':1},
+                       'synthetic.AppOrderTakeCompatibilityTest':{'invariant':1},
+                       'synthetic.StoreOrderStatisticsDatabaseTest':{'invariant':1}} if folder=='business'
+                      else {'synthetic.PaymentDatabaseTest':{'invariant':1}})
             stream=io.StringIO()
             with patch.object(module,'PRIVATE',root),patch.object(module,'WORKSPACE',root),patch.object(module.importlib.util,'spec_from_file_location',return_value=spec),patch.object(module.importlib.util,'module_from_spec',return_value=fake),patch.object(module,'Evidence',return_value=ev),patch.object(module,'manifest',return_value=expected),patch.object(module,'execute',return_value=exit_code),patch.object(sys,'argv',['runner']),contextlib.redirect_stdout(stream):
                 if provision_failure:
@@ -340,6 +352,34 @@ class ControlledEvidenceFaults(unittest.TestCase):
         registry={'qa.Suite':{'a':1,'b(String)[1]':1,'b(String)[2]':1}}
         self.assertEqual({'qa.Suite':{'b(String)[1]':1,'b(String)[2]':1}},scoped_cases(registry,['Suite#b']))
         with self.assertRaisesRegex(RuntimeError,'NOT_REGISTERED'):scoped_cases(registry,['Suite#missing'])
+
+    def test_mutation_method_scopes_union_without_duplicate_cases(self):
+        from mutate import scoped_cases
+        registry={'qa.Suite':{'a':1,'b(String)[1]':1,'b(String)[2]':1}}
+        self.assertEqual(registry,scoped_cases(registry,['Suite#a','Suite#b','Suite#b']))
+
+    def test_receipt_transaction_mutation_targets_only_two_argument_overload(self):
+        from mutate import OPERATORS, REPO
+        operator=next(item for item in OPERATORS if item[0]=='receipt-transaction-omission')
+        _,relative,before,after,_=operator
+        source=next(REPO.rglob(relative))
+        content=source.read_text()
+        self.assertIn('takeOrder(String orderId, Long uid)',before)
+        self.assertNotIn('expectedVersion',before)
+        self.assertEqual(1,content.count(before))
+        self.assertIn('takeOrder(String orderId, Long uid)',after)
+
+    def test_mutation_environment_discards_external_acceptance_overrides(self):
+        from mutate import mutation_environment
+        source={'PRINTER_ACCEPTANCE_CONFIG':'/outside/printer.properties',
+                'YSHOP_PRINTER_ACCEPTANCE_CONFIG':'legacy',
+                'YSHOP_SCORE_ACCEPTANCE_CONFIG':'score','YSHOP_SCORE_ACCEPTANCE_H2':'/outside/score.mv.db',
+                'KEEP_SYNTHETIC_FLAG':'yes'}
+        result=mutation_environment(source)
+        for key in ['PRINTER_ACCEPTANCE_CONFIG','YSHOP_PRINTER_ACCEPTANCE_CONFIG',
+                    'YSHOP_SCORE_ACCEPTANCE_CONFIG','YSHOP_SCORE_ACCEPTANCE_H2']:
+            self.assertNotIn(key,result)
+        self.assertEqual('yes',result['KEEP_SYNTHETIC_FLAG'])
 
     def test_private_mini_receipt_cannot_certify_tracked_asset(self):
         from inventory import collect

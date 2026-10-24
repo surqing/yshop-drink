@@ -96,12 +96,36 @@ def api(origin, path, token, context, data=None, method='GET'):
     return reply.get('data')
 
 
-def allowed_admin_origin(origin, synthetic=False):
+def allowed_admin_origin(origin, synthetic=False, ca_file=None):
     u = urllib.parse.urlsplit(origin)
-    return (u.scheme == 'https' and u.hostname in ('localhost','127.0.0.1')
-            and u.port in ((48443,48444) if synthetic else (48443,))
-            and not (u.username or u.password or u.query or u.fragment)
-            and u.path in ('','/'))
+    local_origin = (u.scheme == 'https' and u.hostname in ('localhost','127.0.0.1')
+                    and not (u.username or u.password or u.query or u.fragment)
+                    and u.path in ('','/'))
+    if not local_origin:
+        return False
+    port = u.port
+    if port in ((48443,48444) if synthetic else (48443,)):
+        return True
+    return synthetic and port is not None and 1024 <= port <= 65535 and owned_synthetic_ca(ca_file)
+
+
+def owned_synthetic_ca(ca_file):
+    tls_dir = os.environ.get('YSHOP_SYNTHETIC_TLS_DIR')
+    if not ca_file or not tls_dir:
+        return False
+    try:
+        tls_root = Path(tls_dir).resolve()
+        ca_path = Path(ca_file).resolve()
+        if ca_path != tls_root / 'ca.pem' or not ca_path.is_file():
+            return False
+        result = subprocess.run(
+            ['openssl', 'x509', '-in', str(ca_path), '-noout', '-subject', '-nameopt', 'RFC2253'],
+            capture_output=True, text=True, timeout=10, check=False)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return False
+    subject = result.stdout.strip()
+    return (result.returncode == 0 and subject.startswith('subject=')
+            and subject[len('subject='):].lstrip() == 'CN=yshop synthetic local CA')
 
 
 def run():
@@ -133,7 +157,8 @@ def run():
             raise ValueError()
         c = json.loads(cf.read_text())
         origin = c['adminOrigin']
-        if not allowed_admin_origin(origin, synthetic=isolated_schema() is not None):
+        synthetic = isolated_schema() is not None
+        if not allowed_admin_origin(origin, synthetic=synthetic, ca_file=c.get('caFile')):
             raise ValueError()
         token_file = Path(c['tokenFile'])
         if PRIVATE.resolve() not in token_file.resolve().parents:
