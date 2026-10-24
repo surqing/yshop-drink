@@ -398,6 +398,7 @@
   "co.yixiang.yshop.module.order.statistics.StoreOrderStatisticsDatabaseTest": {
     "storeSummaryCannotReadForeignShop": 1,
     "headquartersEqualsAuthorizedStoreTotals": 1,
+    "headquartersShopOptionsOnlyIncludeShopsWithOrdersInCurrentTenant": 1,
     "shanghaiMidnightBelongsToOneDay": 1,
     "emptyWindowReturnsZeroMetrics": 1
   },

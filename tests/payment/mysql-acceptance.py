@@ -101,7 +101,8 @@ def main():
         if prepayment_mode:
             if ingress_only:
                 allowed_ingress = is_owned_synthetic_ingress(
-                    env.get('YSHOP_INGRESS_BASE_URL'), env.get('YSHOP_INGRESS_CA'), env.get('YSHOP_SYNTHETIC_TLS_DIR'))
+                    env.get('YSHOP_INGRESS_BASE_URL'), env.get('YSHOP_INGRESS_CA'),
+                    env.get('YSHOP_SYNTHETIC_TLS_DIR'), env.get('YSHOP_INGRESS_OWNER'))
             else:
                 allowed_ingress = (env.get('YSHOP_INGRESS_BASE_URL') in {'https://localhost:48443','https://localhost:48444'}
                                    and bool(env.get('YSHOP_INGRESS_CA')))

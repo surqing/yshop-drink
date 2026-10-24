@@ -83,10 +83,15 @@ def main():
             except (OSError,ssl.SSLError):
                 if time.monotonic()>=deadline:raise RuntimeError('OWNED_TLS_PROXY_NOT_READY')
                 time.sleep(.1)
+        claim=folder/'ingress-target.json'
+        claim.write_text(json.dumps({'owner':name,'port':proxy_port,'serverCertSha256':expected.hex()}))
+        claim.chmod(0o600)
         env=os.environ.copy();env['YSHOP_INGRESS_BASE_URL']=f'https://localhost:{proxy_port}';env['YSHOP_INGRESS_CA']=str(folder/'ca.pem')
+        env['YSHOP_INGRESS_OWNER']=name
         result=subprocess.run([sys.executable,str(REPO/'tests/payment/mysql-acceptance.py'),'--prepayment','--ingress-only'],env=env,timeout=780)
         if result.returncode:raise RuntimeError('SYNTHETIC_INGRESS_TEST_FAILED')
     finally:
+        (folder/'ingress-target.json').unlink(missing_ok=True)
         try:
             if container_created:
                 state=json.loads(docker('inspect',name))[0]
