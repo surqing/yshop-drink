@@ -10,6 +10,15 @@ import unittest
 REPO = Path(os.environ.get('YSHOP_E2E_TEST_REPO', Path(__file__).resolve().parents[2]))
 
 class E2eCliTest(unittest.TestCase):
+    def test_order_fulfillment_suite_uses_the_separate_mysql_acceptance_gate(self):
+        quality_dir = str(REPO / 'tests/quality')
+        sys.path.insert(0, quality_dir)
+        try:
+            from run import CONDITIONAL
+            self.assertIn('OrderFulfillmentDatabaseTest', CONDITIONAL)
+        finally:
+            sys.path.remove(quality_dir)
+
     def test_complete_capability_blockage_is_not_business_failure(self):
         from e2e.runner import scenario_failure
         cases=[{'id':'a','status':'PASSED'},{'id':'b','status':'BLOCKED'}]

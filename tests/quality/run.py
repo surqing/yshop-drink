@@ -113,7 +113,10 @@ def discover_quick_suites():
     return paths
 
 
-CONDITIONAL = {'PrinterMigrationDatabaseTest','MemberIdentityMysqlAcceptanceTest','CouponCodeRedisAcceptanceTest','CallbackIngressEndToEndTest','CatalogEditingMysqlAcceptance'}
+# These suites belong to separate owned-database acceptance gates. In
+# particular, OrderFulfillmentDatabaseTest includes MySQL-only migration
+# assertions that are intentionally skipped by its generic H2 execution.
+CONDITIONAL = {'PrinterMigrationDatabaseTest','MemberIdentityMysqlAcceptanceTest','CouponCodeRedisAcceptanceTest','CallbackIngressEndToEndTest','CatalogEditingMysqlAcceptance','OrderFulfillmentDatabaseTest'}
 
 
 def source_digest():

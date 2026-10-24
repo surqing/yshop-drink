@@ -16,7 +16,7 @@
   "tests/printer/page.test.mjs": 11,
   "tests/printer/routes.test.mjs": 3,
   "tests/quality/test_e2e_acceptance.py": 22,
-  "tests/quality/test_e2e_cli.py": 13,
+  "tests/quality/test_e2e_cli.py": 14,
   "tests/quality/test_e2e_contract.py": 32,
   "tests/quality/test_e2e_environment.py": 18,
   "tests/quality/test_e2e_publish.py": 9,
