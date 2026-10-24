@@ -33,10 +33,12 @@ final class PrinterMigrationSupport {
         try {executeDelimited(jdbc,sql);}
         finally {if(mysql) jdbc.execute("DROP PROCEDURE IF EXISTS quality_check_printer_management");}
         String jobs=Files.readString(Path.of("../../sql/migrations/2026-10-22-order-print-job.sql"));
-        if(!mysql) jobs=jobs.replaceAll(" CHARACTER SET ascii COLLATE ascii_bin", "")
+        if(!mysql) jobs=jobs.replaceAll("(?s)-- MYSQL_PREFLIGHT_BEGIN.*?-- MYSQL_PREFLIGHT_END", "")
+            .replaceAll(" CHARACTER SET ascii COLLATE ascii_bin", "")
             .replaceAll(" ON UPDATE CURRENT_TIMESTAMP", "")
             .replaceAll(" ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "");
-        jdbc.execute(jobs.trim().replaceAll(";+$", ""));
+        try {executeDelimited(jdbc,jobs);}
+        finally {if(mysql) jdbc.execute("DROP PROCEDURE IF EXISTS quality_preflight_order_print_job_schema");}
         String claims=Files.readString(Path.of("../../sql/migrations/2026-10-22-order-print-device-claim.sql"));
         if(!mysql) claims=claims.replaceAll("(?s)-- MYSQL_PREFLIGHT_BEGIN.*?-- MYSQL_PREFLIGHT_END", "")
             .replaceAll(" CHARACTER SET ascii COLLATE ascii_bin", "")

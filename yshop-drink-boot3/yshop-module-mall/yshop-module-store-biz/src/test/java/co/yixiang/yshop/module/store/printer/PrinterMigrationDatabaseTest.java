@@ -59,6 +59,17 @@ class PrinterMigrationDatabaseTest {
             assertEquals(1,jdbc.queryForObject("SELECT deleted+0 FROM system_menu WHERE id=2313",Integer.class));
         } finally {jdbc.execute("DROP TABLE system_role_menu");}
     }
+    @Test void wrongSameNameOrderPrintJobColumnIsRejectedBeforeSchemaChanges() throws Exception {
+        migrate();
+        jdbc.execute("ALTER TABLE yshop_order_print_job MODIFY request_key VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL");
+        rejectedUnchanged();
+    }
+    @Test void wrongSameNameOrderPrintJobIndexIsRejectedBeforeSchemaChanges() throws Exception {
+        migrate();
+        jdbc.execute("ALTER TABLE yshop_order_print_job DROP INDEX uk_order_print_request");
+        jdbc.execute("ALTER TABLE yshop_order_print_job ADD UNIQUE KEY uk_order_print_request(tenant_id,order_id)");
+        rejectedUnchanged();
+    }
     @Test void existingPrinterSchemaUpgradePreservesOperationAndAddsRecoveryAudit() throws Exception {
         migrate();
         String token="12345678-1234-1234-1234-123456789012";

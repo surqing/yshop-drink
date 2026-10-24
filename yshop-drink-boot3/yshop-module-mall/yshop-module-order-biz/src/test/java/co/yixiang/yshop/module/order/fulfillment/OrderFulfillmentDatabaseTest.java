@@ -1,6 +1,7 @@
 package co.yixiang.yshop.module.order.fulfillment;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.*;
 
 import co.yixiang.yshop.framework.common.exception.ServiceException;
@@ -106,14 +107,8 @@ class OrderFulfillmentDatabaseTest {
         }
         if (mysql) setupMemberTables(true);
         if (mysql) {
-            String migration = Files.readString(boot.resolve("sql/migrations/2026-10-22-order-fulfillment.sql"));
-            transaction(() -> {
-                for (String sql : migration.split(";"))
-                    if (!sql.isBlank()) jdbc.execute(sql);
-                return null;
-            });
-            String printEvents = Files.readString(boot.resolve("sql/migrations/2026-10-22-order-print-event.sql"));
-            for (String sql : printEvents.split(";")) if (!sql.isBlank()) jdbc.execute(sql);
+            runMysqlMigration("2026-10-22-order-fulfillment.sql", "quality_preflight_order_fulfillment_schema");
+            runMysqlMigration("2026-10-22-order-print-event.sql", "quality_preflight_order_print_event_schema");
         }
         jdbc.update("DELETE FROM yshop_order_fulfillment_log");
         insertShops();
@@ -216,6 +211,77 @@ class OrderFulfillmentDatabaseTest {
 
     private <T> T transaction(java.util.function.Supplier<T> action) {
         return new TransactionTemplate(transactions).execute(status -> action.get());
+    }
+
+    private void runMysqlMigration(String fileName, String procedureName) throws Exception {
+        String sql = Files.readString(boot.resolve("sql/migrations").resolve(fileName));
+        String delimiter = ";";
+        StringBuilder statement = new StringBuilder();
+        try {
+            for (String line : sql.split("\\R")) {
+                String trimmed = line.trim();
+                if (trimmed.startsWith("--") || trimmed.isEmpty()) continue;
+                if (trimmed.startsWith("DELIMITER ")) {
+                    delimiter = trimmed.substring("DELIMITER ".length()).trim();
+                    continue;
+                }
+                statement.append(line).append('\n');
+                String pending = statement.toString().trim();
+                if (pending.endsWith(delimiter)) {
+                    jdbc.execute(pending.substring(0, pending.length() - delimiter.length()));
+                    statement.setLength(0);
+                }
+            }
+            assertTrue(statement.toString().isBlank(), "Unterminated migration statement in " + fileName);
+        } finally {
+            jdbc.execute("DROP PROCEDURE IF EXISTS " + procedureName);
+        }
+    }
+
+    @Test void migrationRejectsSameNameFulfillmentColumnWithWrongType() throws Exception {
+        assumeTrue(mysql, "Production migration schema assertions require isolated MySQL acceptance");
+        jdbc.execute("ALTER TABLE yshop_store_order MODIFY fulfillment_status VARCHAR(12) NOT NULL DEFAULT 'LEGACY'");
+        try {
+            assertThrows(Exception.class, () -> runMysqlMigration("2026-10-22-order-fulfillment.sql", "quality_preflight_order_fulfillment_schema"));
+        } finally {
+            jdbc.execute("ALTER TABLE yshop_store_order MODIFY fulfillment_status VARCHAR(24) NOT NULL DEFAULT 'LEGACY'");
+        }
+        runMysqlMigration("2026-10-22-order-fulfillment.sql", "quality_preflight_order_fulfillment_schema");
+    }
+
+    @Test void migrationRejectsSameNameFulfillmentQueueIndexWithWrongColumns() throws Exception {
+        assumeTrue(mysql, "Production migration schema assertions require isolated MySQL acceptance");
+        jdbc.execute("ALTER TABLE yshop_store_order DROP INDEX idx_fulfillment_queue");
+        jdbc.execute("ALTER TABLE yshop_store_order ADD INDEX idx_fulfillment_queue(shop_id,paid,fulfillment_status,update_time)");
+        try {
+            assertThrows(Exception.class, () -> runMysqlMigration("2026-10-22-order-fulfillment.sql", "quality_preflight_order_fulfillment_schema"));
+        } finally {
+            jdbc.execute("ALTER TABLE yshop_store_order DROP INDEX idx_fulfillment_queue");
+            jdbc.execute("ALTER TABLE yshop_store_order ADD INDEX idx_fulfillment_queue(fulfillment_status,paid,shop_id,update_time)");
+        }
+        runMysqlMigration("2026-10-22-order-fulfillment.sql", "quality_preflight_order_fulfillment_schema");
+    }
+
+    @Test void migrationRejectsSameNameFulfillmentAuditColumnWithWrongDefinition() throws Exception {
+        assumeTrue(mysql, "Production migration schema assertions require isolated MySQL acceptance");
+        jdbc.execute("ALTER TABLE yshop_order_fulfillment_log MODIFY request_key VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL");
+        try {
+            assertThrows(Exception.class, () -> runMysqlMigration("2026-10-22-order-fulfillment.sql", "quality_preflight_order_fulfillment_schema"));
+        } finally {
+            jdbc.execute("ALTER TABLE yshop_order_fulfillment_log MODIFY request_key VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL");
+        }
+        runMysqlMigration("2026-10-22-order-fulfillment.sql", "quality_preflight_order_fulfillment_schema");
+    }
+
+    @Test void migrationRejectsSameNamePrintEventColumnWithWrongType() throws Exception {
+        assumeTrue(mysql, "Production migration schema assertions require isolated MySQL acceptance");
+        jdbc.execute("ALTER TABLE yshop_order_fulfillment_print_event MODIFY payload_snapshot TEXT NOT NULL");
+        try {
+            assertThrows(Exception.class, () -> runMysqlMigration("2026-10-22-order-print-event.sql", "quality_preflight_order_print_event_schema"));
+        } finally {
+            jdbc.execute("ALTER TABLE yshop_order_fulfillment_print_event MODIFY payload_snapshot LONGTEXT NOT NULL");
+        }
+        runMysqlMigration("2026-10-22-order-print-event.sql", "quality_preflight_order_print_event_schema");
     }
 
     private String state() {

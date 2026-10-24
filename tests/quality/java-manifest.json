@@ -389,7 +389,11 @@
     "acceptanceEventFailureRollsBackTransitionAndAudit": 1,
     "legacyMemberCanConfirmOnlyReadyHistoricalPickupAndRewardOnce": 1,
     "legacyMemberCannotConfirmHistoricalPickupStillInPreparation": 1,
-    "legacyStaffCanCloseHistoricalPickupWithActorAudit": 1
+    "legacyStaffCanCloseHistoricalPickupWithActorAudit": 1,
+    "migrationRejectsSameNameFulfillmentColumnWithWrongType": 1,
+    "migrationRejectsSameNameFulfillmentQueueIndexWithWrongColumns": 1,
+    "migrationRejectsSameNameFulfillmentAuditColumnWithWrongDefinition": 1,
+    "migrationRejectsSameNamePrintEventColumnWithWrongType": 1
   },
   "co.yixiang.yshop.module.order.fulfillment.AppOrderTakeCompatibilityTest": {
     "oldPickupClientUsesGuardedLegacyTransition": 1,
@@ -1088,7 +1092,9 @@
     "alteredCheckConstraintIsRejected": 1,
     "unenforcedCheckConstraintIsRejected": 1,
     "printerTriggerIsRejected": 1,
-    "nonTransactionalPrinterTableIsRejected": 1
+    "nonTransactionalPrinterTableIsRejected": 1,
+    "wrongSameNameOrderPrintJobColumnIsRejectedBeforeSchemaChanges": 1,
+    "wrongSameNameOrderPrintJobIndexIsRejectedBeforeSchemaChanges": 1
   },
   "co.yixiang.yshop.module.store.service.printer.yilianyun.YilianyunProviderTest": {
     "officialFormSignatureAuthorizationAndEndpointContract": 1,
