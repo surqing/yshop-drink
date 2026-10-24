@@ -32,6 +32,7 @@ import java.security.KeyStore;
 import java.security.cert.CertificateFactory;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import javax.net.ssl.*;
 
@@ -173,6 +174,7 @@ class CallbackIngressEndToEndTest {
 
     @BeforeAll
     void start() throws Exception {
+        verifySyntheticIngressTarget();
         diagnosticsFixture = new LiveMerchantPreflightDatabaseTest();
         diagnosticsFixture.setup();
         fixture = diagnosticsFixture.v;
@@ -229,6 +231,24 @@ class CallbackIngressEndToEndTest {
                         "logging.level.root",
                         "WARN"));
         web = app.run();
+    }
+
+    private static void verifySyntheticIngressTarget() throws Exception {
+        Path root = Path.of("").toAbsolutePath().normalize();
+        while (root != null && !Files.isRegularFile(root.resolve("tests/quality/ingress_target.py"))) {
+            root = root.getParent();
+        }
+        assertNotNull(root, "SYNTHETIC_INGRESS_TARGET_VERIFIER_UNAVAILABLE");
+        Process verifier = new ProcessBuilder(
+                        "python3", root.resolve("tests/quality/ingress_target.py").toString(), "--check-env")
+                .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                .redirectError(ProcessBuilder.Redirect.DISCARD)
+                .start();
+        if (!verifier.waitFor(30, TimeUnit.SECONDS)) {
+            verifier.destroyForcibly().waitFor();
+            fail("SYNTHETIC_INGRESS_TARGET_REJECTED");
+        }
+        assertEquals(0, verifier.exitValue(), "SYNTHETIC_INGRESS_TARGET_REJECTED");
     }
 
     HttpResponse<String> post(String id, String raw, Map<String, String> h) throws Exception {

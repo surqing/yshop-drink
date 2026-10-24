@@ -66,7 +66,10 @@ def run():
         return 0
     certificates(folder)
     config = (REPO / 'scripts/payment/callback-nginx.conf').read_text()
-    config = config.replace('host.docker.internal:48081', 'host.docker.internal:' + str(a.upstream_port))
+    upstream_marker = 'host.docker.internal:48081'
+    if config.count(upstream_marker) != 3:
+        raise ValueError()
+    config = config.replace(upstream_marker, 'host.docker.internal:' + str(a.upstream_port))
     target = folder / 'nginx.conf'
     target.write_text(config)
     target.chmod(0o600)
@@ -111,7 +114,9 @@ def run():
     if not verified:
         raise RuntimeError()
     server_digest = hashlib.sha256(ssl.PEM_cert_to_DER_cert((folder / 'server.pem').read_text())).hexdigest()
-    private_json(claim, {'owner': NAME, 'port': 48443, 'serverCertSha256': server_digest})
+    private_json(claim, {'owner': NAME, 'port': 48443, 'serverCertSha256': server_digest,
+                         'upstreamPort': a.upstream_port,
+                         'configSha256': hashlib.sha256(config.encode()).hexdigest()})
     private_json(folder / 'state.json', {'image': IMAGE, 'upstreamPort': a.upstream_port,
                  'https': 'https://localhost:48443', 'systemTrustChanged': False,
                  'accessLogging': False, 'bodyOrSignatureLogging': False, 'publicIngress': False})

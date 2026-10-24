@@ -13,6 +13,7 @@ import sys
 import tarfile
 import uuid
 from evidence import workspace, source_identity
+from ingress_target import CALLBACK_UPSTREAM_PORT, expected_proxy_config
 REPO=Path(__file__).resolve().parents[2]
 IMAGE='nginx@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94'
 
@@ -53,10 +54,9 @@ def main():
         docker('volume','create','--label','quality.owner='+name,volume);volume_created=True
         archive=io.BytesIO()
         linux=sys.platform.startswith('linux')
-        config=(REPO/'scripts/payment/callback-nginx.conf').read_text().replace('host.docker.internal:48081','127.0.0.1:48881' if linux else 'host.docker.internal:48881')
+        config=expected_proxy_config(proxy_port, platform=sys.platform).decode()
         # Linux host networking preserves the test backend's loopback-only binding.
         # Docker Desktop has its own host DNS/proxy; overriding it causes 502.
-        if linux:config=linux_proxy_config(config,proxy_port)
         with tarfile.open(fileobj=archive,mode='w') as out:
             for file in ['server.pem','server-key.pem','nginx.conf']:
                 data=config.encode() if file=='nginx.conf' else (folder/file).read_bytes()
@@ -84,7 +84,9 @@ def main():
                 if time.monotonic()>=deadline:raise RuntimeError('OWNED_TLS_PROXY_NOT_READY')
                 time.sleep(.1)
         claim=folder/'ingress-target.json'
-        claim.write_text(json.dumps({'owner':name,'port':proxy_port,'serverCertSha256':expected.hex()}))
+        claim.write_text(json.dumps({'owner':name,'port':proxy_port,'serverCertSha256':expected.hex(),
+                                     'upstreamPort':CALLBACK_UPSTREAM_PORT,
+                                     'configSha256':hashlib.sha256(config.encode()).hexdigest()}))
         claim.chmod(0o600)
         env=os.environ.copy();env['YSHOP_INGRESS_BASE_URL']=f'https://localhost:{proxy_port}';env['YSHOP_INGRESS_CA']=str(folder/'ca.pem')
         env['YSHOP_INGRESS_OWNER']=name
