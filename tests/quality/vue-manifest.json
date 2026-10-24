@@ -36,7 +36,8 @@
     "order detail keeps refund status and shows pickup fulfillment separately"
   ],
   "tests/store-order-summary-date-range.test.ts": [
-    "inclusive date picker end date is sent as the next-day exclusive bound for totals and details"
+    "inclusive date picker end date is sent as the next-day exclusive bound for totals and details",
+    "a late fulfillment response cannot replace the currently selected tab orders"
   ],
   "tests/store-order-print-jobs.test.ts": [
     "refreshing an unknown job reads state without submitting a print",
