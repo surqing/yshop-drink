@@ -12,6 +12,8 @@ def run():
     env = os.environ.copy()
     env['YSHOP_INGRESS_BASE_URL'] = 'https://localhost:48443'
     env['YSHOP_INGRESS_CA'] = str(PRIVATE / 'ingress/ca.pem')
+    env['YSHOP_SYNTHETIC_TLS_DIR'] = str(PRIVATE / 'ingress')
+    env['YSHOP_INGRESS_OWNER'] = 'yshop-drink-local-ingress-streamed'
     try:
         subprocess.run([sys.executable, str(REPO / 'tests/payment/mysql-acceptance.py'), '--prepayment'],
                        env=env, check=True)

@@ -10,6 +10,7 @@ import sys
 from urllib.parse import urlsplit
 
 PROXY_IMAGE = "nginx@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94"
+MANAGED_INGRESS = "yshop-drink-local-ingress-streamed"
 
 
 def _owned_proxy_publishes(owner, port):
@@ -25,14 +26,19 @@ def _owned_proxy_publishes(owner, port):
         config = container.get("Config") or {}
         host = container.get("HostConfig") or {}
         state = container.get("State") or {}
+        managed = owner == MANAGED_INGRESS
+        labels = config.get("Labels") or {}
+        expected_label = labels.get("project") == "yshop-drink-phase5h" if managed else labels.get("quality.owner") == owner
         if (config.get("Image") != PROXY_IMAGE or config.get("Entrypoint") != ["nginx"]
                 or config.get("Cmd") != ["-c", "/tls/nginx.conf", "-g", "daemon off;"]
-                or (config.get("Labels") or {}).get("quality.owner") != owner
+                or not expected_label
                 or state.get("Running") is not True):
             return False
         if host.get("NetworkMode") == "host":
-            return sys.platform.startswith("linux")
+            return not managed and sys.platform.startswith("linux")
         bindings = (host.get("PortBindings") or {}).get("8443/tcp") or []
+        if managed and port != 48443:
+            return False
         return any(binding.get("HostIp") == "127.0.0.1" and binding.get("HostPort") == str(port)
                    for binding in bindings)
     except (OSError, subprocess.SubprocessError, TypeError, ValueError, AttributeError):
@@ -51,7 +57,8 @@ def is_owned_synthetic_ingress(base_url, ca_file, tls_dir, expected_owner=None):
             or url.username is not None or url.password is not None or url.path not in ("", "/")
             or url.query or url.fragment or ca_path != tls_root / "ca.pem" or not ca_path.is_file()
             or not isinstance(expected_owner, str)
-            or not re.fullmatch(r"yshop-quality-ingress-[0-9a-f]{12}", expected_owner)):
+            or not (re.fullmatch(r"yshop-quality-ingress-[0-9a-f]{12}", expected_owner)
+                    or expected_owner == MANAGED_INGRESS)):
         return False
     try:
         server_path = tls_root / "server.pem"

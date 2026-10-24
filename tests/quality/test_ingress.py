@@ -155,6 +155,44 @@ class SyntheticIngressTests(unittest.TestCase):
             with patch('ingress_target.sys.platform', 'darwin'):
                 self.assertFalse(_owned_proxy_publishes(owner, 49124))
 
+    def test_managed_local_proxy_requires_its_fixed_loopback_port_and_project_label(self):
+        from ingress_target import _owned_proxy_publishes, MANAGED_INGRESS
+        owner = MANAGED_INGRESS
+        managed = json.loads(self.proxy_inspect(owner, port=48443).stdout)[0]
+        managed['Config']['Labels'] = {'project': 'yshop-drink-phase5h'}
+        with patch('ingress_target.subprocess.run', return_value=CompletedProcess([], 0, json.dumps([managed]), '')):
+            self.assertTrue(_owned_proxy_publishes(owner, 48443))
+            self.assertFalse(_owned_proxy_publishes(owner, 48444))
+        managed['Config']['Labels'] = {'project': 'another-project'}
+        with patch('ingress_target.subprocess.run', return_value=CompletedProcess([], 0, json.dumps([managed]), '')):
+            self.assertFalse(_owned_proxy_publishes(owner, 48443))
+
+    def test_managed_local_proxy_passes_end_to_end_target_validation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            ca_file = root / 'ca.pem'
+            ca_file.write_text('synthetic test certificate')
+            (root / 'server.pem').write_text(
+                '-----BEGIN CERTIFICATE-----\nU1lOVEhFVElD\n-----END CERTIFICATE-----\n')
+            owner = 'yshop-drink-local-ingress-streamed'
+            (root / 'ingress-target.json').write_text(json.dumps({
+                'owner': owner, 'port': 48443,
+                'serverCertSha256': hashlib.sha256(b'SYNTHETIC').hexdigest(),
+            }))
+            managed = json.loads(self.proxy_inspect(owner, port=48443).stdout)[0]
+            managed['Config']['Labels'] = {'project': 'yshop-drink-phase5h'}
+            tls_socket = MagicMock()
+            tls_socket.getpeercert.return_value = b'SYNTHETIC'
+            context = MagicMock()
+            context.wrap_socket.return_value.__enter__.return_value = tls_socket
+            with patch('ingress_target.subprocess.run', side_effect=[CompletedProcess(
+                    [], 0, 'subject= CN=yshop synthetic local CA\n', ''),
+                    CompletedProcess([], 0, json.dumps([managed]), '')]), \
+                    patch('ssl.create_default_context', return_value=context), \
+                    patch('socket.create_connection'):
+                self.assertTrue(is_owned_synthetic_ingress(
+                    'https://localhost:48443', ca_file, root, owner))
+
     def test_owned_synthetic_ingress_rejects_nonlocal_or_unowned_targets(self):
         with tempfile.TemporaryDirectory() as folder:
             ca_file = Path(folder) / 'ca.pem'

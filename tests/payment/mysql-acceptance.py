@@ -23,7 +23,20 @@ WORKSPACE = workspace(REPO)
 PRIVATE = Path(os.environ.get('YSHOP_ACCEPTANCE_OUTPUT',str(WORKSPACE / '.local-dev/acceptance')))
 
 
+def prepayment_ingress_allowed(env):
+    """Require every callback E2E invocation to target a proven owned synthetic proxy."""
+    return is_owned_synthetic_ingress(
+        env.get('YSHOP_INGRESS_BASE_URL'), env.get('YSHOP_INGRESS_CA'),
+        env.get('YSHOP_SYNTHETIC_TLS_DIR'), env.get('YSHOP_INGRESS_OWNER'))
+
+
 def main():
+    prepayment_mode = '--prepayment' in sys.argv[1:]
+    ingress_only = '--ingress-only' in sys.argv[1:]
+    if ingress_only and not prepayment_mode:
+        raise RuntimeError('PREPAYMENT_ISOLATION_REQUIRED')
+    if prepayment_mode and not prepayment_ingress_allowed(os.environ):
+        raise RuntimeError('SYNTHETIC_LOOPBACK_INGRESS_REQUIRED')
     PRIVATE.mkdir(parents=True, exist_ok=True, mode=0o700)
     PRIVATE.chmod(0o700)
     helper = database_helper(WORKSPACE)
@@ -57,10 +70,6 @@ def main():
         return 0
     coupon_mode = '--coupon' in sys.argv[1:]
     cancellation_mode = '--cancellation' in sys.argv[1:] or coupon_mode
-    prepayment_mode = '--prepayment' in sys.argv[1:]
-    ingress_only = '--ingress-only' in sys.argv[1:]
-    if ingress_only and not prepayment_mode:
-        raise RuntimeError('PREPAYMENT_ISOLATION_REQUIRED')
     preflight_mode = '--preflight' in sys.argv[1:] or prepayment_mode or cancellation_mode
     readiness_mode = '--readiness' in sys.argv[1:] or preflight_mode
     v3_mode = '--v3' in sys.argv[1:] or readiness_mode
@@ -99,15 +108,6 @@ def main():
         if coupon_mode:
             command[-2] += ',CouponPaymentDatabaseTest'
         if prepayment_mode:
-            if ingress_only:
-                allowed_ingress = is_owned_synthetic_ingress(
-                    env.get('YSHOP_INGRESS_BASE_URL'), env.get('YSHOP_INGRESS_CA'),
-                    env.get('YSHOP_SYNTHETIC_TLS_DIR'), env.get('YSHOP_INGRESS_OWNER'))
-            else:
-                allowed_ingress = (env.get('YSHOP_INGRESS_BASE_URL') in {'https://localhost:48443','https://localhost:48444'}
-                                   and bool(env.get('YSHOP_INGRESS_CA')))
-            if not allowed_ingress:
-                raise RuntimeError('SYNTHETIC_LOOPBACK_INGRESS_REQUIRED')
             command[-2] += ',CallbackIngressEndToEndTest'
             if ingress_only:
                 command[-2] = '-Dtest=CallbackIngressEndToEndTest'
