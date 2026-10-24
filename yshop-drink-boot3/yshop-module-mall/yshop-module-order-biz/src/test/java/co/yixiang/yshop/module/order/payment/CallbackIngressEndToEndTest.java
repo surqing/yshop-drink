@@ -36,7 +36,7 @@ import java.util.*;
 import javax.net.ssl.*;
 
 /** Actual HTTPS -> Nginx -> Tomcat -> production security/MVC -> official SDK -> database. */
-@EnabledIfEnvironmentVariable(named = "YSHOP_INGRESS_BASE_URL", matches = "https://localhost:4844[34]")
+@EnabledIfEnvironmentVariable(named = "YSHOP_INGRESS_BASE_URL", matches = "https://localhost:(?:4844[34]|[1-9][0-9]{3,4})")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CallbackIngressEndToEndTest {

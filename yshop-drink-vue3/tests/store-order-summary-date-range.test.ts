@@ -60,3 +60,29 @@ test('inclusive date picker end date is sent as the next-day exclusive bound for
   await state().loadSummary()
   expect(mocks.getStoreOrderSummary).toHaveBeenLastCalledWith({ from: '2031-12-31', to: '2032-01-01' })
 })
+
+test('a late fulfillment response cannot replace the currently selected tab orders', async () => {
+  await flushPromises()
+  vi.clearAllMocks()
+
+  let resolveWaitAccept!: (value: { list: { id: number }[]; total: number }) => void
+  let resolveReady!: (value: { list: { id: number }[]; total: number }) => void
+  mocks.getStoreOrderPage
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveWaitAccept = resolve }))
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveReady = resolve }))
+
+  state().queryParams.fulfillmentStatus = 'WAIT_ACCEPT'
+  const waitAcceptRequest = state().getList()
+  state().queryParams.fulfillmentStatus = 'READY'
+  const readyRequest = state().getList()
+  expect(mocks.getStoreOrderPage).toHaveBeenNthCalledWith(1, expect.objectContaining({ fulfillmentStatus: 'WAIT_ACCEPT' }))
+  expect(mocks.getStoreOrderPage).toHaveBeenNthCalledWith(2, expect.objectContaining({ fulfillmentStatus: 'READY' }))
+  resolveReady({ list: [{ id: 22 }], total: 1 })
+  await readyRequest
+  resolveWaitAccept({ list: [{ id: 11 }], total: 1 })
+  await waitAcceptRequest
+
+  expect(state().queryParams.fulfillmentStatus).toBe('READY')
+  expect(state().list).toEqual([{ id: 22 }])
+  expect(state().total).toBe(1)
+})

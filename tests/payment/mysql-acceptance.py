@@ -18,6 +18,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / 'tests/quality'))
 from evidence import Evidence, execute, manifest, workspace
 from acceptance_support import mysql_port, maven_command, database_helper, supported_mysql, assert_removed
+from ingress_target import is_owned_synthetic_ingress
 WORKSPACE = workspace(REPO)
 PRIVATE = Path(os.environ.get('YSHOP_ACCEPTANCE_OUTPUT',str(WORKSPACE / '.local-dev/acceptance')))
 
@@ -98,7 +99,13 @@ def main():
         if coupon_mode:
             command[-2] += ',CouponPaymentDatabaseTest'
         if prepayment_mode:
-            if env.get('YSHOP_INGRESS_BASE_URL') not in {'https://localhost:48443','https://localhost:48444'} or not env.get('YSHOP_INGRESS_CA'):
+            if ingress_only:
+                allowed_ingress = is_owned_synthetic_ingress(
+                    env.get('YSHOP_INGRESS_BASE_URL'), env.get('YSHOP_INGRESS_CA'), env.get('YSHOP_SYNTHETIC_TLS_DIR'))
+            else:
+                allowed_ingress = (env.get('YSHOP_INGRESS_BASE_URL') in {'https://localhost:48443','https://localhost:48444'}
+                                   and bool(env.get('YSHOP_INGRESS_CA')))
+            if not allowed_ingress:
                 raise RuntimeError('SYNTHETIC_LOOPBACK_INGRESS_REQUIRED')
             command[-2] += ',CallbackIngressEndToEndTest'
             if ingress_only:

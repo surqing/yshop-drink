@@ -63,7 +63,7 @@ class StoreOrderStatisticsDatabaseTest {
         boot = Path.of("").toAbsolutePath();
         while (!Files.exists(boot.resolve("sql/yixiang-drink-open.sql"))) boot = boot.getParent();
         if (!mysql) {
-            jdbc.execute("CREATE TABLE yshop_store_shop(id BIGINT PRIMARY KEY,name VARCHAR(100) NOT NULL,mobile VARCHAR(20) NOT NULL,images VARCHAR(100) NOT NULL,address VARCHAR(100) NOT NULL,address_map VARCHAR(100) NOT NULL,start_time TIMESTAMP NOT NULL,end_time TIMESTAMP NOT NULL,lng VARCHAR(30) NOT NULL,lat VARCHAR(30) NOT NULL,status INT NOT NULL,admin_id VARCHAR(100) NOT NULL,tenant_id BIGINT DEFAULT 0,deleted BIT DEFAULT 0)");
+            jdbc.execute("CREATE TABLE yshop_store_shop(id BIGINT PRIMARY KEY,name VARCHAR(100) NOT NULL,mobile VARCHAR(20) NOT NULL,images VARCHAR(100) NOT NULL,address VARCHAR(100) NOT NULL,address_map VARCHAR(100) NOT NULL,start_time TIMESTAMP NOT NULL,end_time TIMESTAMP NOT NULL,lng VARCHAR(30) NOT NULL,lat VARCHAR(30) NOT NULL,status INT NOT NULL,admin_id VARCHAR(100) NOT NULL,deleted BIT DEFAULT 0)");
             jdbc.execute("CREATE TABLE yshop_store_order(id BIGINT PRIMARY KEY,order_id VARCHAR(32) NOT NULL UNIQUE,uid BIGINT NOT NULL,shop_id BIGINT,tenant_id BIGINT DEFAULT 0,order_type VARCHAR(32),paid INT NOT NULL,status INT NOT NULL,refund_status INT NOT NULL,refund_price DECIMAL(8,2) NOT NULL DEFAULT 0,pay_price DECIMAL(8,2) NOT NULL DEFAULT 0,pay_time TIMESTAMP,total_num INT NOT NULL DEFAULT 0,is_system_del INT DEFAULT 0,deleted BIT DEFAULT 0,fulfillment_status VARCHAR(24) DEFAULT 'LEGACY',pay_type VARCHAR(32) NOT NULL,mark VARCHAR(512) NOT NULL,cost DECIMAL(8,2) NOT NULL,create_time TIMESTAMP NOT NULL)");
             jdbc.execute("CREATE TABLE yshop_store_order_cart_info(id BIGINT AUTO_INCREMENT PRIMARY KEY,oid BIGINT NOT NULL,order_id VARCHAR(32),cart_info CLOB NOT NULL)");
         } else ensureMysqlFixtures();
@@ -138,6 +138,17 @@ class StoreOrderStatisticsDatabaseTest {
         assertEquals(java.util.List.of(shopOne), service.authorizedShops().stream().map(StoreOrderStatisticsService.ShopOption::id).toList());
         assertThrows(AccessDeniedException.class,
                 () -> service.summary(shopTwo, LocalDate.parse("2026-10-22"), LocalDate.parse("2026-10-23")));
+    }
+
+    @Test
+    void headquartersShopOptionsOnlyIncludeShopsWithOrdersInCurrentTenant() {
+        insertOrder(shopOne, 101, 1, 0, "0", "20", 2, "WAIT_ACCEPT", "2031-10-22T10:00:00");
+        insertOrder(shopTwo, 102, 1, 0, "0", "30", 3, "WAIT_ACCEPT", "2031-10-22T11:00:00");
+        headquartersUsers.add(103L);
+        login(103, 101L);
+
+        assertEquals(java.util.List.of(shopOne), service.authorizedShops().stream()
+                .map(StoreOrderStatisticsService.ShopOption::id).toList());
     }
 
     @Test

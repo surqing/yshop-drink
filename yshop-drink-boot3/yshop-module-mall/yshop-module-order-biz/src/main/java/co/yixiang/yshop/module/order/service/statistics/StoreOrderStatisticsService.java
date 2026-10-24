@@ -77,14 +77,21 @@ public class StoreOrderStatisticsService {
     @Transactional(readOnly = true)
     public List<ShopOption> authorizedShops() {
         Scope scope = scope(null);
-        String sql = "SELECT id,name FROM yshop_store_shop WHERE deleted=0";
-        Object[] args = new Object[0];
-        if (!scope.headquarters()) {
+        String sql;
+        Object[] args;
+        if (scope.headquarters()) {
+            // yshop_store_shop is global and has no tenant_id; expose only shops represented by this tenant's orders.
+            sql = "SELECT s.id,s.name FROM yshop_store_shop s WHERE s.deleted=0 AND EXISTS ("
+                    + "SELECT 1 FROM yshop_store_order o WHERE o.shop_id=s.id AND o.deleted=0 "
+                    + "AND o.is_system_del=0 AND COALESCE(o.tenant_id,0)=?)";
+            args = new Object[] {scope.arguments().get(0)};
+        } else {
+            sql = "SELECT id,name FROM yshop_store_shop WHERE deleted=0";
             String placeholders = String.join(",", java.util.Collections.nCopies(scope.authorizedShopIds().size(), "?"));
             sql += " AND id IN (" + placeholders + ")";
             args = scope.authorizedShopIds().toArray();
         }
-        sql += " ORDER BY name,id";
+        sql += scope.headquarters() ? " ORDER BY s.name,s.id" : " ORDER BY name,id";
         return jdbc.query(sql, (rs, row) -> new ShopOption(rs.getLong("id"), rs.getString("name")), args);
     }
 

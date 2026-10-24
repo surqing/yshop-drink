@@ -9,6 +9,7 @@ import json
 import shutil
 import subprocess
 import tempfile
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[2] / 'scripts/payment'
 sys.path.insert(0, str(SCRIPTS))
@@ -51,6 +52,9 @@ class Evidence(unittest.TestCase):
         self.assertFalse(provision.allowed_admin_origin('https://localhost:48444'))
         self.assertTrue(provision.allowed_admin_origin('https://localhost:48444',synthetic=True))
         self.assertTrue(provision.allowed_admin_origin('https://localhost:48443'))
+        with patch.object(provision,'owned_synthetic_ca',return_value=True) as verify_ca:
+            self.assertTrue(provision.allowed_admin_origin('https://localhost:49124',synthetic=True,ca_file='synthetic-ca.pem'))
+        verify_ca.assert_called_once_with('synthetic-ca.pem')
 
     def test_synthetic_origin_does_not_allow_public_or_unsafe_urls(self):
         for url in ['http://localhost:48444','https://example.invalid:48444','https://user@localhost:48444','https://localhost:48444?x=1','https://localhost:48444/#fragment','https://localhost:48445']:

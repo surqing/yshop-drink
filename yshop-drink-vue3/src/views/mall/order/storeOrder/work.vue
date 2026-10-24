@@ -183,6 +183,7 @@ const queryParams = reactive({
 const queryFormRef = ref() // 搜索的表单
 const exportLoading = ref(false) // 导出的加载中
 const transitioningId = ref<number | null>(null)
+const listRequestSequence = ref(0)
 
 const activeName = ref('WAIT_ACCEPT')
 
@@ -310,14 +311,17 @@ const transitionOrder = async (order: StoreOrderApi.StoreOrderVO) => {
 
 /** 查询列表 */
 const getList = async () => {
+ const requestSequence = ++listRequestSequence.value
+ const params = { ...queryParams }
  loading.value = true
  try {
-   const data = await StoreOrderApi.getStoreOrderPage(queryParams)
-   list.value = data.list
-   //console.log("aa:",list.value)
-   total.value = data.total
+   const data = await StoreOrderApi.getStoreOrderPage(params)
+   if (requestSequence === listRequestSequence.value) {
+     list.value = data.list
+     total.value = data.total
+   }
  } finally {
-   loading.value = false
+   if (requestSequence === listRequestSequence.value) loading.value = false
  }
 }
 
