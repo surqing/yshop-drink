@@ -106,6 +106,10 @@ class StoreOrderStatisticsDatabaseTest {
         }
         if (jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_store_order' AND COLUMN_NAME='fulfillment_status'", Integer.class) == 0)
             jdbc.execute("ALTER TABLE yshop_store_order ADD COLUMN fulfillment_status VARCHAR(24) NOT NULL DEFAULT 'LEGACY'");
+        if (jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_store_order' AND COLUMN_NAME='fulfillment_version'", Integer.class) == 0)
+            jdbc.execute("ALTER TABLE yshop_store_order ADD COLUMN fulfillment_version INT NOT NULL DEFAULT 0");
+        if (jdbc.queryForObject("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_store_order' AND INDEX_NAME='idx_fulfillment_queue'", Integer.class) == 0)
+            jdbc.execute("ALTER TABLE yshop_store_order ADD INDEX idx_fulfillment_queue(fulfillment_status,paid,shop_id,update_time)");
     }
 
     private long insertOrder(long shopId, int tenant, int paid, int refundStatus, String refundPrice,
