@@ -215,27 +215,30 @@ class OrderFulfillmentDatabaseTest {
 
     private void runMysqlMigration(String fileName, String procedureName) throws Exception {
         String sql = Files.readString(boot.resolve("sql/migrations").resolve(fileName));
-        String delimiter = ";";
-        StringBuilder statement = new StringBuilder();
-        try {
-            for (String line : sql.split("\\R")) {
-                String trimmed = line.trim();
-                if (trimmed.startsWith("--") || trimmed.isEmpty()) continue;
-                if (trimmed.startsWith("DELIMITER ")) {
-                    delimiter = trimmed.substring("DELIMITER ".length()).trim();
-                    continue;
+        transaction(() -> {
+            String delimiter = ";";
+            StringBuilder statement = new StringBuilder();
+            try {
+                for (String line : sql.split("\\R")) {
+                    String trimmed = line.trim();
+                    if (trimmed.startsWith("--") || trimmed.isEmpty()) continue;
+                    if (trimmed.startsWith("DELIMITER ")) {
+                        delimiter = trimmed.substring("DELIMITER ".length()).trim();
+                        continue;
+                    }
+                    statement.append(line).append('\n');
+                    String pending = statement.toString().trim();
+                    if (pending.endsWith(delimiter)) {
+                        jdbc.execute(pending.substring(0, pending.length() - delimiter.length()));
+                        statement.setLength(0);
+                    }
                 }
-                statement.append(line).append('\n');
-                String pending = statement.toString().trim();
-                if (pending.endsWith(delimiter)) {
-                    jdbc.execute(pending.substring(0, pending.length() - delimiter.length()));
-                    statement.setLength(0);
-                }
+                assertTrue(statement.toString().isBlank(), "Unterminated migration statement in " + fileName);
+            } finally {
+                jdbc.execute("DROP PROCEDURE IF EXISTS " + procedureName);
             }
-            assertTrue(statement.toString().isBlank(), "Unterminated migration statement in " + fileName);
-        } finally {
-            jdbc.execute("DROP PROCEDURE IF EXISTS " + procedureName);
-        }
+            return null;
+        });
     }
 
     @Test void migrationRejectsSameNameFulfillmentColumnWithWrongType() throws Exception {
