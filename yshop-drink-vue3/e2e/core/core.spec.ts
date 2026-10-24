@@ -750,27 +750,41 @@ async function storeStatistics(f: Flow) {
       let started!: () => void, release!: () => void
       const startedA = new Promise<void>(resolve => { started = resolve })
       const gate = new Promise<void>(resolve => { release = resolve })
-      let responseA: any
+      let dataA: any
       const slowPath = '**/admin-api/order/store-order/store-summary*'
       const handler = async (route: any) => {
         const url = new URL(route.request().url())
         if (url.searchParams.get('shopId') !== '101') return route.fallback()
-        responseA = await route.fetch(); started(); await gate; await route.fulfill({ response: responseA })
+        const backendUrl = `${context.backend}${url.pathname}${url.search}`
+        const response = await route.fetch({ url: backendUrl })
+        expect(response.status()).toBe(200)
+        expect(response.ok()).toBe(true)
+        const result = await response.json()
+        expect(result.code).toBe(0)
+        dataA = result.data
+        const paramsA = summaryParams(backendUrl)
+        expect(paramsA.shopId).toBe('101')
+        assertSummaryMatchesSql(dataA, f.oracle('store-summary', { ...paramsA, shopId: 101 })[0])
+        started(); await gate; await route.fulfill({ response })
       }
       await f.page.route(slowPath, handler)
       try {
         const selector = f.page.locator('.el-form-item').filter({ hasText: '统计门店' }).locator('.el-select')
         await selector.click()
-        const requestA = f.page.waitForResponse((r: any) => r.url().includes('/store-summary?') && new URL(r.url()).searchParams.get('shopId') === '101')
+        const requestA = f.page.waitForRequest((r: any) => r.url().includes('/store-summary?') && new URL(r.url()).searchParams.get('shopId') === '101')
         await f.page.getByRole('option', { name: 'QA Shop A', exact: true }).click()
         await startedA
         const storeB = await chooseStatsShop(f.page, 'QA Shop B')
         const paramsB = summaryParams(storeB.url); expect(paramsB.shopId).toBe('102')
         const amountB = Number(storeB.data.grossPaidAmount).toFixed(2)
+        const amountA = Number(dataA.grossPaidAmount).toFixed(2)
+        expect(amountA).not.toBe(amountB)
         await expect(statsCard(f.page, '订单实付额（毛额）')).toContainText(amountB)
+        const finishedA = requestA.then((request: any) => f.page.waitForEvent('requestfinished', (finished: any) => finished === request))
         release()
-        await requestA
-        await expect(statsCard(f.page, '订单实付额（毛额）')).toContainText(amountB)
+        await finishedA
+        await f.page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+        await expect(statsCard(f.page, '订单实付额（毛额）'), 'late Shop A response must not replace Shop B statistics').toContainText(amountB)
         assertSummaryMatchesSql(storeB.data, f.oracle('store-summary', { ...paramsB, shopId: 102 })[0])
       } finally {
         release(); await f.page.unroute(slowPath, handler)
