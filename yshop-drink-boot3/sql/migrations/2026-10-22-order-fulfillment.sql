@@ -11,6 +11,7 @@ BEGIN
   DECLARE matched_index_count INT DEFAULT 0;
   DECLARE constraint_count INT DEFAULT 0;
   DECLARE trigger_count INT DEFAULT 0;
+  DECLARE schema_failure_detail VARCHAR(128) DEFAULT '';
 
   SELECT COUNT(*) INTO table_count FROM information_schema.TABLES
     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_store_order';
@@ -48,7 +49,8 @@ SELECT COUNT(*) INTO matched_column_count FROM (
           AND BINARY actual.COLUMN_DEFAULT <=> BINARY expected.default_value))
       AND LOWER(actual.EXTRA)=LOWER(expected.extra);
   IF actual_column_count NOT IN (0,2) OR (actual_column_count=2 AND matched_column_count<>2) THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='ORDER_FULFILLMENT_COLUMN_SCHEMA_MISMATCH';
+    SET schema_failure_detail=CONCAT('ORDER_FULFILLMENT_COLUMN_SCHEMA_MISMATCH:',actual_column_count,':',matched_column_count);
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT=schema_failure_detail;
   END IF;
   SELECT COUNT(DISTINCT INDEX_NAME) INTO actual_index_count FROM information_schema.STATISTICS
     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yshop_store_order' AND INDEX_NAME='idx_fulfillment_queue';
