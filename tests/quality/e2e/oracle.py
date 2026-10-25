@@ -26,6 +26,12 @@ def operation_token(value):
     return "'"+value+"'"
 
 
+def batch_id(value):
+    if not isinstance(value,str) or not re.fullmatch(r'[0-9a-f]{32}',value):
+        raise ValueError('BATCH_ID_INVALID')
+    return "'"+value+"'"
+
+
 def date_range(ids):
     values=[]
     for key in ('from','to'):
@@ -148,6 +154,28 @@ def query_for(name, ids):
                 " UNION ALL SELECT JSON_OBJECT('kind','bill','id',id,'orderId',extend_field,'memberId',uid,'amount',number,'category',category,'type',type,'pm',pm) FROM yshop_user_bill WHERE extend_field="+oid+';')
     if name=='inventory':
         return "SELECT JSON_OBJECT('stock',stock,'skuId',id,'productId',product_id,'price',price) FROM yshop_store_product_attr_value WHERE id="+number(ids.get('skuId'))+';'
+    if name=='batch-stock-product':
+        product=number(ids.get('productId'));sku=number(ids.get('skuId'))
+        return ("SELECT JSON_OBJECT('shopId',p.shop_id,'productStock',p.stock,'skuStock',s.stock,"
+                "'batchCount',(SELECT COUNT(DISTINCT o.batch_id) FROM yshop_product_operation o WHERE o.product_id=p.id AND o.batch_id IS NOT NULL),"
+                "'batchOperationCount',(SELECT COUNT(*) FROM yshop_product_operation o WHERE o.product_id=p.id AND o.batch_id IS NOT NULL)) "
+                "FROM yshop_store_product p JOIN yshop_store_product_attr_value s ON s.product_id=p.id WHERE p.id="+product+" AND s.id="+sku+';')
+    if name=='batch-stock-state':
+        batch=batch_id(ids.get('batchId'));product=number(ids.get('productId'));sku=number(ids.get('skuId'))
+        return ("SELECT JSON_OBJECT('batchId',b.batch_id,'shopId',b.shop_id,'state',b.state,'skuStock',s.stock,'productStock',p.stock,"
+                "'batchRows',(SELECT COUNT(*) FROM yshop_product_stock_batch WHERE batch_id="+batch+"),"
+                "'operationRows',(SELECT COUNT(*) FROM yshop_product_operation WHERE batch_id="+batch+"),"
+                "'operationDelta',(SELECT delta_value FROM yshop_product_operation WHERE batch_id="+batch+" AND product_id="+product+" AND sku_id="+sku+"),"
+                "'beforeStock',(SELECT before_value FROM yshop_product_operation WHERE batch_id="+batch+" AND product_id="+product+" AND sku_id="+sku+"),"
+                "'afterStock',(SELECT after_value FROM yshop_product_operation WHERE batch_id="+batch+" AND product_id="+product+" AND sku_id="+sku+")) "
+                "FROM yshop_product_stock_batch b JOIN yshop_store_product p ON p.id="+product+" JOIN yshop_store_product_attr_value s ON s.id="+sku+
+                " WHERE b.batch_id="+batch+" AND s.product_id=p.id;")
+    if name=='batch-stock-financial':
+        return ("SELECT JSON_OBJECT('payments',(SELECT COUNT(*) FROM yshop_order_payment),"
+                "'attempts',(SELECT COUNT(*) FROM yshop_order_payment_attempt),"
+                "'bills',(SELECT COUNT(*) FROM yshop_user_bill),"
+                "'walletTransactions',(SELECT COUNT(*) FROM yshop_member_wallet_transaction),"
+                "'recharges',(SELECT COUNT(*) FROM yshop_member_recharge_order));")
     if name=='product':
         return "SELECT JSON_OBJECT('id',id,'shopId',shop_id,'version',catalog_version,'name',store_name,'stock',stock,'giveIntegral',give_integral) FROM yshop_store_product WHERE id="+number(ids.get('productId'))+';'
     if name=='coupon-right':

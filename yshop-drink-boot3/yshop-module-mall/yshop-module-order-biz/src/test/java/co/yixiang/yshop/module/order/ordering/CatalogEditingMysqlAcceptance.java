@@ -23,6 +23,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import org.mybatis.spring.SqlSessionTemplate;
+import java.nio.file.Files;
 import java.util.*;
 
 /** Explicit MySQL acceptance (not an H2 substitute). Exercises original catalog save path. */
@@ -69,4 +70,36 @@ class CatalogEditingMysqlAcceptance {
         assertEquals(0,fixture.n("SELECT COUNT(*) FROM yshop_store_product_attr_value WHERE product_id=? AND price=0",id));
     }
     @RepeatedTest(20) void skuEditAndReservationRace() throws Exception {var p=dto();long id=created(p);long sku=fixture.f.db.queryForObject("SELECT id FROM yshop_store_product_attr_value WHERE product_id=?",Long.class,id);var successes=fixture.f.parallel(20,()->{fixture.f.access(103,false);try{if(java.util.concurrent.ThreadLocalRandom.current().nextBoolean()){var edit=dto();edit.setId(id);edit.setCatalogVersion(1L);edit.getAttrs().get(0).setPrice(18D);edit.setSpecType(1);edit.setItems(List.of(FromatDetailDto.builder().value("杯型").detail(List.of("大杯")).build()));edit.getAttrs().get(0).setDetail(Map.of("杯型","大杯"));edit.getAttrs().get(0).setStock(2);products.insertAndEditYxStoreProduct(edit);}else{var req=fixture.f.request();req.setProductId(List.of(Long.toString(id)));req.setSpec(List.of("默认"));req.setChoices(List.of(new co.yixiang.yshop.module.product.service.catalog.CatalogOptions.Choice(1,List.of())));fixture.f.place(req);}return true;}catch(co.yixiang.yshop.framework.common.exception.ServiceException e){return false;}});assertTrue(successes.contains(true));assertEquals(sku,fixture.n("SELECT id FROM yshop_store_product_attr_value WHERE product_id=? AND sku='默认'",id));assertEquals(5-fixture.n("SELECT COUNT(*) FROM yshop_store_order"),fixture.n("SELECT stock FROM yshop_store_product_attr_value WHERE id=?",sku));assertEquals(0,fixture.n("SELECT COUNT(*) FROM yshop_store_order WHERE paid<>0 OR pay_price<>15"));assertEquals(fixture.n("SELECT SUM(stock) FROM yshop_store_product_attr_value WHERE product_id=?",id),fixture.n("SELECT stock FROM yshop_store_product WHERE id=?",id));for(String order:fixture.f.db.queryForList("SELECT order_id FROM yshop_store_order",String.class))fixture.f.orders.cancel(order,1L,false);assertEquals(5,fixture.n("SELECT stock FROM yshop_store_product_attr_value WHERE id=?",sku));assertEquals(fixture.n("SELECT SUM(stock) FROM yshop_store_product_attr_value WHERE product_id=?",id),fixture.n("SELECT stock FROM yshop_store_product WHERE id=?",id));}
+
+    @Test void batchStockMigrationRerunsAndPreservesLegacyHistory() throws Exception {
+        var f=fixture.f;
+        fixture.catalog.adjustStock(1,1,10,-1,"legacy history before R4",UUID.randomUUID().toString());
+        String legacyId=f.db.queryForObject("SELECT operation_id FROM yshop_product_operation WHERE reason='legacy history before R4'",String.class);
+        String migration=Files.readString(f.boot.resolve("sql/migrations/2026-10-25-product-stock-batch.sql"));
+        var tx=new org.springframework.transaction.support.TransactionTemplate(f.tm);
+        for(int run=0;run<2;run++) tx.executeWithoutResult(s->{for(String part:migration.split(";"))if(!part.isBlank())f.db.execute(part);});
+        assertEquals(1,fixture.n("SELECT COUNT(*) FROM yshop_product_operation WHERE operation_id=?",legacyId));
+        assertEquals(9,fixture.n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertNull(f.db.queryForObject("SELECT batch_id FROM yshop_product_operation WHERE operation_id=?",String.class,legacyId));
+        assertNull(f.db.queryForObject("SELECT delta_value FROM yshop_product_operation WHERE operation_id=?",Integer.class,legacyId));
+        fixture.catalog.adjustStock(1,1,9,1,"legacy endpoint after R4",UUID.randomUUID().toString());
+        assertEquals(10,fixture.n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        var result=fixture.stockBatches.apply(1,List.of(new co.yixiang.yshop.module.product.service.catalog.BatchStockOperationsService.LineInput(1,1,10,2)),"new batch after migration","migration_batch_0123456789abcdef");
+        assertEquals(12,fixture.n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(2,fixture.n("SELECT delta_value FROM yshop_product_operation WHERE batch_id=?",result.batchId()));
+        assertEquals(1,fixture.n("SELECT COUNT(*) FROM yshop_product_stock_batch WHERE batch_id=?",result.batchId()));
+    }
+
+    @Test void batchStockMigrationRejectsIncompatibleHeaderAndPreservesLegacyHistory() throws Exception {
+        var f=fixture.f;
+        fixture.catalog.adjustStock(1,1,10,-1,"legacy history before incompatible migration",UUID.randomUUID().toString());
+        String legacyId=f.db.queryForObject("SELECT operation_id FROM yshop_product_operation WHERE reason='legacy history before incompatible migration'",String.class);
+        f.db.execute("DROP TABLE yshop_product_stock_batch");
+        f.db.execute("CREATE TABLE yshop_product_stock_batch(batch_id CHAR(32) PRIMARY KEY) ENGINE=InnoDB");
+        String migration=Files.readString(f.boot.resolve("sql/migrations/2026-10-25-product-stock-batch.sql"));
+        var tx=new org.springframework.transaction.support.TransactionTemplate(f.tm);
+        assertThrows(RuntimeException.class,()->tx.executeWithoutResult(s->{for(String part:migration.split(";"))if(!part.isBlank())f.db.execute(part);}));
+        assertEquals(1,fixture.n("SELECT COUNT(*) FROM yshop_product_operation WHERE operation_id=?",legacyId));
+        assertEquals(9,fixture.n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+    }
 }

@@ -76,12 +76,12 @@ class E2eCliTest(unittest.TestCase):
             self.assertEqual(0,result.returncode,result.stderr)
             report=json.loads(result.stdout)
             self.assertEqual('local',report['profile'])
-            self.assertEqual(['score-redemption','score-retry','printer-unknown','pickup-contact','auth-session','catalog-order','store-isolation','order-retry',
+            self.assertEqual(['score-redemption','score-retry','printer-unknown','pickup-contact','auth-session','catalog-order','batch-stock-operations','store-isolation','order-retry',
                               'order-cancel','coupon-release','coupon-complete','pickup-fulfillment','store-statistics','order-print-jobs',
                               'printer-operation-recovery','printer-operation-recovery-tenant-enabled'],
                              [s['id'] for s in report['scenarios']])
             for scenario in report['scenarios']:
-                if scenario['id'] in ('printer-unknown','store-statistics','order-print-jobs','printer-operation-recovery',
+                if scenario['id'] in ('printer-unknown','store-statistics','order-print-jobs','batch-stock-operations','printer-operation-recovery',
                                       'printer-operation-recovery-tenant-enabled'):
                     self.assertEqual('api-admin',scenario['variant'])
                     self.assertNotIn('mini',scenario['requiredCapabilities'])
@@ -95,7 +95,7 @@ class E2eCliTest(unittest.TestCase):
         self.assertEqual(0,result.returncode,result.stderr)
         report=json.loads(result.stdout)
         self.assertEqual('NOT_RUN',report['miniStatus'])
-        self.assertEqual(16,len(report['scenarios']))
+        self.assertEqual(17,len(report['scenarios']))
         self.assertTrue(all(s['variant']=='api-admin' for s in report['scenarios']))
 
     def test_f3_recovery_order_and_quick_contracts_are_registered(self):
@@ -107,7 +107,7 @@ class E2eCliTest(unittest.TestCase):
                           'cross-store-print-denied','print-job-sql-audit'],checks)
         self.assertLess(checks.index('unknown-recovery-audited'),checks.index('manual-reprint-audited'))
         quick=json.loads((REPO/'tests/quality/quick-manifest.json').read_text())
-        self.assertEqual(10,quick['tests/quality/test_e2e_oracle_contract.py'])
+        self.assertEqual(12,quick['tests/quality/test_e2e_oracle_contract.py'])
         self.assertEqual(13,quick['tests/quality/test_e2e_support.py'])
         recovery=listing('ci','printer-operation-recovery')['scenarios'][0]
         self.assertEqual('api-admin',recovery['variant'])
@@ -134,6 +134,18 @@ class E2eCliTest(unittest.TestCase):
         self.assertEqual('NOT_RUN',plan['miniStatus'])
         self.assertEqual('backend-admin-subset',plan['scope'])
         self.assertEqual('api-admin',plan['scenarios'][0]['variant'])
+
+    def test_repeated_scenario_selection_keeps_exact_order_and_rejects_duplicates(self):
+        result=self.invoke('E2E','--profile','local','--scenario','batch-stock-operations',
+                           '--scenario','catalog-order','--scenario','store-isolation','--list')
+        self.assertEqual(0,result.returncode,result.stderr)
+        plan=json.loads(result.stdout)
+        self.assertEqual(['batch-stock-operations','catalog-order','store-isolation'],
+                         [scenario['id'] for scenario in plan['scenarios']])
+        self.assertEqual('REQUIRED',plan['miniStatus'])
+        duplicate=self.invoke('E2E','--profile','local','--scenario','catalog-order','--scenario','catalog-order','--list')
+        self.assertEqual(2,duplicate.returncode)
+        self.assertIn('DUPLICATE_E2E_SCENARIO',duplicate.stderr)
 
     def test_missing_official_tools_blocks_local_without_ci_fallback(self):
         with tempfile.TemporaryDirectory() as folder:

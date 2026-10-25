@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { getAccessToken, removeToken } from '@/utils/auth'
 import { CACHE_KEY, useCache, deleteUserCache } from '@/hooks/web/useCache'
 import { getInfo, loginOut } from '@/api/login'
+import { clearPendingBatchRequests } from '@/utils/batchStockSession'
 
 const { wsCache } = useCache()
 // Refresh cached permissions once after restoring the printer menu on upgrade.
@@ -87,6 +88,7 @@ export const useUserStore = defineStore('admin-user', {
       this.resetState()
     },
     resetState() {
+      try { clearPendingBatchRequests(window.sessionStorage) } catch {}
       this.permissions = []
       this.roles = []
       this.isSetUser = false

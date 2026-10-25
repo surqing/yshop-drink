@@ -4,6 +4,25 @@ export interface CatalogGroup { id: string; name: string; kind: 'CUSTOM' | 'TOPP
 export interface CatalogConfig { groups: CatalogGroup[] }
 export interface CatalogSku { id: number; sku: string; price: number | string; stock: number; is_show: number }
 export interface CatalogData { version: number; configuration: CatalogConfig; skus: CatalogSku[] }
+export interface BatchStockLineInput { productId: number; skuId: number; expectedStock: number; delta: number }
+export interface BatchStockPreviewLine extends BatchStockLineInput {
+  productName: string
+  skuName: string
+  currentStock: number
+  afterStock: number
+  conflictCode: string | null
+}
+export interface BatchStockPreview { eligible: boolean; rows: BatchStockPreviewLine[] }
+export interface BatchStockBody { shopId: number; lines: BatchStockLineInput[]; reason: string }
+export interface BatchStockAppliedLine { productId: number; skuId: number; beforeStock: number; delta: number; afterStock: number; reason: string }
+export interface BatchStockResult {
+  batchId: string
+  shopId: number
+  state: 'APPLIED'
+  lines: BatchStockAppliedLine[]
+  appliedAt: string
+}
+export interface BatchStockResultLookup { status: 'CONFIRMED' | 'UNCONFIRMED'; batch: BatchStockResult | null }
 export const configuration = (productId: number): Promise<CatalogData> => request.get({ url: '/product/catalog/configuration', params: { productId } })
 export const configure = (productId: number, version: number, configuration: CatalogConfig) => request.put({ url: '/product/catalog/configuration', data: { productId, version, configuration } })
 export const stock = (data: { productId: number; skuId: number; expected: number; delta: number; reason: string; key: string }) => request.post({ url: '/product/catalog/stock', data })
@@ -12,3 +31,6 @@ export const skuSale = (data: { productId: number; skuId: number; enabled: boole
 export const history = (productId: number): Promise<Record<string, unknown>[]> => request.get({ url: '/product/catalog/history', params: { productId } })
 export const copy = (data: { sourceId: number; targetShopId: number; targetCategoryId: number; key: string }): Promise<number> => request.post({ url: '/product/catalog/copy', data })
 export const batch = (ids: number[], sale?: number, categoryId?: number) => request.post({ url: '/product/catalog/batch', data: { ids, sale, categoryId } })
+export const previewStockBatch = (data: BatchStockBody): Promise<BatchStockPreview> => request.post({ url: '/product/catalog/stock-batches/preview', data })
+export const applyStockBatch = (data: BatchStockBody & { key: string }): Promise<BatchStockResult> => request.post({ url: '/product/catalog/stock-batches', data })
+export const getStockBatchResult = (key: string): Promise<BatchStockResultLookup> => request.get({ url: '/product/catalog/stock-batches/result', params: { key } })

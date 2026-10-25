@@ -188,7 +188,22 @@
     "jsonQuantityCannotBeCoerced(String)[2]": 1,
     "jsonQuantityCannotBeCoerced(String)[3]": 1,
     "batchAllOrNothingOnCrossStore": 1,
-    "batchWrongCategoryRollsBack": 1
+    "batchWrongCategoryRollsBack": 1,
+    "batchStockPreviewIsReadOnlyAndReportsExpectedStockConflict": 1,
+    "batchStockAppliesMultipleSkusAtomicallyAndReplaysNormalizedRequest": 1,
+    "batchStockStaleSecondSkuRejectsEveryLineWithoutAudit": 1,
+    "batchStockSecondAuditFailureRollsBackHeaderAndFirstSku": 1,
+    "batchStockSameKeyConcurrentCallsApplyExactlyOnce": 1,
+    "batchStockDifferentKeysCompeteOnExpectedValueWithoutPartialWrite": 1,
+    "batchStockRejectsInvalidAndCrossStoreRequestsWithoutDisclosureOrWrites": 1,
+    "batchStockSupportsExactlyOneHundredUniqueSkus": 1,
+    "batchStockPreservesReservationAndHistoricalOrderSnapshot": 1,
+    "batchStockResultAndReplayRequireCurrentShopPermission": 1,
+    "batchStockSameKeyRejectsEveryChangedSemanticField": 1,
+    "batchStockApiRejectsNonIntegerOrOverflowQuantities(String)[1]": 1,
+    "batchStockApiRejectsNonIntegerOrOverflowQuantities(String)[2]": 1,
+    "batchStockApiRejectsNonIntegerOrOverflowQuantities(String)[3]": 1,
+    "batchStockApiRejectsNonIntegerOrOverflowQuantities(String)[4]": 1
   },
   "co.yixiang.yshop.module.order.ordering.CatalogEditingMysqlAcceptance": {
     "originalCreateProducesSkuAndInitialInventoryAudit": 1,
@@ -196,6 +211,8 @@
     "failedCreationDoesNotLeaveOrphans": 1,
     "categoryCrossStoreAndThreeLevelRejected": 1,
     "multiSkuEditReadbackKeepsExactPricesAndSavingDoesNotZeroThem": 1,
+    "batchStockMigrationRerunsAndPreservesLegacyHistory": 1,
+    "batchStockMigrationRejectsIncompatibleHeaderAndPreservesLegacyHistory": 1,
     "skuEditAndReservationRace": 20
   },
   "co.yixiang.yshop.module.order.ordering.CouponCodeRedisAcceptanceTest": {

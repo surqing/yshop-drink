@@ -28,7 +28,7 @@
           <el-table-column label="销售状态"><template #default="{ row }"><el-button @click="toggle(row)">{{ row.is_show ? '停售此规格' : '恢复销售' }}</el-button></template></el-table-column>
           <el-table-column label="经营操作"><template #default="{ row }"><el-button @click="adjust(row)">调整库存</el-button><el-button @click="changePrice(row)">修改售价</el-button></template></el-table-column>
         </el-table>
-        <el-table :data="operations"><el-table-column label="操作人" prop="actor_id" /><el-table-column label="类型"><template #default="{ row }">{{ operationLabel(row.kind) }}</template></el-table-column><el-table-column label="原值" prop="before_value" /><el-table-column label="新值" prop="after_value" /><el-table-column label="原因" prop="reason" /><el-table-column label="时间"><template #default="{ row }">{{ formatDate(row.create_time) }}</template></el-table-column></el-table>
+        <el-table :data="operations"><el-table-column label="操作人" prop="actor_id" /><el-table-column label="类型"><template #default="{ row }">{{ operationLabel(row.kind, row.batch_id) }}</template></el-table-column><el-table-column label="原值" prop="before_value" /><el-table-column label="增减" prop="delta_value" /><el-table-column label="新值" prop="after_value" /><el-table-column label="关联批次" prop="batch_id" min-width="190" /><el-table-column label="原因" prop="reason" /><el-table-column label="时间"><template #default="{ row }">{{ formatDate(row.create_time) }}</template></el-table-column></el-table>
       </el-tab-pane>
       <el-tab-pane label="复制到其他门店" name="copy">
         <el-alert title="复制后为独立商品，默认下架、零库存，不会覆盖目标门店现有商品和价格。" :closable="false" />
@@ -45,7 +45,7 @@ import * as ShopApi from '@/api/mall/store/shop'
 import * as CategoryApi from '@/api/mall/product/category'
 import { ElMessageBox } from 'element-plus'
 import { formatDate } from '@/utils/formatTime'
-const operationLabel = (kind: string) => (({ STOCK: '库存调整', PRICE: '售价调整', COPY: '跨店复制' } as Record<string, string>)[kind] || kind)
+const operationLabel = (kind: string, batchId?: string) => batchId ? '批量库存调整' : (({ STOCK: '库存调整', PRICE: '售价调整', COPY: '跨店复制' } as Record<string, string>)[kind] || kind)
 const message = useMessage()
 const visible = ref(false), busy = ref(false), tab = ref('options'), productId = ref(0)
 const data = ref<api.CatalogData>({ version: 0, configuration: { groups: [] }, skus: [] })

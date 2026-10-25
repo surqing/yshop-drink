@@ -221,6 +221,241 @@ async function catalogOrder(f: Flow) {
   })
 }
 
+async function batchStockOperations(f: Flow) {
+  let product: any, skuId = 0, committed: any, forwarded: any, beforeFinancial: any
+  let commitMode: 'reject-business' | 'drop-response' | 'forward' = 'forward'
+  await f.check('batch-stock-fixture-created', async () => {
+    product = await f.createProduct(101, 'batch-stock', 19)
+    skuId = Number(product.skus[0].id)
+    expect(f.oracle('batch-stock-product', { productId: product.id, skuId })[0]).toMatchObject({
+      shopId: 101, productStock: 10, skuStock: 10, batchCount: 0, batchOperationCount: 0
+    })
+    beforeFinancial = f.oracle('batch-stock-financial', {})[0]
+  })
+
+  await f.check('batch-stock-api-rejects-non-integer-quantities', async () => {
+    const invalidLines = [
+      { expectedStock: '10', delta: 1 },
+      { expectedStock: true, delta: 1 },
+      { expectedStock: 10.5, delta: 1 },
+      { expectedStock: 2147483648, delta: 1 },
+      { expectedStock: 10, delta: '1' },
+      { expectedStock: 10, delta: false },
+      { expectedStock: 10, delta: 1.5 },
+      { expectedStock: 10, delta: 2147483648 }
+    ]
+    for (const invalid of invalidLines) {
+      const response = await f.api('POST', '/admin-api/product/catalog/stock-batches/preview', {
+        shopId: 101, lines: [{ productId: product.id, skuId, ...invalid }], reason: 'strict API integers'
+      }, f.adminToken, false)
+      expect(response.code).not.toBe(0)
+    }
+    expect(f.oracle('batch-stock-product', { productId: product.id, skuId })[0]).toMatchObject({
+      productStock: 10, skuStock: 10, batchCount: 0, batchOperationCount: 0
+    })
+    expect(f.oracle('batch-stock-financial', {})[0]).toEqual(beforeFinancial)
+  })
+
+  await f.check('batch-stock-preview-on-real-page', async () => {
+    await f.page.goto('/mall/products')
+    const shopItem = f.page.locator('.el-form-item').filter({ hasText: '门店' }).first()
+    await shopItem.locator('.el-select').click()
+    await f.page.getByRole('option', { name: 'QA Shop A', exact: true }).click()
+    await f.page.getByPlaceholder('请输入商品名称', { exact: true }).fill(product.name)
+    const pageLoad = f.page.waitForResponse(response => response.url().includes('/admin-api/product/store-product/page?'))
+    await f.page.getByRole('button', { name: '搜索', exact: true }).click()
+    await pageLoad
+    const productRow = f.page.getByRole('row').filter({ hasText: product.name })
+    await expect(productRow).toBeVisible()
+    await productRow.locator('.el-checkbox__inner').click()
+    await f.page.getByRole('button', { name: '批量库存调整', exact: true }).click()
+    const dialog = f.page.locator('.el-dialog:visible').filter({ hasText: '批量库存调整' })
+    await expect(dialog).toBeVisible()
+    const skuRow = dialog.getByRole('row').filter({ hasText: product.skus[0].sku })
+    await skuRow.locator('.el-input-number input').fill('2')
+    await dialog.getByPlaceholder('填写本批库存调整原因').fill('R4 E2 restock')
+    const previewWait = f.page.waitForResponse(response => response.url().includes('/admin-api/product/catalog/stock-batches/preview') && response.request().method() === 'POST')
+    await dialog.getByRole('button', { name: '预览调整结果', exact: true }).click()
+    const response = await previewWait
+    expect(response.status()).toBe(200)
+    const body = await response.json()
+    expect(body.code).toBe(0)
+    expect(body.data).toMatchObject({ eligible: true, rows: [{ productId: product.id, skuId, currentStock: 10, expectedStock: 10, delta: 2, afterStock: 12, conflictCode: null }] })
+    await expect(dialog).toContainText('可提交')
+  })
+
+  await f.check('batch-stock-http-200-business-error-is-not-success', async () => {
+    const dialog = f.page.locator('.el-dialog:visible').filter({ hasText: '批量库存调整' })
+    const endpoint = '**/admin-api/product/catalog/stock-batches'
+    await f.page.route(endpoint, async route => {
+      if (route.request().method() !== 'POST' || commitMode !== 'reject-business') return route.fallback()
+      commitMode = 'drop-response'
+      const rejected = { code: 500, msg: 'Synthetic business rejection', data: null }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rejected) })
+    })
+    const responseWait = f.page.waitForResponse(response => response.url().endsWith('/admin-api/product/catalog/stock-batches') && response.request().method() === 'POST')
+    commitMode = 'reject-business'
+    await dialog.getByRole('button', { name: '确认批量调整', exact: true }).click()
+    const response = await responseWait
+    expect(response.status()).toBe(200)
+    expect((await response.json()).code).toBe(500)
+    await expect(dialog).toContainText('服务端已拒绝本次调整')
+    await expect(dialog).not.toContainText('已提交，共')
+    expect(f.oracle('batch-stock-product', { productId: product.id, skuId })[0]).toMatchObject({
+      productStock: 10, skuStock: 10, batchCount: 0, batchOperationCount: 0
+    })
+    await dialog.locator('.el-input-number input').fill('3')
+    const previewWait = f.page.waitForResponse(response => response.url().includes('/admin-api/product/catalog/stock-batches/preview') && response.request().method() === 'POST')
+    await dialog.getByRole('button', { name: '预览调整结果', exact: true }).click()
+    const previewResponse = await previewWait
+    expect(previewResponse.status()).toBe(200)
+    expect((await previewResponse.json()).data).toMatchObject({ eligible: true, rows: [{ delta: 3, afterStock: 13 }] })
+  })
+
+  await f.check('batch-stock-lost-response-recovers-by-original-key', async () => {
+    const dialog = f.page.locator('.el-dialog:visible').filter({ hasText: '批量库存调整' })
+    await f.page.route('**/admin-api/product/catalog/stock-batches', async route => {
+      if (route.request().method() !== 'POST' || commitMode !== 'drop-response') return route.fallback()
+      const body = route.request().postDataJSON()
+      const requestUrl = new URL(route.request().url())
+      const response = await route.fetch({ url: `${context.backend}${requestUrl.pathname}${requestUrl.search}` })
+      expect(response.status()).toBe(200)
+      const result = await response.json()
+      expect(result.code).toBe(0)
+      expect(result.data.state).toBe('APPLIED')
+      forwarded = { key: body.key, result: result.data }
+      await route.abort('failed')
+    })
+    const applyRequest = f.page.waitForRequest(request => request.url().endsWith('/admin-api/product/catalog/stock-batches') && request.method() === 'POST')
+    await dialog.getByRole('button', { name: '确认批量调整', exact: true }).click()
+    const submitted = await applyRequest
+    expect(submitted.postDataJSON().lines).toEqual([{ productId: product.id, skuId, expectedStock: 10, delta: 3 }])
+    await expect(dialog).toContainText('提交响应未确认')
+    await expect(dialog).not.toContainText('已提交，共')
+    expect(forwarded?.key).toBe(submitted.postDataJSON().key)
+    committed = forwarded.result
+    expect(f.oracle('batch-stock-state', { batchId: forwarded.result.batchId, productId: product.id, skuId })[0]).toMatchObject({
+      batchId: forwarded.result.batchId, shopId: 101, state: 'APPLIED', skuStock: 13, productStock: 13, batchRows: 1,
+      operationRows: 1, operationDelta: 3, beforeStock: 10, afterStock: 13
+    })
+    const resultWait = f.page.waitForResponse(response => response.url().includes('/admin-api/product/catalog/stock-batches/result?') && response.request().method() === 'GET')
+    await dialog.getByRole('button', { name: '查询原请求结果', exact: true }).click()
+    const recovered = await resultWait
+    expect(recovered.status()).toBe(200)
+    expect((await recovered.json()).data).toMatchObject({ status: 'CONFIRMED', batch: { batchId: forwarded.result.batchId, state: 'APPLIED' } })
+    await expect(dialog).toContainText(`批次 ${forwarded.result.batchId} 已提交`)
+  })
+
+  await f.check('batch-stock-history-page-links-batch-and-line-delta', async () => {
+    const dialog = f.page.locator('.el-dialog:visible').filter({ hasText: '批量库存调整' })
+    await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+    const productRow = f.page.getByRole('row').filter({ hasText: product.name })
+    const historyWait = f.page.waitForResponse(response => response.url().includes('/admin-api/product/catalog/history?') && response.request().method() === 'GET')
+    await productRow.getByRole('button', { name: '经营设置', exact: true }).click()
+    const catalogDialog = f.page.locator('.el-dialog:visible').filter({ hasText: '商品经营设置' })
+    await catalogDialog.getByText('规格价格与库存', { exact: true }).click()
+    const historyResponse = await historyWait
+    expect(historyResponse.status()).toBe(200)
+    const history = await historyResponse.json()
+    expect(history.code).toBe(0)
+    expect(history.data).toEqual(expect.arrayContaining([expect.objectContaining({ batch_id: forwarded.result.batchId, delta_value: 3, reason: 'R4 E2 restock' })]))
+    await expect(catalogDialog).toContainText(forwarded.result.batchId)
+    await expect(catalogDialog).toContainText('R4 E2 restock')
+  })
+
+  await f.check('batch-stock-shop-switch-ignores-late-preview', async () => {
+    const catalogDialog = f.page.locator('.el-dialog:visible').filter({ hasText: '商品经营设置' })
+    await catalogDialog.locator('.el-dialog__header .cursor-pointer').last().click()
+    const shopBProduct = await f.createProduct(102, 'shop-b-stock', 19)
+    const shopFilter = f.page.locator('.el-form-item').filter({ hasText: '门店' }).first()
+    const searchFor = async (shopName: string, productName: string) => {
+      await shopFilter.locator('.el-select').click()
+      await f.page.getByRole('option', { name: shopName, exact: true }).click()
+      await f.page.getByPlaceholder('请输入商品名称', { exact: true }).fill(productName)
+      const pageLoad = f.page.waitForResponse(response => response.url().includes('/admin-api/product/store-product/page?'))
+      await f.page.getByRole('button', { name: '搜索', exact: true }).click()
+      await pageLoad
+    }
+    await searchFor('QA Shop A', product.name)
+    const rowA = f.page.getByRole('row').filter({ hasText: product.name })
+    await expect(rowA).toBeVisible()
+    await rowA.locator('.el-checkbox__inner').click()
+    await f.page.getByRole('button', { name: '批量库存调整', exact: true }).click()
+
+    let releaseSlow: () => void = () => {}
+    let signalSlowReady: () => void = () => {}
+    let signalSlowFinished: () => void = () => {}
+    const slowGate = new Promise<void>(resolve => { releaseSlow = resolve })
+    const slowReady = new Promise<void>(resolve => { signalSlowReady = resolve })
+    const slowFinished = new Promise<void>(resolve => { signalSlowFinished = resolve })
+    const previewEndpoint = '**/admin-api/product/catalog/stock-batches/preview'
+    let held = false
+    await f.page.route(previewEndpoint, async route => {
+      if (held || route.request().method() !== 'POST') return route.fallback()
+      held = true
+      const requestUrl = new URL(route.request().url())
+      const response = await route.fetch({ url: `${context.backend}${requestUrl.pathname}${requestUrl.search}` })
+      signalSlowReady()
+      await slowGate
+      await route.fulfill({ response })
+      signalSlowFinished()
+    })
+    try {
+      const dialogA = f.page.locator('.el-dialog:visible').filter({ hasText: '批量库存调整' })
+      await dialogA.locator('.el-input-number input').fill('1')
+      await dialogA.getByPlaceholder('填写本批库存调整原因').fill('late preview A')
+      await dialogA.getByRole('button', { name: '预览调整结果', exact: true }).click()
+      await slowReady
+      await dialogA.getByRole('button', { name: '关闭', exact: true }).click()
+
+      await searchFor('QA Shop B', shopBProduct.name)
+      const rowB = f.page.getByRole('row').filter({ hasText: shopBProduct.name })
+      await expect(rowB).toBeVisible()
+      await rowB.locator('.el-checkbox__inner').click()
+      await f.page.getByRole('button', { name: '批量库存调整', exact: true }).click()
+      const dialogB = f.page.locator('.el-dialog:visible').filter({ hasText: '批量库存调整' })
+      const skuRowB = dialogB.getByRole('row').filter({ hasText: shopBProduct.skus[0].sku })
+      await expect(skuRowB).toBeVisible()
+      await skuRowB.locator('.el-input-number input').fill('1')
+      await dialogB.getByPlaceholder('填写本批库存调整原因').fill('active preview B')
+      const previewB = f.page.waitForResponse(response => response.url().includes('/admin-api/product/catalog/stock-batches/preview') && response.request().method() === 'POST')
+      await dialogB.getByRole('button', { name: '预览调整结果', exact: true }).click()
+      const responseB = await previewB
+      expect(responseB.status()).toBe(200)
+      expect((await responseB.json()).data.rows).toMatchObject([{ productId: shopBProduct.id, skuId: shopBProduct.skus[0].id, currentStock: 10, expectedStock: 10, delta: 1, afterStock: 11 }])
+      await expect(dialogB).toContainText('可提交')
+
+      const lateResponse = f.page.waitForResponse(response => {
+        if (!response.url().includes('/admin-api/product/catalog/stock-batches/preview') || response.request().method() !== 'POST') return false
+        return response.request().postDataJSON().lines?.[0]?.productId === product.id
+      })
+      releaseSlow()
+      const responseA = await lateResponse
+      expect(responseA.status()).toBe(200)
+      expect((await responseA.json()).data.rows).toMatchObject([{ productId: product.id, skuId, currentStock: 13, expectedStock: 13, delta: 1, afterStock: 14 }])
+      await slowFinished
+      const previewRowsB = dialogB.locator('.el-table').last().locator('.el-table__row')
+      await expect(previewRowsB).toHaveCount(1)
+      await expect(previewRowsB.first()).toContainText(shopBProduct.skus[0].sku)
+      await expect(previewRowsB.first()).toContainText(shopBProduct.name)
+      await expect(previewRowsB.first()).not.toContainText(product.name)
+      expect(f.oracle('batch-stock-product', { productId: shopBProduct.id, skuId: shopBProduct.skus[0].id })[0]).toMatchObject({
+        shopId: 102, productStock: 10, skuStock: 10, batchCount: 0, batchOperationCount: 0
+      })
+    } finally {
+      releaseSlow()
+      await f.page.unroute(previewEndpoint)
+    }
+  })
+
+  await f.check('batch-stock-sql-and-financial-invariants', () => {
+    const row = f.oracle('batch-stock-state', { batchId: committed.batchId, productId: product.id, skuId })
+    expect(row[0].state).toBe('APPLIED')
+    expect(row[0]).toMatchObject({ batchRows: 1, operationRows: 1, operationDelta: 3, beforeStock: 10, afterStock: 13, skuStock: 13, productStock: 13 })
+    expect(f.oracle('batch-stock-financial', {})[0]).toEqual(beforeFinancial)
+  })
+}
+
 async function storeIsolation(f: Flow) {
   const a = await f.createProduct(101, 'isolation-a'), b = await f.createProduct(102, 'isolation-b', 20)
   const member = await f.member(), other = await f.member(2)
@@ -1856,6 +2091,7 @@ const scenarios: Record<string, (flow: Flow) => Promise<void>> = {
   'pickup-fulfillment': pickupFulfillment, 'store-statistics': storeStatistics, 'order-print-jobs': orderPrintJobs,
   'pickup-contact': pickupContact, 'auth-session': authSession, 'catalog-order': catalogOrder, 'store-isolation': storeIsolation,
   'order-retry': orderRetry, 'order-cancel': orderCancel,
+  'batch-stock-operations': batchStockOperations,
   'coupon-release': flow => couponFlow(flow, false), 'coupon-complete': flow => couponFlow(flow, true),
   'printer-operation-recovery': printerOperationRecovery,
   'printer-operation-recovery-tenant-enabled': printerOperationRecoveryTenantEnabled

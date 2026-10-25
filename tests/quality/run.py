@@ -366,7 +366,7 @@ def main():
     p.add_argument('--run-report',action='append',default=[])
     p.add_argument('--output',default=os.environ.get('YSHOP_QUALITY_OUTPUT',str(Path(tempfile.gettempdir())/'yshop-quality')))
     p.add_argument('--profile',choices=['local','ci'])
-    p.add_argument('--scenario')
+    p.add_argument('--scenario',action='append',help='Select an E2E scenario; repeat to run a focused suite')
     p.add_argument('--list',action='store_true',dest='list_scenarios')
     a=p.parse_args()
     if a.mode=='E2E':

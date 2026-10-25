@@ -36,7 +36,13 @@ local 还需要 macOS、HBuilderX、已登录且启用服务端口的微信开�
 
 ## 场景和边界
 
-完整集合为 14 个必需场景：`score-redemption`、`score-retry`、`printer-unknown`、`pickup-contact`、`auth-session`、`catalog-order`、`store-isolation`、`order-retry`、`order-cancel`、`coupon-release`、`coupon-complete`、`pickup-fulfillment`、`store-statistics`、`order-print-jobs`。local 中 11 个场景使用官方 Mini 并标为 `mini-admin`；`printer-unknown`、`store-statistics`、`order-print-jobs` 使用真实后台页面和所属后端，标为 `api-admin`，Mini 明确 NOT_RUN。ci 的 14 个场景均为 `api-admin`，小程序明确 NOT_RUN。
+完整集合为 17 个必需场景，其中新增 `batch-stock-operations`：真实后台页面和接口验证 JSON 严格整数、批量预览、切店时 A 店迟到预览不会覆盖 B 店、HTTP 200 业务失败、已提交但响应丢失后的原 key 恢复、经营历史与只读 SQL 不变量。local 中 11 个场景使用官方 Mini 并标为 `mini-admin`；`printer-unknown`、`store-statistics`、`order-print-jobs`、`batch-stock-operations` 及两项 printer recovery 场景使用真实后台页面和所属后端，标为 `api-admin`，Mini 明确 NOT_RUN。ci 的 17 个场景均为 `api-admin`，小程序明确 NOT_RUN。对 R4 可重复指定精确场景集合，例如：
+
+```sh
+.quality/venv/bin/python tests/quality/run.py E2E --profile local \
+  --scenario batch-stock-operations --scenario catalog-order --scenario store-isolation \
+  --scenario order-retry --scenario order-cancel --output /private/tmp/yshop-r4-e2e-1
+```
 
 新增页面场景范围如下：
 
