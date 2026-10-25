@@ -78,6 +78,27 @@ export interface ResolveUnknownRequest {
   notPrintedConfirmed: boolean
   printedConfirmed: boolean
 }
+export interface PendingPrinterOperation {
+  printerId: number
+  operationToken: string
+  operationType: string
+  requestId: string | null
+  startedAt: PrinterTime | null
+}
+export interface ResolvePrinterOperationRequest {
+  id: number
+  operationToken: string
+  reason: string
+  senderStopped: true
+  providerWorkSettled: true
+}
+export interface PrinterOperationResolution {
+  printerId: number
+  operationToken: string
+  operationType: string
+  outcome: string
+  resolvedAt: PrinterTime
+}
 export interface ShopOption {
   id: number
   name: string
@@ -132,3 +153,10 @@ export const reprintOrderPrintJob = (data: ReprintRequest) =>
   request.post<OrderPrintJob>({ url: '/store/order-print-job/reprint', data })
 export const resolveUnknownOrderPrintJob = (data: ResolveUnknownRequest) =>
   request.post<OrderPrintJob>({ url: '/store/order-print-job/resolve-unknown', data })
+export const getPendingPrinterOperation = (id: number) =>
+  request.get<PendingPrinterOperation | null>({
+    url: '/store/printer/operation/pending',
+    params: { id }
+  })
+export const resolvePrinterOperation = (data: ResolvePrinterOperationRequest) =>
+  request.post<PrinterOperationResolution>({ url: '/store/printer/operation/resolve', data })

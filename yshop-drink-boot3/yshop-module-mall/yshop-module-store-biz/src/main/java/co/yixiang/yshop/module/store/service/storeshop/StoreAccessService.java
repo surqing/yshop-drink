@@ -2,6 +2,7 @@ package co.yixiang.yshop.module.store.service.storeshop;
 
 import co.yixiang.yshop.framework.security.core.util.SecurityFrameworkUtils;
 import co.yixiang.yshop.module.system.api.permission.PermissionApi;
+import co.yixiang.yshop.module.system.api.user.AdminUserApi;
 
 import lombok.RequiredArgsConstructor;
 
@@ -17,6 +18,7 @@ import java.util.*;
 public class StoreAccessService {
     private final JdbcTemplate jdbc;
     private final PermissionApi permissions;
+    private final AdminUserApi adminUsers;
 
     public boolean headquarters() {
         var user = SecurityFrameworkUtils.getLoginUser();
@@ -41,6 +43,16 @@ public class StoreAccessService {
 
     public void requireHeadquarters() {
         if (!headquarters()) throw new AccessDeniedException("HEADQUARTERS_REQUIRED");
+    }
+
+    /**
+     * When tenant support is disabled, token creation can lose the request tenant and
+     * default the cached OAuth tenant to 0. Do not let that collapsed claim select the
+     * single-tenant data scope for a principal whose persisted account belongs elsewhere.
+     */
+    public void requirePrincipalTenant(Long userId, Long authenticatedTenantId) {
+        if (!adminUsers.matchesUserTenant(userId, authenticatedTenantId))
+            throw new AccessDeniedException("STORE_TENANT_MISMATCH");
     }
 
     public void requireShop(Long shopId) {

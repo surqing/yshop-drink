@@ -24,6 +24,12 @@ public interface AdminUserApi {
     AdminUserRespDTO getUser(Long id);
 
     /**
+     * Internal authorization check against the current, non-deleted database record.
+     * This method is for in-process module calls and is not an HTTP endpoint.
+     */
+    boolean matchesUserTenant(Long id, Long expectedTenantId);
+
+    /**
      * 通过用户 ID 查询用户下属
      *
      * @param id 用户编号

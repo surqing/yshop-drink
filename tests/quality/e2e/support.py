@@ -36,6 +36,7 @@ class TestSupport:
     def __init__(self,repo,root,identity,owner):
         self.repo=Path(repo);self.root=Path(root);self.identity=identity;self.owner=owner
         self.mailbox=self.root/('commands-'+owner)
+        self.tenant_enabled_port=None
 
     def prepare(self):
         jar=self.repo/'yshop-drink-boot3/yshop-server/target/yshop-server.jar'
@@ -68,9 +69,61 @@ class TestSupport:
         config['info']['e2eTestSupport']='provider-boundaries-only'
         config['yshop']['payment']={'recovery-delay-ms':3600000}
 
+    def configure_printer_recovery(self,environment):
+        # Synthetic least-privilege operator identities for the R2 browser/API
+        # scenario. The business action itself still runs through the real HTTP
+        # controller, authorization interceptor, service and transaction.
+        environment.sql(
+            "INSERT INTO system_tenant(id,name,contact_name,status,domain,package_id,expire_time,account_count,creator,updater) "
+            "VALUES(901,'QA printer recovery tenant','Synthetic QA',0,'',0,'2099-12-31 23:59:59',20,'quality','quality'),"
+            "(902,'QA printer recovery tenant B','Synthetic QA',0,'',0,'2099-12-31 23:59:59',20,'quality','quality');"
+            "INSERT INTO system_role(id,name,code,sort,status,type,tenant_id) VALUES"
+            "(910110,'QA printer operators','business_headquarters',1,0,2,0),"
+            "(910111,'QA printer query','business_headquarters',2,0,2,0),"
+            "(910112,'QA printer no query','business_headquarters',3,0,2,0),"
+            "(910113,'QA printer tenant','business_headquarters',4,0,2,901),"
+            "(910117,'QA printer tenant B','business_headquarters',5,0,2,902);"
+            "INSERT INTO system_users(id,username,password,nickname,status,tenant_id) "
+            "SELECT 910110,'qualityhq',password,'synthetic-printer-hq',0,0 FROM system_users WHERE id=101;"
+            "INSERT INTO system_users(id,username,password,nickname,status,tenant_id) "
+            "SELECT 910114,'qualityhq2',password,'synthetic-printer-hq-2',0,0 FROM system_users WHERE id=101;"
+            "INSERT INTO system_users(id,username,password,nickname,status,tenant_id) "
+            "SELECT 910115,'qualityhqrevoked',password,'synthetic-printer-hq-revoked',0,0 FROM system_users WHERE id=101;"
+            "INSERT INTO system_users(id,username,password,nickname,status,tenant_id) "
+            "SELECT 910111,'qualityhqquery',password,'synthetic-printer-query',0,0 FROM system_users WHERE id=101;"
+            "INSERT INTO system_users(id,username,password,nickname,status,tenant_id) "
+            "SELECT 910112,'qualityhqnoquery',password,'synthetic-printer-no-query',0,0 FROM system_users WHERE id=101;"
+            "INSERT INTO system_users(id,username,password,nickname,status,tenant_id) "
+            "SELECT 910113,'qualityhqcross',password,'synthetic-printer-cross-tenant',0,901 FROM system_users WHERE id=101;"
+            "INSERT INTO system_users(id,username,password,nickname,status,tenant_id) "
+            "SELECT 910117,'qualityhqother',password,'synthetic-printer-other-tenant',0,902 FROM system_users WHERE id=101;"
+            "INSERT INTO system_user_role(user_id,role_id,tenant_id) VALUES"
+            "(910110,910110,0),(910114,910110,0),(910115,910110,0),"
+            "(910111,910111,0),(910112,910112,0),(910113,910113,901),(910117,910117,902);"
+            "INSERT INTO system_role_menu(role_id,menu_id,tenant_id) "
+            "SELECT 910110,id,0 FROM system_menu WHERE id IN (2000,2308) OR permission IN ('store:web-print:query','store:web-print:authorize');"
+            "INSERT INTO system_role_menu(role_id,menu_id,tenant_id) "
+            "SELECT 910111,id,0 FROM system_menu WHERE id IN (2000,2308) OR permission='store:web-print:query';"
+            "INSERT INTO system_role_menu(role_id,menu_id,tenant_id) "
+            "SELECT 910113,id,901 FROM system_menu WHERE id IN (2000,2308) OR permission IN "
+            "('store:web-print:query','store:web-print:authorize','store:web-print:create','store:web-print:test');"
+            "INSERT INTO system_role_menu(role_id,menu_id,tenant_id) "
+            "SELECT 910117,id,902 FROM system_menu WHERE id IN (2000,2308) OR permission IN "
+            "('store:web-print:query','store:web-print:authorize','store:web-print:create','store:web-print:test');"
+        )
+
     def launch(self,config,port):
-        return ['java','-De2e.owner='+self.owner,'-De2e.root='+str(self.root),'-cp',self.classpath,
-                'e2esupport.OwnedE2eApplication','--spring.config.location=file:'+str(config),'--server.port='+str(port)]
+        command=['java','-De2e.owner='+self.owner,'-De2e.root='+str(self.root),'-cp',self.classpath,
+                 'e2esupport.OwnedE2eApplication','--spring.config.location=file:'+str(config),'--server.port='+str(port)]
+        if port==self.tenant_enabled_port:
+            # This second app instance exists only to exercise the tenant-enabled
+            # printer HTTP boundary against the shared owned schema. Its scheduled
+            # worker must not race the primary instance for test jobs or split the
+            # synthetic provider-call counters across JVMs; E2 invokes the real
+            # worker explicitly through the primary owned mailbox.
+            command.extend(['--yshop.tenant.enable=true','--e2e.printer-tenant-probe=true',
+                            '--yshop.printer.order-print-poll-ms=2147483647'])
+        return command
 
     def context(self):
         return {'commandDir':str(self.mailbox),'smsOutbox':str(self.root/'outbox')}

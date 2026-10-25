@@ -105,12 +105,16 @@ class E2eAcceptanceTest(unittest.TestCase):
         local=listing('local');ci=listing('ci')
         by_local={scenario['id']:scenario for scenario in local['scenarios']}
         by_ci={scenario['id']:scenario for scenario in ci['scenarios']}
-        self.assertTrue({'pickup-fulfillment','store-statistics','order-print-jobs'}.issubset(by_local))
+        self.assertTrue({'pickup-fulfillment','store-statistics','order-print-jobs','printer-operation-recovery',
+                         'printer-operation-recovery-tenant-enabled'}.issubset(by_local))
         self.assertEqual(set(by_local),set(by_ci))
         self.assertIn('mini',by_local['pickup-fulfillment']['requiredCapabilities'])
         self.assertNotIn('mini',by_local['store-statistics']['requiredCapabilities'])
         self.assertNotIn('mini',by_local['order-print-jobs']['requiredCapabilities'])
-        for name in ('pickup-fulfillment','store-statistics','order-print-jobs'):
+        self.assertNotIn('mini',by_local['printer-operation-recovery']['requiredCapabilities'])
+        self.assertNotIn('mini',by_local['printer-operation-recovery-tenant-enabled']['requiredCapabilities'])
+        for name in ('pickup-fulfillment','store-statistics','order-print-jobs','printer-operation-recovery',
+                     'printer-operation-recovery-tenant-enabled'):
             self.assertEqual('api-admin',by_ci[name]['variant'])
             self.assertEqual('mini-admin' if name=='pickup-fulfillment' else 'api-admin',by_local[name]['variant'])
             self.assertEqual(len(by_local[name]['expectedCheckIds']),len(set(by_local[name]['expectedCheckIds'])))
@@ -124,7 +128,15 @@ class E2eAcceptanceTest(unittest.TestCase):
                 'shop-switch-ignores-stale-summary','branch-a-page-scope','branch-b-page-scope','branch-cannot-read-foreign-shop'],
             'order-print-jobs':['unbound-order-waits-on-real-page','offline-device-waits-on-real-page','order-history-on-real-page',
                 'unknown-refresh-readonly','recovery-confirmation-gate','unknown-recovery-audited','manual-reprint-audited',
-                'printed-confirmation-closes-without-resend','cross-store-print-denied','print-job-sql-audit']}
+                'printed-confirmation-closes-without-resend','cross-store-print-denied','print-job-sql-audit'],
+            'printer-operation-recovery':['pending-fixture-created','hq-pending-read-is-side-effect-free','query-only-headquarters-page',
+                'permission-and-tenant-denials','invalid-resolution-requests-no-side-effects','page-resolution-records-audit',
+                'two-operator-race-single-audit','same-token-role-revocation','undelivered-command-needs-explicit-retry',
+                'lost-response-with-empty-pending-is-not-success','new-token-before-reread-resets-confirmation',
+                'database-business-and-provider-invariants'],
+            'printer-operation-recovery-tenant-enabled':['tenant-enabled-same-tenant-pending-read',
+                'tenant-enabled-rejects-missing-and-mismatched-context',
+                'tenant-enabled-cross-tenant-resource-and-recovery-denied']}
         local_only={'pickup-fulfillment':['mini-initial-status','mini-accepted-status','mini-ready-and-collect','mini-collected-status']}
         for name,checks in exact.items():
             self.assertEqual(checks,by_ci[name]['expectedCheckIds'])

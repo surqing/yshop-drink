@@ -31,6 +31,17 @@ _CHECKS = {
                          'unknown-recovery-audited','manual-reprint-audited','printed-confirmation-closes-without-resend',
                          'cross-store-print-denied',
                          'print-job-sql-audit'],
+    'printer-operation-recovery': ['pending-fixture-created','hq-pending-read-is-side-effect-free',
+                                   'query-only-headquarters-page','permission-and-tenant-denials',
+                                   'invalid-resolution-requests-no-side-effects','page-resolution-records-audit',
+                                   'two-operator-race-single-audit','same-token-role-revocation',
+                                   'undelivered-command-needs-explicit-retry',
+                                   'lost-response-with-empty-pending-is-not-success',
+                                   'new-token-before-reread-resets-confirmation',
+                                   'database-business-and-provider-invariants'],
+    'printer-operation-recovery-tenant-enabled': ['tenant-enabled-same-tenant-pending-read',
+                                                   'tenant-enabled-rejects-missing-and-mismatched-context',
+                                                   'tenant-enabled-cross-tenant-resource-and-recovery-denied'],
 }
 _LOCAL = {
     'score-redemption': ['mini-score-page'],

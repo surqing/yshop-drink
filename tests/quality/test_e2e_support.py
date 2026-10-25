@@ -8,6 +8,17 @@ from e2e.support import extract_application, TestSupport
 from e2e.bridge import validate_context, invoke
 
 class TestSupportBoundaryTest(unittest.TestCase):
+    def test_tenant_probe_scopes_guard_exception_and_disables_its_background_print_poller(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);support=TestSupport(root,root/'support',{'sourceSha':'sha','sourceDigest':'digest'},'a'*32)
+            support.classpath='owned-test-classpath';support.tenant_enabled_port=18082
+            disabled=support.launch(root/'application.yaml',18081)
+            enabled=support.launch(root/'application.yaml',18082)
+            self.assertFalse(any('tenant.enable' in value or 'printer-tenant-probe' in value or 'order-print-poll-ms' in value for value in disabled))
+            self.assertIn('--yshop.tenant.enable=true',enabled)
+            self.assertIn('--e2e.printer-tenant-probe=true',enabled)
+            self.assertIn('--yshop.printer.order-print-poll-ms=2147483647',enabled)
+
     def test_extracts_current_boot_classes_and_libraries_only(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);jar=root/'app.jar'
@@ -88,6 +99,33 @@ class TestSupportBoundaryTest(unittest.TestCase):
             with patch('e2e.bridge.time.sleep',side_effect=respond):
                 reply=invoke(context,'order-print-poll',{},timeout=1)
             self.assertEqual(3,reply['printCalls']);self.assertEqual(1,reply['statusCalls'])
+
+    def test_bridge_targets_a_specific_owned_backend_port(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as folder:
+            owner='a'*32;mailbox=Path(folder)/('commands-'+owner);mailbox.mkdir(mode=0o700)
+            (mailbox/'requests').mkdir();(mailbox/'responses').mkdir()
+            context={'owner':owner,'commandDir':str(mailbox)}
+            def respond(_):
+                requests=list((mailbox/'requests').glob('*.json'))
+                if not requests:return
+                command=json.loads(requests[0].read_text())
+                self.assertEqual(18082,command['targetPort'])
+                (mailbox/'responses'/requests[0].name).write_text(json.dumps({
+                    'owner':owner,'commandId':command['commandId'],'status':'PASSED','printCalls':2,'statusCalls':0}))
+            with patch('e2e.bridge.time.sleep',side_effect=respond):
+                reply=invoke(context,'printer-counters',{'targetPort':18082},timeout=1)
+            self.assertEqual(2,reply['printCalls'])
+
+    def test_bridge_rejects_invalid_target_backend_port(self):
+        with tempfile.TemporaryDirectory() as folder:
+            owner='a'*32;mailbox=Path(folder)/('commands-'+owner);mailbox.mkdir(mode=0o700)
+            (mailbox/'requests').mkdir();(mailbox/'responses').mkdir()
+            context={'owner':owner,'commandDir':str(mailbox)}
+            for value in (0,-1,65536,True,'18082'):
+                with self.subTest(value=value), self.assertRaisesRegex(ValueError,'BRIDGE_TARGET_PORT_INVALID'):
+                    invoke(context,'printer-counters',{'targetPort':value},timeout=.01)
+            self.assertEqual([],list((mailbox/'requests').iterdir()))
 
     def test_crash_fixture_requires_a_positive_owned_job_id(self):
         from unittest.mock import patch

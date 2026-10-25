@@ -38,6 +38,15 @@ public class AdminUserApiImpl implements AdminUserApi {
     }
 
     @Override
+    public boolean matchesUserTenant(Long id, Long expectedTenantId) {
+        if (id == null || expectedTenantId == null) {
+            return false;
+        }
+        AdminUserDO user = userService.getUser(id);
+        return user != null && expectedTenantId.equals(user.getTenantId());
+    }
+
+    @Override
     public List<AdminUserRespDTO> getUserListBySubordinate(Long id) {
         // 1.1 获取用户负责的部门
         AdminUserDO user = userService.getUser(id);

@@ -11,6 +11,7 @@ import co.yixiang.yshop.framework.common.pojo.PageResult;
 import co.yixiang.yshop.framework.common.util.date.DateUtils;
 import co.yixiang.yshop.framework.security.core.LoginUser;
 import co.yixiang.yshop.framework.tenant.core.context.TenantContextHolder;
+import co.yixiang.yshop.framework.tenant.core.util.TenantUtils;
 import co.yixiang.yshop.module.store.dal.dataobject.storeshop.StoreShopDO;
 import co.yixiang.yshop.module.store.dal.mysql.storeshop.StoreShopMapper;
 import co.yixiang.yshop.module.system.controller.admin.oauth2.vo.token.OAuth2AccessTokenPageReqVO;
@@ -131,7 +132,11 @@ public class OAuth2TokenServiceImpl implements OAuth2TokenService {
         if(hint==null) throw exception0(401,"访问令牌不存在");
         if(DateUtils.isExpired(hint.getExpiresTime())) throw exception0(401,"访问令牌已过期");
         requireEnabledPrincipal(hint.getUserId(),hint.getUserType());
-        OAuth2RefreshTokenDO family=oauth2RefreshTokenMapper.lockByRefreshToken(hint.getRefreshToken());
+        if(hint.getTenantId()==null) throw exception0(401,"访问令牌租户范围无效");
+        // Authentication runs before TenantSecurityWebFilter can derive the request tenant
+        // from LoginUser. Scope this linked family lookup to the tenant stored with the token.
+        OAuth2RefreshTokenDO family=TenantUtils.execute(hint.getTenantId(),
+                ()->oauth2RefreshTokenMapper.lockByRefreshToken(hint.getRefreshToken()));
         if(family==null || DateUtils.isExpired(family.getExpiresTime())
                 || !Objects.equals(family.getUserId(),hint.getUserId())
                 || !Objects.equals(family.getUserType(),hint.getUserType())

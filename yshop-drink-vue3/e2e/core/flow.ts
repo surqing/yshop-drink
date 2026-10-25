@@ -115,7 +115,14 @@ export class Flow {
       { cwd: context.repo, env: process.env, encoding: 'utf8', timeout: 45000 }))
   }
   bridge(action: string, ids: Record<string, unknown>) {
-    return JSON.parse(execFileSync(context.python, ['-m', 'e2e.bridge', '--context', process.env.YSHOP_E2E_CONTEXT!, '--action', action, '--ids', JSON.stringify(ids)],
+    const backendPort = Number(new URL(context.backend).port)
+    if (!Number.isInteger(backendPort) || backendPort < 1 || backendPort > 65535)
+      throw new Error('E2E_BACKEND_PORT_INVALID')
+    // The owned test-support mailbox can serve two backend JVMs in tenant-enabled
+    // runs. Bind every command to its intended instance unless a scenario explicitly
+    // targets another owned backend (for example the tenant-enabled probe).
+    const commandIds = { targetPort: backendPort, ...ids }
+    return JSON.parse(execFileSync(context.python, ['-m', 'e2e.bridge', '--context', process.env.YSHOP_E2E_CONTEXT!, '--action', action, '--ids', JSON.stringify(commandIds)],
       { cwd: context.repo, env: process.env, encoding: 'utf8', timeout: 65000 }))
   }
   async member(principal = 1) {

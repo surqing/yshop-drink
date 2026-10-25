@@ -140,6 +140,14 @@
               >{{ testActionLabel(row) }}</el-button
             >
             <el-button
+              v-hasPermi="['store:web-print:query']"
+              link
+              type="primary"
+              :disabled="busy[row.id]"
+              @click="openRecovery(row)"
+              >待处理操作</el-button
+            >
+            <el-button
               v-hasPermi="['store:web-print:delete']"
               link
               type="danger"
@@ -313,6 +321,14 @@
       />
     </div>
   </Dialog>
+
+  <PrinterOperationRecovery
+    v-model:visible="operationRecoveryVisible"
+    :printer-id="operationRecoveryPrinter?.id ?? null"
+    :printer-name="operationRecoveryPrinter?.name"
+    :can-resolve="canResolvePrinterOperation"
+    @resolved="onOperationResolved"
+  />
 </template>
 
 <script setup lang="ts">
@@ -320,6 +336,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import * as Api from '@/api/mall/store/printer'
 import OrderPrintJobs from './OrderPrintJobs.vue'
+import PrinterOperationRecovery from './PrinterOperationRecovery.vue'
 import { CACHE_KEY, useCache } from '@/hooks/web/useCache'
 import { formatDate } from '@/utils/formatTime'
 
@@ -335,6 +352,10 @@ async function confirm(text: string) {
   }
 }
 const { wsCache } = useCache()
+const canResolvePrinterOperation = computed(() => {
+  const permissions = wsCache.get(CACHE_KEY.USER)?.permissions || []
+  return permissions.includes('*:*:*') || permissions.includes('store:web-print:authorize')
+})
 const providerList = ref<Api.ProviderInfo[]>([])
 const shopList = ref<Api.ShopOption[]>([])
 const list = ref<Api.Printer[]>([])
@@ -427,6 +448,17 @@ async function operation(row: Api.Printer, action: () => Promise<unknown>) {
   } finally {
     busy[row.id] = false
   }
+}
+
+const operationRecoveryVisible = ref(false)
+const operationRecoveryPrinter = ref<Api.Printer | null>(null)
+function openRecovery(row: Api.Printer) {
+  if (row.deleted || busy[row.id]) return
+  operationRecoveryPrinter.value = row
+  operationRecoveryVisible.value = true
+}
+async function onOperationResolved() {
+  await load()
 }
 
 const blank = (): Api.SaveRequest => ({

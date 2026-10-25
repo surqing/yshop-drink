@@ -86,6 +86,9 @@ def run(repo, output, profile, scenario=None):
     root=parent/uuid.uuid4().hex;root.mkdir(parents=True,mode=0o700,exist_ok=False);os.chmod(root,0o700)
     identity=source_identity(repo);plan=listing(profile,scenario);workspace=source_workspace(repo)
     needs_mini=any('mini' in item['requiredCapabilities'] for item in plan['scenarios'])
+    tenant_enabled_http=any(item['id']=='printer-operation-recovery-tenant-enabled' for item in plan['scenarios'])
+    printer_recovery=any(item['id'] in ('printer-operation-recovery','printer-operation-recovery-tenant-enabled')
+                         for item in plan['scenarios'])
     env=execution_environment(workspace)
     report={**identity,**plan,'runId':root.name,'owner':uuid.uuid4().hex,'complete':False,
             'startedAt':time.time(),'hostPlatform':sys.platform,'status':'INCONCLUSIVE','cleanup':'NOT_RUN','stage':'PREFLIGHT',
@@ -126,7 +129,25 @@ def run(repo, output, profile, scenario=None):
             report['testSupport']=support.prepare()
             environment=OwnedEnvironment(repo,root/'owned',identity=identity,owner=report['owner'],run_id=report['runId'])
             report['stage']='ENVIRONMENT';write_reports(root,report)
-            environment.start(configure=support.configure,launcher=support.launch)
+            if tenant_enabled_http:
+                report['tenantEnabledPrinterProbe']={
+                    'secondOwnedBackendOnly':True,
+                    'globalTenantModeEnabled':True,
+                    'productionHttpSecurityAndDatabaseInterceptors':True,
+                    'ownedSchemaLegacyShopTableTenantIgnored':True,
+                    'memberIdentitySchemaGuardValidatedByFirstDisabledInstance':True,
+                    'memberIdentityGlobalTenantBanSkippedOnlyInTestSupportSecondInstance':True
+                }
+                write_reports(root,report)
+            def configure_owned(environment,config):
+                support.configure(environment,config)
+                if printer_recovery:
+                    support.configure_printer_recovery(environment)
+                if tenant_enabled_http:
+                    support.tenant_enabled_port=environment.port+1
+                    ignore_tables=config.setdefault('yshop',{}).setdefault('tenant',{}).setdefault('ignore-tables',[])
+                    if 'yshop_store_shop' not in ignore_tables:ignore_tables.append('yshop_store_shop')
+            environment.start(instances=2 if tenant_enabled_http else 1,configure=configure_owned,launcher=support.launch)
             deadline=time.monotonic()+15
             while not (support.root/'support-ready.json').exists():
                 if time.monotonic()>deadline:raise RuntimeError('TEST_SUPPORT_READINESS_FAILED')
@@ -140,7 +161,15 @@ def run(repo, output, profile, scenario=None):
                      'accounts':{'admin':{'username':'qualityadmin','password':'syntheticQA12'},
                                  'staff':{'username':'qualitystaff','password':'syntheticQA12'},
                                  'staffB':{'username':'qualitystaffb','password':'syntheticQA12'},
-                                 'staffC':{'username':'qualitystaffc','password':'syntheticQA12'}}}
+                                 'staffC':{'username':'qualitystaffc','password':'syntheticQA12'},
+                                 'hq':{'username':'qualityhq','password':'syntheticQA12'},
+                                 'hqB':{'username':'qualityhq2','password':'syntheticQA12'},
+                                 'hqQuery':{'username':'qualityhqquery','password':'syntheticQA12'},
+                                 'hqNoQuery':{'username':'qualityhqnoquery','password':'syntheticQA12'},
+                                 'hqRevoked':{'username':'qualityhqrevoked','password':'syntheticQA12'},
+                                 'hqCrossTenant':{'username':'qualityhqcross','password':'syntheticQA12'},
+                                 'hqOtherTenant':{'username':'qualityhqother','password':'syntheticQA12'}}}
+            if tenant_enabled_http:context['tenantEnabledBackend']='http://127.0.0.1:'+str(environment.port+1)
             if needs_mini:
                 report['stage']='MINI_BUILD';write_reports(root,report)
                 from mini_pages import prepare_mini

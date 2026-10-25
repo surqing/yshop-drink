@@ -77,10 +77,12 @@ class E2eCliTest(unittest.TestCase):
             report=json.loads(result.stdout)
             self.assertEqual('local',report['profile'])
             self.assertEqual(['score-redemption','score-retry','printer-unknown','pickup-contact','auth-session','catalog-order','store-isolation','order-retry',
-                              'order-cancel','coupon-release','coupon-complete','pickup-fulfillment','store-statistics','order-print-jobs'],
+                              'order-cancel','coupon-release','coupon-complete','pickup-fulfillment','store-statistics','order-print-jobs',
+                              'printer-operation-recovery','printer-operation-recovery-tenant-enabled'],
                              [s['id'] for s in report['scenarios']])
             for scenario in report['scenarios']:
-                if scenario['id'] in ('printer-unknown','store-statistics','order-print-jobs'):
+                if scenario['id'] in ('printer-unknown','store-statistics','order-print-jobs','printer-operation-recovery',
+                                      'printer-operation-recovery-tenant-enabled'):
                     self.assertEqual('api-admin',scenario['variant'])
                     self.assertNotIn('mini',scenario['requiredCapabilities'])
                 else:
@@ -93,7 +95,7 @@ class E2eCliTest(unittest.TestCase):
         self.assertEqual(0,result.returncode,result.stderr)
         report=json.loads(result.stdout)
         self.assertEqual('NOT_RUN',report['miniStatus'])
-        self.assertEqual(14,len(report['scenarios']))
+        self.assertEqual(16,len(report['scenarios']))
         self.assertTrue(all(s['variant']=='api-admin' for s in report['scenarios']))
 
     def test_f3_recovery_order_and_quick_contracts_are_registered(self):
@@ -106,7 +108,21 @@ class E2eCliTest(unittest.TestCase):
         self.assertLess(checks.index('unknown-recovery-audited'),checks.index('manual-reprint-audited'))
         quick=json.loads((REPO/'tests/quality/quick-manifest.json').read_text())
         self.assertEqual(10,quick['tests/quality/test_e2e_oracle_contract.py'])
-        self.assertEqual(10,quick['tests/quality/test_e2e_support.py'])
+        self.assertEqual(13,quick['tests/quality/test_e2e_support.py'])
+        recovery=listing('ci','printer-operation-recovery')['scenarios'][0]
+        self.assertEqual('api-admin',recovery['variant'])
+        self.assertIn('browser',recovery['requiredCapabilities'])
+        self.assertNotIn('mini',recovery['requiredCapabilities'])
+        self.assertEqual(['pending-fixture-created','hq-pending-read-is-side-effect-free','query-only-headquarters-page',
+                          'permission-and-tenant-denials','invalid-resolution-requests-no-side-effects','page-resolution-records-audit',
+                          'two-operator-race-single-audit','same-token-role-revocation','undelivered-command-needs-explicit-retry',
+                          'lost-response-with-empty-pending-is-not-success','new-token-before-reread-resets-confirmation',
+                          'database-business-and-provider-invariants'], recovery['expectedCheckIds'])
+        enabled=listing('ci','printer-operation-recovery-tenant-enabled')['scenarios'][0]
+        self.assertEqual('api-admin',enabled['variant'])
+        self.assertEqual(['tenant-enabled-same-tenant-pending-read',
+                          'tenant-enabled-rejects-missing-and-mismatched-context',
+                          'tenant-enabled-cross-tenant-resource-and-recovery-denied'], enabled['expectedCheckIds'])
 
     def test_filtered_list_contains_only_requested_scenario(self):
         result=self.invoke('E2E','--profile','local','--scenario','order-retry','--list')

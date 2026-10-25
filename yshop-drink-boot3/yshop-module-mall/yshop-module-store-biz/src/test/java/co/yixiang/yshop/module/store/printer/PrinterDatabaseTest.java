@@ -21,6 +21,7 @@ import co.yixiang.yshop.module.store.service.storeshop.StoreShopServiceImpl;
 import co.yixiang.yshop.module.store.service.storeshop.StoreShopService;
 import co.yixiang.yshop.module.store.service.storeshop.StoreAccessService;
 import co.yixiang.yshop.module.system.api.permission.PermissionApi;
+import co.yixiang.yshop.module.system.api.user.AdminUserApi;
 import org.springframework.security.access.AccessDeniedException;
 import co.yixiang.yshop.module.store.dal.mysql.storeshop.StoreShopMapper;
 import co.yixiang.yshop.module.store.dal.dataobject.storeshop.StoreShopDO;
@@ -45,7 +46,9 @@ class PrinterDatabaseTest {
     FakeProvider fake;
     PrinterProviderRegistry providers;
     final Set<String> headquartersRoles=new HashSet<>();
+    final Map<Long,Long> printerAdminTenants=new ConcurrentHashMap<>();
     PermissionApi printerPermissions;
+    AdminUserApi printerAdminUsers;
     StoreAccessService printerAccess;
     static boolean mysql() { return System.getenv("PRINTER_ACCEPTANCE_CONFIG")!=null; }
     @BeforeEach void setup() throws Exception {
@@ -71,7 +74,11 @@ class PrinterDatabaseTest {
                     .flatMap(argument -> argument instanceof String[] roles ? Arrays.stream(roles) : java.util.stream.Stream.of((String) argument))
                     .anyMatch(headquartersRoles::contains);
         });
-        printerAccess=new StoreAccessService(jdbc,printerPermissions);
+        printerAdminTenants.clear(); printerAdminTenants.put(1L,1L);
+        printerAdminUsers=mock(AdminUserApi.class);
+        when(printerAdminUsers.matchesUserTenant(any(),any())).thenAnswer(call->
+                Objects.equals(printerAdminTenants.get(call.getArgument(0)),call.getArgument(1)));
+        printerAccess=new StoreAccessService(jdbc,printerPermissions,printerAdminUsers);
         // A second transport deliberately needs no edits to the business service or the first provider.
         providers=new PrinterProviderRegistry(List.of(fake,new FakeProvider("SECOND_VENDOR")));
         service=new PrinterService(repo,providers,cipher,new TransactionTemplate(manager),printerAccess,false);
@@ -104,9 +111,14 @@ class PrinterDatabaseTest {
         jdbc.update("UPDATE yshop_printer SET authorization='AUTHORIZED',device_state='ONLINE',state_checked_at=CURRENT_TIMESTAMP WHERE tenant_id=1 AND id=?",id);
         return id;
     }
-    @AfterEach void cleanup() { SecurityContextHolder.clearContext(); TenantContextHolder.clear(); }
+    @AfterEach void cleanup() {
+        SecurityContextHolder.clearContext(); TenantContextHolder.clear();
+    }
     private void login(long tenant,long shop) {
-        LoginUser user=new LoginUser(); user.setId(1L); user.setUserType(2); user.setShopId(shop); user.setTenantId(tenant);
+        login(1L,tenant,shop);
+    }
+    private void login(long userId,long tenant,long shop) {
+        LoginUser user=new LoginUser(); user.setId(userId); user.setUserType(2); user.setShopId(shop); user.setTenantId(tenant);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(user,null,List.of()));
         TenantContextHolder.setTenantId(tenant);
     }
@@ -114,6 +126,33 @@ class PrinterDatabaseTest {
         return new SaveRequest(id,"测试设备","YILIAN_YUN",code,"K4","CLOUD",true,configuration);
     }
     private long device(String code) { return service.save(request(null,code,Map.of("terminalKey","synthetic-device-key")),false); }
+
+    @Test void disabledTenantModeDoesNotExposePendingOperationToForeignDatabaseTenant() {
+        login(0,0);
+        long id=device("4000010001");
+        fake.crash=true;
+        assertThrows(IllegalStateException.class,()->service.authorize(id,false));
+        fake.crash=false;
+        assertNotNull(service.pendingOperation(id));
+
+        printerAdminTenants.put(910113L,901L);
+        PrinterRepository observedRepo=spy(repo);
+        PrinterService guarded=new PrinterService(observedRepo,providers,cipher,new TransactionTemplate(manager),printerAccess,false);
+        try {
+            login(910113L,0L,0L); // The cached OAuth claim has collapsed to database default tenant 0.
+            TenantContextHolder.clear(); // Tenant auto-configuration is disabled in this profile.
+
+            assertThrows(PrinterFailure.class,()->guarded.pendingOperation(id));
+            PendingOperation pending=repo.pendingOperation(repo.require(0L,id,false));
+            int providerCalls=fake.printCalls.get();
+            assertThrows(PrinterFailure.class,()->guarded.resolveOperation(new ResolveOperationRequest(
+                    id,pending.operationToken(),"阻止跨租户恢复操作",true,true)));
+            verifyNoInteractions(observedRepo);
+            assertEquals(providerCalls,fake.printCalls.get());
+        } finally {
+            printerAdminTenants.remove(910113L);
+        }
+    }
 
     @Test void zeroShopHintDoesNotGrantHeadquarters() {
         long id=device("4000000001"); headquartersRoles.clear(); login(1,0);
@@ -716,13 +755,49 @@ class PrinterDatabaseTest {
     @Test void singleTenantNullTokenAndDatabaseDefaultShareScopeButTenantModeRejectsMissingIdentity() {
         login(1,0); TenantContextHolder.clear();
         var user=(LoginUser)SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        printerAdminTenants.put(1L,0L);
         user.setTenantId(null);
         long id=device("4000000001");
         assertEquals(0L,jdbc.queryForObject("SELECT tenant_id FROM yshop_printer WHERE id=?",Long.class,id));
         user.setTenantId(0L); assertEquals(id,service.get(id).id());
         user.setTenantId(null);
-        PrinterService strict=new PrinterService(repo,new PrinterProviderRegistry(List.of(fake)),cipher,new TransactionTemplate(manager),printerAccess,true);
+        fake.crash=true;
+        assertThrows(IllegalStateException.class,()->service.authorize(id,false));
+        fake.crash=false;
+        PendingOperation pending=service.pendingOperation(id);
+        assertEquals("AUTHORIZE",pending.operationType());
+        assertEquals("AUTHORIZATION_UNKNOWN",service.resolveOperation(new ResolveOperationRequest(
+                id,pending.operationToken(),"单租户操作的服务端身份已核验",true,true)).outcome());
+        assertNull(service.pendingOperation(id));
+        service.bind(new BindingRequest(id,1L));
+        assertEquals(1L,service.get(id).shopId());
+
+        PrinterRepository observedRepo=spy(repo);
+        PrinterService strict=new PrinterService(observedRepo,new PrinterProviderRegistry(List.of(fake)),cipher,new TransactionTemplate(manager),printerAccess,true);
+        clearInvocations(printerPermissions,observedRepo);
         assertThrows(PrinterFailure.class,()->strict.get(id));
+        verifyNoInteractions(printerPermissions,observedRepo);
+        user.setTenantId(0L); TenantContextHolder.setTenantId(0L);
+        assertEquals(id,strict.get(id).id());
+        fake.deviceState=DeviceState.UNKNOWN;
+        fake.crash=true;
+        assertThrows(IllegalStateException.class,()->strict.authorize(id,false));
+        fake.crash=false;
+        fake.deviceState=DeviceState.ONLINE;
+        PendingOperation strictPending=strict.pendingOperation(id);
+        assertEquals("AUTHORIZE",strictPending.operationType());
+        clearInvocations(observedRepo);
+        clearInvocations(printerPermissions,observedRepo);
+        TenantContextHolder.setTenantId(1L);
+        assertThrows(PrinterFailure.class,()->strict.pendingOperation(id));
+        assertThrows(PrinterFailure.class,()->strict.resolveOperation(new ResolveOperationRequest(
+                id,strictPending.operationToken(),"租户令牌与上下文不一致时拒绝恢复",true,true)));
+        verifyNoInteractions(printerPermissions,observedRepo);
+
+        login(1,1);
+        long foreignId=device("4000000002");
+        login(0,0);
+        assertThrows(PrinterFailure.class,()->strict.get(foreignId));
         TenantContextHolder.setTenantId(1L); assertThrows(PrinterFailure.class,()->service.get(id));
         TenantContextHolder.clear(); headquartersRoles.clear(); user.setShopId(1L); assertThrows(PrinterFailure.class,()->service.get(id));
     }
@@ -748,7 +823,7 @@ class PrinterDatabaseTest {
         context.registerBean(PlatformTransactionManager.class,()->manager);
         context.registerBean(PrinterRepository.class,()->repository);
         context.registerBean(StoreShopMapper.class,()->mapper);
-        context.registerBean(StoreAccessService.class,()->new StoreAccessService(jdbc,permissions));
+        context.registerBean(StoreAccessService.class,()->new StoreAccessService(jdbc,permissions,mock(AdminUserApi.class)));
         context.register(ShopTransactions.class,StoreShopServiceImpl.class); context.refresh();
         return context;
     }

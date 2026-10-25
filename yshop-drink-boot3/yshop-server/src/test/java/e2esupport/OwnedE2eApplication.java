@@ -21,6 +21,8 @@ import me.chanjar.weixin.common.error.WxErrorException;
 import me.chanjar.weixin.mp.api.WxMpService;
 import com.egzosn.pay.spring.boot.core.PayServiceManager;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -45,12 +47,14 @@ public final class OwnedE2eApplication {
     static final String OWNER=System.getProperty("e2e.owner","");
     static final Path ROOT=Path.of(System.getProperty("e2e.root",""));
     static final Set<String> CODES=ConcurrentHashMap.newKeySet();
+    static volatile int SERVER_PORT=-1;
     static final java.util.concurrent.atomic.AtomicInteger PRINT_CALLS=new java.util.concurrent.atomic.AtomicInteger();
     static final java.util.concurrent.atomic.AtomicInteger STATUS_CALLS=new java.util.concurrent.atomic.AtomicInteger();
     static final java.util.concurrent.atomic.AtomicReference<co.yixiang.yshop.module.store.service.printer.PrinterModels.DeviceState> PRINTER_STATE=
             new java.util.concurrent.atomic.AtomicReference<>(co.yixiang.yshop.module.store.service.printer.PrinterModels.DeviceState.ONLINE);
 
     public static void main(String[] args) throws Exception {
+        SERVER_PORT=serverPort(args);
         if(!OWNER.matches("[a-f0-9]{32}") || !ROOT.resolve("commands-"+OWNER).toFile().isDirectory())
             throw new IllegalStateException("OWNED_TEST_ROOT_REQUIRED");
         SpringApplication application=new SpringApplication(YshopServerApplication.class,ExternalBoundaries.class);
@@ -81,6 +85,27 @@ public final class OwnedE2eApplication {
 
     @Configuration(proxyBeanMethods=false)
     public static class ExternalBoundaries {
+        @Bean
+        @ConditionalOnProperty(prefix="e2e",name="printer-tenant-probe",havingValue="true")
+        static BeanDefinitionRegistryPostProcessor skipOnlyMemberGlobalTenantBanForOwnedPrinterProbe() {
+            return new BeanDefinitionRegistryPostProcessor() {
+                @Override public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) {
+                    // The disabled-tenant instance starts first against the same owned schema and
+                    // executes every MemberIdentitySchemaGuard schema/data assertion. This second,
+                    // test-support-only instance isolates the printer tenant HTTP branch because
+                    // that guard intentionally refuses every globally tenant-enabled application.
+                    var guards=Arrays.stream(registry.getBeanDefinitionNames())
+                            .filter(name->registry.getBeanDefinition(name).getBeanClassName()!=null
+                                    && registry.getBeanDefinition(name).getBeanClassName().equals(
+                                    "co.yixiang.yshop.module.member.service.auth.MemberIdentitySchemaGuard"))
+                            .toList();
+                    if(guards.size()!=1)throw new IllegalStateException("OWNED_PRINTER_TENANT_GUARD_INVENTORY_MISMATCH");
+                    registry.removeBeanDefinition(guards.get(0));
+                }
+                @Override public void postProcessBeanFactory(org.springframework.beans.factory.config.ConfigurableListableBeanFactory beanFactory) {}
+            };
+        }
+
         @Bean
         @ConditionalOnProperty(prefix="info",name="e2eTestSupport",havingValue="b3-tenant-context")
         FilterRegistrationBean<TenantContextWebFilter> b3TenantContextFilter() {
@@ -213,6 +238,13 @@ public final class OwnedE2eApplication {
                 try {
                     JsonNode command=JSON.readTree(request.toFile());
                     if(!OWNER.equals(command.path("owner").asText()) || !id.equals(command.path("commandId").asText()))throw new IllegalArgumentException("FOREIGN_COMMAND");
+                    JsonNode targetPort=command.get("targetPort");
+                    if(targetPort!=null) {
+                        if(!targetPort.isIntegralNumber() || !targetPort.canConvertToInt()
+                                || targetPort.intValue()<1 || targetPort.intValue()>65535)
+                            throw new IllegalArgumentException("INVALID_BRIDGE_TARGET_PORT");
+                        if(SERVER_PORT!=targetPort.intValue())continue;
+                    }
                     String action=command.path("action").asText();
                     if(action.equals("printer-counters")) {
                         reply.put("printCalls",PRINT_CALLS.get());reply.put("statusCalls",STATUS_CALLS.get());
@@ -309,6 +341,17 @@ public final class OwnedE2eApplication {
                 write(response,reply);
             }
         } catch(Exception ignored) { /* Parent command timeout and retained private artifacts surface failure. */ }
+    }
+
+    static int serverPort(String[] args) {
+        for(String arg:args)if(arg.startsWith("--server.port=")) {
+            try {
+                int port=Integer.parseInt(arg.substring("--server.port=".length()));
+                if(port<1||port>65535)throw new IllegalArgumentException("INVALID_OWNED_SERVER_PORT");
+                return port;
+            } catch(NumberFormatException invalid) { throw new IllegalArgumentException("INVALID_OWNED_SERVER_PORT",invalid); }
+        }
+        throw new IllegalArgumentException("OWNED_SERVER_PORT_REQUIRED");
     }
 
     static void write(Path path,Object value) throws Exception {
