@@ -9,6 +9,7 @@ import co.yixiang.yshop.module.order.service.ordering.OrderPlacementService;
 import co.yixiang.yshop.module.order.service.storeorder.AppStoreOrderServiceImpl;
 import co.yixiang.yshop.module.store.service.storeshop.StoreAccessService;
 import co.yixiang.yshop.module.system.api.permission.PermissionApi;
+import co.yixiang.yshop.module.system.api.user.AdminUserApi;
 
 import org.junit.jupiter.api.*;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -860,7 +861,7 @@ class OrderingDatabaseTest {
         SecurityContextHolder.getContext().setAuthentication(auth);
         var permission = mock(PermissionApi.class);
         when(permission.hasAnyRoles(eq(uid), any(String[].class))).thenReturn(hq);
-        return new StoreAccessService(db, permission);
+        return new StoreAccessService(db, permission, mock(AdminUserApi.class));
     }
 
     @Test
@@ -890,7 +891,7 @@ class OrderingDatabaseTest {
         access(102, false);
         assertThrows(
                 org.springframework.security.access.AccessDeniedException.class,
-                () -> new StoreAccessService(db, mock(PermissionApi.class)).requireOrder(oid));
+                () -> new StoreAccessService(db, mock(PermissionApi.class), mock(AdminUserApi.class)).requireOrder(oid));
     }
 
     @Test

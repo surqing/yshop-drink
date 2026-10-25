@@ -43,5 +43,35 @@
     "refreshing an unknown job reads state without submitting a print",
     "network failure retries a manual reprint with the same masked request",
     "confirmed printed recovery releases an unknown job with an audited printed disposition"
+  ],
+  "tests/printer-operation-recovery.test.ts": [
+    "pending operation API reads the exact printer operation endpoint",
+    "resolve operation API posts the exact conditional recovery command",
+    "empty pending state is distinct from a read failure and sends no command",
+    "mismatched pending identity fails closed and unknown operation type is read only",
+    "reason must be 5 to 500 trimmed characters and both confirmations are explicit",
+    "submission trims reason, allows one in-flight command, and emits only a matching audited result",
+    "a mismatched resolve response never appears successful and only rereads pending",
+    "lost response with original token clears confirmations and never auto-posts again",
+    "lost response with no pending operation is not reported as success",
+    "new token after a lost response replaces the operation and resets operator input",
+    "a 403 after opening disables recovery for the same operator session",
+    "a late response from device A cannot replace device B details or loading state",
+    "closing and reopening the same device ignores the earlier read response",
+    "late submit completion after unmount does not emit a recovery result",
+    "A to B switch ignores a late read failure without replacing B state",
+    "late A submit finally cannot unlock B submit after switching devices",
+    "late A submit failure after a device switch cannot clear B submit state or trigger a reread",
+    "external close and reopen invalidates an old submit before a new session",
+    "printer list opens the separate recovery component with read-only permission state"
+  ],
+  "tests/axios-error-contract.test.ts": [
+    "HTTP 200 business 403 rejects with a recognizable authorization error",
+    "HTTP 403 keeps the original Axios error and response status",
+    "network failures keep the original Axios error",
+    "401 refreshes the access token and replays the original request once",
+    "401 without a refresh token preserves the relogin prompt and rejection",
+    "business 500 retains its Error rejection",
+    "other business failures retain their generic rejection"
   ]
 }

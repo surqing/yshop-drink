@@ -20,6 +20,7 @@ import co.yixiang.yshop.module.order.service.fulfillment.FulfillmentEventReposit
 import co.yixiang.yshop.module.order.service.fulfillment.OrderFulfillmentService;
 import co.yixiang.yshop.module.store.service.storeshop.StoreAccessService;
 import co.yixiang.yshop.module.system.api.permission.PermissionApi;
+import co.yixiang.yshop.module.system.api.user.AdminUserApi;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
@@ -175,7 +176,7 @@ class OrderFulfillmentDatabaseTest {
     }
 
     private OrderFulfillmentService createService(OrderFulfillmentRewardService rewardService) {
-        return new OrderFulfillmentService(jdbc, new StoreAccessService(jdbc, permissions), rewardService,
+        return new OrderFulfillmentService(jdbc, new StoreAccessService(jdbc, permissions, mock(AdminUserApi.class)), rewardService,
                 new FulfillmentEventRepository(jdbc, new ObjectMapper()));
     }
 

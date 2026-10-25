@@ -19,6 +19,8 @@ import co.yixiang.yshop.module.system.dal.dataobject.user.AdminUserDO;
 import co.yixiang.yshop.module.system.dal.mysql.dept.UserPostMapper;
 import co.yixiang.yshop.module.system.dal.mysql.user.AdminUserMapper;
 import co.yixiang.yshop.module.system.enums.common.SexEnum;
+import co.yixiang.yshop.module.system.api.user.AdminUserApi;
+import co.yixiang.yshop.module.system.api.user.AdminUserApiImpl;
 import co.yixiang.yshop.module.system.service.dept.DeptService;
 import co.yixiang.yshop.module.system.service.dept.PostService;
 import co.yixiang.yshop.module.system.service.permission.PermissionService;
@@ -53,7 +55,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-@Import(AdminUserServiceImpl.class)
+@Import({AdminUserServiceImpl.class, AdminUserApiImpl.class})
 public class AdminUserServiceImplTest extends BaseDbUnitTest {
 
     @Resource
@@ -63,6 +65,40 @@ public class AdminUserServiceImplTest extends BaseDbUnitTest {
     private AdminUserMapper userMapper;
     @Resource
     private UserPostMapper userPostMapper;
+
+    @Resource
+    private AdminUserApi adminUserApi;
+
+    @Test
+    public void matchesUserTenantReadsCurrentDatabaseIdentity() {
+        AdminUserDO user = randomAdminUserDO(o -> o.setTenantId(901L));
+        userMapper.insert(user);
+
+        assertTrue(adminUserApi.matchesUserTenant(user.getId(), 901L));
+        assertFalse(adminUserApi.matchesUserTenant(user.getId(), 0L));
+
+        user.setTenantId(0L);
+        userMapper.updateById(user);
+        assertTrue(adminUserApi.matchesUserTenant(user.getId(), 0L));
+        assertFalse(adminUserApi.matchesUserTenant(user.getId(), 901L));
+    }
+
+    @Test
+    public void matchesUserTenantRejectsMissingAndDeletedUsers() {
+        assertFalse(adminUserApi.matchesUserTenant(Long.MAX_VALUE, 0L));
+
+        AdminUserDO user = randomAdminUserDO(o -> o.setTenantId(901L));
+        userMapper.insert(user);
+        assertTrue(adminUserApi.matchesUserTenant(user.getId(), 901L));
+        userMapper.deleteById(user.getId());
+        assertFalse(adminUserApi.matchesUserTenant(user.getId(), 901L));
+    }
+
+    @Test
+    public void matchesUserTenantRejectsMissingArguments() {
+        assertFalse(adminUserApi.matchesUserTenant(null, 0L));
+        assertFalse(adminUserApi.matchesUserTenant(1L, null));
+    }
 
     @MockBean
     private co.yixiang.yshop.module.store.dal.mysql.storeshop.StoreShopMapper storeShopMapper;

@@ -1278,11 +1278,586 @@ async function printerUnknown(f: Flow) {
   })
 }
 
+async function printerOperationRecovery(f: Flow) {
+  const prefix = '/admin-api/store/printer'
+  const pendingPath = (id: number) => `${prefix}/operation/pending?id=${id}`
+  const resolvePath = `${prefix}/operation/resolve`
+  const counts = () => {
+    const value = f.bridge('printer-counters', {})
+    return { print: value.printCalls, status: value.statusCalls }
+  }
+  const printerState = (id: number) => f.oracle('printer-state', { printerId: id })[0]
+  const businessFingerprint = () => f.oracle('printer-operation-business-fingerprint', {})[0]
+  const forwardCommittedResolveThenDrop = async (route: any, item: any, sessionToken: string,
+    beforeBrowserAbort?: () => Promise<void>) => {
+    const request = route.request()
+    const browserUrl = new URL(request.url())
+    const backend = new URL(context.backend)
+    expect(request.method()).toBe('POST')
+    expect(browserUrl.pathname).toBe(resolvePath)
+    expect(browserUrl.origin).toBe(new URL(f.baseURL).origin)
+    const backendUrl = new URL(`${browserUrl.pathname}${browserUrl.search}`, `${backend.origin}/`)
+    expect(backendUrl.origin).toBe(backend.origin)
+    expect(request.headers().authorization).toBe(`Bearer ${sessionToken}`)
+    const command = request.postDataJSON()
+    expect(command).toMatchObject({ id: item.id, operationToken: item.pending.operationToken,
+      senderStopped: true, providerWorkSettled: true })
+    expect(typeof command.reason).toBe('string')
+
+    let aborted = false
+    try {
+      const response = await route.fetch({ url: backendUrl.href, maxRedirects: 0, maxRetries: 0 })
+      const bytes = await response.body()
+      const payload = JSON.parse(bytes.toString('utf8'))
+      expect(response.status()).toBe(200)
+      expect(response.headers()['content-type']).toMatch(/^application\/json(?:;|$)/i)
+      expect(payload && typeof payload === 'object' && !Array.isArray(payload)).toBe(true)
+      expect(payload.code).toBe(0)
+      expect(payload.data).toMatchObject({ printerId: item.id,
+        operationToken: item.pending.operationToken, operationType: item.pending.operationType })
+
+      const audit = f.oracle('printer-operation-resolution', {
+        printerId: item.id, operationToken: item.pending.operationToken, requestId: item.requestId
+      })
+      expect(audit).toHaveLength(1)
+      expect(audit[0]).toMatchObject({ printerId: item.id, operationType: item.pending.operationType,
+        requestId: item.requestId, outcome: 'TEST_PRINT_UNKNOWN' })
+      expect(printerState(item.id)).toMatchObject({ operationType: null, operationRequestId: null,
+        operationTokenPresent: 0, operationResolutionCount: 1, jobState: 'UNKNOWN' })
+      console.log('[R2-F01] forwarded recovery response', JSON.stringify({
+        address: `${backendUrl.origin}${backendUrl.pathname}`, status: response.status(),
+        responseBytes: bytes.length, businessCode: payload.code, printerMatched: payload.data.printerId === item.id,
+        tokenMatched: payload.data.operationToken === item.pending.operationToken,
+        operationTypeMatched: payload.data.operationType === item.pending.operationType,
+        sqlAuditCount: audit.length, sqlPendingCleared: true
+      }))
+      if (beforeBrowserAbort) await beforeBrowserAbort()
+      await route.abort('failed')
+      aborted = true
+    } finally {
+      if (!aborted) await route.abort('failed').catch(() => {})
+    }
+  }
+  const rawApi = async (method: string, path: string, token?: string, data?: unknown, extraHeaders: Record<string, string> = {}) => {
+    const response = await f.request.fetch(`${context.backend}${path}`, {
+      method, data, timeout: 30000,
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extraHeaders }
+    })
+    let body: any = {}
+    try { body = await response.json() } catch { body = {} }
+    return { status: response.status(), body }
+  }
+  const assertDenied = (response: { status: number; body: any }) => {
+    expect(response.status).not.toBe(500)
+    expect(response.status === 401 || response.status === 403 ||
+      (Number.isInteger(response.body?.code) && response.body.code !== 0 && response.body.code !== 500),
+    JSON.stringify({ status: response.status, code: response.body?.code,
+      msg: response.body?.msg, message: response.body?.message })).toBe(true)
+    expect(response.body?.code).not.toBe(500)
+  }
+  const createPending = async (label: string) => {
+    const name = f.title(label)
+    const id = await f.api('POST', `${prefix}/create`, {
+      name, providerCode: 'OWNED_TEST', deviceCode: key(), model: 'Synthetic',
+      connectionType: 'LAN', enabled: true, configuration: {}
+    })
+    await f.api('PUT', `${prefix}/binding`, { id, shopId: 101 })
+    const requestId = key()
+    const job = await f.api('POST', `${prefix}/test-print`, { id, requestId })
+    expect(job).toMatchObject({ printerId: id, state: 'UNKNOWN', requestId })
+    expectedExplicitPrints++
+    const pending = await f.api('GET', pendingPath(id))
+    expect(pending).toMatchObject({ printerId: id, operationType: 'TEST_PRINT', requestId })
+    return { id: Number(id), name, requestId, pending }
+  }
+  const openOperator = async (account: any, deviceName: string) => {
+    const browserContext = await f.browser.newContext({ baseURL: f.baseURL, serviceWorkers: 'block' })
+    const page = await browserContext.newPage()
+    const token = await f.login(page, account)
+    await page.goto('/mall/web-print')
+    const row = page.getByRole('row').filter({ hasText: deviceName })
+    await expect(row).toBeVisible()
+    await row.getByRole('button', { name: '待处理操作', exact: true }).click()
+    const dialog = page.locator('.el-dialog:visible').filter({ hasText: '待处理设备操作核验' })
+    await expect(dialog).toBeVisible()
+    return { browserContext, page, token, row, dialog }
+  }
+  const fillReview = async (dialog: any, reason: string) => {
+    await dialog.locator('textarea').fill(reason)
+    await dialog.getByText('我已确认原发送进程已停止。', { exact: true }).click()
+    await dialog.getByText('我已确认厂商侧操作已结束，并已人工核验其结果。', { exact: true }).click()
+    await expect(dialog.getByRole('checkbox').nth(0)).toBeChecked()
+    await expect(dialog.getByRole('checkbox').nth(1)).toBeChecked()
+  }
+  const resolveResponse = (page: any) => page.waitForResponse((response: any) =>
+    response.url().includes('/admin-api/store/printer/operation/resolve') && response.request().method() === 'POST')
+
+  let expectedExplicitPrints = 0
+  let businessBefore: any
+  let countersBefore: any
+  let primary: any
+  await f.check('pending-fixture-created', async () => {
+    businessBefore = businessFingerprint()
+    countersBefore = counts()
+    primary = await createPending('recovery-primary')
+    expect(counts()).toEqual({ print: countersBefore.print + 1, status: countersBefore.status })
+    expect(printerState(primary.id)).toMatchObject({ tenantId: 0, operationType: 'TEST_PRINT', operationRequestId: primary.requestId,
+      operationTokenPresent: 1, operationResolutionCount: 0, jobState: 'UNKNOWN' })
+  })
+  await f.check('hq-pending-read-is-side-effect-free', async () => {
+    const login = await rawApi('POST', '/admin-api/system/auth/login', undefined, {
+      username: context.accounts.hq.username, password: context.accounts.hq.password
+    })
+    expect(login.body.code).toBe(0)
+    const token = login.body.data.accessToken
+    const before = printerState(primary.id), vendor = counts()
+    const pending = await f.api('GET', pendingPath(primary.id), undefined, token)
+    expect(pending).toEqual(primary.pending)
+    expect(printerState(primary.id)).toEqual(before)
+    expect(counts()).toEqual(vendor)
+  })
+  await f.check('query-only-headquarters-page', async () => {
+    const session = await openOperator(context.accounts.hqQuery, primary.name)
+    try {
+      const pending = await f.api('GET', pendingPath(primary.id), undefined, session.token)
+      expect(pending).toMatchObject({ printerId: primary.id, operationType: 'TEST_PRINT', operationToken: primary.pending.operationToken })
+      await expect(session.dialog).toContainText('当前账号没有解除权限')
+      await expect(session.dialog.getByRole('button', { name: '解除待处理状态', exact: true })).toBeDisabled()
+      const before = printerState(primary.id), vendor = counts()
+      const denied = await rawApi('POST', resolvePath, session.token, {
+        id: primary.id, operationToken: primary.pending.operationToken, reason: '人工核实旧操作已结束',
+        senderStopped: true, providerWorkSettled: true
+      })
+      assertDenied(denied)
+      expect(printerState(primary.id)).toEqual(before)
+      expect(counts()).toEqual(vendor)
+    } finally { await session.browserContext.close() }
+  })
+  await f.check('permission-and-tenant-denials', async () => {
+    const before = printerState(primary.id), vendor = counts()
+    const noQueryLogin = await rawApi('POST', '/admin-api/system/auth/login', undefined, {
+      username: context.accounts.hqNoQuery.username, password: context.accounts.hqNoQuery.password
+    })
+    expect(noQueryLogin.body.code).toBe(0)
+    assertDenied(await rawApi('GET', pendingPath(primary.id), noQueryLogin.body.data.accessToken))
+
+    const staffLogin = await rawApi('POST', '/admin-api/system/auth/login', undefined, {
+      username: context.accounts.staff.username, password: context.accounts.staff.password
+    })
+    expect(staffLogin.body.code).toBe(0)
+    assertDenied(await rawApi('GET', pendingPath(primary.id), staffLogin.body.data.accessToken))
+
+    const crossTenantLogin = await rawApi('POST', '/admin-api/system/auth/login', undefined, {
+      username: context.accounts.hqCrossTenant.username, password: context.accounts.hqCrossTenant.password
+    }, { 'tenant-id': '901' })
+    expect(crossTenantLogin.body.code, JSON.stringify({
+      status: crossTenantLogin.status,
+      code: crossTenantLogin.body.code,
+      msg: crossTenantLogin.body.msg,
+      message: crossTenantLogin.body.message
+    })).toBe(0)
+    const crossTenantToken = crossTenantLogin.body.data.accessToken
+    expect(f.oracle('printer-auth-tenant', { userId: 910113 })[0]).toEqual({ userTenantId: 901, accessTokenTenantId: 0 })
+    const isolatedRead = await rawApi('GET', pendingPath(primary.id), crossTenantToken, undefined, { 'tenant-id': '901' })
+    assertDenied(isolatedRead)
+    assertDenied(await rawApi('GET', pendingPath(primary.id), crossTenantToken, undefined, { 'tenant-id': '902' }))
+    const beforeCrossTenantResolve = printerState(primary.id), countersBeforeCrossTenantResolve = counts()
+    assertDenied(await rawApi('POST', resolvePath, crossTenantToken, {
+      id: primary.id, operationToken: primary.pending.operationToken,
+      reason: '跨租户越权恢复应拒绝', senderStopped: true, providerWorkSettled: true
+    }, { 'tenant-id': '901' }))
+    expect(printerState(primary.id)).toEqual(beforeCrossTenantResolve)
+    expect(counts()).toEqual(countersBeforeCrossTenantResolve)
+
+    const shortTokenClient = async () => {
+      const response = await rawApi('POST', '/admin-api/system/auth/login', undefined, {
+        username: context.accounts.hq.username, password: context.accounts.hq.password
+      })
+      return response.body.data.accessToken
+    }
+    f.bridge('token-lifetime', { seconds: 2 })
+    try {
+      const shortToken = await shortTokenClient()
+      expect((await rawApi('GET', pendingPath(primary.id), shortToken)).body.code).toBe(0)
+      await new Promise(resolve => setTimeout(resolve, 3000))
+      assertDenied(await rawApi('GET', pendingPath(primary.id), shortToken))
+    } finally { f.bridge('token-lifetime', { seconds: 3600 }) }
+
+    expect(printerState(primary.id)).toEqual(before)
+    expect(counts()).toEqual(vendor)
+  })
+  await f.check('invalid-resolution-requests-no-side-effects', async () => {
+    const login = await rawApi('POST', '/admin-api/system/auth/login', undefined, {
+      username: context.accounts.hq.username, password: context.accounts.hq.password
+    })
+    const token = login.body.data.accessToken
+    const before = printerState(primary.id), vendor = counts()
+    const wrongToken = await rawApi('POST', resolvePath, token, {
+      id: primary.id, operationToken: '00000000-0000-4000-8000-000000000001', reason: '人工核实旧操作已结束',
+      senderStopped: true, providerWorkSettled: true
+    })
+    assertDenied(wrongToken)
+    assertDenied(await rawApi('GET', pendingPath(999999), token))
+    assertDenied(await rawApi('POST', resolvePath, token, {
+      id: 999999, operationToken: primary.pending.operationToken, reason: '人工核实旧操作已结束',
+      senderStopped: true, providerWorkSettled: true
+    }))
+    assertDenied(await rawApi('POST', resolvePath, token, {
+      id: primary.id, operationToken: primary.pending.operationToken, reason: '人工核实旧操作已结束',
+      senderStopped: false, providerWorkSettled: true
+    }))
+    expect(printerState(primary.id)).toEqual(before)
+    expect(counts()).toEqual(vendor)
+    expect(f.oracle('printer-operation-resolution', {
+      printerId: primary.id, operationToken: primary.pending.operationToken, requestId: primary.requestId
+    })).toHaveLength(0)
+  })
+  await f.check('page-resolution-records-audit', async () => {
+    const before = printerState(primary.id), vendor = counts()
+    const session = await openOperator(context.accounts.hq, primary.name)
+    try {
+      await expect(session.dialog).toContainText('测试打印')
+      await expect(session.dialog).toContainText(primary.requestId)
+      await fillReview(session.dialog, '厂商后台已确认原测试操作结束')
+      const responseWait = resolveResponse(session.page)
+      await session.dialog.getByRole('button', { name: '解除待处理状态', exact: true }).click()
+      const response = await responseWait
+      const body = await response.json()
+      expect(body.code).toBe(0)
+      expect(body.data).toMatchObject({ printerId: primary.id, operationToken: primary.pending.operationToken,
+        operationType: 'TEST_PRINT', outcome: 'TEST_PRINT_UNKNOWN' })
+      await expect(session.dialog).toContainText('测试打印结果仍待核验')
+      const actorId = (await f.api('GET', '/admin-api/system/auth/get-permission-info', undefined, session.token)).user.id
+      expect(f.oracle('printer-operation-resolution', {
+        printerId: primary.id, operationToken: primary.pending.operationToken, requestId: primary.requestId
+      })).toEqual([{ tenantId: 0, printerId: primary.id, operationType: 'TEST_PRINT', requestId: primary.requestId,
+        outcome: 'TEST_PRINT_UNKNOWN', senderStopped: 1, providerWorkSettled: 1, actorId,
+        reason: '厂商后台已确认原测试操作结束' }])
+      expect(await f.api('GET', pendingPath(primary.id), undefined, session.token)).toBeNull()
+      expect(printerState(primary.id)).toMatchObject({ operationType: null, operationTokenPresent: 0,
+        operationResolutionCount: 1, jobState: 'UNKNOWN' })
+      expect(printerState(primary.id).operationResolutionCount).toBe(before.operationResolutionCount + 1)
+      expect(counts()).toEqual(vendor)
+    } finally { await session.browserContext.close() }
+  })
+  await f.check('two-operator-race-single-audit', async () => {
+    const race = await createPending('recovery-race')
+    const vendor = counts()
+    const first = await openOperator(context.accounts.hq, race.name)
+    const second = await openOperator(context.accounts.hqB, race.name)
+    try {
+      const pendingA = await f.api('GET', pendingPath(race.id), undefined, first.token)
+      const pendingB = await f.api('GET', pendingPath(race.id), undefined, second.token)
+      expect(pendingA.operationToken).toBe(pendingB.operationToken)
+      await fillReview(first.dialog, '第一操作员已完成独立核验')
+      await fillReview(second.dialog, '第二操作员已完成独立核验')
+      const firstResponse = resolveResponse(first.page)
+      const secondResponse = resolveResponse(second.page)
+      await Promise.all([
+        first.dialog.getByRole('button', { name: '解除待处理状态', exact: true }).click(),
+        second.dialog.getByRole('button', { name: '解除待处理状态', exact: true }).click()
+      ])
+      const responses = await Promise.all([firstResponse, secondResponse])
+      const bodies = await Promise.all(responses.map(response => response.json()))
+      expect(bodies.filter(body => body.code === 0)).toHaveLength(1)
+      const denied = bodies.find(body => body.code !== 0)
+      expect(denied).toBeTruthy(); expect(denied.code).not.toBe(500)
+      const displays = [first.dialog, second.dialog]
+      await expect.poll(async () => {
+        const successes = await Promise.all(displays.map(dialog => dialog.getByText(/已记录处置/).count()))
+        return successes.filter(value => value > 0).length
+      }, { timeout: 15000 }).toBe(1)
+      await expect.poll(async () => {
+        const unresolvedNotices = await Promise.all(displays.map(dialog => dialog.getByText(/当前无待处理/).count()))
+        return unresolvedNotices.reduce((sum, value) => sum + value, 0)
+      }, { timeout: 15000 }).toBeGreaterThan(0)
+      const audit = f.oracle('printer-operation-resolution', {
+        printerId: race.id, operationToken: pendingA.operationToken, requestId: race.requestId
+      })
+      expect(audit).toHaveLength(1)
+      expect(printerState(race.id).operationResolutionCount).toBe(1)
+      expect(counts()).toEqual(vendor)
+    } finally {
+      await Promise.all([first.browserContext.close(), second.browserContext.close()])
+    }
+  })
+  await f.check('same-token-role-revocation', async () => {
+    const revokedDevice = await createPending('recovery-revoke')
+    const session = await openOperator(context.accounts.hqRevoked, revokedDevice.name)
+    try {
+      await fillReview(session.dialog, '页面打开后撤权仍必须服务端拒绝')
+      const before = printerState(revokedDevice.id), vendor = counts()
+      await f.api('POST', '/admin-api/system/permission/assign-user-role', { userId: 910115, roleIds: [] })
+      const responseWait = resolveResponse(session.page)
+      await session.dialog.getByRole('button', { name: '解除待处理状态', exact: true }).click()
+      const response = await responseWait
+      const result = await response.json()
+      expect(result.code).toBe(403)
+      await expect(session.dialog).toContainText('权限已变化')
+      await expect(session.dialog.getByRole('button', { name: '解除待处理状态', exact: true })).toBeDisabled()
+      expect(f.oracle('printer-state', { printerId: revokedDevice.id })[0]).toEqual(before)
+      expect(f.oracle('printer-operation-resolution', {
+        printerId: revokedDevice.id, operationToken: revokedDevice.pending.operationToken, requestId: revokedDevice.requestId
+      })).toHaveLength(0)
+      expect(counts()).toEqual(vendor)
+      const permissionInfo = await f.api('GET', '/admin-api/system/auth/get-permission-info', undefined, session.token)
+      expect(permissionInfo.user.id).toBe(910115)
+      expect(permissionInfo.roles).not.toContain('business_headquarters')
+    } finally { await session.browserContext.close() }
+  })
+  await f.check('undelivered-command-needs-explicit-retry', async () => {
+    const item = await createPending('recovery-undelivered')
+    const session = await openOperator(context.accounts.hq, item.name)
+    try {
+      const vendor = counts()
+      await fillReview(session.dialog, '核验原请求未送达后的人工重试')
+      let resolveRequests = 0
+      session.page.on('request', (request: any) => {
+        if (request.url().includes('/admin-api/store/printer/operation/resolve') && request.method() === 'POST') resolveRequests++
+      })
+      await session.page.route('**/admin-api/store/printer/operation/resolve', (route: any) => route.abort('failed'))
+      await session.dialog.getByRole('button', { name: '解除待处理状态', exact: true }).click()
+      await expect(session.dialog).toContainText('原操作仍在待处理中')
+      expect(resolveRequests).toBe(1)
+      expect(await f.api('GET', pendingPath(item.id), undefined, session.token)).toMatchObject({ operationToken: item.pending.operationToken })
+      expect(f.oracle('printer-operation-resolution', {
+        printerId: item.id, operationToken: item.pending.operationToken, requestId: item.requestId
+      })).toHaveLength(0)
+      expect(counts()).toEqual(vendor)
+
+      await session.page.unroute('**/admin-api/store/printer/operation/resolve')
+      await fillReview(session.dialog, '核验原请求未送达后由操作员明确重试')
+      const responseWait = resolveResponse(session.page)
+      await session.dialog.getByRole('button', { name: '解除待处理状态', exact: true }).click()
+      expect((await responseWait).status()).toBe(200)
+      expect(resolveRequests).toBe(2)
+      await expect(session.dialog).toContainText('测试打印结果仍待核验')
+      expect(counts()).toEqual(vendor)
+    } finally { await session.browserContext.close() }
+  })
+  await f.check('lost-response-with-empty-pending-is-not-success', async () => {
+    const item = await createPending('recovery-response-lost')
+    const session = await openOperator(context.accounts.hq, item.name)
+    try {
+      const vendor = counts()
+      await fillReview(session.dialog, '后端已提交但浏览器响应将丢失')
+      let resolveRequests = 0, pendingReads = 0
+      session.page.on('request', (request: any) => {
+        if (request.url().includes('/admin-api/store/printer/operation/resolve') && request.method() === 'POST') resolveRequests++
+        if (request.url().includes('/admin-api/store/printer/operation/pending') && request.method() === 'GET') pendingReads++
+      })
+      let handlerTask: Promise<void> | undefined
+      await session.page.route('**/admin-api/store/printer/operation/resolve', (route: any) => {
+        handlerTask = forwardCommittedResolveThenDrop(route, item, session.token)
+        return handlerTask
+      })
+      await session.dialog.getByRole('button', { name: '解除待处理状态', exact: true }).click()
+      await expect(session.dialog).toContainText('当前无待处理，上一请求结果未确认')
+      await handlerTask
+      expect(resolveRequests).toBe(1); expect(pendingReads).toBe(1)
+      expect(await f.api('GET', pendingPath(item.id), undefined, session.token)).toBeNull()
+      expect(await session.dialog.getByText(/已记录处置/).count()).toBe(0)
+      const audit = f.oracle('printer-operation-resolution', {
+        printerId: item.id, operationToken: item.pending.operationToken, requestId: item.requestId
+      })
+      expect(audit).toHaveLength(1)
+      expect(counts()).toEqual(vendor)
+    } finally { await session.browserContext.close() }
+  })
+  await f.check('new-token-before-reread-resets-confirmation', async () => {
+    const item = await createPending('recovery-new-token')
+    const session = await openOperator(context.accounts.hq, item.name)
+    try {
+      const vendor = counts()
+      await fillReview(session.dialog, '先核验旧操作，再单独测试新操作变化')
+      let resolveRequests = 0, pendingReads = 0
+      session.page.on('request', (request: any) => {
+        if (request.url().includes('/admin-api/store/printer/operation/resolve') && request.method() === 'POST') resolveRequests++
+        if (request.url().includes('/admin-api/store/printer/operation/pending') && request.method() === 'GET') pendingReads++
+      })
+      let nextPending: any, handlerTask: Promise<void> | undefined
+      const beforeRecovery = counts()
+      await session.page.route('**/admin-api/store/printer/operation/resolve', (route: any) => {
+        handlerTask = forwardCommittedResolveThenDrop(route, item, session.token, async () => {
+          expect(counts()).toEqual(beforeRecovery)
+          const requestId = key()
+          const job = await f.api('POST', `${prefix}/test-print`, { id: item.id, requestId })
+          expect(job).toMatchObject({ printerId: item.id, state: 'UNKNOWN', requestId })
+          expectedExplicitPrints++ // This fake-provider call creates the new-token fixture, not a recovery side effect.
+          nextPending = await f.api('GET', pendingPath(item.id))
+          expect(nextPending).toMatchObject({ printerId: item.id, operationType: 'TEST_PRINT', requestId })
+          expect(nextPending.operationToken).not.toBe(item.pending.operationToken)
+          expect(printerState(item.id)).toMatchObject({ operationType: 'TEST_PRINT',
+            operationRequestId: requestId, operationTokenPresent: 1, operationResolutionCount: 1, jobState: 'UNKNOWN' })
+        })
+        return handlerTask
+      })
+      await session.dialog.getByRole('button', { name: '解除待处理状态', exact: true }).click()
+      await expect(session.dialog).toContainText('发现新的待处理操作')
+      await handlerTask
+      expect(resolveRequests).toBe(1); expect(pendingReads).toBe(1)
+      expect(nextPending.operationToken).not.toBe(item.pending.operationToken)
+      await expect(session.dialog.locator('textarea')).toHaveValue('')
+      await expect(session.dialog.getByRole('checkbox').nth(0)).not.toBeChecked()
+      await expect(session.dialog.getByRole('checkbox').nth(1)).not.toBeChecked()
+      expect(await session.dialog.getByText(/已记录处置/).count()).toBe(0)
+      expect(counts()).toEqual({ print: vendor.print + 1, status: vendor.status })
+      expect(f.oracle('printer-operation-resolution', {
+        printerId: item.id, operationToken: item.pending.operationToken, requestId: item.requestId
+      })).toHaveLength(1)
+      expect(printerState(item.id)).toMatchObject({ operationType: 'TEST_PRINT', operationRequestId: nextPending.requestId,
+        operationTokenPresent: 1, operationResolutionCount: 1, jobState: 'UNKNOWN' })
+    } finally { await session.browserContext.close() }
+  })
+  await f.check('database-business-and-provider-invariants', async () => {
+    expect(businessFingerprint()).toEqual(businessBefore)
+    const vendor = counts()
+    expect(vendor).toEqual({ print: countersBefore.print + expectedExplicitPrints, status: countersBefore.status })
+    for (const item of [primary]) {
+      expect(printerState(item.id)).toMatchObject({ operationTokenPresent: 0, operationResolutionCount: 1, jobState: 'UNKNOWN' })
+    }
+  })
+}
+
+async function printerOperationRecoveryTenantEnabled(f: Flow) {
+  const backend = context.tenantEnabledBackend
+  expect(typeof backend).toBe('string')
+  expect(new URL(backend).origin).not.toBe(new URL(context.backend).origin)
+  const prefix = '/admin-api/store/printer'
+  const pendingPath = (id: number) => `${prefix}/operation/pending?id=${id}`
+  const resolvePath = `${prefix}/operation/resolve`
+  const counters = () => {
+    const value = f.bridge('printer-counters', { targetPort: Number(new URL(backend).port) })
+    return { print: value.printCalls, status: value.statusCalls }
+  }
+  const rawApi = async (method: string, path: string, token?: string, tenantId?: string, data?: unknown) => {
+    const headers: Record<string, string> = {}
+    if (token) headers.Authorization = `Bearer ${token}`
+    if (tenantId !== undefined) headers['tenant-id'] = tenantId
+    const response = await f.request.fetch(`${backend}${path}`, { method, data, headers, timeout: 30000 })
+    let body: any = {}
+    try { body = await response.json() } catch { /* Assertions below fail closed on a missing business payload. */ }
+    return { status: response.status(), body }
+  }
+  const assertDenied = (response: { status: number; body: any }, operationToken?: string) => {
+    expect(response.status).not.toBe(500)
+    expect(response.status === 401 || response.status === 403 ||
+      (Number.isInteger(response.body?.code) && response.body.code !== 0 && response.body.code !== 500),
+    JSON.stringify({ status: response.status, code: response.body?.code, msg: response.body?.msg })).toBe(true)
+    expect(response.body?.code).not.toBe(0)
+    expect(response.body?.code).not.toBe(500)
+    if (operationToken) expect(JSON.stringify(response.body)).not.toContain(operationToken)
+  }
+  const login = async (account: any, tenantId: string) => {
+    const result = await rawApi('POST', '/admin-api/system/auth/login', undefined, tenantId,
+      { username: account.username, password: account.password })
+    expect(result.status).toBe(200)
+    expect(result.body.code).toBe(0)
+    expect(result.body.data.accessToken).toBeTruthy()
+    return result.body.data.accessToken as string
+  }
+  const createPending = async (token: string, tenantId: string, label: string) => {
+    const name = f.title(label)
+    const created = await rawApi('POST', `${prefix}/create`, token, tenantId, {
+      name, providerCode: 'OWNED_TEST', deviceCode: key(), model: 'Synthetic',
+      connectionType: 'LAN', enabled: true, configuration: {}
+    })
+    expect(created.status).toBe(200); expect(created.body.code).toBe(0)
+    const id = Number(created.body.data)
+    expect(Number.isSafeInteger(id) && id > 0).toBe(true)
+    const requestId = key()
+    const printed = await rawApi('POST', `${prefix}/test-print`, token, tenantId, { id, requestId })
+    expect(printed.status).toBe(200); expect(printed.body.code).toBe(0)
+    expect(printed.body.data).toMatchObject({ printerId: id, requestId, state: 'UNKNOWN' })
+    const pending = await rawApi('GET', pendingPath(id), token, tenantId)
+    expect(pending.status).toBe(200); expect(pending.body.code).toBe(0)
+    expect(pending.body.data).toMatchObject({ printerId: id, operationType: 'TEST_PRINT', requestId })
+    expect(pending.body.data.operationToken).toMatch(/^[0-9a-f-]{36}$/i)
+    expect(f.oracle('printer-state', { printerId: id })[0]).toMatchObject({
+      tenantId: Number(tenantId), operationType: 'TEST_PRINT', operationRequestId: requestId,
+      operationTokenPresent: 1, operationResolutionCount: 0, jobState: 'UNKNOWN'
+    })
+    return { id, name, requestId, operationToken: pending.body.data.operationToken }
+  }
+  const before = counters()
+  const tenant902Token = await login(context.accounts.hqOtherTenant, '902')
+  const tenant901Token = await login(context.accounts.hqCrossTenant, '901')
+  expect(f.oracle('printer-auth-tenant', { userId: 910113 })[0]).toEqual({ userTenantId: 901, accessTokenTenantId: 901 })
+  expect(f.oracle('printer-auth-tenant', { userId: 910117 })[0]).toEqual({ userTenantId: 902, accessTokenTenantId: 902 })
+  let tenant902: any, tenant901: any, afterFixtures: any
+
+  await f.check('tenant-enabled-same-tenant-pending-read', async () => {
+    tenant902 = await createPending(tenant902Token, '902', 'recovery-enabled-tenant-902')
+    tenant901 = await createPending(tenant901Token, '901', 'recovery-enabled-tenant-901')
+    afterFixtures = counters()
+    expect(afterFixtures).toEqual({ print: before.print + 2, status: before.status })
+    const read902 = await rawApi('GET', pendingPath(tenant902.id), tenant902Token, '902')
+    const read901 = await rawApi('GET', pendingPath(tenant901.id), tenant901Token, '901')
+    for (const [result, item] of [[read902, tenant902], [read901, tenant901]] as const) {
+      expect(result.status).toBe(200); expect(result.body.code).toBe(0)
+      expect(result.body.data).toMatchObject({ printerId: item.id, requestId: item.requestId,
+        operationToken: item.operationToken, operationType: 'TEST_PRINT' })
+    }
+    expect(counters()).toEqual(afterFixtures)
+  })
+
+  await f.check('tenant-enabled-rejects-missing-and-mismatched-context', async () => {
+    assertDenied(await rawApi('GET', pendingPath(tenant901.id)), tenant901.operationToken)
+    assertDenied(await rawApi('GET', pendingPath(tenant901.id), undefined, '901'), tenant901.operationToken)
+    expect(await rawApi('GET', pendingPath(tenant901.id), tenant901Token)).toMatchObject({
+      status: 200, body: { code: 0, data: { operationToken: tenant901.operationToken } }
+    })
+    assertDenied(await rawApi('GET', pendingPath(tenant901.id), tenant901Token, '902'), tenant901.operationToken)
+    expect(await rawApi('GET', pendingPath(tenant902.id), tenant902Token)).toMatchObject({
+      status: 200, body: { code: 0, data: { operationToken: tenant902.operationToken } }
+    })
+    assertDenied(await rawApi('GET', pendingPath(tenant902.id), tenant902Token, '901'), tenant902.operationToken)
+    expect(await rawApi('GET', pendingPath(tenant901.id), tenant901Token, '901')).toMatchObject({
+      status: 200, body: { code: 0, data: { operationToken: tenant901.operationToken } }
+    })
+    expect(await rawApi('GET', pendingPath(tenant902.id), tenant902Token, '902')).toMatchObject({
+      status: 200, body: { code: 0, data: { operationToken: tenant902.operationToken } }
+    })
+    expect(counters()).toEqual(afterFixtures)
+  })
+
+  await f.check('tenant-enabled-cross-tenant-resource-and-recovery-denied', async () => {
+    const before902 = f.oracle('printer-state', { printerId: tenant902.id })[0]
+    const before901 = f.oracle('printer-state', { printerId: tenant901.id })[0]
+    const crossReads = [
+      await rawApi('GET', pendingPath(tenant902.id), tenant901Token, '901'),
+      await rawApi('GET', pendingPath(tenant901.id), tenant902Token, '902')
+    ]
+    assertDenied(crossReads[0], tenant902.operationToken)
+    assertDenied(crossReads[1], tenant901.operationToken)
+    const command = (item: any) => ({ id: item.id, operationToken: item.operationToken,
+      reason: '不同租户不得读取或解除该待处理操作', senderStopped: true, providerWorkSettled: true })
+    const crossResolutions = [
+      await rawApi('POST', resolvePath, tenant901Token, '901', command(tenant902)),
+      await rawApi('POST', resolvePath, tenant902Token, '902', command(tenant901))
+    ]
+    assertDenied(crossResolutions[0], tenant902.operationToken)
+    assertDenied(crossResolutions[1], tenant901.operationToken)
+    for (const item of [tenant902, tenant901]) {
+      expect(f.oracle('printer-state', { printerId: item.id })[0]).toEqual(item.id === tenant902.id ? before902 : before901)
+      expect(f.oracle('printer-operation-resolution', { printerId: item.id,
+        operationToken: item.operationToken, requestId: item.requestId })).toHaveLength(0)
+      const sameTenant = item.id === tenant902.id
+        ? await rawApi('GET', pendingPath(item.id), tenant902Token, '902')
+        : await rawApi('GET', pendingPath(item.id), tenant901Token, '901')
+      expect(sameTenant.body.data.operationToken).toBe(item.operationToken)
+    }
+    expect(counters()).toEqual(afterFixtures)
+  })
+}
+
 const scenarios: Record<string, (flow: Flow) => Promise<void>> = {
   'score-redemption': scoreRedemption, 'score-retry': scoreRetry, 'printer-unknown': printerUnknown,
   'pickup-fulfillment': pickupFulfillment, 'store-statistics': storeStatistics, 'order-print-jobs': orderPrintJobs,
   'pickup-contact': pickupContact, 'auth-session': authSession, 'catalog-order': catalogOrder, 'store-isolation': storeIsolation,
   'order-retry': orderRetry, 'order-cancel': orderCancel,
-  'coupon-release': flow => couponFlow(flow, false), 'coupon-complete': flow => couponFlow(flow, true)
+  'coupon-release': flow => couponFlow(flow, false), 'coupon-complete': flow => couponFlow(flow, true),
+  'printer-operation-recovery': printerOperationRecovery,
+  'printer-operation-recovery-tenant-enabled': printerOperationRecoveryTenantEnabled
 }
 for (const selected of context.planned) test(selected.id, async ({ flow }) => { await scenarios[selected.id](flow) })

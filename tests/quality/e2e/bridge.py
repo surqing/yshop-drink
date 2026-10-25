@@ -31,6 +31,8 @@ def invoke(context, action, ids, timeout=60):
         raise ValueError('INVALID_TEST_TOKEN_LIFETIME')
     if action=='printer-state' and ids.get('state') not in ('ONLINE','OFFLINE','PAPER_OUT','UNKNOWN'):
         raise ValueError('INVALID_TEST_PRINTER_STATE')
+    if 'targetPort' in ids and (type(ids['targetPort']) is not int or not 1<=ids['targetPort']<=65535):
+        raise ValueError('BRIDGE_TARGET_PORT_INVALID')
     if action=='simulate-print-crash' and (isinstance(ids.get('jobId'),bool) or not re.fullmatch(r'[1-9][0-9]{0,17}',str(ids.get('jobId','')))):
         raise ValueError('ENTITY_ID_INVALID')
     if action=='stats-boundary-times':

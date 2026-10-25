@@ -991,6 +991,7 @@
     "revokedHeadquartersCannotUseCachedSession": 1,
     "explicitHeadquartersUsesRoleAndTenantScope": 1,
     "singleTenantNullTokenAndDatabaseDefaultShareScopeButTenantModeRejectsMissingIdentity": 1,
+    "disabledTenantModeDoesNotExposePendingOperationToForeignDatabaseTenant": 1,
     "realShopDeletionClearsBindingsAndRollsBackOnFailure": 1,
     "unauthorizedShopDeletionIsDeniedBeforeLookingUpAnyShop": 1,
     "zeroAffectedShopDeletionDoesNotClearBindings": 1,
@@ -1601,6 +1602,9 @@
     "testUpdateTenant_system": 1
   },
   "co.yixiang.yshop.module.system.service.user.AdminUserServiceImplTest": {
+    "matchesUserTenantReadsCurrentDatabaseIdentity": 1,
+    "matchesUserTenantRejectsMissingAndDeletedUsers": 1,
+    "matchesUserTenantRejectsMissingArguments": 1,
     "testCreatUser_max": 1,
     "testUpdateUserPassword_success": 1,
     "testGetUserListByStatus": 1,

@@ -32,8 +32,15 @@ public class PrinterService {
     private long tenant() {
         var user=SecurityFrameworkUtils.getLoginUser();
         Long contextTenant=TenantContextHolder.getTenantId();
+        // Reject incomplete or inconsistent tenant-enabled identity before role lookups:
+        // those lookups are tenant-filtered and must not run without an authorized scope.
+        if(tenantEnabled&&(user==null||user.getId()==null||user.getTenantId()==null
+                ||contextTenant==null||!contextTenant.equals(user.getTenantId())))
+            throw new PrinterFailure("HEADQUARTERS_ONLY",false);
         try {
             storeAccess.requireHeadquarters();
+            if(user!=null&&user.getId()!=null&&!tenantEnabled&&contextTenant==null)
+                storeAccess.requirePrincipalTenant(user.getId(),user.getTenantId()==null?0L:user.getTenantId());
         } catch (AccessDeniedException denied) {
             throw new PrinterFailure("HEADQUARTERS_ONLY",false);
         }

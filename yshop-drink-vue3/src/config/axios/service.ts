@@ -177,6 +177,10 @@ service.interceptors.response.use(
       } else {
         ElNotification.error({ title: msg })
       }
+      // Preserve the authorization signal so sensitive views can stop stale sessions
+      // from retrying after their role has been revoked. Other business failures keep
+      // the existing generic rejection contract.
+      if (code === 403) return Promise.reject(Object.assign(new Error(msg), { code }))
       return Promise.reject('error')
     } else {
       return data

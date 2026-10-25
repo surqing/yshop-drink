@@ -107,9 +107,14 @@ def query_for(name, ids):
                 "'debit',(SELECT COALESCE(SUM(b.number),0) FROM yshop_user_bill b JOIN yshop_score_order o ON o.order_id=b.extend_field AND o.uid=b.uid WHERE o.uid="+member+" AND o.product_id=p.id),"
                 "'ledgerBalance',(SELECT MIN(b.balance) FROM yshop_user_bill b JOIN yshop_score_order o ON o.order_id=b.extend_field AND o.uid=b.uid WHERE o.uid="+member+" AND o.product_id=p.id),"
                 "'totalScore',(SELECT COALESCE(SUM(total_score),0) FROM yshop_score_order WHERE uid="+member+" AND product_id=p.id)) FROM yshop_score_product p WHERE p.id="+product+';')
+    if name=='printer-auth-tenant':
+        user=number(ids.get('userId'))
+        return ("SELECT JSON_OBJECT('userTenantId',u.tenant_id,'accessTokenTenantId',"
+                "(SELECT t.tenant_id FROM system_oauth2_access_token t WHERE t.user_id=u.id AND t.user_type=2 AND t.deleted=b'0' ORDER BY t.id DESC LIMIT 1)) "
+                "FROM system_users u WHERE u.id="+user+" AND u.deleted=b'0';")
     if name=='printer-state':
         device=number(ids.get('printerId'))
-        return ("SELECT JSON_OBJECT('state',p.device_state,'checkedAt',p.state_checked_at,'authorization',p.authorization,"
+        return ("SELECT JSON_OBJECT('tenantId',p.tenant_id,'state',p.device_state,'checkedAt',p.state_checked_at,'authorization',p.authorization,"
                 "'jobs',(SELECT COUNT(*) FROM yshop_printer_test_job WHERE printer_id=p.id),"
                 "'jobState',(SELECT MAX(state) FROM yshop_printer_test_job WHERE printer_id=p.id),"
                 "'operationType',p.authorization_operation_type,'operationRequestId',p.authorization_operation_request_id,"
@@ -118,11 +123,20 @@ def query_for(name, ids):
                 "FROM yshop_printer p WHERE p.id="+device+';')
     if name=='printer-operation-resolution':
         device=number(ids.get('printerId'));token=operation_token(ids.get('operationToken'));request=order_id(ids.get('requestId'))
-        return ("SELECT JSON_OBJECT('operationType',r.operation_type,'requestId',r.request_id,'outcome',r.outcome,"
+        return ("SELECT JSON_OBJECT('tenantId',r.tenant_id,'printerId',r.printer_id,'operationType',r.operation_type,'requestId',r.request_id,'outcome',r.outcome,"
                 "'senderStopped',CAST(r.sender_stopped AS UNSIGNED),'providerWorkSettled',CAST(r.provider_work_settled AS UNSIGNED),"
                 "'actorId',r.actor_id,'reason',r.reason) FROM yshop_printer p JOIN yshop_printer_operation_resolution r "
                 "ON r.tenant_id=p.tenant_id AND r.printer_id=p.id WHERE p.id="+device+
                 " AND r.operation_token="+token+" AND r.request_id="+request+";")
+    if name=='printer-operation-business-fingerprint':
+        return ("SELECT JSON_OBJECT('orders',(SELECT COUNT(*) FROM yshop_store_order),"
+                "'inventoryStock',(SELECT COALESCE(SUM(stock),0) FROM yshop_store_product_attr_value),"
+                "'couponRights',(SELECT COUNT(*) FROM yshop_coupon_user),"
+                "'couponOperations',(SELECT COUNT(*) FROM yshop_coupon_operation),"
+                "'memberPoints',(SELECT COALESCE(SUM(integral),0) FROM yshop_user),"
+                "'payments',(SELECT COUNT(*) FROM yshop_order_payment),"
+                "'paymentAttempts',(SELECT COUNT(*) FROM yshop_order_payment_attempt),"
+                "'userBills',(SELECT COUNT(*) FROM yshop_user_bill));")
     if name=='order':
         return "SELECT JSON_OBJECT('id',id,'memberId',uid,'shopId',shop_id,'amount',pay_price,'paid',paid,'status',status,'deleted',CAST(deleted AS UNSIGNED),'couponId',coupon_id,'quantity',total_num,'remark',remark) FROM yshop_store_order WHERE order_id="+order_id(ids.get('orderId'))+';'
     if name=='order-lines':

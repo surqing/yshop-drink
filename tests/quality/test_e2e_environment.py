@@ -110,6 +110,16 @@ class ReadOracleTest(unittest.TestCase):
         self.assertIn("WHERE order_id='owned-123'",query)
         self.assertNotIn('UPDATE ',query)
 
+    def test_printer_auth_tenant_oracle_reports_only_tenant_ids(self):
+        from e2e.oracle import query_for
+        query=query_for('printer-auth-tenant',{'userId':910113})
+        self.assertIn("'userTenantId',u.tenant_id",query)
+        self.assertIn("'accessTokenTenantId'",query)
+        self.assertIn("t.user_id=u.id",query)
+        self.assertNotIn('t.access_token',query)
+        with self.assertRaisesRegex(ValueError,'ENTITY_ID_INVALID'):
+            query_for('printer-auth-tenant',{'userId':'910113 OR 1=1'})
+
     def test_line_oracle_reads_only_exact_orders_historical_snapshot(self):
         import sqlite3
         from e2e.oracle import query_for

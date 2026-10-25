@@ -8,6 +8,7 @@ import co.yixiang.yshop.framework.tenant.core.context.TenantContextHolder;
 import co.yixiang.yshop.module.order.service.statistics.StoreOrderStatisticsService;
 import co.yixiang.yshop.module.store.service.storeshop.StoreAccessService;
 import co.yixiang.yshop.module.system.api.permission.PermissionApi;
+import co.yixiang.yshop.module.system.api.user.AdminUserApi;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -72,7 +73,7 @@ class StoreOrderStatisticsDatabaseTest {
         permissions = mock(PermissionApi.class);
         when(permissions.hasAnyRoles(anyLong(), any(String[].class)))
                 .thenAnswer(call -> headquartersUsers.contains(call.getArgument(0)));
-        service = new StoreOrderStatisticsService(jdbc, new StoreAccessService(jdbc, permissions), false);
+        service = new StoreOrderStatisticsService(jdbc, new StoreAccessService(jdbc, permissions, mock(AdminUserApi.class)), false);
     }
 
     @AfterEach
