@@ -1266,7 +1266,7 @@ async function printerUnknown(f: Flow) {
       printerId: device, operationToken: pending.operationToken, requestId
     })
     expect(resolution).toHaveLength(1)
-    expect(resolution[0]).toEqual({ operationType: 'TEST_PRINT', requestId, outcome: 'TEST_PRINT_UNKNOWN',
+    expect(resolution[0]).toEqual({ tenantId: 0, printerId: device, operationType: 'TEST_PRINT', requestId, outcome: 'TEST_PRINT_UNKNOWN',
       senderStopped: 1, providerWorkSettled: 1, actorId, reason: body.reason })
     expect(counters()).toEqual(count)
   })
