@@ -8,15 +8,16 @@ from e2e.support import extract_application, TestSupport
 from e2e.bridge import validate_context, invoke
 
 class TestSupportBoundaryTest(unittest.TestCase):
-    def test_only_the_second_owned_printer_probe_gets_the_tenant_enabled_guard_exception(self):
+    def test_tenant_probe_scopes_guard_exception_and_disables_its_background_print_poller(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);support=TestSupport(root,root/'support',{'sourceSha':'sha','sourceDigest':'digest'},'a'*32)
             support.classpath='owned-test-classpath';support.tenant_enabled_port=18082
             disabled=support.launch(root/'application.yaml',18081)
             enabled=support.launch(root/'application.yaml',18082)
-            self.assertFalse(any('tenant.enable' in value or 'printer-tenant-probe' in value for value in disabled))
+            self.assertFalse(any('tenant.enable' in value or 'printer-tenant-probe' in value or 'order-print-poll-ms' in value for value in disabled))
             self.assertIn('--yshop.tenant.enable=true',enabled)
             self.assertIn('--e2e.printer-tenant-probe=true',enabled)
+            self.assertIn('--yshop.printer.order-print-poll-ms=2147483647',enabled)
 
     def test_extracts_current_boot_classes_and_libraries_only(self):
         with tempfile.TemporaryDirectory() as folder:

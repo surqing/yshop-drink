@@ -116,7 +116,13 @@ class TestSupport:
         command=['java','-De2e.owner='+self.owner,'-De2e.root='+str(self.root),'-cp',self.classpath,
                  'e2esupport.OwnedE2eApplication','--spring.config.location=file:'+str(config),'--server.port='+str(port)]
         if port==self.tenant_enabled_port:
-            command.extend(['--yshop.tenant.enable=true','--e2e.printer-tenant-probe=true'])
+            # This second app instance exists only to exercise the tenant-enabled
+            # printer HTTP boundary against the shared owned schema. Its scheduled
+            # worker must not race the primary instance for test jobs or split the
+            # synthetic provider-call counters across JVMs; E2 invokes the real
+            # worker explicitly through the primary owned mailbox.
+            command.extend(['--yshop.tenant.enable=true','--e2e.printer-tenant-probe=true',
+                            '--yshop.printer.order-print-poll-ms=2147483647'])
         return command
 
     def context(self):
