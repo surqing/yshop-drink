@@ -224,6 +224,7 @@ async function catalogOrder(f: Flow) {
 async function batchStockOperations(f: Flow) {
   let product: any, skuId = 0, committed: any, forwarded: any, beforeFinancial: any
   let accessProduct: any, accessSkuId = 0, accessToken = '', accessKey = '', accessBatchId = ''
+  let assignmentProduct: any, assignmentSkuId = 0, assignmentKey = '', assignmentBatchId = ''
   let peerToken = '', assignmentToken = '', queryToken = ''
   let commitMode: 'reject-business' | 'drop-response' | 'forward' = 'forward'
   let droppedResponseApplyRequests = 0
@@ -238,9 +239,13 @@ async function batchStockOperations(f: Flow) {
     expect(body.code, JSON.stringify({ code: body.code, msg: body.msg })).toBe(0)
     return body.data.accessToken as string
   }
-  const stockHttp = async (method: string, path: string, token: string, data?: unknown) => {
+  // GET callers pass the token as the third argument; POST callers pass
+  // (data, token). Keep that established call convention explicit here.
+  const stockHttp = async (method: string, path: string, dataOrToken: unknown, token?: string) => {
+    const requestToken = token ?? String(dataOrToken)
+    const data = token === undefined ? undefined : dataOrToken
     const response = await f.request.fetch(`${context.backend}${path}`, {
-      method, data, headers: { Authorization: `Bearer ${token}` }, timeout: 30000
+      method, data, headers: { Authorization: `Bearer ${requestToken}` }, timeout: 30000
     })
     const raw = await response.text()
     let body: any = null
@@ -255,14 +260,25 @@ async function batchStockOperations(f: Flow) {
     expect(response.body?.code).not.toBe(500)
     for (const name of names.filter(Boolean)) expect(response.raw).not.toContain(name)
   }
-  const deniedStockOperations = async (token: string, key: string, target: any, names: string[]) => {
+  const deniedStockOperations = async (token: string, key: string, target: any, names: string[],
+                                      resultPolicy: 'deny' | 'masked-or-deny' = 'masked-or-deny') => {
     const line = { productId: target.id, skuId: Number(target.skus[0].id), expectedStock: 10, delta: 1 }
     const body = { shopId: 101, lines: [line], reason: 'R4 authorization boundary', key }
     const preview = await stockHttp('POST', '/admin-api/product/catalog/stock-batches/preview', body, token)
     const replay = await stockHttp('POST', '/admin-api/product/catalog/stock-batches', body, token)
     const newKey = await stockHttp('POST', '/admin-api/product/catalog/stock-batches', { ...body, key: key + '_new' }, token)
     const result = await stockHttp('GET', `/admin-api/product/catalog/stock-batches/result?key=${encodeURIComponent(key)}`, token)
-    for (const response of [preview, replay, newKey, result]) expectStockDenied(response, names)
+    for (const response of [preview, replay, newKey]) expectStockDenied(response, names)
+    // Result lookup is either method-denied (query-only) or masks another
+    // account's key as unconfirmed (an account with batch-operation access).
+    if (resultPolicy === 'deny' || result.status === 401 || result.status === 403 ||
+        (Number.isInteger(result.body?.code) && result.body.code !== 0 && result.body.code !== 500)) {
+      expectStockDenied(result, names)
+    } else {
+      expect(result.status).toBe(200)
+      expect(result.body).toMatchObject({ code: 0, data: { status: 'UNCONFIRMED', batch: null } })
+    }
+    for (const name of names.filter(Boolean)) expect(result.raw).not.toContain(name)
   }
   await f.check('batch-stock-fixture-created', async () => {
     product = await f.createProduct(101, 'batch-stock', 19)
@@ -545,7 +561,10 @@ async function batchStockOperations(f: Flow) {
     const initial = f.oracle('batch-stock-product', { productId: accessProduct.id, skuId: accessSkuId })[0]
     expect(initial).toMatchObject({ shopId: 101, productStock: 10, skuStock: 10, batchCount: 0, batchOperationCount: 0 })
     accessToken = await stockLogin(context.accounts.stockWriter)
-    expect((await f.api('GET', '/admin-api/system/auth/get-permission-info', undefined, accessToken)).user.id).toBe(910120)
+    const permissionInfo = await f.api('GET', '/admin-api/system/auth/get-permission-info', undefined, accessToken)
+    expect(permissionInfo.user.id).toBe(910120)
+    expect(permissionInfo.permissions).toContain('shop:store-product:query')
+    expect(permissionInfo.permissions).toContain('shop:store-product:update')
     const request = { shopId: 101, lines: [{ productId: accessProduct.id, skuId: accessSkuId, expectedStock: 10, delta: 1 }],
       reason: 'R4 authorized HTTP acceptance' }
     const preview = await stockHttp('POST', '/admin-api/product/catalog/stock-batches/preview', request, accessToken)
@@ -570,7 +589,7 @@ async function batchStockOperations(f: Flow) {
   await f.check('batch-stock-http-same-token-revocation-denies-all-batch-operations', async () => {
     const before = f.oracle('batch-stock-product', { productId: accessProduct.id, skuId: accessSkuId })[0]
     const financialBefore = f.oracle('batch-stock-financial', {})[0]
-    await f.api('POST', '/admin-api/system/permission/assign-role-menu', { roleId: 910120, menuIds: [2169] }, f.adminToken)
+    await f.api('POST', '/admin-api/system/permission/assign-role-menu', { roleId: 910120, menuIds: [3111] }, f.adminToken)
     const line = { productId: accessProduct.id, skuId: accessSkuId, expectedStock: 11, delta: 1 }
     const probe = { shopId: 101, lines: [line], reason: 'R4 revoked HTTP acceptance' }
     expectStockDenied(await stockHttp('POST', '/admin-api/product/catalog/stock-batches/preview', probe, accessToken), [accessProduct.name, accessBatchId])
@@ -586,18 +605,31 @@ async function batchStockOperations(f: Flow) {
   })
 
   await f.check('batch-stock-http-shop-assignment-revocation-denies-all-batch-operations', async () => {
+    assignmentProduct = await f.createProduct(101, 'batch-stock-assignment-revocation', 19)
+    assignmentSkuId = Number(assignmentProduct.skus[0].id)
     assignmentToken = await stockLogin(context.accounts.stockAssignment)
     expect((await f.api('GET', '/admin-api/system/auth/get-permission-info', undefined, assignmentToken)).user.id).toBe(910123)
+    assignmentKey = key()
+    const assignmentApply = await stockHttp('POST', '/admin-api/product/catalog/stock-batches', {
+      shopId: 101, lines: [{ productId: assignmentProduct.id, skuId: assignmentSkuId, expectedStock: 10, delta: 1 }],
+      reason: 'R4 assignment revocation old result', key: assignmentKey
+    }, assignmentToken)
+    expect(assignmentApply.status).toBe(200)
+    expect(assignmentApply.body).toMatchObject({ code: 0, data: { state: 'APPLIED', shopId: 101,
+      lines: [{ productId: assignmentProduct.id, skuId: assignmentSkuId, beforeStock: 10, delta: 1, afterStock: 11 }] } })
+    assignmentBatchId = assignmentApply.body.data.batchId
+    expect(assignmentBatchId).toBeTruthy()
     const shop = await f.api('GET', '/admin-api/store/shop/get?id=101')
     expect(shop.adminId.map(String)).toContain('910123')
     const updatedAdmins = shop.adminId.map(String).filter((id: string) => id !== '910123')
     await f.api('PUT', '/admin-api/store/shop/update', { ...shop, id: 101, adminId: updatedAdmins }, f.adminToken)
     const updatedShop = await f.api('GET', '/admin-api/store/shop/get?id=101')
     expect(updatedShop.adminId.map(String)).not.toContain('910123')
-    const before = f.oracle('batch-stock-product', { productId: accessProduct.id, skuId: accessSkuId })[0]
+    const before = f.oracle('batch-stock-product', { productId: assignmentProduct.id, skuId: assignmentSkuId })[0]
     const financialBefore = f.oracle('batch-stock-financial', {})[0]
-    await deniedStockOperations(assignmentToken, accessKey, accessProduct, [accessProduct.name, accessBatchId])
-    expect(f.oracle('batch-stock-product', { productId: accessProduct.id, skuId: accessSkuId })[0]).toEqual(before)
+    await deniedStockOperations(assignmentToken, assignmentKey, assignmentProduct,
+      [assignmentProduct.name, assignmentBatchId], 'deny')
+    expect(f.oracle('batch-stock-product', { productId: assignmentProduct.id, skuId: assignmentSkuId })[0]).toEqual(before)
     expect(f.oracle('batch-stock-financial', {})[0]).toEqual(financialBefore)
   })
 
