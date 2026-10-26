@@ -145,19 +145,26 @@ test('empty HTTP 200 response keeps the original request key for recovery', asyn
   expect(state().operationMessage).not.toContain('服务端已拒绝')
 })
 
-test('reopening checks a saved original key before loading a new draft', async () => {
+test('reopening with a clock ahead checks the saved original key before loading a new draft', async () => {
   const key = 'batch_0123456789abcdef'
-  sessionStorage.setItem('batch-stock-pending-v1:101:101', JSON.stringify({
-    userId: 101, shopId: 101, key, savedAt: Date.now() - 31 * 60 * 1000,
+  const saved = {
+    userId: 101, shopId: 101, key, savedAt: Date.now() + 60_000,
     body: { shopId: 101, lines: [{ productId: 1, skuId: 10, expectedStock: 10, delta: 1 }], reason: 'test restock' }
-  }))
-  mocks.getStockBatchResult.mockResolvedValueOnce({ status: 'CONFIRMED', batch: result('fedcba9876543210fedcba9876543210', 1) })
+  }
+  sessionStorage.setItem('batch-stock-pending-v1:101:101', JSON.stringify(saved))
+  const resultLookup = deferred<any>()
+  mocks.getStockBatchResult.mockReturnValueOnce(resultLookup.promise)
 
   await wrapper!.setProps({ modelValue: true })
   await flushPromises()
 
+  expect(state().pendingRequest).toEqual(saved)
   expect(mocks.getStockBatchResult).toHaveBeenCalledWith(key)
+  expect(mocks.applyStockBatch).not.toHaveBeenCalled()
   expect(mocks.configuration).not.toHaveBeenCalled()
+
+  resultLookup.resolve({ status: 'CONFIRMED', batch: result('fedcba9876543210fedcba9876543210', 1) })
+  await flushPromises()
   expect(state().batchResult.batchId).toBe('fedcba9876543210fedcba9876543210')
   expect(sessionStorage.length).toBe(0)
 })

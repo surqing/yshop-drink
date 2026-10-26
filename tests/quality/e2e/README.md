@@ -36,7 +36,7 @@ local 还需要 macOS、HBuilderX、已登录且启用服务端口的微信开�
 
 ## 场景和边界
 
-完整集合为 17 个必需场景，其中新增 `batch-stock-operations`：真实后台页面和接口验证 JSON 严格整数、批量预览、切店时 A 店迟到预览不会覆盖 B 店、HTTP 200 业务失败、已提交但响应丢失后的原 key 恢复、经营历史与只读 SQL 不变量。local 中 11 个场景使用官方 Mini 并标为 `mini-admin`；`printer-unknown`、`store-statistics`、`order-print-jobs`、`batch-stock-operations` 及两项 printer recovery 场景使用真实后台页面和所属后端，标为 `api-admin`，Mini 明确 NOT_RUN。ci 的 17 个场景均为 `api-admin`，小程序明确 NOT_RUN。对 R4 可重复指定精确场景集合，例如：
+完整集合为 17 个必需场景，其中新增 `batch-stock-operations`：真实后台页面和接口验证 JSON 严格整数、批量预览、切店时 A 店迟到预览不会覆盖 B 店、HTTP 200 业务失败、提交响应丢失后把保存时间置于未来并重开页面仍以原 key 恢复、角色权限撤销和门店管理员移除后旧登录令牌对预览/重放/新提交/结果查询的拒绝、跨账号 key 隔离、跨店混合请求拒绝、仅查询账号受方法权限约束、历史批次与库存/财务 SQL 不变量。local 中 11 个场景使用官方 Mini 并标为 `mini-admin`；`printer-unknown`、`store-statistics`、`order-print-jobs`、`batch-stock-operations` 及两项 printer recovery 场景使用真实后台页面和所属后端，标为 `api-admin`，Mini 明确 NOT_RUN。ci 的 17 个场景均为 `api-admin`，小程序明确 NOT_RUN。对 R4 可重复指定精确场景集合，例如：
 
 ```sh
 .quality/venv/bin/python tests/quality/run.py E2E --profile local \

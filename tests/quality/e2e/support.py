@@ -112,6 +112,32 @@ class TestSupport:
             "('store:web-print:query','store:web-print:authorize','store:web-print:create','store:web-print:test');"
         )
 
+    def configure_batch_stock_access(self,environment):
+        # Ordinary synthetic users exercise the real admin login, method-security
+        # checks, role-menu cache eviction, and fresh store assignment lookup.
+        environment.sql(
+            "INSERT INTO system_role(id,name,code,sort,data_scope,data_scope_dept_ids,status,type,tenant_id) VALUES"
+            "(910120,'R4 stock writer','r4_stock_writer',1,1,'',0,2,0),"
+            "(910121,'R4 stock query','r4_stock_query',2,1,'',0,2,0),"
+            "(910122,'R4 stock peer','r4_stock_peer',3,1,'',0,2,0),"
+            "(910123,'R4 stock assignment revocation','r4_stock_assignment',4,1,'',0,2,0);"
+            "INSERT INTO system_users(id,username,password,nickname,status,tenant_id) "
+            "SELECT 910120,'qualitystockwriter',password,'synthetic-r4-writer',0,0 FROM system_users WHERE id=101;"
+            "INSERT INTO system_users(id,username,password,nickname,status,tenant_id) "
+            "SELECT 910121,'qualitystockquery',password,'synthetic-r4-query',0,0 FROM system_users WHERE id=101;"
+            "INSERT INTO system_users(id,username,password,nickname,status,tenant_id) "
+            "SELECT 910122,'qualitystockpeer',password,'synthetic-r4-peer',0,0 FROM system_users WHERE id=101;"
+            "INSERT INTO system_users(id,username,password,nickname,status,tenant_id) "
+            "SELECT 910123,'qualitystockassignment',password,'synthetic-r4-assignment',0,0 FROM system_users WHERE id=101;"
+            "INSERT INTO system_user_role(user_id,role_id,tenant_id) VALUES"
+            "(910120,910120,0),(910121,910121,0),(910122,910122,0),(910123,910123,0);"
+            "INSERT INTO system_role_menu(role_id,menu_id,tenant_id) SELECT 910120,id,0 FROM system_menu WHERE id IN (2169,2171);"
+            "INSERT INTO system_role_menu(role_id,menu_id,tenant_id) SELECT 910121,id,0 FROM system_menu WHERE id=2169;"
+            "INSERT INTO system_role_menu(role_id,menu_id,tenant_id) SELECT 910122,id,0 FROM system_menu WHERE id IN (2169,2171);"
+            "INSERT INTO system_role_menu(role_id,menu_id,tenant_id) SELECT 910123,id,0 FROM system_menu WHERE id IN (2169,2171);"
+            "UPDATE yshop_store_shop SET admin_id=CONCAT(admin_id,',910120,910121,910122,910123') WHERE id=101;"
+        )
+
     def launch(self,config,port):
         command=['java','-De2e.owner='+self.owner,'-De2e.root='+str(self.root),'-cp',self.classpath,
                  'e2esupport.OwnedE2eApplication','--spring.config.location=file:'+str(config),'--server.port='+str(port)]

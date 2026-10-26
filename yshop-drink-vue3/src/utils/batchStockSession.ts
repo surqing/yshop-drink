@@ -49,20 +49,19 @@ export function loadPendingBatchRequest(
   storage: SessionStorageLike,
   userId: number,
   shopId: number,
-  now = Date.now()
+  _now = Date.now()
 ): PendingBatchRequest | undefined {
   const key = pendingBatchStorageKey(userId, shopId)
   const raw = storage.getItem(key)
   if (!raw) return undefined
   try {
     const value = JSON.parse(raw) as PendingBatchRequest
-    const age = now - value.savedAt
     const validLines = Array.isArray(value.body?.lines) && value.body.lines.length > 0 && value.body.lines.length <= 100 &&
       value.body.lines.every(line => line && Number.isSafeInteger(line.productId) && line.productId > 0 &&
         Number.isSafeInteger(line.skuId) && line.skuId > 0 && Number.isSafeInteger(line.expectedStock) && line.expectedStock >= 0 &&
         Number.isSafeInteger(line.delta) && line.delta !== 0 && Math.abs(line.delta) <= 1000000)
     const valid = value.userId === userId && value.shopId === shopId && value.body?.shopId === shopId &&
-      REQUEST_KEY.test(value.key) && Number.isFinite(value.savedAt) && age >= 0 &&
+      REQUEST_KEY.test(value.key) && Number.isFinite(value.savedAt) &&
       validLines && typeof value.body.reason === 'string' && value.body.reason.trim().length > 0 && value.body.reason.trim().length <= 200
     if (!valid) {
       storage.removeItem(key)

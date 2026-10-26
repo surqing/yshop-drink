@@ -46,6 +46,31 @@ test('pending batch request remains recoverable after thirty minutes and is isol
   expect(storage.has(pendingBatchStorageKey(101, 201))).toBe(true)
 })
 
+test('pending request survives wall clock rollback without changing key or body', () => {
+  const storage = new Map<string, string>()
+  const storageLike = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => storage.set(key, value),
+    removeItem: (key: string) => storage.delete(key),
+    key: (index: number) => [...storage.keys()][index] ?? null,
+    get length() { return storage.size }
+  }
+  const request = {
+    userId: 101,
+    shopId: 201,
+    key: 'batch_0123456789abcdef',
+    savedAt: 100_000,
+    body: { shopId: 201, lines: [{ productId: 1, skuId: 2, expectedStock: 10, delta: 3 }], reason: '补货' }
+  }
+  const storageKey = pendingBatchStorageKey(request.userId, request.shopId)
+  savePendingBatchRequest(storageLike, request)
+  const storedBefore = storage.get(storageKey)
+
+  expect(loadPendingBatchRequest(storageLike, request.userId, request.shopId, 99_999)).toEqual(request)
+  expect(loadPendingBatchRequest(storageLike, request.userId, request.shopId, 10_000)).toEqual(request)
+  expect(storage.get(storageKey)).toBe(storedBefore)
+})
+
 test('HTTP business failures are definitive while network loss remains recoverable', () => {
   expect(isUncertainBatchOutcome('error')).toBe(false)
   expect(isUncertainBatchOutcome(Object.assign(new Error('forbidden'), { code: 403 }))).toBe(false)
