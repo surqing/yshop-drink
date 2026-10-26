@@ -87,10 +87,11 @@ export function clearPendingBatchRequests(storage: SessionStorageLike) {
 export function isUncertainBatchOutcome(error: unknown) {
   if (error === 'error') return false
   if (error && typeof error === 'object') {
-    const candidate = error as { code?: unknown; response?: { status?: unknown }; message?: unknown }
+    const candidate = error as { code?: unknown; businessCode?: unknown; response?: { status?: unknown }; message?: unknown }
     const status = Number(candidate.response?.status)
     if (status >= 500) return true
     if ((status >= 400 && status < 500) || candidate.code === 403) return false
+    if (candidate.businessCode === 500 || candidate.businessCode === 901) return false
     if (candidate.code === 'ERR_NETWORK' || candidate.code === 'ECONNABORTED' || candidate.code === 'ETIMEDOUT') return true
     if (typeof candidate.message === 'string' && /network error|timeout/i.test(candidate.message)) return true
   }

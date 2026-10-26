@@ -155,7 +155,7 @@ service.interceptors.response.use(
       }
     } else if (code === 500) {
       ElMessage.error(t('sys.api.errMsg500'))
-      return Promise.reject(new Error(msg))
+      return Promise.reject(Object.assign(new Error(msg), { businessCode: code }))
     } else if (code === 901) {
       ElMessage.error({
         offset: 300,
@@ -169,7 +169,7 @@ service.interceptors.response.use(
           '<div> &nbsp; </div>' +
           '<div></div>'
       })
-      return Promise.reject(new Error(msg))
+      return Promise.reject(Object.assign(new Error(msg), { businessCode: code }))
     } else if (code !== 200) {
       if (msg === '无效的刷新令牌') {
         // hard coding：忽略这个提示，直接登出

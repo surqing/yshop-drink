@@ -53,6 +53,8 @@ test('HTTP business failures are definitive while network loss remains recoverab
   expect(isUncertainBatchOutcome(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }))).toBe(true)
   expect(isUncertainBatchOutcome(Object.assign(new Error(''), { response: { status: 200 } }))).toBe(true)
   expect(isUncertainBatchOutcome(new Error(''))).toBe(true)
+  expect(isUncertainBatchOutcome(Object.assign(new Error('Synthetic business rejection'), { businessCode: 500 }))).toBe(false)
+  expect(isUncertainBatchOutcome(new Error('unclassified failure'))).toBe(true)
 })
 
 test('logout cleanup removes only this feature pending keys', () => {
