@@ -129,10 +129,26 @@ test('lost apply response keeps and reuses the original key until a result is co
   expect(sessionStorage.length).toBe(0)
 })
 
+test('empty HTTP 200 response keeps the original request key for recovery', async () => {
+  await wrapper!.setProps({ modelValue: true })
+  await flushPromises()
+  state().rows[0].delta = 1
+  state().reason = 'test restock'
+  await state().runPreview()
+  mocks.applyStockBatch.mockRejectedValueOnce(Object.assign(new Error(''), { response: { status: 200, data: '' } }))
+
+  await state().submitBatch()
+
+  expect(state().requestState).toBe('CHECKING')
+  expect(state().pendingRequest?.key).toMatch(/^[A-Za-z0-9_-]{16,64}$/)
+  expect(sessionStorage.length).toBe(1)
+  expect(state().operationMessage).not.toContain('服务端已拒绝')
+})
+
 test('reopening checks a saved original key before loading a new draft', async () => {
   const key = 'batch_0123456789abcdef'
   sessionStorage.setItem('batch-stock-pending-v1:101:101', JSON.stringify({
-    userId: 101, shopId: 101, key, savedAt: Date.now(),
+    userId: 101, shopId: 101, key, savedAt: Date.now() - 31 * 60 * 1000,
     body: { shopId: 101, lines: [{ productId: 1, skuId: 10, expectedStock: 10, delta: 1 }], reason: 'test restock' }
   }))
   mocks.getStockBatchResult.mockResolvedValueOnce({ status: 'CONFIRMED', batch: result('fedcba9876543210fedcba9876543210', 1) })

@@ -20,7 +20,7 @@ test('late preview for shop A cannot overwrite the active shop B context', () =>
   expect(guard.isCurrent(shopB)).toBe(true)
 })
 
-test('pending batch request is isolated by account and shop and expires', () => {
+test('pending batch request remains recoverable after thirty minutes and is isolated by account and shop', () => {
   const storage = new Map<string, string>()
   const storageLike = {
     getItem: (key: string) => storage.get(key) ?? null,
@@ -41,8 +41,9 @@ test('pending batch request is isolated by account and shop and expires', () => 
   expect(loadPendingBatchRequest(storageLike, 101, 201, 1_001)).toEqual(request)
   expect(loadPendingBatchRequest(storageLike, 102, 201, 1_001)).toBeUndefined()
   expect(loadPendingBatchRequest(storageLike, 101, 202, 1_001)).toBeUndefined()
-  expect(loadPendingBatchRequest(storageLike, 101, 201, 1_000 + 30 * 60 * 1000 + 1)).toBeUndefined()
-  expect(storage.has(pendingBatchStorageKey(101, 201))).toBe(false)
+  const aged = loadPendingBatchRequest(storageLike, 101, 201, 1_000 + 30 * 60 * 1000 + 1)
+  expect(aged).toEqual(request)
+  expect(storage.has(pendingBatchStorageKey(101, 201))).toBe(true)
 })
 
 test('HTTP business failures are definitive while network loss remains recoverable', () => {
@@ -50,6 +51,8 @@ test('HTTP business failures are definitive while network loss remains recoverab
   expect(isUncertainBatchOutcome(Object.assign(new Error('forbidden'), { code: 403 }))).toBe(false)
   expect(isUncertainBatchOutcome(Object.assign(new Error('HTTP 500'), { response: { status: 500 } }))).toBe(true)
   expect(isUncertainBatchOutcome(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }))).toBe(true)
+  expect(isUncertainBatchOutcome(Object.assign(new Error(''), { response: { status: 200 } }))).toBe(true)
+  expect(isUncertainBatchOutcome(new Error(''))).toBe(true)
 })
 
 test('logout cleanup removes only this feature pending keys', () => {

@@ -213,6 +213,7 @@
     "multiSkuEditReadbackKeepsExactPricesAndSavingDoesNotZeroThem": 1,
     "batchStockMigrationRerunsAndPreservesLegacyHistory": 1,
     "batchStockMigrationRejectsIncompatibleHeaderAndPreservesLegacyHistory": 1,
+    "batchStockMigrationRejectsCreatedAtDefaultsAndPreservesLegacyHistory": 1,
     "skuEditAndReservationRace": 20
   },
   "co.yixiang.yshop.module.order.ordering.CouponCodeRedisAcceptanceTest": {

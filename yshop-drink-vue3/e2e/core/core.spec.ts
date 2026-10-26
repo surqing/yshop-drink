@@ -324,7 +324,7 @@ async function batchStockOperations(f: Flow) {
       expect(result.code).toBe(0)
       expect(result.data.state).toBe('APPLIED')
       forwarded = { key: body.key, result: result.data }
-      await route.abort('failed')
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '' })
     })
     const applyRequest = f.page.waitForRequest(request => request.url().endsWith('/admin-api/product/catalog/stock-batches') && request.method() === 'POST')
     await dialog.getByRole('button', { name: '确认批量调整', exact: true }).click()

@@ -19,7 +19,6 @@ export interface SessionStorageLike {
 }
 
 const PREFIX = 'batch-stock-pending-v1:'
-const MAX_AGE_MS = 30 * 60 * 1000
 const REQUEST_KEY = /^[A-Za-z0-9_-]{16,64}$/
 
 export function createBatchContextGuard() {
@@ -63,7 +62,7 @@ export function loadPendingBatchRequest(
         Number.isSafeInteger(line.skuId) && line.skuId > 0 && Number.isSafeInteger(line.expectedStock) && line.expectedStock >= 0 &&
         Number.isSafeInteger(line.delta) && line.delta !== 0 && Math.abs(line.delta) <= 1000000)
     const valid = value.userId === userId && value.shopId === shopId && value.body?.shopId === shopId &&
-      REQUEST_KEY.test(value.key) && Number.isFinite(value.savedAt) && age >= 0 && age <= MAX_AGE_MS &&
+      REQUEST_KEY.test(value.key) && Number.isFinite(value.savedAt) && age >= 0 &&
       validLines && typeof value.body.reason === 'string' && value.body.reason.trim().length > 0 && value.body.reason.trim().length <= 200
     if (!valid) {
       storage.removeItem(key)
@@ -91,9 +90,12 @@ export function isUncertainBatchOutcome(error: unknown) {
     const candidate = error as { code?: unknown; response?: { status?: unknown }; message?: unknown }
     const status = Number(candidate.response?.status)
     if (status >= 500) return true
-    if (status >= 400 || candidate.code === 403) return false
+    if ((status >= 400 && status < 500) || candidate.code === 403) return false
     if (candidate.code === 'ERR_NETWORK' || candidate.code === 'ECONNABORTED' || candidate.code === 'ETIMEDOUT') return true
     if (typeof candidate.message === 'string' && /network error|timeout/i.test(candidate.message)) return true
   }
-  return false
+  // A malformed, empty, or otherwise unclassified failure may happen after the
+  // server committed but before the client received a usable response. Keep
+  // the idempotency key so the caller can query or retry the original request.
+  return true
 }

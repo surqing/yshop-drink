@@ -102,4 +102,34 @@ class CatalogEditingMysqlAcceptance {
         assertEquals(1,fixture.n("SELECT COUNT(*) FROM yshop_product_operation WHERE operation_id=?",legacyId));
         assertEquals(9,fixture.n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
     }
+
+    @Test void batchStockMigrationRejectsCreatedAtDefaultsAndPreservesLegacyHistory() throws Exception {
+        var f=fixture.f;
+        fixture.catalog.adjustStock(1,1,10,-1,"legacy history before created_at migration checks",UUID.randomUUID().toString());
+        String legacyId=f.db.queryForObject("SELECT operation_id FROM yshop_product_operation WHERE reason='legacy history before created_at migration checks'",String.class);
+        String migration=Files.readString(f.boot.resolve("sql/migrations/2026-10-25-product-stock-batch.sql"));
+        var tx=new org.springframework.transaction.support.TransactionTemplate(f.tm);
+        for(String createdAt : List.of(
+                "DATETIME NOT NULL",
+                "DATETIME NOT NULL DEFAULT '2000-01-01 00:00:00'",
+                "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")) {
+            f.db.execute("DROP TABLE IF EXISTS yshop_product_stock_batch");
+            f.db.execute("CREATE TABLE yshop_product_stock_batch("
+                    +"batch_id CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,"
+                    +"actor_id BIGINT NOT NULL,"
+                    +"request_key VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,"
+                    +"request_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,"
+                    +"shop_id BIGINT NOT NULL,"
+                    +"state VARCHAR(16) NOT NULL,"
+                    +"result_json MEDIUMTEXT NULL,"
+                    +"applied_at DATETIME NULL,"
+                    +"created_at "+createdAt+","
+                    +"PRIMARY KEY(batch_id),"
+                    +"UNIQUE KEY uk_product_stock_batch_actor_key(actor_id,request_key)"
+                    +") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+            assertThrows(RuntimeException.class,()->tx.executeWithoutResult(s->{for(String part:migration.split(";"))if(!part.isBlank())f.db.execute(part);}),createdAt);
+            assertEquals(1,fixture.n("SELECT COUNT(*) FROM yshop_product_operation WHERE operation_id=?",legacyId));
+            assertEquals(9,fixture.n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        }
+    }
 }
