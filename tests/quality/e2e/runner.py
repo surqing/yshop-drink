@@ -172,10 +172,10 @@ def run(repo, output, profile, scenario=None):
                                  'hqRevoked':{'username':'qualityhqrevoked','password':'syntheticQA12'},
                                  'hqCrossTenant':{'username':'qualityhqcross','password':'syntheticQA12'},
                                  'hqOtherTenant':{'username':'qualityhqother','password':'syntheticQA12'},
-                                 'stockWriter':{'username':'qualitystockwriter','password':'syntheticQA12'},
-                                 'stockQuery':{'username':'qualitystockquery','password':'syntheticQA12'},
-                                 'stockPeer':{'username':'qualitystockpeer','password':'syntheticQA12'},
-                                 'stockAssignment':{'username':'qualitystockassignment','password':'syntheticQA12'}}}
+                                 'stockWriter':{'username':'r4stockwriter','password':'syntheticQA12'},
+                                 'stockQuery':{'username':'r4stockquery','password':'syntheticQA12'},
+                                 'stockPeer':{'username':'r4stockpeer','password':'syntheticQA12'},
+                                 'stockAssignment':{'username':'r4stockassign','password':'syntheticQA12'}}}
             if tenant_enabled_http:context['tenantEnabledBackend']='http://127.0.0.1:'+str(environment.port+1)
             if needs_mini:
                 report['stage']='MINI_BUILD';write_reports(root,report)

@@ -235,7 +235,7 @@ async function batchStockOperations(f: Flow) {
     })
     expect(response.status()).toBe(200)
     const body = await response.json()
-    expect(body.code).toBe(0)
+    expect(body.code, JSON.stringify({ code: body.code, msg: body.msg })).toBe(0)
     return body.data.accessToken as string
   }
   const stockHttp = async (method: string, path: string, token: string, data?: unknown) => {
