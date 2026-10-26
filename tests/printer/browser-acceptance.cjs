@@ -47,7 +47,20 @@ const source = identity(),
   startedAt = Date.now() / 1000,
   checks = [],
   requests = [],
-  blocked = [];
+  apiEvents = [];
+let blockedExternalRequestCount = 0,
+  pageErrorCount = 0,
+  consoleErrorCount = 0,
+  currentStage = "runner.startup",
+  currentStageStartedAt = Date.now(),
+  injectedTimeoutUsed = false;
+const injectedTimeoutStage =
+  process.env.YSHOP_PRINTER_BROWSER_TEST_INJECT_TIMEOUT === "test-only"
+    ? process.env.YSHOP_PRINTER_BROWSER_INJECT_TIMEOUT_STAGE
+    : null;
+const diagnosticSentinel =
+  process.env.YSHOP_PRINTER_BROWSER_DIAGNOSTIC_SENTINEL ||
+  "r4-diagnostic-marker";
 const report = {
   runId,
   owner,
@@ -58,7 +71,10 @@ const report = {
   scope:
     "Real Vue printer SFC in Chromium with synthetic loopback HTTP fixture; not full backend/router/browser acceptance",
   checks,
+  startupOwnerCheck: { status: "NOT_RUN" },
+  finalFixtureOwnerCheck: { status: "NOT_RUN" },
   realProviderRequests: 0,
+  blockedExternalRequestCount: 0,
 };
 let server, browser, context, page, log;
 let interrupted = false;
@@ -82,6 +98,64 @@ const check = async (name, fn) => {
   if (interrupted) throw Error("CONTROLLED_INTERRUPTED");
   await fn();
   checks.push(name);
+};
+const stage = async (name) => {
+  currentStage = name;
+  currentStageStartedAt = Date.now();
+  if (injectedTimeoutStage === name && !injectedTimeoutUsed) {
+    injectedTimeoutUsed = true;
+    if (!page) throw Error("CONTROLLED_TIMEOUT_PAGE_NOT_READY");
+    await page
+      .getByTestId(diagnosticSentinel)
+      .waitFor({ state: "visible", timeout: 250 });
+  }
+};
+const failureUiState = async () => {
+  const empty = {
+    visibleDialogs: 0,
+    visibleSelectDropdowns: 0,
+    visibleLoadingMasks: 0,
+    disabledButtons: 0,
+    ariaBusyCount: 0,
+    bindingSelectCount: 0,
+    bindingOptionCount: 0,
+    bindingButtonCount: 0,
+    bindingButtonDisabled: null,
+  };
+  if (!page || page.isClosed()) return empty;
+  const count = async (selector) => page.locator(selector).count().catch(() => 0);
+  const bindingButton = page
+    .locator(".el-dialog:visible")
+    .getByRole("button", { name: "绑定", exact: true });
+  const bindingButtonCount = await bindingButton.count().catch(() => 0);
+  const bindingButtonDisabled = bindingButtonCount
+    ? await bindingButton.first().isDisabled().catch(() => null)
+    : null;
+  return {
+    visibleDialogs: await count(".el-dialog:visible"),
+    visibleSelectDropdowns: await count(".el-select-dropdown:visible"),
+    visibleLoadingMasks: await count(".el-loading-mask:visible"),
+    disabledButtons: await count("button:disabled"),
+    ariaBusyCount: await count('[aria-busy="true"]'),
+    bindingSelectCount: await count(".el-dialog:visible .el-select"),
+    bindingOptionCount: await page.getByRole("option").count().catch(() => 0),
+    bindingButtonCount,
+    bindingButtonDisabled,
+  };
+};
+const safeApiPath = (pathname) =>
+  /^\/admin-api\/store\/printer\/(providers|shops|page|get|create|update|binding|authorize|reconnect|deauthorize|status|status\/refresh|test-print|test-print\/get|test-print\/page|delete)$/.test(
+    pathname,
+  );
+const recordApiEvent = (request, status, failed) => {
+  const url = new URL(request.url());
+  if (url.hostname !== "127.0.0.1" || !safeApiPath(url.pathname)) return;
+  apiEvents.push({
+    method: request.method(),
+    path: url.pathname,
+    status,
+    failed,
+  });
 };
 async function fixture() {
   return (await fetch(baseUrl + "/__printer-fixture")).json();
@@ -134,7 +208,12 @@ async function main() {
         const r = await fetch(baseUrl + "/__printer-fixture");
         if (r.ok) {
           const body = await r.json();
-          if (body.owner !== owner) throw Error("PREVIEW_OWNER_MISMATCH");
+          const ownerMatched = body.owner === owner;
+          report.startupOwnerCheck = {
+            status: ownerMatched ? "PASS" : "FAIL",
+            ownerMatched,
+          };
+          if (!ownerMatched) throw Error("PREVIEW_OWNER_MISMATCH");
           break;
         }
       } catch (error) {
@@ -154,19 +233,33 @@ async function main() {
         ["http:", "https:"].includes(url.protocol) &&
         !["127.0.0.1", "localhost"].includes(url.hostname)
       ) {
-        blocked.push(url.origin);
+        blockedExternalRequestCount += 1;
         await route.abort();
         return;
       }
       await route.continue();
     });
+    page.on("response", (response) => {
+      recordApiEvent(response.request(), response.status(), false);
+    });
+    page.on("requestfailed", (request) => {
+      recordApiEvent(request, null, true);
+    });
+    page.on("pageerror", () => {
+      pageErrorCount += 1;
+    });
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrorCount += 1;
+    });
     page.on("request", (r) => {
       if (r.url().includes("/admin-api/store/printer/"))
         requests.push({ method: r.method(), path: new URL(r.url()).pathname });
     });
+    await stage("page.load");
     await page.goto(baseUrl + "/__printer-preview", {
       waitUntil: "networkidle",
     });
+    await stage("check.unconfigured-service-local-management");
     await check("unconfigured-service-local-management", () =>
       expect(
         page.getByText(
@@ -174,8 +267,10 @@ async function main() {
         ),
       ).toBeVisible(),
     );
+    await stage("printer.create.open-dialog");
     await page.getByRole("button", { name: "新增打印机", exact: true }).click();
     let dialog = page.locator(".el-dialog:visible");
+    await stage("printer.create.fill-form");
     await dialog
       .locator(".el-form-item")
       .filter({ hasText: "设备名称" })
@@ -186,51 +281,72 @@ async function main() {
       .filter({ hasText: "设备编号" })
       .locator("input")
       .fill("owned-browser-code");
+    await stage("printer.create.submit");
     await dialog.getByRole("button", { name: "保存", exact: true }).click();
     let row = page
       .locator(".el-table__body-wrapper tr")
       .filter({ hasText: "owned-browser-device" });
+    await stage("check.create-real-form");
     await check("create-real-form", () => expect(row).toBeVisible());
+    await stage("check.unconfigured-connect-disabled");
     await check("unconfigured-connect-disabled", () =>
       expect(
         row.getByRole("button", { name: "连接设备", exact: true }),
       ).toBeDisabled(),
     );
+    await stage("printer.edit.open-dialog");
     await row.getByRole("button", { name: "编辑", exact: true }).click();
     dialog = page.locator(".el-dialog:visible");
+    await stage("printer.edit.fill-form");
     await dialog
       .locator(".el-form-item")
       .filter({ hasText: "设备名称" })
       .locator("input")
       .fill("owned-browser-edited");
+    await stage("printer.edit.submit");
     await dialog.getByRole("button", { name: "保存", exact: true }).click();
     row = page
       .locator(".el-table__body-wrapper tr")
       .filter({ hasText: "owned-browser-edited" });
+    await stage("check.edit-real-form");
     await check("edit-real-form", () => expect(row).toBeVisible());
+    await stage("printer.binding.open-dialog");
     await row.getByRole("button", { name: "绑定门店", exact: true }).click();
     dialog = page.locator(".el-dialog:visible");
+    await stage("printer.binding.open-shop-dropdown");
     await dialog.locator(".el-select").click();
+    await stage("printer.binding.select-shop");
     await page.getByRole("option", { name: "测试门店一", exact: true }).click();
+    await stage("printer.binding.submit");
     await dialog.getByRole("button", { name: "绑定", exact: true }).click();
+    await stage("check.binding-while-service-disabled");
     await check("binding-while-service-disabled", () =>
       expect(row).toContainText("测试门店一"),
     );
+    await stage("fixture.enable-provider");
     await fetch(baseUrl + "/__printer-fixture?configured=1");
+    await stage("page.reload-after-provider-config");
     await page.reload({ waitUntil: "networkidle" });
     row = page
       .locator(".el-table__body-wrapper tr")
       .filter({ hasText: "owned-browser-edited" });
+    await stage("printer.authorize");
     await row.getByRole("button", { name: "连接设备", exact: true }).click();
+    await stage("check.explicit-authorization");
     await check("explicit-authorization", () =>
       expect(row).toContainText("已连接"),
     );
+    await stage("printer.reconnect");
     await row.getByRole("button", { name: "重新连接", exact: true }).click();
+    await stage("printer.reconnect.confirm");
     await confirm();
+    await stage("check.reconnect-keeps-binding");
     await check("reconnect-keeps-binding", () =>
       expect(row).toContainText("测试门店一"),
     );
+    await stage("printer.status.refresh");
     await row.getByRole("button", { name: "刷新状态", exact: true }).click();
+    await stage("check.status-paper-out");
     await check("status-paper-out", async () => {
       await expect(row).toContainText("缺纸");
       expect(
@@ -240,17 +356,23 @@ async function main() {
       ).toBe(1);
       expect(requests.filter((r) => r.path.endsWith("/status")).length).toBe(0);
     });
+    await stage("printer.test-print.submit");
     await row.getByRole("button", { name: "测试打印", exact: true }).click();
+    await stage("printer.test-print.confirm");
     await confirm();
+    await stage("check.unknown-retains-request");
     await check("unknown-retains-request", () =>
       expect(
         row.getByRole("button", { name: "查询测试结果", exact: true }),
       ).toBeVisible(),
     );
+    await stage("printer.test-print.lookup");
     await row
       .getByRole("button", { name: "查询测试结果", exact: true })
       .click();
+    await stage("printer.test-print.lookup-confirm");
     await confirm();
+    await stage("check.unknown-lookup-readonly");
     await check("unknown-lookup-readonly", async () => {
       const f = await fixture();
       expect(f.submitted).toBe(1);
@@ -266,8 +388,10 @@ async function main() {
         ).length,
       ).toBe(1);
     });
+    await stage("printer.history.open");
     await row.getByRole("button", { name: "测试记录", exact: true }).click();
     dialog = page.locator(".el-dialog:visible");
+    await stage("check.unknown-history-and-no-paper-claim");
     await check("unknown-history-and-no-paper-claim", async () => {
       await expect(dialog).toContainText("待确认");
       await expect(dialog).toContainText(
@@ -275,27 +399,37 @@ async function main() {
       );
       expect(await dialog.textContent()).not.toContain("已出纸");
     });
+    await stage("printer.history.close");
     await dialog.locator(".el-dialog__header .is-hover").last().click();
+    await stage("printer.binding.unbind");
     await row.getByRole("button", { name: "解绑门店", exact: true }).click();
+    await stage("printer.binding.unbind-confirm");
     await confirm();
     await expect(row).toContainText("未绑定");
+    await stage("printer.deauthorize");
     await row.getByRole("button", { name: "取消授权", exact: true }).click();
+    await stage("printer.deauthorize.confirm");
     await confirm();
     await expect(
       row.getByRole("button", { name: "连接设备", exact: true }),
     ).toBeVisible();
+    await stage("printer.delete");
     await row.getByRole("button", { name: "删除", exact: true }).click();
+    await stage("printer.delete.confirm");
     await confirm();
     await expect(row).toHaveCount(0);
+    await stage("printer.deleted-filter.open");
     await page
       .locator(".el-form-item")
       .filter({ hasText: "设备范围" })
       .locator(".el-select")
       .click();
+    await stage("printer.deleted-filter.select");
     await page.getByRole("option", { name: "已删除", exact: true }).click();
     row = page
       .locator(".el-table__body-wrapper tr")
       .filter({ hasText: "owned-browser-edited" });
+    await stage("check.deleted-device-has-history-only");
     await check("deleted-device-has-history-only", async () => {
       await expect(row).toBeVisible();
       await expect(
@@ -303,17 +437,31 @@ async function main() {
       ).toBeVisible();
       expect(await row.getByRole("button").count()).toBe(1);
     });
+    await stage("printer.deleted-history.open");
     await row.getByRole("button", { name: "测试记录", exact: true }).click();
+    await stage("check.deleted-device-history-remains-readable");
     await check("deleted-device-history-remains-readable", () =>
       expect(page.locator(".el-dialog:visible")).toContainText("待确认"),
     );
+    await stage("artifact.history-screenshot");
     await page.screenshot({
       path: path.join(root, "printer-history.png"),
       fullPage: true,
     });
-    report.fixture = await fixture();
+    await stage("fixture.final-read");
+    const finalFixture = await fixture();
+    const finalOwnerMatched = finalFixture.owner === owner;
+    report.finalFixtureOwnerCheck = {
+      status: finalOwnerMatched ? "PASS" : "FAIL",
+      ownerMatched: finalOwnerMatched,
+    };
+    if (!finalOwnerMatched) throw Error("FINAL_FIXTURE_OWNER_MISMATCH");
+    report.fixture = finalFixture;
     report.requests = requests;
-    report.blockedExternalOrigins = [...new Set(blocked)];
+    report.apiEvents = apiEvents;
+    report.blockedExternalRequestCount = blockedExternalRequestCount;
+    report.pageErrorCount = pageErrorCount;
+    report.consoleErrorCount = consoleErrorCount;
     report.result = "PASS";
   } catch (error) {
     report.reasonType = ["Error", "AssertionError", "TimeoutError"].includes(
@@ -324,6 +472,15 @@ async function main() {
     report.reasonCode = interrupted
       ? "CONTROLLED_INTERRUPTED"
       : "PRINTER_BROWSER_CHECK_FAILED";
+    report.failedStage = currentStage;
+    report.stageDurationMs = Math.max(0, Date.now() - currentStageStartedAt);
+    report.lastPassedCheck = checks.length ? checks[checks.length - 1] : null;
+    report.failureUiState = await failureUiState();
+    report.requests = requests;
+    report.apiEvents = apiEvents;
+    report.blockedExternalRequestCount = blockedExternalRequestCount;
+    report.pageErrorCount = pageErrorCount;
+    report.consoleErrorCount = consoleErrorCount;
     fs.writeFileSync(
       path.join(root, "failure-private.log"),
       String(error.stack),
@@ -386,8 +543,7 @@ async function main() {
       serverExited: serverExited(),
       portReleased,
       ownedLoopbackOnly: true,
-      ownershipHandshakeChecked:
-        !!report.fixture && report.fixture.owner === owner,
+      ownershipHandshakeChecked: report.finalFixtureOwnerCheck.status === "PASS",
     };
     report.sourceUnchanged =
       JSON.stringify(identity()) === JSON.stringify(source);

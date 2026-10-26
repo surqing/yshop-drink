@@ -333,6 +333,7 @@ jobs:
       - name: Actual application pages with explicit synthetic API fixtures
         run: python3 tests/quality/run.py BROWSER --output "$RUNNER_TEMP/browser"
       - name: Coupon load failure cannot update the previously opened coupon
+        if: ${{ !cancelled() }}
         run: python3 tests/defects/browser_red.py --output "$RUNNER_TEMP/coupon-load-regression"
       - name: Upload safe receipts only; screenshots and traces remain private
         if: always()

@@ -2,6 +2,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import time
 import unittest
@@ -156,8 +157,10 @@ class PrinterBrowserReceiptTest(unittest.TestCase):
         self.value={**self.identity,'runId':'run','owner':self.owner,'result':'PASS','cleanup':'PASS',
             'complete':True,'sourceUnchanged':True,'startedAt':self.started+.1,'endedAt':self.started+.2,
             'checks':['one','two'],'fixture':{'owner':self.owner},'loopbackPort':12345,
+            'startupOwnerCheck':{'status':'PASS','ownerMatched':True},
+            'finalFixtureOwnerCheck':{'status':'PASS','ownerMatched':True},
             'resources':{'owner':self.owner,'browserClosed':True,'contextClosed':True,'serverExited':True,'portReleased':True,'previewPid':1234,'ownedLoopbackOnly':True,'ownershipHandshakeChecked':True},
-            'scriptSha256':'script','realProviderRequests':0,'blockedExternalOrigins':[],
+            'scriptSha256':'script','realProviderRequests':0,'blockedExternalRequestCount':0,
             'artifacts':[{'path':'page.png','sha256':hashlib.sha256(b'synthetic screenshot').hexdigest()}]}
     def verify(self,value=None):
         from page_evidence import printer_browser_receipt
@@ -173,7 +176,7 @@ class PrinterBrowserReceiptTest(unittest.TestCase):
             bad=copy.deepcopy(self.value);bad['resources'][key]=False
             with self.assertRaises(RuntimeError):self.verify(bad)
     def test_printer_receipt_rejects_omissions_duplicates_wrong_source_or_owner(self):
-        for field,value in [('checks',['one']),('checks',['one','one']),('sourceDigest','old'),('runId','foreign'),('fixture',{'owner':'b'*32}),('scriptSha256','old-script'),('realProviderRequests',1),('blockedExternalOrigins',['external'])]:
+        for field,value in [('checks',['one']),('checks',['one','one']),('sourceDigest','old'),('runId','foreign'),('fixture',{'owner':'b'*32}),('scriptSha256','old-script'),('realProviderRequests',1),('blockedExternalRequestCount',1)]:
             bad=copy.deepcopy(self.value);bad[field]=value
             with self.assertRaises(RuntimeError):self.verify(bad)
     def test_printer_receipt_rejects_tampered_or_escaping_artifacts(self):
@@ -181,5 +184,58 @@ class PrinterBrowserReceiptTest(unittest.TestCase):
         with self.assertRaises(RuntimeError):self.verify()
         bad=copy.deepcopy(self.value);bad['artifacts'][0]['path']='../page.png'
         with self.assertRaises(RuntimeError):self.verify(bad)
+    def test_printer_receipt_requires_executed_startup_and_final_owner_checks(self):
+        for field, value in [('startupOwnerCheck', {'status':'NOT_RUN'}),
+                             ('startupOwnerCheck', {'status':'FAIL','ownerMatched':False}),
+                             ('finalFixtureOwnerCheck', {'status':'NOT_RUN'}),
+                             ('finalFixtureOwnerCheck', {'status':'FAIL','ownerMatched':False})]:
+            bad=copy.deepcopy(self.value);bad[field]=value
+            with self.assertRaises(RuntimeError):self.verify(bad)
+    def test_failed_printer_receipt_has_specific_nonpass_reason(self):
+        bad=copy.deepcopy(self.value);bad.update(result='FAIL',checks=['one'],failedStage='printer.binding.open-shop-dropdown',
+            reasonType='TimeoutError',reasonCode='PRINTER_BROWSER_CHECK_FAILED',stageDurationMs=250,lastPassedCheck='one')
+        with self.assertRaisesRegex(RuntimeError,'PRINTER_BROWSER_EXECUTION_FAILED'):self.verify(bad)
+    def test_failure_diagnostics_are_safe_attributable_and_structural(self):
+        from page_evidence import printer_browser_diagnostics
+        checks=['one']
+        failed={**self.value,'result':'FAIL','checks':checks,'failedStage':'printer.binding.open-shop-dropdown',
+            'reasonType':'TimeoutError','reasonCode':'PRINTER_BROWSER_CHECK_FAILED','stageDurationMs':250,
+            'lastPassedCheck':'one','startupOwnerCheck':{'status':'PASS','ownerMatched':True},
+            'finalFixtureOwnerCheck':{'status':'NOT_RUN'},'failureUiState':{'visibleDialogs':1,
+                'visibleSelectDropdowns':0,'visibleLoadingMasks':0,'disabledButtons':0,'ariaBusyCount':0,
+                'bindingSelectCount':1,'bindingOptionCount':0,'bindingButtonCount':1,'bindingButtonDisabled':False},
+            'apiEvents':[{'method':'PUT','path':'/admin-api/store/printer/update','status':200}],
+            'pageErrorCount':0,'consoleErrorCount':0,'blockedExternalRequestCount':0,
+            'privateStack':'DO_NOT_PUBLISH_SENTINEL'}
+        failed['resources']['ownershipHandshakeChecked']=False
+        self.path.write_text(json.dumps(failed))
+        summary=printer_browser_diagnostics(self.path,self.started,self.identity,'run',['one','two'],'script')
+        self.assertEqual('FAILED',summary['status'])
+        self.assertEqual('printer.binding.open-shop-dropdown',summary['failedStage'])
+        self.assertEqual(1,summary['executedChecks'])
+        self.assertEqual('PASS',summary['startupOwnerCheck'])
+        self.assertEqual('NOT_RUN',summary['finalFixtureOwnerCheck'])
+        self.assertNotIn('DO_NOT_PUBLISH_SENTINEL',json.dumps(summary))
+
+class BrowserWorkflowIndependenceTest(unittest.TestCase):
+    def setUp(self):
+        self.workflow=(Path(__file__).resolve().parents[2]/'.github/workflows/test-quality.yml').read_text()
+        job=re.search(r'(?ms)^  browser-smoke:\n(?P<body>.*?)(?=^  [\w-]+:\n|\Z)',self.workflow)
+        self.assertIsNotNone(job)
+        self.job=job.group('body')
+
+    def test_coupon_regression_runs_after_printer_failure_unless_cancelled(self):
+        coupon=re.search(r'(?ms)^      - name: Coupon load failure cannot update the previously opened coupon\n(?P<body>.*?)(?=^      - name: |\Z)',self.job)
+        self.assertIsNotNone(coupon)
+        self.assertRegex(coupon.group('body'),r'(?m)^        if: \$\{\{ !cancelled\(\) \}\}$')
+        self.assertIn('python3 tests/defects/browser_red.py --output',coupon.group('body'))
+        self.assertNotIn('continue-on-error',coupon.group('body'))
+
+    def test_printer_failure_stays_fatal_and_safe_artifact_upload_always_runs(self):
+        self.assertNotIn('continue-on-error',self.job)
+        upload=re.search(r'(?ms)^      - name: Upload safe receipts only; screenshots and traces remain private\n(?P<body>.*?)(?=^  [\w-]+:\n|\Z)',self.job)
+        self.assertIsNotNone(upload)
+        self.assertRegex(upload.group('body'),r'(?m)^        if: always\(\)$')
+        self.assertIn('browser/**/report.json',upload.group('body'))
 
 if __name__=='__main__':unittest.main()
