@@ -178,8 +178,8 @@ const finalizeCacheEvidence = () => {
     sourceIdentity: { sourceSha: source.sourceSha, sourceDigest: source.sourceDigest },
     metadataBeforePresent: cacheContext.metadataPresentBefore,
     metadataBeforeSha256: cacheContext.metadataSha256Before,
-    metadataAfterPresent,
-    metadataAfterSha256,
+    metadataAfterPresent: metadataPresentAfter,
+    metadataAfterSha256: metadataSha256After,
     metadataAfter: metadata,
     preview: previewCacheHandshake,
   };

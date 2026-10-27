@@ -299,6 +299,10 @@ class PrinterBrowserReceiptTest(unittest.TestCase):
         self.assertIn('PRINTER_PREVIEW_CACHE_DIR_REQUIRED',preview)
         self.assertIn('server.config.cacheDir',preview)
         self.assertNotIn('|| undefined',preview)
+    def test_printer_driver_serializes_metadata_presence_from_the_observed_value(self):
+        driver=(Path(__file__).resolve().parents[2]/'tests/printer/browser-acceptance.cjs').read_text()
+        self.assertRegex(driver,r'metadataAfterPresent:\s*metadataPresentAfter')
+        self.assertRegex(driver,r'metadataAfterSha256:\s*metadataSha256After')
     def test_printer_receipt_rejects_claimed_cleanup_without_owned_resource_receipts(self):
         for field,value in [('resources',{}),('cleanup','FAIL'),('sourceUnchanged',False),('complete',False)]:
             bad=copy.deepcopy(self.value);bad[field]=value
