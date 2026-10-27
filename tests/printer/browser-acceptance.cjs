@@ -47,16 +47,28 @@ const source = identity(),
   startedAt = Date.now() / 1000,
   checks = [],
   requests = [],
-  apiEvents = [];
+  apiEvents = [],
+  documentEvents = [],
+  viteEvents = [],
+  lifecycleEvents = [],
+  confirmationSteps = [];
 let blockedExternalRequestCount = 0,
   pageErrorCount = 0,
   consoleErrorCount = 0,
   currentStage = "runner.startup",
   currentStageStartedAt = Date.now(),
-  injectedTimeoutUsed = false;
+  injectedTimeoutUsed = false,
+  documentGeneration = 0,
+  pendingNavigationReason = null;
+const pendingDocumentCommits = [];
+let previewLineBuffer = '', traceStarted = false;
 const injectedTimeoutStage =
   process.env.YSHOP_PRINTER_BROWSER_TEST_INJECT_TIMEOUT === "test-only"
     ? process.env.YSHOP_PRINTER_BROWSER_INJECT_TIMEOUT_STAGE
+    : null;
+const injectedReloadStage =
+  process.env.YSHOP_PRINTER_BROWSER_TEST_INJECT_RELOAD === "test-only"
+    ? process.env.YSHOP_PRINTER_BROWSER_INJECT_RELOAD_STAGE
     : null;
 const diagnosticSentinel =
   process.env.YSHOP_PRINTER_BROWSER_DIAGNOSTIC_SENTINEL ||
@@ -73,10 +85,18 @@ const report = {
   checks,
   startupOwnerCheck: { status: "NOT_RUN" },
   finalFixtureOwnerCheck: { status: "NOT_RUN" },
+  optimizerReadinessCheck: { status: 'NOT_RUN', optimizerReady: null },
   realProviderRequests: 0,
   blockedExternalRequestCount: 0,
+  cache: { state: 'DEFAULT', metadataPresentBefore: null, metadataSha256Before: null },
+  diagnostics: {
+    document: { status: "UNAVAILABLE", events: null },
+    vite: { status: "UNAVAILABLE", events: null },
+    lifecycle: { status: "UNAVAILABLE", events: null },
+    confirmationSteps,
+  },
 };
-let server, browser, context, page, log;
+let server, browser, context, page, log, previewLogStream, tracePath;
 let interrupted = false;
 const interrupt = () => {
   interrupted = true;
@@ -99,9 +119,46 @@ const check = async (name, fn) => {
   await fn();
   checks.push(name);
 };
+const assertNoUnexpectedDocumentNavigation = () => {
+  if (documentEvents.some(event =>
+    ['document-request', 'document-commit'].includes(event.type) && event.classification === 'unexpected')) {
+    report.diagnosticCode = 'UNEXPECTED_DOCUMENT_NAVIGATION';
+    throw Error('UNEXPECTED_DOCUMENT_NAVIGATION');
+  }
+};
+const relativeMs = () => Math.max(0, Date.now() - startedAt * 1000);
+const safePath = (value) => {
+  try {
+    const url = new URL(value);
+    if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return null;
+    return ['/', '/__printer-preview'].includes(url.pathname) ? url.pathname : null;
+  } catch {
+    return null;
+  }
+};
+const recordViteEvent = (type) => {
+  if (viteEvents.length < 256)
+    viteEvents.push({ type, relativeMs: relativeMs() });
+};
+const recordPreviewOutput = (chunk) => {
+  if (!previewLogStream) return;
+  previewLogStream.write(chunk);
+  previewLineBuffer += chunk.toString('utf8');
+  const lines = previewLineBuffer.split(/\r?\n/);
+  previewLineBuffer = lines.pop() || '';
+  for (const line of lines) {
+    if (/optimizing dependencies|re-optimizing dependencies/i.test(line))
+      recordViteEvent('optimize-start');
+    if (/optimized dependencies changed\. reloading/i.test(line))
+      recordViteEvent('optimized-dependencies-reload');
+    else if (/dependencies optimized/i.test(line))
+      recordViteEvent('dependencies-optimized');
+  }
+};
 const stage = async (name) => {
   currentStage = name;
   currentStageStartedAt = Date.now();
+  assertNoUnexpectedDocumentNavigation();
   if (injectedTimeoutStage === name && !injectedTimeoutUsed) {
     injectedTimeoutUsed = true;
     if (!page) throw Error("CONTROLLED_TIMEOUT_PAGE_NOT_READY");
@@ -110,38 +167,85 @@ const stage = async (name) => {
       .waitFor({ state: "visible", timeout: 250 });
   }
 };
+const unavailableUiState = () => ({
+  status: 'UNAVAILABLE',
+  visibleDialogs: null,
+  visibleSelectDropdowns: null,
+  visibleLoadingMasks: null,
+  disabledButtons: null,
+  ariaBusyCount: null,
+  bindingSelectCount: null,
+  bindingOptionCount: null,
+  bindingButtonCount: null,
+  bindingButtonDisabled: null,
+  visibleMessageBoxes: null,
+  confirmButtonCount: null,
+  confirmButtonDisabled: null,
+  documentLang: null,
+});
 const failureUiState = async () => {
-  const empty = {
-    visibleDialogs: 0,
-    visibleSelectDropdowns: 0,
-    visibleLoadingMasks: 0,
-    disabledButtons: 0,
-    ariaBusyCount: 0,
-    bindingSelectCount: 0,
-    bindingOptionCount: 0,
-    bindingButtonCount: 0,
-    bindingButtonDisabled: null,
-  };
-  if (!page || page.isClosed()) return empty;
-  const count = async (selector) => page.locator(selector).count().catch(() => 0);
+  if (!page || page.isClosed()) return unavailableUiState();
+  try {
+  const count = async (selector) => page.locator(selector).count();
   const bindingButton = page
     .locator(".el-dialog:visible")
     .getByRole("button", { name: "绑定", exact: true });
-  const bindingButtonCount = await bindingButton.count().catch(() => 0);
+  const bindingButtonCount = await bindingButton.count();
   const bindingButtonDisabled = bindingButtonCount
-    ? await bindingButton.first().isDisabled().catch(() => null)
+    ? await bindingButton.first().isDisabled()
     : null;
+  const messageBox = page.locator('.el-message-box:visible');
+  const visibleMessageBoxes = await messageBox.count();
+  const confirmButton = messageBox.getByRole('button', { name: /^(确定|确认)$/ });
+  const confirmButtonCount = await confirmButton.count();
+  const confirmButtonDisabled = confirmButtonCount ? await confirmButton.first().isDisabled() : null;
+  const documentLang = await page.locator('html').getAttribute('lang');
+  const createButton = page.getByRole('button', { name: '新增打印机', exact: true });
+  const createButtonCount = await createButton.count();
+  const createButtonState = createButtonCount ? {
+    status: 'OBSERVED',
+    visible: await createButton.first().isVisible(),
+    enabled: await createButton.first().isEnabled(),
+    geometry: await createButton.first().evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      const style = getComputedStyle(element);
+      return {
+        x: Math.round(x), y: Math.round(y), width: Math.round(rect.width), height: Math.round(rect.height),
+        inViewport: x >= 0 && y >= 0 && x < innerWidth && y < innerHeight,
+        pointerTarget: hit === element || element.contains(hit) ? 'target' : hit ? 'other' : 'none',
+        display: style.display, visibility: style.visibility,
+        pointerEvents: style.pointerEvents, opacity: style.opacity,
+      };
+    }),
+    runningPageAnimationCount: await createButton.first().evaluate(() =>
+      document.getAnimations().filter((animation) => animation.playState === 'running').length),
+    activeAnimationCount: await createButton.first().evaluate((element) =>
+      element.getAnimations({ subtree: true }).filter((animation) => animation.playState === 'running').length),
+  } : { status: 'OBSERVED', count: 0 };
   return {
+    status: 'OBSERVED',
     visibleDialogs: await count(".el-dialog:visible"),
     visibleSelectDropdowns: await count(".el-select-dropdown:visible"),
     visibleLoadingMasks: await count(".el-loading-mask:visible"),
     disabledButtons: await count("button:disabled"),
     ariaBusyCount: await count('[aria-busy="true"]'),
     bindingSelectCount: await count(".el-dialog:visible .el-select"),
-    bindingOptionCount: await page.getByRole("option").count().catch(() => 0),
+    bindingOptionCount: await page.getByRole("option").count(),
     bindingButtonCount,
     bindingButtonDisabled,
+    visibleMessageBoxes,
+    confirmButtonCount,
+    confirmButtonDisabled,
+    documentLang,
+    createButtonCount,
+    createButtonState,
   };
+  } catch {
+    return unavailableUiState();
+  }
 };
 const safeApiPath = (pathname) =>
   /^\/admin-api\/store\/printer\/(providers|shops|page|get|create|update|binding|authorize|reconnect|deauthorize|status|status\/refresh|test-print|test-print\/get|test-print\/page|delete)$/.test(
@@ -160,11 +264,94 @@ const recordApiEvent = (request, status, failed) => {
 async function fixture() {
   return (await fetch(baseUrl + "/__printer-fixture")).json();
 }
-async function confirm() {
+const unavailableMessageBox = () => ({
+  status: 'UNAVAILABLE', visibleCount: null, confirmButtonCount: null,
+  confirmButtonDisabled: null, documentLang: null,
+});
+const messageBoxState = async () => {
+  if (!page || page.isClosed()) return unavailableMessageBox();
+  try {
+    const box = page.locator('.el-message-box:visible');
+    const visibleCount = await box.count();
+    const button = box.getByRole('button', { name: /^(确定|确认)$/ });
+    const confirmButtonCount = await button.count();
+    const confirmButtonDisabled = confirmButtonCount ? await button.first().isDisabled() : null;
+    const documentLang = await page.locator('html').getAttribute('lang');
+    return { status: 'OBSERVED', visibleCount, confirmButtonCount,
+      confirmButtonDisabled, documentLang };
+  } catch {
+    return unavailableMessageBox();
+  }
+};
+const runConfirmAction = async (stageName, action) => {
+  const before = await messageBoxState();
+  const generation = documentGeneration;
+  const at = relativeMs();
+  let navigationListener;
+  let navigationPromise;
+  if (page && !page.isClosed()) {
+    navigationPromise = new Promise((resolve) => {
+      navigationListener = () => {
+        if (documentGeneration !== generation) resolve({ kind: 'navigation' });
+      };
+      page.on('framenavigated', navigationListener);
+    });
+  }
+  let outcome;
+  const actionPromise = Promise.resolve().then(action).then(
+    () => ({ kind: 'completed' }),
+    (error) => ({ kind: 'error', error }),
+  );
+  const inject = injectedReloadStage === stageName;
+  let injectionPromise;
+  if (inject) {
+    injectionPromise = page.evaluate(() => window.location.reload()).catch(() => null);
+  }
+  try {
+    if (before.status !== 'OBSERVED')
+      throw Error('CONFIRMATION_OBSERVATION_UNAVAILABLE');
+    outcome = await (navigationPromise
+      ? Promise.race([
+          inject
+            ? actionPromise.then((value) => value.kind === 'error' ? value : new Promise(() => {}))
+            : actionPromise,
+          navigationPromise,
+        ])
+      : actionPromise);
+    if (outcome.kind === 'navigation' || documentGeneration !== generation) {
+      report.diagnosticCode = 'UNEXPECTED_DOCUMENT_NAVIGATION_DURING_CONFIRM';
+      throw Error('UNEXPECTED_DOCUMENT_NAVIGATION_DURING_CONFIRM');
+    }
+    if (outcome.kind === 'error') throw outcome.error;
+    const after = await messageBoxState();
+    if (after.status !== 'OBSERVED')
+      throw Error('CONFIRMATION_OBSERVATION_UNAVAILABLE');
+    confirmationSteps.push({ stage: stageName, status: 'PASSED', relativeMs: at,
+      generation, messageBoxBefore: before, messageBoxAfter: after });
+  } catch (error) {
+    if (documentGeneration !== generation || outcome?.kind === 'navigation')
+      report.diagnosticCode = 'UNEXPECTED_DOCUMENT_NAVIGATION_DURING_CONFIRM';
+    else if (error.message === 'CONFIRMATION_OBSERVATION_UNAVAILABLE')
+      report.diagnosticCode = 'CONFIRMATION_OBSERVATION_UNAVAILABLE';
+    confirmationSteps.push({ stage: stageName, status: 'FAILED', relativeMs: at,
+      generation, messageBoxBefore: before, messageBoxAfter: await messageBoxState() });
+    throw error;
+  } finally {
+    if (navigationListener && page && !page.isClosed())
+      page.off('framenavigated', navigationListener);
+    if (injectionPromise) injectionPromise.catch(() => {});
+  }
+};
+async function confirm(operation) {
   const box = page.locator(".el-message-box");
-  await box.waitFor();
-  await box.getByRole("button", { name: /^(确定|确认)$/ }).click();
-  await box.waitFor({ state: "hidden" });
+  for (const action of ['wait-visible', 'click-confirm', 'wait-hidden']) {
+    const stageName = `${operation}.${action}`;
+    await stage(stageName);
+    if (action === 'wait-visible') await runConfirmAction(stageName, () => box.waitFor());
+    else if (action === 'click-confirm')
+      await runConfirmAction(stageName, () => box.getByRole('button', { name: /^(确定|确认)$/ }).click());
+    else await runConfirmAction(stageName, () => box.waitFor({ state: 'hidden' }));
+  }
 }
 async function main() {
   try {
@@ -189,8 +376,21 @@ async function main() {
         process.env.YSHOP_QUALITY_SOURCE_DIGEST !== source.sourceDigest)
     )
       throw Error("SOURCE_IDENTITY_MISMATCH");
+    if (process.env.YSHOP_PRINTER_BROWSER_CACHE_DIR) {
+      const metadataPath = path.join(process.env.YSHOP_PRINTER_BROWSER_CACHE_DIR, 'deps', '_metadata.json');
+      const metadataExists = fs.existsSync(metadataPath);
+      report.cache = {
+        state: metadataExists ? 'WARM' : 'COLD',
+        metadataPresentBefore: metadataExists,
+        metadataSha256Before: metadataExists
+          ? crypto.createHash('sha256').update(fs.readFileSync(metadataPath)).digest('hex')
+          : null,
+      };
+    }
     if (await listening()) throw Error("PREVIEW_PORT_ALREADY_OWNED");
     log = fs.openSync(path.join(root, "preview-private.log"), "w", 0o600);
+    previewLogStream = fs.createWriteStream(null, { fd: log, autoClose: false });
+    report.diagnostics.vite = { status: 'OBSERVED', events: viteEvents };
     server = cp.spawn("node", ["tests/printer/preview.mjs"], {
       cwd: path.join(repo, "yshop-drink-vue3"),
       env: {
@@ -198,9 +398,11 @@ async function main() {
         YSHOP_PRINTER_BROWSER_PORT: String(port),
         YSHOP_PRINTER_BROWSER_OWNER: owner,
       },
-      stdio: ["ignore", log, log],
+      stdio: ["ignore", "pipe", "pipe"],
       detached: true,
     });
+    server.stdout.on('data', recordPreviewOutput);
+    server.stderr.on('data', recordPreviewOutput);
     for (let i = 0; i < 120; i++) {
       if (interrupted) throw Error("CONTROLLED_INTERRUPTED");
       if (server.exitCode !== null) throw Error("PREVIEW_EXITED");
@@ -209,11 +411,18 @@ async function main() {
         if (r.ok) {
           const body = await r.json();
           const ownerMatched = body.owner === owner;
+          const optimizerReady = body.optimizerReady === true;
           report.startupOwnerCheck = {
             status: ownerMatched ? "PASS" : "FAIL",
             ownerMatched,
           };
+          report.optimizerReadinessCheck = {
+            status: optimizerReady ? 'PASS' : process.env.YSHOP_PRINTER_BROWSER_TEST_BYPASS_OPTIMIZER_READY === 'test-only' ? 'BYPASSED' : 'FAIL',
+            optimizerReady,
+          };
           if (!ownerMatched) throw Error("PREVIEW_OWNER_MISMATCH");
+          if (!optimizerReady && process.env.YSHOP_PRINTER_BROWSER_TEST_BYPASS_OPTIMIZER_READY !== 'test-only')
+            throw Error('PREVIEW_OPTIMIZER_NOT_READY');
           break;
         }
       } catch (error) {
@@ -226,6 +435,9 @@ async function main() {
     context = await browser.newContext({
       viewport: { width: 1600, height: 1100 },
     });
+    tracePath = path.join(root, 'browser-trace.zip');
+    await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
+    traceStarted = true;
     page = await context.newPage();
     await page.route("**/*", async (route) => {
       const url = new URL(route.request().url());
@@ -250,12 +462,81 @@ async function main() {
     });
     page.on("console", (message) => {
       if (message.type() === "error") consoleErrorCount += 1;
+      const lifecycle = {
+        'R4_PREVIEW_LIFECYCLE:printer-page-before-mount': 'printer-page-before-mount',
+        'R4_PREVIEW_LIFECYCLE:printer-page-mounted': 'printer-page-mounted',
+        'R4_PREVIEW_LIFECYCLE:printer-page-before-unmount': 'printer-page-before-unmount',
+        'R4_PREVIEW_LIFECYCLE:printer-page-unmounted': 'printer-page-unmounted',
+      }[message.text()];
+      if (lifecycle && lifecycleEvents.length < 128)
+        lifecycleEvents.push({ type: lifecycle, relativeMs: relativeMs(), generation: documentGeneration });
     });
     page.on("request", (r) => {
+      if (r.isNavigationRequest()) {
+        let isMainFrame = false;
+        try { isMainFrame = r.frame() === page.mainFrame(); } catch {}
+        if (isMainFrame) {
+          const reason = pendingNavigationReason;
+          pendingNavigationReason = null;
+          pendingDocumentCommits.push({ url: r.url(), reason });
+          documentEvents.push({
+            type: 'document-request',
+            classification: reason ? 'expected' : 'unexpected',
+            navigation: reason,
+            path: safePath(r.url()),
+            relativeMs: relativeMs(),
+            generation: documentGeneration + 1,
+          });
+        }
+      }
       if (r.url().includes("/admin-api/store/printer/"))
         requests.push({ method: r.method(), path: new URL(r.url()).pathname });
     });
+    page.on('framenavigated', (frame) => {
+      if (frame !== page.mainFrame()) return;
+      const url = frame.url();
+      const index = pendingDocumentCommits.findIndex((event) => event.url === url);
+      if (index >= 0) {
+        const [request] = pendingDocumentCommits.splice(index, 1);
+        documentGeneration += 1;
+        documentEvents.push({
+          type: 'document-commit',
+          classification: request.reason ? 'expected' : 'unexpected',
+          navigation: request.reason,
+          path: safePath(url),
+          relativeMs: relativeMs(),
+          generation: documentGeneration,
+        });
+      } else {
+        documentEvents.push({
+          type: 'same-document-navigation',
+          classification: 'same-document',
+          navigation: null,
+          path: safePath(url),
+          relativeMs: relativeMs(),
+          generation: documentGeneration,
+        });
+      }
+    });
+    report.diagnostics.document = { status: 'OBSERVED', events: documentEvents };
+    report.diagnostics.lifecycle = { status: 'OBSERVED', events: lifecycleEvents };
+    page.on('websocket', (socket) => {
+      try {
+        const wsUrl = new URL(socket.url());
+        if (!['127.0.0.1', 'localhost'].includes(wsUrl.hostname)) return;
+      } catch { return; }
+      socket.on('framereceived', ({ payload }) => {
+        try {
+          const message = JSON.parse(String(payload));
+          if (message.type === 'connected') recordViteEvent('connected');
+          else if (message.type === 'full-reload' || message.event === 'vite:beforeFullReload')
+            recordViteEvent('hmr-full-reload');
+          else if (message.type === 'update') recordViteEvent('hmr-update');
+        } catch {}
+      });
+    });
     await stage("page.load");
+    pendingNavigationReason = 'initial-page-load';
     await page.goto(baseUrl + "/__printer-preview", {
       waitUntil: "networkidle",
     });
@@ -326,6 +607,7 @@ async function main() {
     await stage("fixture.enable-provider");
     await fetch(baseUrl + "/__printer-fixture?configured=1");
     await stage("page.reload-after-provider-config");
+    pendingNavigationReason = 'provider-config-reload';
     await page.reload({ waitUntil: "networkidle" });
     row = page
       .locator(".el-table__body-wrapper tr")
@@ -338,8 +620,7 @@ async function main() {
     );
     await stage("printer.reconnect");
     await row.getByRole("button", { name: "重新连接", exact: true }).click();
-    await stage("printer.reconnect.confirm");
-    await confirm();
+    await confirm('printer.reconnect.confirm');
     await stage("check.reconnect-keeps-binding");
     await check("reconnect-keeps-binding", () =>
       expect(row).toContainText("测试门店一"),
@@ -358,8 +639,7 @@ async function main() {
     });
     await stage("printer.test-print.submit");
     await row.getByRole("button", { name: "测试打印", exact: true }).click();
-    await stage("printer.test-print.confirm");
-    await confirm();
+    await confirm('printer.test-print.confirm');
     await stage("check.unknown-retains-request");
     await check("unknown-retains-request", () =>
       expect(
@@ -370,8 +650,7 @@ async function main() {
     await row
       .getByRole("button", { name: "查询测试结果", exact: true })
       .click();
-    await stage("printer.test-print.lookup-confirm");
-    await confirm();
+    await confirm('printer.test-print.lookup-confirm');
     await stage("check.unknown-lookup-readonly");
     await check("unknown-lookup-readonly", async () => {
       const f = await fixture();
@@ -403,20 +682,17 @@ async function main() {
     await dialog.locator(".el-dialog__header .is-hover").last().click();
     await stage("printer.binding.unbind");
     await row.getByRole("button", { name: "解绑门店", exact: true }).click();
-    await stage("printer.binding.unbind-confirm");
-    await confirm();
+    await confirm('printer.binding.unbind-confirm');
     await expect(row).toContainText("未绑定");
     await stage("printer.deauthorize");
     await row.getByRole("button", { name: "取消授权", exact: true }).click();
-    await stage("printer.deauthorize.confirm");
-    await confirm();
+    await confirm('printer.deauthorize.confirm');
     await expect(
       row.getByRole("button", { name: "连接设备", exact: true }),
     ).toBeVisible();
     await stage("printer.delete");
     await row.getByRole("button", { name: "删除", exact: true }).click();
-    await stage("printer.delete.confirm");
-    await confirm();
+    await confirm('printer.delete.confirm');
     await expect(row).toHaveCount(0);
     await stage("printer.deleted-filter.open");
     await page
@@ -462,6 +738,7 @@ async function main() {
     report.blockedExternalRequestCount = blockedExternalRequestCount;
     report.pageErrorCount = pageErrorCount;
     report.consoleErrorCount = consoleErrorCount;
+    assertNoUnexpectedDocumentNavigation();
     report.result = "PASS";
   } catch (error) {
     report.reasonType = ["Error", "AssertionError", "TimeoutError"].includes(
@@ -486,16 +763,32 @@ async function main() {
       String(error.stack),
       { mode: 0o600 },
     );
-    if (page)
-      await page
-        .screenshot({ path: path.join(root, "failure.png"), fullPage: true })
-        .catch(() => {});
+    if (page) {
+      try {
+        await page.screenshot({ path: path.join(root, 'failure.png'), fullPage: true });
+        report.failureScreenshot = { status: 'CAPTURED' };
+      } catch (screenshotError) {
+        report.failureScreenshot = {
+          status: 'UNAVAILABLE',
+          errorType: ['Error', 'TimeoutError'].includes(screenshotError.name) ? screenshotError.name : 'Error',
+        };
+        fs.writeFileSync(path.join(root, 'screenshot-private.log'), String(screenshotError.stack), { mode: 0o600 });
+      }
+    }
   } finally {
     const cleanupErrors = [];
     const closed = { contextClosed: !context, browserClosed: !browser };
     const serverExited = () =>
       !server || server.exitCode !== null || server.signalCode !== null;
     let portReleased = !server;
+    if (context && traceStarted) {
+      try {
+        await context.tracing.stop({ path: tracePath });
+        traceStarted = false;
+      } catch (error) {
+        cleanupErrors.push(String(error.stack));
+      }
+    }
     for (const [name, resource] of [
       ["contextClosed", context],
       ["browserClosed", browser],
@@ -523,6 +816,10 @@ async function main() {
       portReleased = true;
     } catch (error) {
       cleanupErrors.push(String(error.stack));
+    }
+    if (previewLogStream) {
+      await new Promise((resolve) => previewLogStream.end(resolve));
+      previewLogStream = null;
     }
     if (cleanupErrors.length) {
       report.cleanup = "FAIL";
@@ -562,6 +859,12 @@ async function main() {
           .update(fs.readFileSync(path.join(root, n)))
           .digest("hex"),
       }));
+    report.privateTrace = tracePath && fs.existsSync(tracePath)
+      ? {
+          name: path.basename(tracePath),
+          sha256: crypto.createHash('sha256').update(fs.readFileSync(tracePath)).digest('hex'),
+        }
+      : { status: 'UNAVAILABLE' };
     report.endedAt = Date.now() / 1000;
     report.complete = true;
     process.removeListener("SIGINT", interrupt);

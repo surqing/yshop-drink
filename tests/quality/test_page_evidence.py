@@ -159,9 +159,47 @@ class PrinterBrowserReceiptTest(unittest.TestCase):
             'checks':['one','two'],'fixture':{'owner':self.owner},'loopbackPort':12345,
             'startupOwnerCheck':{'status':'PASS','ownerMatched':True},
             'finalFixtureOwnerCheck':{'status':'PASS','ownerMatched':True},
+            'optimizerReadinessCheck':{'status':'PASS','optimizerReady':True},
             'resources':{'owner':self.owner,'browserClosed':True,'contextClosed':True,'serverExited':True,'portReleased':True,'previewPid':1234,'ownedLoopbackOnly':True,'ownershipHandshakeChecked':True},
             'scriptSha256':'script','realProviderRequests':0,'blockedExternalRequestCount':0,
-            'artifacts':[{'path':'page.png','sha256':hashlib.sha256(b'synthetic screenshot').hexdigest()}]}
+            'artifacts':[{'path':'page.png','sha256':hashlib.sha256(b'synthetic screenshot').hexdigest()}],
+            'diagnostics':self.valid_diagnostics()}
+    def valid_diagnostics(self):
+        confirmations=[]
+        for operation in ['printer.reconnect.confirm','printer.test-print.confirm',
+                          'printer.test-print.lookup-confirm','printer.binding.unbind-confirm',
+                          'printer.deauthorize.confirm','printer.delete.confirm']:
+            for action,before,after in [
+                ('wait-visible',(0,0,None),(1,1,False)),
+                ('click-confirm',(1,1,False),(0,0,None)),
+                ('wait-hidden',(0,0,None),(0,0,None))]:
+                visible,buttons,disabled=before
+                after_visible,after_buttons,after_disabled=after
+                confirmations.append({'stage':f'{operation}.{action}','status':'PASSED',
+                    'relativeMs':10+len(confirmations),'generation':2,
+                    'messageBoxBefore':{'status':'OBSERVED','visibleCount':visible,
+                        'confirmButtonCount':buttons,'confirmButtonDisabled':disabled,'documentLang':'zh-CN'},
+                    'messageBoxAfter':{'status':'OBSERVED','visibleCount':after_visible,
+                        'confirmButtonCount':after_buttons,'confirmButtonDisabled':after_disabled,'documentLang':'zh-CN'}})
+        return {
+            'document':{'status':'OBSERVED','events':[
+                {'type':'document-request','classification':'expected','navigation':'initial-page-load',
+                 'path':'/__printer-preview','relativeMs':1,'generation':1},
+                {'type':'document-commit','classification':'expected','navigation':'initial-page-load',
+                 'path':'/__printer-preview','relativeMs':2,'generation':1},
+                {'type':'document-request','classification':'expected','navigation':'provider-config-reload',
+                 'path':'/__printer-preview','relativeMs':101,'generation':2},
+                {'type':'document-commit','classification':'expected','navigation':'provider-config-reload',
+                 'path':'/__printer-preview','relativeMs':102,'generation':2}]},
+            'vite':{'status':'OBSERVED','events':[
+                {'type':'optimize-start','relativeMs':3},
+                {'type':'optimized-dependencies-reload','relativeMs':4}]},
+            'lifecycle':{'status':'OBSERVED','events':[
+                {'type':'printer-page-before-mount','relativeMs':4,'generation':1},
+                {'type':'printer-page-mounted','relativeMs':5,'generation':1},
+                {'type':'printer-page-before-mount','relativeMs':103,'generation':2},
+                {'type':'printer-page-mounted','relativeMs':104,'generation':2}]},
+            'confirmationSteps':confirmations}
     def verify(self,value=None):
         from page_evidence import printer_browser_receipt
         self.path.write_text(json.dumps(value or self.value))
@@ -191,22 +229,114 @@ class PrinterBrowserReceiptTest(unittest.TestCase):
                              ('finalFixtureOwnerCheck', {'status':'FAIL','ownerMatched':False})]:
             bad=copy.deepcopy(self.value);bad[field]=value
             with self.assertRaises(RuntimeError):self.verify(bad)
+        bad=copy.deepcopy(self.value)
+        bad['optimizerReadinessCheck']={'status':'BYPASSED','optimizerReady':False}
+        with self.assertRaisesRegex(RuntimeError,'OPTIMIZER_READINESS_REQUIRED'):self.verify(bad)
     def test_failed_printer_receipt_has_specific_nonpass_reason(self):
         bad=copy.deepcopy(self.value);bad.update(result='FAIL',checks=['one'],failedStage='printer.binding.open-shop-dropdown',
             reasonType='TimeoutError',reasonCode='PRINTER_BROWSER_CHECK_FAILED',stageDurationMs=250,lastPassedCheck='one')
         with self.assertRaisesRegex(RuntimeError,'PRINTER_BROWSER_EXECUTION_FAILED'):self.verify(bad)
+    def test_printer_success_receipt_requires_complete_observation_contract(self):
+        expected=[f'{operation}.{action}' for operation in [
+            'printer.reconnect.confirm','printer.test-print.confirm',
+            'printer.test-print.lookup-confirm','printer.binding.unbind-confirm',
+            'printer.deauthorize.confirm','printer.delete.confirm']
+            for action in ['wait-visible','click-confirm','wait-hidden']]
+        self.assertEqual(expected,[step['stage'] for step in self.value['diagnostics']['confirmationSteps']])
+        def make_confirmations_unavailable(d):
+            for step in d['confirmationSteps']:
+                for field in ('messageBoxBefore','messageBoxAfter'):
+                    step[field]={'status':'UNAVAILABLE','visibleCount':None,
+                        'confirmButtonCount':None,'confirmButtonDisabled':None,'documentLang':None}
+        def claim_confirmation_without_visible_dialog(d):
+            d['confirmationSteps'][0]['messageBoxAfter']['visibleCount']=0
+            d['confirmationSteps'][0]['messageBoxAfter']['confirmButtonCount']=0
+            d['confirmationSteps'][0]['messageBoxAfter']['confirmButtonDisabled']=None
+        def add_duplicate_mount_in_same_generation(d):
+            d['lifecycle']['events'].append({'type':'printer-page-mounted','relativeMs':6,'generation':1})
+        def add_unexpected_document_navigation(d):
+            d['document']['events'].append({'type':'document-commit','classification':'unexpected',
+                'navigation':None,'path':'/__printer-preview','relativeMs':20,'generation':3})
+        for mutate in [
+            lambda d:d['document'].update(status='UNAVAILABLE',events=None),
+            lambda d:d['vite'].update(status='UNAVAILABLE',events=None),
+            lambda d:d['lifecycle'].update(status='UNAVAILABLE',events=None),
+            add_duplicate_mount_in_same_generation,
+            make_confirmations_unavailable,
+            claim_confirmation_without_visible_dialog,
+            add_unexpected_document_navigation,
+        ]:
+            bad=copy.deepcopy(self.value);mutate(bad['diagnostics'])
+            with self.assertRaises(RuntimeError):self.verify(bad)
+            from page_evidence import printer_browser_diagnostics
+            self.path.write_text(json.dumps(bad))
+            summary=printer_browser_diagnostics(self.path,self.started,self.identity,'run',
+                ['one','two'],'script')
+            self.assertEqual('FAILED',summary['status'])
+    def test_printer_success_receipt_rejects_unexpected_document_navigation(self):
+        bad=copy.deepcopy(self.value)
+        bad['diagnostics']['document']['events'].append({
+            'type':'document-commit','classification':'unexpected','navigation':None,
+            'path':'/__printer-preview','relativeMs':20,'generation':2})
+        with self.assertRaises(RuntimeError):self.verify(bad)
+    def test_failure_diagnostics_preserve_safe_navigation_vite_and_confirm_steps(self):
+        from page_evidence import printer_browser_diagnostics
+        checks=['one']
+        failed={**self.value,'result':'FAIL','checks':checks,
+            'failedStage':'printer.reconnect.confirm.wait-visible','reasonType':'Error',
+            'reasonCode':'PRINTER_BROWSER_CHECK_FAILED','diagnosticCode':'UNEXPECTED_DOCUMENT_NAVIGATION_DURING_CONFIRM',
+            'stageDurationMs':24,'lastPassedCheck':'one','startupOwnerCheck':{'status':'PASS','ownerMatched':True},
+            'finalFixtureOwnerCheck':{'status':'NOT_RUN'},
+            'optimizerReadinessCheck':{'status':'PASS','optimizerReady':True},
+            'failureUiState':{'status':'UNAVAILABLE','visibleDialogs':None,
+                'visibleSelectDropdowns':None,'visibleLoadingMasks':None,'disabledButtons':None,
+                'ariaBusyCount':None,'bindingSelectCount':None,'bindingOptionCount':None,
+                'bindingButtonCount':None,'bindingButtonDisabled':None,
+                'visibleMessageBoxes':None,'confirmButtonCount':None,'confirmButtonDisabled':None,
+                'documentLang':None},
+            'apiEvents':[{'method':'PUT','path':'/admin-api/store/printer/update','status':200}],
+            'pageErrorCount':0,'consoleErrorCount':0,'blockedExternalRequestCount':0,
+            'privateStack':'DO_NOT_PUBLISH_SENTINEL'}
+        failed['diagnostics']['document']['events'].append({
+            'type':'document-request','classification':'unexpected','navigation':None,
+            'path':'/__printer-preview','relativeMs':20,'generation':2})
+        failed['diagnostics']['document']['events'].append({
+            'type':'document-commit','classification':'unexpected','navigation':None,
+            'path':'/__printer-preview','relativeMs':21,'generation':2})
+        failed['diagnostics']['vite']['events'].append({'type':'hmr-full-reload','relativeMs':19})
+        failed['diagnostics']['confirmationSteps']=failed['diagnostics']['confirmationSteps'][:1]
+        step=failed['diagnostics']['confirmationSteps'][0]
+        step.update(stage='printer.reconnect.confirm.wait-visible',status='FAILED',relativeMs=18,generation=1)
+        step['messageBoxBefore']={'status':'OBSERVED','visibleCount':0,'confirmButtonCount':0,
+            'confirmButtonDisabled':None,'documentLang':'zh-CN'}
+        step['messageBoxAfter']={'status':'UNAVAILABLE','visibleCount':None,'confirmButtonCount':None,
+            'confirmButtonDisabled':None,'documentLang':None}
+        self.path.write_text(json.dumps(failed))
+        summary=printer_browser_diagnostics(self.path,self.started,self.identity,'run',
+            ['one','two'],'script')
+        self.assertEqual('UNEXPECTED_DOCUMENT_NAVIGATION_DURING_CONFIRM',summary['diagnosticCode'])
+        self.assertEqual(['document-request','document-commit','document-request','document-commit',
+                          'document-request','document-commit'],
+            [event['type'] for event in summary['diagnostics']['document']['events']])
+        self.assertEqual('hmr-full-reload',summary['diagnostics']['vite']['events'][-1]['type'])
+        self.assertEqual('UNAVAILABLE',summary['failureUiState']['status'])
+        self.assertIsNone(summary['failureUiState']['visibleMessageBoxes'])
+        self.assertNotIn('DO_NOT_PUBLISH_SENTINEL',json.dumps(summary))
     def test_failure_diagnostics_are_safe_attributable_and_structural(self):
         from page_evidence import printer_browser_diagnostics
         checks=['one']
         failed={**self.value,'result':'FAIL','checks':checks,'failedStage':'printer.binding.open-shop-dropdown',
             'reasonType':'TimeoutError','reasonCode':'PRINTER_BROWSER_CHECK_FAILED','stageDurationMs':250,
             'lastPassedCheck':'one','startupOwnerCheck':{'status':'PASS','ownerMatched':True},
-            'finalFixtureOwnerCheck':{'status':'NOT_RUN'},'failureUiState':{'visibleDialogs':1,
+            'finalFixtureOwnerCheck':{'status':'NOT_RUN'},
+            'optimizerReadinessCheck':{'status':'PASS','optimizerReady':True},
+            'failureUiState':{'status':'OBSERVED','visibleDialogs':1,
                 'visibleSelectDropdowns':0,'visibleLoadingMasks':0,'disabledButtons':0,'ariaBusyCount':0,
-                'bindingSelectCount':1,'bindingOptionCount':0,'bindingButtonCount':1,'bindingButtonDisabled':False},
+                'bindingSelectCount':1,'bindingOptionCount':0,'bindingButtonCount':1,'bindingButtonDisabled':False,
+                'visibleMessageBoxes':0,'confirmButtonCount':0,'confirmButtonDisabled':None,'documentLang':'zh-CN'},
             'apiEvents':[{'method':'PUT','path':'/admin-api/store/printer/update','status':200}],
             'pageErrorCount':0,'consoleErrorCount':0,'blockedExternalRequestCount':0,
-            'privateStack':'DO_NOT_PUBLISH_SENTINEL'}
+            'diagnostics':self.valid_diagnostics(),'privateStack':'DO_NOT_PUBLISH_SENTINEL'}
         failed['resources']['ownershipHandshakeChecked']=False
         self.path.write_text(json.dumps(failed))
         summary=printer_browser_diagnostics(self.path,self.started,self.identity,'run',['one','two'],'script')

@@ -1,6 +1,7 @@
 /** Start a loopback-only browser fixture for the real Vue page; external APIs are never used. */
 import { createServer } from 'vite'
 import { createServer as createPortProbe } from 'node:net'
+import { existsSync, readFileSync, unwatchFile, watchFile } from 'node:fs'
 
 const requestedPort = process.env.YSHOP_PRINTER_BROWSER_PORT
 const port = requestedPort
@@ -36,8 +37,61 @@ const shops = [
   { id: 1, name: '测试门店一' },
   { id: 2, name: '测试门店二' }
 ]
+let markOptimizerReady
+let optimizerReadyResolved = false
+const optimizerReady = new Promise((resolve) => { markOptimizerReady = resolve })
+const resolveOptimizerReady = () => {
+  if (optimizerReadyResolved) return
+  optimizerReadyResolved = true
+  markOptimizerReady()
+}
+const bypassOptimizerGate = process.env.YSHOP_PRINTER_BROWSER_TEST_BYPASS_OPTIMIZER_READY === 'test-only'
+const awaitOptimizerReady = () => bypassOptimizerGate ? Promise.resolve() : optimizerReady
+const waitForOptimizerMetadata = (metadataPath) => new Promise((resolve, reject) => {
+  if (existsSync(metadataPath)) return resolve()
+  const onChange = (current) => {
+    if (!current.isFile()) return
+    clearTimeout(deadline)
+    unwatchFile(metadataPath, onChange)
+    resolve()
+  }
+  const deadline = setTimeout(() => {
+    unwatchFile(metadataPath, onChange)
+    reject(new Error('PRINTER_PREVIEW_OPTIMIZER_METADATA_TIMEOUT'))
+  }, 60_000)
+  watchFile(metadataPath, { interval: 100, persistent: false }, onChange)
+})
 
 const server = await createServer({
+  cacheDir: process.env.YSHOP_PRINTER_BROWSER_CACHE_DIR || undefined,
+  optimizeDeps: {
+    entries: ['tests/printer/preview.html'],
+    holdUntilCrawlEnd: false,
+    include: [
+      'element-plus/es/components/base/style/css',
+      'element-plus/es/components/loading/style/css',
+      'element-plus/es/components/tabs/style/css',
+      'element-plus/es/components/tab-pane/style/css',
+      'element-plus/es/components/scrollbar/style/css',
+      'element-plus/es/components/message/style/css',
+      'element-plus/es/components/message-box/style/css',
+      'element-plus/es/components/notification/style/css',
+      'element-plus/es/components/icon/style/css',
+      'vue-ueditor-wrap',
+      'vue-dompurify-html',
+      'element-plus/es/components/aside/style/css',
+      'element-plus/es/components/container/style/css',
+      'element-plus/es/components/divider/style/css',
+      'element-plus/es/components/header/style/css',
+      'element-plus/es/components/main/style/css',
+      'element-plus/es/components/popconfirm/style/css',
+      'element-plus/es/components/transfer/style/css',
+      '@form-create/designer',
+      '@form-create/element-ui/auto-import',
+      'element-plus/es/components/config-provider/style/css',
+      'element-plus/es/components/popover/style/css'
+    ]
+  },
   server: { host: '127.0.0.1', port, strictPort: true, open: false },
   plugins: [
     {
@@ -46,15 +100,17 @@ const server = await createServer({
         server.middlewares.use(async (request, response, next) => {
           const url = new URL(request.url, `http://127.0.0.1:${port}`)
           if (url.pathname === '/__printer-preview') {
+            await awaitOptimizerReady()
             const html = await server.transformIndexHtml(
               url.pathname,
-              '<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><title>打印机页面验收 · 模拟数据</title></head><body><div style="padding:16px;background:#fff3cd">仅用于页面验收 · 模拟设备，不连接真实打印服务</div><div id="app" style="padding:24px"></div><script type="module" src="/tests/printer/preview.ts"></script></body></html>'
+              readFileSync(new URL('./preview.html', import.meta.url), 'utf8')
             )
             response.setHeader('Content-Type', 'text/html; charset=utf-8')
             response.end(html)
             return
           }
           if (url.pathname === '/__printer-fixture') {
+            await awaitOptimizerReady()
             if (url.searchParams.has('configured'))
               configured = url.searchParams.get('configured') === '1'
             response.setHeader('Content-Type', 'application/json')
@@ -62,6 +118,7 @@ const server = await createServer({
               JSON.stringify({
                 configured,
                 owner: process.env.YSHOP_PRINTER_BROWSER_OWNER || null,
+                optimizerReady: optimizerReadyResolved,
                 deviceCount: devices.length,
                 submitted,
                 jobCount: jobs.length
@@ -201,4 +258,7 @@ const server = await createServer({
   ]
 })
 await server.listen()
+const metadataPath = `${server.config.cacheDir}/deps/_metadata.json`
+if (!bypassOptimizerGate) await waitForOptimizerMetadata(metadataPath)
+if (existsSync(metadataPath)) resolveOptimizerReady()
 console.log(`Printer browser acceptance: http://127.0.0.1:${port}/__printer-preview`)
