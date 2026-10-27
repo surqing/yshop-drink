@@ -89,6 +89,7 @@ def run(repo, output, profile, scenario=None):
     tenant_enabled_http=any(item['id']=='printer-operation-recovery-tenant-enabled' for item in plan['scenarios'])
     printer_recovery=any(item['id'] in ('printer-operation-recovery','printer-operation-recovery-tenant-enabled')
                          for item in plan['scenarios'])
+    batch_stock_access=any(item['id']=='batch-stock-operations' for item in plan['scenarios'])
     env=execution_environment(workspace)
     report={**identity,**plan,'runId':root.name,'owner':uuid.uuid4().hex,'complete':False,
             'startedAt':time.time(),'hostPlatform':sys.platform,'status':'INCONCLUSIVE','cleanup':'NOT_RUN','stage':'PREFLIGHT',
@@ -143,6 +144,8 @@ def run(repo, output, profile, scenario=None):
                 support.configure(environment,config)
                 if printer_recovery:
                     support.configure_printer_recovery(environment)
+                if batch_stock_access:
+                    support.configure_batch_stock_access(environment)
                 if tenant_enabled_http:
                     support.tenant_enabled_port=environment.port+1
                     ignore_tables=config.setdefault('yshop',{}).setdefault('tenant',{}).setdefault('ignore-tables',[])
@@ -168,7 +171,11 @@ def run(repo, output, profile, scenario=None):
                                  'hqNoQuery':{'username':'qualityhqnoquery','password':'syntheticQA12'},
                                  'hqRevoked':{'username':'qualityhqrevoked','password':'syntheticQA12'},
                                  'hqCrossTenant':{'username':'qualityhqcross','password':'syntheticQA12'},
-                                 'hqOtherTenant':{'username':'qualityhqother','password':'syntheticQA12'}}}
+                                 'hqOtherTenant':{'username':'qualityhqother','password':'syntheticQA12'},
+                                 'stockWriter':{'username':'r4stockwriter','password':'syntheticQA12'},
+                                 'stockQuery':{'username':'r4stockquery','password':'syntheticQA12'},
+                                 'stockPeer':{'username':'r4stockpeer','password':'syntheticQA12'},
+                                 'stockAssignment':{'username':'r4stockassign','password':'syntheticQA12'}}}
             if tenant_enabled_http:context['tenantEnabledBackend']='http://127.0.0.1:'+str(environment.port+1)
             if needs_mini:
                 report['stage']='MINI_BUILD';write_reports(root,report)

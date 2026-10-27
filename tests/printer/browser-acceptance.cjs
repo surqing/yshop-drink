@@ -47,7 +47,34 @@ const source = identity(),
   startedAt = Date.now() / 1000,
   checks = [],
   requests = [],
-  blocked = [];
+  apiEvents = [],
+  documentEvents = [],
+  viteEvents = [],
+  lifecycleEvents = [],
+  confirmationSteps = [];
+let blockedExternalRequestCount = 0,
+  pageErrorCount = 0,
+  consoleErrorCount = 0,
+  currentStage = "runner.startup",
+  currentStageStartedAt = Date.now(),
+  injectedTimeoutUsed = false,
+  documentGeneration = 0,
+  pendingNavigationReason = null;
+const pendingDocumentCommits = [];
+let previewLineBuffer = '', traceStarted = false,
+  cacheContext = null,
+  previewCacheHandshake = null;
+const injectedTimeoutStage =
+  process.env.YSHOP_PRINTER_BROWSER_TEST_INJECT_TIMEOUT === "test-only"
+    ? process.env.YSHOP_PRINTER_BROWSER_INJECT_TIMEOUT_STAGE
+    : null;
+const injectedReloadStage =
+  process.env.YSHOP_PRINTER_BROWSER_TEST_INJECT_RELOAD === "test-only"
+    ? process.env.YSHOP_PRINTER_BROWSER_INJECT_RELOAD_STAGE
+    : null;
+const diagnosticSentinel =
+  process.env.YSHOP_PRINTER_BROWSER_DIAGNOSTIC_SENTINEL ||
+  "r4-diagnostic-marker";
 const report = {
   runId,
   owner,
@@ -58,10 +85,128 @@ const report = {
   scope:
     "Real Vue printer SFC in Chromium with synthetic loopback HTTP fixture; not full backend/router/browser acceptance",
   checks,
+  startupOwnerCheck: { status: "NOT_RUN" },
+  finalFixtureOwnerCheck: { status: "NOT_RUN" },
+  optimizerReadinessCheck: { status: 'NOT_RUN', optimizerReady: null },
+  cacheHandshakeCheck: { status: 'NOT_RUN', cacheOwnerMatched: false, resolvedPathMatched: false,
+    metadataMatched: false, previewPidMatched: false, startupObserved: false, finalObserved: false },
   realProviderRequests: 0,
+  blockedExternalRequestCount: 0,
+  cache: {},
+  diagnostics: {
+    document: { status: "UNAVAILABLE", events: null },
+    vite: { status: "UNAVAILABLE", events: null },
+    lifecycle: { status: "UNAVAILABLE", events: null },
+    confirmationSteps,
+  },
 };
-let server, browser, context, page, log;
+let server, browser, context, page, log, previewLogStream, tracePath;
 let interrupted = false;
+let cacheFinalizationStage = 'NOT_STARTED';
+const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
+const inside = (child, parent) => child === parent || child.startsWith(parent + path.sep);
+const prepareOwnedCache = () => {
+  const explicit = process.env.YSHOP_PRINTER_BROWSER_CACHE_DIR || null;
+  const mode = explicit ? 'EXPLICIT_EXPERIMENT' : 'RUN_PRIVATE_DEFAULT';
+  if (explicit && !path.isAbsolute(explicit)) throw Error('PRINTER_CACHE_PATH_MUST_BE_ABSOLUTE');
+  const requested = path.resolve(explicit || path.join(root, 'private-vite-cache'));
+  if (requested.split(path.sep).includes('node_modules')) throw Error('PRINTER_CACHE_SHARED_NODE_MODULES_FORBIDDEN');
+  const existedBefore = fs.existsSync(requested);
+  if (mode === 'RUN_PRIVATE_DEFAULT' && existedBefore) throw Error('PRINTER_DEFAULT_CACHE_MUST_BE_FRESH');
+  if (existedBefore && fs.lstatSync(requested).isSymbolicLink()) throw Error('PRINTER_CACHE_SYMLINK_FORBIDDEN');
+  fs.mkdirSync(requested, { recursive: true, mode: 0o700 });
+  fs.chmodSync(requested, 0o700);
+  const resolved = fs.realpathSync(requested);
+  if (resolved.split(path.sep).includes('node_modules')) throw Error('PRINTER_CACHE_SHARED_NODE_MODULES_FORBIDDEN');
+  if (inside(resolved, repo) && !(mode === 'RUN_PRIVATE_DEFAULT' && inside(resolved, path.join(repo, '.quality'))))
+    throw Error('PRINTER_CACHE_MUST_BE_PRIVATE_OUTPUT');
+  const markerPath = path.join(resolved, '.r4-printer-cache-owner.json');
+  const metadataPath = path.join(resolved, 'deps', '_metadata.json');
+  let marker, cacheOwnerId;
+  if (fs.existsSync(markerPath)) {
+    if (fs.lstatSync(markerPath).isSymbolicLink()) throw Error('PRINTER_CACHE_OWNER_MARKER_SYMLINK_FORBIDDEN');
+    marker = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
+    if (!/^[a-f0-9]{32}$/.test(marker.cacheOwnerId || '') || marker.cacheDir !== resolved ||
+        marker.sourceSha !== source.sourceSha || marker.sourceDigest !== source.sourceDigest)
+      throw Error('PRINTER_CACHE_OWNER_MARKER_MISMATCH');
+    cacheOwnerId = marker.cacheOwnerId;
+  } else {
+    if (fs.readdirSync(resolved).length !== 0) throw Error('PRINTER_CACHE_UNOWNED_CONTENTS_FORBIDDEN');
+    cacheOwnerId = crypto.randomUUID().replaceAll('-', '');
+    marker = { cacheOwnerId, cacheDir: resolved, sourceSha: source.sourceSha, sourceDigest: source.sourceDigest };
+    fs.writeFileSync(markerPath, JSON.stringify(marker), { flag: 'wx', mode: 0o600 });
+    fs.chmodSync(markerPath, 0o600);
+  }
+  const metadataPresentBefore = fs.existsSync(metadataPath);
+  const metadataSha256Before = metadataPresentBefore ? sha256(fs.readFileSync(metadataPath)) : null;
+  const markerSha256 = sha256(fs.readFileSync(markerPath));
+  cacheContext = { mode, state: metadataPresentBefore ? 'WARM' : 'COLD', cacheOwnerId,
+    cacheDir: resolved, metadataPath, markerPath, markerSha256,
+    metadataPresentBefore, metadataSha256Before };
+  report.cache = {
+    mode, state: cacheContext.state, cacheOwnerId,
+    metadataPresentBefore, metadataSha256Before,
+    metadataPresentAfter: false, metadataSha256After: null, privateEvidenceSha256: null,
+  };
+  return cacheContext;
+};
+const finalizeCacheEvidence = () => {
+  if (!cacheContext) return;
+  cacheFinalizationStage = 'READ_METADATA';
+  let metadata = null, metadataPresentAfter = false, metadataSha256After = null;
+  try {
+    metadataPresentAfter = fs.existsSync(cacheContext.metadataPath);
+    if (metadataPresentAfter) {
+      const bytes = fs.readFileSync(cacheContext.metadataPath);
+      metadataSha256After = sha256(bytes);
+      metadata = JSON.parse(bytes.toString('utf8'));
+    }
+  } catch {
+    metadataPresentAfter = false;
+    metadataSha256After = null;
+    metadata = null;
+  }
+  const privateEvidence = {
+    schemaVersion: 1,
+    cacheMode: cacheContext.mode,
+    cacheState: cacheContext.state,
+    cacheOwnerId: cacheContext.cacheOwnerId,
+    cacheDir: cacheContext.cacheDir,
+    metadataPath: cacheContext.metadataPath,
+    markerPath: cacheContext.markerPath,
+    markerSha256: fs.existsSync(cacheContext.markerPath) ? sha256(fs.readFileSync(cacheContext.markerPath)) : null,
+    sourceIdentity: { sourceSha: source.sourceSha, sourceDigest: source.sourceDigest },
+    metadataBeforePresent: cacheContext.metadataPresentBefore,
+    metadataBeforeSha256: cacheContext.metadataSha256Before,
+    metadataAfterPresent: metadataPresentAfter,
+    metadataAfterSha256: metadataSha256After,
+    metadataAfter: metadata,
+    preview: previewCacheHandshake,
+  };
+  cacheFinalizationStage = 'SERIALIZE_PRIVATE_EVIDENCE';
+  const serialized = JSON.stringify(privateEvidence, null, 2);
+  const privatePath = path.join(root, 'cache-private.json');
+  cacheFinalizationStage = 'WRITE_PRIVATE_EVIDENCE';
+  fs.writeFileSync(privatePath, serialized, { flag: 'wx', mode: 0o600 });
+  cacheFinalizationStage = 'SET_PRIVATE_EVIDENCE_MODE';
+  fs.chmodSync(privatePath, 0o600);
+  cacheFinalizationStage = 'HASH_PRIVATE_EVIDENCE';
+  report.cache.metadataPresentAfter = metadataPresentAfter;
+  report.cache.metadataSha256After = metadataSha256After;
+  report.cache.privateEvidenceSha256 = sha256(fs.readFileSync(privatePath));
+  cacheFinalizationStage = 'COMPLETE';
+};
+const validatePreviewCacheHandshake = (handshake) => {
+  if (!cacheContext || !handshake || typeof handshake !== 'object') return false;
+  const metadata = handshake.metadata;
+  const metadataBytes = fs.existsSync(cacheContext.metadataPath) ? fs.readFileSync(cacheContext.metadataPath) : null;
+  if (!metadataBytes) return false;
+  const actualHash = sha256(metadataBytes);
+  return handshake.optimizerReady === true && handshake.cacheOwnerId === cacheContext.cacheOwnerId &&
+    handshake.resolvedCacheDir === cacheContext.cacheDir && handshake.configCacheDir === cacheContext.cacheDir &&
+    handshake.metadataPath === cacheContext.metadataPath && handshake.metadataSha256 === actualHash &&
+    handshake.pid === server?.pid && JSON.stringify(metadata) === JSON.stringify(JSON.parse(metadataBytes.toString('utf8')));
+};
 const interrupt = () => {
   interrupted = true;
   if (page) page.close().catch(() => {});
@@ -83,14 +228,239 @@ const check = async (name, fn) => {
   await fn();
   checks.push(name);
 };
+const assertNoUnexpectedDocumentNavigation = () => {
+  if (documentEvents.some(event =>
+    ['document-request', 'document-commit'].includes(event.type) && event.classification === 'unexpected')) {
+    report.diagnosticCode = 'UNEXPECTED_DOCUMENT_NAVIGATION';
+    throw Error('UNEXPECTED_DOCUMENT_NAVIGATION');
+  }
+};
+const relativeMs = () => Math.max(0, Date.now() - startedAt * 1000);
+const safePath = (value) => {
+  try {
+    const url = new URL(value);
+    if (!['127.0.0.1', 'localhost'].includes(url.hostname)) return null;
+    return ['/', '/__printer-preview'].includes(url.pathname) ? url.pathname : null;
+  } catch {
+    return null;
+  }
+};
+const recordViteEvent = (type) => {
+  if (viteEvents.length < 256)
+    viteEvents.push({ type, relativeMs: relativeMs() });
+};
+const recordPreviewOutput = (chunk) => {
+  if (!previewLogStream) return;
+  previewLogStream.write(chunk);
+  previewLineBuffer += chunk.toString('utf8');
+  const lines = previewLineBuffer.split(/\r?\n/);
+  previewLineBuffer = lines.pop() || '';
+  for (const line of lines) {
+    if (/optimizing dependencies|re-optimizing dependencies/i.test(line))
+      recordViteEvent('optimize-start');
+    if (/optimized dependencies changed\. reloading/i.test(line))
+      recordViteEvent('optimized-dependencies-reload');
+    else if (/dependencies optimized/i.test(line))
+      recordViteEvent('dependencies-optimized');
+  }
+};
+const stage = async (name) => {
+  currentStage = name;
+  currentStageStartedAt = Date.now();
+  assertNoUnexpectedDocumentNavigation();
+  if (injectedTimeoutStage === name && !injectedTimeoutUsed) {
+    injectedTimeoutUsed = true;
+    if (!page) throw Error("CONTROLLED_TIMEOUT_PAGE_NOT_READY");
+    await page
+      .getByTestId(diagnosticSentinel)
+      .waitFor({ state: "visible", timeout: 250 });
+  }
+};
+const unavailableUiState = () => ({
+  status: 'UNAVAILABLE',
+  visibleDialogs: null,
+  visibleSelectDropdowns: null,
+  visibleLoadingMasks: null,
+  disabledButtons: null,
+  ariaBusyCount: null,
+  bindingSelectCount: null,
+  bindingOptionCount: null,
+  bindingButtonCount: null,
+  bindingButtonDisabled: null,
+  visibleMessageBoxes: null,
+  confirmButtonCount: null,
+  confirmButtonDisabled: null,
+  documentLang: null,
+});
+const failureUiState = async () => {
+  if (!page || page.isClosed()) return unavailableUiState();
+  try {
+  const count = async (selector) => page.locator(selector).count();
+  const bindingButton = page
+    .locator(".el-dialog:visible")
+    .getByRole("button", { name: "绑定", exact: true });
+  const bindingButtonCount = await bindingButton.count();
+  const bindingButtonDisabled = bindingButtonCount
+    ? await bindingButton.first().isDisabled()
+    : null;
+  const messageBox = page.locator('.el-message-box:visible');
+  const visibleMessageBoxes = await messageBox.count();
+  const confirmButton = messageBox.getByRole('button', { name: /^(确定|确认)$/ });
+  const confirmButtonCount = await confirmButton.count();
+  const confirmButtonDisabled = confirmButtonCount ? await confirmButton.first().isDisabled() : null;
+  const documentLang = await page.locator('html').getAttribute('lang');
+  const createButton = page.getByRole('button', { name: '新增打印机', exact: true });
+  const createButtonCount = await createButton.count();
+  const createButtonState = createButtonCount ? {
+    status: 'OBSERVED',
+    visible: await createButton.first().isVisible(),
+    enabled: await createButton.first().isEnabled(),
+    geometry: await createButton.first().evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      const style = getComputedStyle(element);
+      return {
+        x: Math.round(x), y: Math.round(y), width: Math.round(rect.width), height: Math.round(rect.height),
+        inViewport: x >= 0 && y >= 0 && x < innerWidth && y < innerHeight,
+        pointerTarget: hit === element || element.contains(hit) ? 'target' : hit ? 'other' : 'none',
+        display: style.display, visibility: style.visibility,
+        pointerEvents: style.pointerEvents, opacity: style.opacity,
+      };
+    }),
+    runningPageAnimationCount: await createButton.first().evaluate(() =>
+      document.getAnimations().filter((animation) => animation.playState === 'running').length),
+    activeAnimationCount: await createButton.first().evaluate((element) =>
+      element.getAnimations({ subtree: true }).filter((animation) => animation.playState === 'running').length),
+  } : { status: 'OBSERVED', count: 0 };
+  return {
+    status: 'OBSERVED',
+    visibleDialogs: await count(".el-dialog:visible"),
+    visibleSelectDropdowns: await count(".el-select-dropdown:visible"),
+    visibleLoadingMasks: await count(".el-loading-mask:visible"),
+    disabledButtons: await count("button:disabled"),
+    ariaBusyCount: await count('[aria-busy="true"]'),
+    bindingSelectCount: await count(".el-dialog:visible .el-select"),
+    bindingOptionCount: await page.getByRole("option").count(),
+    bindingButtonCount,
+    bindingButtonDisabled,
+    visibleMessageBoxes,
+    confirmButtonCount,
+    confirmButtonDisabled,
+    documentLang,
+    createButtonCount,
+    createButtonState,
+  };
+  } catch {
+    return unavailableUiState();
+  }
+};
+const safeApiPath = (pathname) =>
+  /^\/admin-api\/store\/printer\/(providers|shops|page|get|create|update|binding|authorize|reconnect|deauthorize|status|status\/refresh|test-print|test-print\/get|test-print\/page|delete)$/.test(
+    pathname,
+  );
+const recordApiEvent = (request, status, failed) => {
+  const url = new URL(request.url());
+  if (url.hostname !== "127.0.0.1" || !safeApiPath(url.pathname)) return;
+  apiEvents.push({
+    method: request.method(),
+    path: url.pathname,
+    status,
+    failed,
+  });
+};
 async function fixture() {
   return (await fetch(baseUrl + "/__printer-fixture")).json();
 }
-async function confirm() {
+const unavailableMessageBox = () => ({
+  status: 'UNAVAILABLE', visibleCount: null, confirmButtonCount: null,
+  confirmButtonDisabled: null, documentLang: null,
+});
+const messageBoxState = async () => {
+  if (!page || page.isClosed()) return unavailableMessageBox();
+  try {
+    const box = page.locator('.el-message-box:visible');
+    const visibleCount = await box.count();
+    const button = box.getByRole('button', { name: /^(确定|确认)$/ });
+    const confirmButtonCount = await button.count();
+    const confirmButtonDisabled = confirmButtonCount ? await button.first().isDisabled() : null;
+    const documentLang = await page.locator('html').getAttribute('lang');
+    return { status: 'OBSERVED', visibleCount, confirmButtonCount,
+      confirmButtonDisabled, documentLang };
+  } catch {
+    return unavailableMessageBox();
+  }
+};
+const runConfirmAction = async (stageName, action) => {
+  const before = await messageBoxState();
+  const generation = documentGeneration;
+  const at = relativeMs();
+  let navigationListener;
+  let navigationPromise;
+  if (page && !page.isClosed()) {
+    navigationPromise = new Promise((resolve) => {
+      navigationListener = () => {
+        if (documentGeneration !== generation) resolve({ kind: 'navigation' });
+      };
+      page.on('framenavigated', navigationListener);
+    });
+  }
+  let outcome;
+  const actionPromise = Promise.resolve().then(action).then(
+    () => ({ kind: 'completed' }),
+    (error) => ({ kind: 'error', error }),
+  );
+  const inject = injectedReloadStage === stageName;
+  let injectionPromise;
+  if (inject) {
+    injectionPromise = page.evaluate(() => window.location.reload()).catch(() => null);
+  }
+  try {
+    if (before.status !== 'OBSERVED')
+      throw Error('CONFIRMATION_OBSERVATION_UNAVAILABLE');
+    outcome = await (navigationPromise
+      ? Promise.race([
+          inject
+            ? actionPromise.then((value) => value.kind === 'error' ? value : new Promise(() => {}))
+            : actionPromise,
+          navigationPromise,
+        ])
+      : actionPromise);
+    if (outcome.kind === 'navigation' || documentGeneration !== generation) {
+      report.diagnosticCode = 'UNEXPECTED_DOCUMENT_NAVIGATION_DURING_CONFIRM';
+      throw Error('UNEXPECTED_DOCUMENT_NAVIGATION_DURING_CONFIRM');
+    }
+    if (outcome.kind === 'error') throw outcome.error;
+    const after = await messageBoxState();
+    if (after.status !== 'OBSERVED')
+      throw Error('CONFIRMATION_OBSERVATION_UNAVAILABLE');
+    confirmationSteps.push({ stage: stageName, status: 'PASSED', relativeMs: at,
+      generation, messageBoxBefore: before, messageBoxAfter: after });
+  } catch (error) {
+    if (documentGeneration !== generation || outcome?.kind === 'navigation')
+      report.diagnosticCode = 'UNEXPECTED_DOCUMENT_NAVIGATION_DURING_CONFIRM';
+    else if (error.message === 'CONFIRMATION_OBSERVATION_UNAVAILABLE')
+      report.diagnosticCode = 'CONFIRMATION_OBSERVATION_UNAVAILABLE';
+    confirmationSteps.push({ stage: stageName, status: 'FAILED', relativeMs: at,
+      generation, messageBoxBefore: before, messageBoxAfter: await messageBoxState() });
+    throw error;
+  } finally {
+    if (navigationListener && page && !page.isClosed())
+      page.off('framenavigated', navigationListener);
+    if (injectionPromise) injectionPromise.catch(() => {});
+  }
+};
+async function confirm(operation) {
   const box = page.locator(".el-message-box");
-  await box.waitFor();
-  await box.getByRole("button", { name: /^(确定|确认)$/ }).click();
-  await box.waitFor({ state: "hidden" });
+  for (const action of ['wait-visible', 'click-confirm', 'wait-hidden']) {
+    const stageName = `${operation}.${action}`;
+    await stage(stageName);
+    if (action === 'wait-visible') await runConfirmAction(stageName, () => box.waitFor());
+    else if (action === 'click-confirm')
+      await runConfirmAction(stageName, () => box.getByRole('button', { name: /^(确定|确认)$/ }).click());
+    else await runConfirmAction(stageName, () => box.waitFor({ state: 'hidden' }));
+  }
 }
 async function main() {
   try {
@@ -115,18 +485,27 @@ async function main() {
         process.env.YSHOP_QUALITY_SOURCE_DIGEST !== source.sourceDigest)
     )
       throw Error("SOURCE_IDENTITY_MISMATCH");
+    prepareOwnedCache();
     if (await listening()) throw Error("PREVIEW_PORT_ALREADY_OWNED");
     log = fs.openSync(path.join(root, "preview-private.log"), "w", 0o600);
+    previewLogStream = fs.createWriteStream(null, { fd: log, autoClose: false });
+    report.diagnostics.vite = { status: 'OBSERVED', events: viteEvents };
     server = cp.spawn("node", ["tests/printer/preview.mjs"], {
       cwd: path.join(repo, "yshop-drink-vue3"),
       env: {
         ...process.env,
         YSHOP_PRINTER_BROWSER_PORT: String(port),
         YSHOP_PRINTER_BROWSER_OWNER: owner,
+        YSHOP_PRINTER_BROWSER_CACHE_DIR: cacheContext.cacheDir,
+        YSHOP_PRINTER_BROWSER_CACHE_OWNER_ID: cacheContext.cacheOwnerId,
+        YSHOP_PRINTER_BROWSER_SOURCE_SHA: source.sourceSha,
+        YSHOP_PRINTER_BROWSER_SOURCE_DIGEST: source.sourceDigest,
       },
-      stdio: ["ignore", log, log],
+      stdio: ["ignore", "pipe", "pipe"],
       detached: true,
     });
+    server.stdout.on('data', recordPreviewOutput);
+    server.stderr.on('data', recordPreviewOutput);
     for (let i = 0; i < 120; i++) {
       if (interrupted) throw Error("CONTROLLED_INTERRUPTED");
       if (server.exitCode !== null) throw Error("PREVIEW_EXITED");
@@ -134,7 +513,33 @@ async function main() {
         const r = await fetch(baseUrl + "/__printer-fixture");
         if (r.ok) {
           const body = await r.json();
-          if (body.owner !== owner) throw Error("PREVIEW_OWNER_MISMATCH");
+          const ownerMatched = body.owner === owner;
+          const cacheHandshake = body.cacheHandshake;
+          const cacheReady = validatePreviewCacheHandshake(cacheHandshake);
+          const optimizerReady = body.optimizerReady === true && cacheReady;
+          previewCacheHandshake = cacheHandshake || null;
+          report.startupOwnerCheck = {
+            status: ownerMatched ? "PASS" : "FAIL",
+            ownerMatched,
+          };
+          report.cacheHandshakeCheck = {
+            status: cacheReady ? 'PASS' : 'FAIL',
+            cacheOwnerMatched: cacheHandshake?.cacheOwnerId === cacheContext.cacheOwnerId,
+            resolvedPathMatched: cacheHandshake?.resolvedCacheDir === cacheContext.cacheDir &&
+              cacheHandshake?.configCacheDir === cacheContext.cacheDir,
+            metadataMatched: cacheReady,
+            previewPidMatched: cacheHandshake?.pid === server.pid,
+            startupObserved: true,
+            finalObserved: false,
+          };
+          report.optimizerReadinessCheck = {
+            status: optimizerReady ? 'PASS' : process.env.YSHOP_PRINTER_BROWSER_TEST_BYPASS_OPTIMIZER_READY === 'test-only' ? 'BYPASSED' : 'FAIL',
+            optimizerReady,
+          };
+          if (!ownerMatched) throw Error("PREVIEW_OWNER_MISMATCH");
+          if (!cacheReady) throw Error('PREVIEW_CACHE_HANDSHAKE_MISMATCH');
+          if (!optimizerReady && process.env.YSHOP_PRINTER_BROWSER_TEST_BYPASS_OPTIMIZER_READY !== 'test-only')
+            throw Error('PREVIEW_OPTIMIZER_NOT_READY');
           break;
         }
       } catch (error) {
@@ -147,6 +552,9 @@ async function main() {
     context = await browser.newContext({
       viewport: { width: 1600, height: 1100 },
     });
+    tracePath = path.join(root, 'browser-trace.zip');
+    await context.tracing.start({ screenshots: true, snapshots: true, sources: false });
+    traceStarted = true;
     page = await context.newPage();
     await page.route("**/*", async (route) => {
       const url = new URL(route.request().url());
@@ -154,19 +562,102 @@ async function main() {
         ["http:", "https:"].includes(url.protocol) &&
         !["127.0.0.1", "localhost"].includes(url.hostname)
       ) {
-        blocked.push(url.origin);
+        blockedExternalRequestCount += 1;
         await route.abort();
         return;
       }
       await route.continue();
     });
+    page.on("response", (response) => {
+      recordApiEvent(response.request(), response.status(), false);
+    });
+    page.on("requestfailed", (request) => {
+      recordApiEvent(request, null, true);
+    });
+    page.on("pageerror", () => {
+      pageErrorCount += 1;
+    });
+    page.on("console", (message) => {
+      if (message.type() === "error") consoleErrorCount += 1;
+      const lifecycle = {
+        'R4_PREVIEW_LIFECYCLE:printer-page-before-mount': 'printer-page-before-mount',
+        'R4_PREVIEW_LIFECYCLE:printer-page-mounted': 'printer-page-mounted',
+        'R4_PREVIEW_LIFECYCLE:printer-page-before-unmount': 'printer-page-before-unmount',
+        'R4_PREVIEW_LIFECYCLE:printer-page-unmounted': 'printer-page-unmounted',
+      }[message.text()];
+      if (lifecycle && lifecycleEvents.length < 128)
+        lifecycleEvents.push({ type: lifecycle, relativeMs: relativeMs(), generation: documentGeneration });
+    });
     page.on("request", (r) => {
+      if (r.isNavigationRequest()) {
+        let isMainFrame = false;
+        try { isMainFrame = r.frame() === page.mainFrame(); } catch {}
+        if (isMainFrame) {
+          const reason = pendingNavigationReason;
+          pendingNavigationReason = null;
+          pendingDocumentCommits.push({ url: r.url(), reason });
+          documentEvents.push({
+            type: 'document-request',
+            classification: reason ? 'expected' : 'unexpected',
+            navigation: reason,
+            path: safePath(r.url()),
+            relativeMs: relativeMs(),
+            generation: documentGeneration + 1,
+          });
+        }
+      }
       if (r.url().includes("/admin-api/store/printer/"))
         requests.push({ method: r.method(), path: new URL(r.url()).pathname });
     });
+    page.on('framenavigated', (frame) => {
+      if (frame !== page.mainFrame()) return;
+      const url = frame.url();
+      const index = pendingDocumentCommits.findIndex((event) => event.url === url);
+      if (index >= 0) {
+        const [request] = pendingDocumentCommits.splice(index, 1);
+        documentGeneration += 1;
+        documentEvents.push({
+          type: 'document-commit',
+          classification: request.reason ? 'expected' : 'unexpected',
+          navigation: request.reason,
+          path: safePath(url),
+          relativeMs: relativeMs(),
+          generation: documentGeneration,
+        });
+      } else {
+        documentEvents.push({
+          type: 'same-document-navigation',
+          classification: 'same-document',
+          navigation: null,
+          path: safePath(url),
+          relativeMs: relativeMs(),
+          generation: documentGeneration,
+        });
+      }
+    });
+    report.diagnostics.document = { status: 'OBSERVED', events: documentEvents };
+    report.diagnostics.lifecycle = { status: 'OBSERVED', events: lifecycleEvents };
+    page.on('websocket', (socket) => {
+      try {
+        const wsUrl = new URL(socket.url());
+        if (!['127.0.0.1', 'localhost'].includes(wsUrl.hostname)) return;
+      } catch { return; }
+      socket.on('framereceived', ({ payload }) => {
+        try {
+          const message = JSON.parse(String(payload));
+          if (message.type === 'connected') recordViteEvent('connected');
+          else if (message.type === 'full-reload' || message.event === 'vite:beforeFullReload')
+            recordViteEvent('hmr-full-reload');
+          else if (message.type === 'update') recordViteEvent('hmr-update');
+        } catch {}
+      });
+    });
+    await stage("page.load");
+    pendingNavigationReason = 'initial-page-load';
     await page.goto(baseUrl + "/__printer-preview", {
       waitUntil: "networkidle",
     });
+    await stage("check.unconfigured-service-local-management");
     await check("unconfigured-service-local-management", () =>
       expect(
         page.getByText(
@@ -174,8 +665,10 @@ async function main() {
         ),
       ).toBeVisible(),
     );
+    await stage("printer.create.open-dialog");
     await page.getByRole("button", { name: "新增打印机", exact: true }).click();
     let dialog = page.locator(".el-dialog:visible");
+    await stage("printer.create.fill-form");
     await dialog
       .locator(".el-form-item")
       .filter({ hasText: "设备名称" })
@@ -186,51 +679,72 @@ async function main() {
       .filter({ hasText: "设备编号" })
       .locator("input")
       .fill("owned-browser-code");
+    await stage("printer.create.submit");
     await dialog.getByRole("button", { name: "保存", exact: true }).click();
     let row = page
       .locator(".el-table__body-wrapper tr")
       .filter({ hasText: "owned-browser-device" });
+    await stage("check.create-real-form");
     await check("create-real-form", () => expect(row).toBeVisible());
+    await stage("check.unconfigured-connect-disabled");
     await check("unconfigured-connect-disabled", () =>
       expect(
         row.getByRole("button", { name: "连接设备", exact: true }),
       ).toBeDisabled(),
     );
+    await stage("printer.edit.open-dialog");
     await row.getByRole("button", { name: "编辑", exact: true }).click();
     dialog = page.locator(".el-dialog:visible");
+    await stage("printer.edit.fill-form");
     await dialog
       .locator(".el-form-item")
       .filter({ hasText: "设备名称" })
       .locator("input")
       .fill("owned-browser-edited");
+    await stage("printer.edit.submit");
     await dialog.getByRole("button", { name: "保存", exact: true }).click();
     row = page
       .locator(".el-table__body-wrapper tr")
       .filter({ hasText: "owned-browser-edited" });
+    await stage("check.edit-real-form");
     await check("edit-real-form", () => expect(row).toBeVisible());
+    await stage("printer.binding.open-dialog");
     await row.getByRole("button", { name: "绑定门店", exact: true }).click();
     dialog = page.locator(".el-dialog:visible");
+    await stage("printer.binding.open-shop-dropdown");
     await dialog.locator(".el-select").click();
+    await stage("printer.binding.select-shop");
     await page.getByRole("option", { name: "测试门店一", exact: true }).click();
+    await stage("printer.binding.submit");
     await dialog.getByRole("button", { name: "绑定", exact: true }).click();
+    await stage("check.binding-while-service-disabled");
     await check("binding-while-service-disabled", () =>
       expect(row).toContainText("测试门店一"),
     );
+    await stage("fixture.enable-provider");
     await fetch(baseUrl + "/__printer-fixture?configured=1");
+    await stage("page.reload-after-provider-config");
+    pendingNavigationReason = 'provider-config-reload';
     await page.reload({ waitUntil: "networkidle" });
     row = page
       .locator(".el-table__body-wrapper tr")
       .filter({ hasText: "owned-browser-edited" });
+    await stage("printer.authorize");
     await row.getByRole("button", { name: "连接设备", exact: true }).click();
+    await stage("check.explicit-authorization");
     await check("explicit-authorization", () =>
       expect(row).toContainText("已连接"),
     );
+    await stage("printer.reconnect");
     await row.getByRole("button", { name: "重新连接", exact: true }).click();
-    await confirm();
+    await confirm('printer.reconnect.confirm');
+    await stage("check.reconnect-keeps-binding");
     await check("reconnect-keeps-binding", () =>
       expect(row).toContainText("测试门店一"),
     );
+    await stage("printer.status.refresh");
     await row.getByRole("button", { name: "刷新状态", exact: true }).click();
+    await stage("check.status-paper-out");
     await check("status-paper-out", async () => {
       await expect(row).toContainText("缺纸");
       expect(
@@ -240,17 +754,21 @@ async function main() {
       ).toBe(1);
       expect(requests.filter((r) => r.path.endsWith("/status")).length).toBe(0);
     });
+    await stage("printer.test-print.submit");
     await row.getByRole("button", { name: "测试打印", exact: true }).click();
-    await confirm();
+    await confirm('printer.test-print.confirm');
+    await stage("check.unknown-retains-request");
     await check("unknown-retains-request", () =>
       expect(
         row.getByRole("button", { name: "查询测试结果", exact: true }),
       ).toBeVisible(),
     );
+    await stage("printer.test-print.lookup");
     await row
       .getByRole("button", { name: "查询测试结果", exact: true })
       .click();
-    await confirm();
+    await confirm('printer.test-print.lookup-confirm');
+    await stage("check.unknown-lookup-readonly");
     await check("unknown-lookup-readonly", async () => {
       const f = await fixture();
       expect(f.submitted).toBe(1);
@@ -266,8 +784,10 @@ async function main() {
         ).length,
       ).toBe(1);
     });
+    await stage("printer.history.open");
     await row.getByRole("button", { name: "测试记录", exact: true }).click();
     dialog = page.locator(".el-dialog:visible");
+    await stage("check.unknown-history-and-no-paper-claim");
     await check("unknown-history-and-no-paper-claim", async () => {
       await expect(dialog).toContainText("待确认");
       await expect(dialog).toContainText(
@@ -275,27 +795,34 @@ async function main() {
       );
       expect(await dialog.textContent()).not.toContain("已出纸");
     });
+    await stage("printer.history.close");
     await dialog.locator(".el-dialog__header .is-hover").last().click();
+    await stage("printer.binding.unbind");
     await row.getByRole("button", { name: "解绑门店", exact: true }).click();
-    await confirm();
+    await confirm('printer.binding.unbind-confirm');
     await expect(row).toContainText("未绑定");
+    await stage("printer.deauthorize");
     await row.getByRole("button", { name: "取消授权", exact: true }).click();
-    await confirm();
+    await confirm('printer.deauthorize.confirm');
     await expect(
       row.getByRole("button", { name: "连接设备", exact: true }),
     ).toBeVisible();
+    await stage("printer.delete");
     await row.getByRole("button", { name: "删除", exact: true }).click();
-    await confirm();
+    await confirm('printer.delete.confirm');
     await expect(row).toHaveCount(0);
+    await stage("printer.deleted-filter.open");
     await page
       .locator(".el-form-item")
       .filter({ hasText: "设备范围" })
       .locator(".el-select")
       .click();
+    await stage("printer.deleted-filter.select");
     await page.getByRole("option", { name: "已删除", exact: true }).click();
     row = page
       .locator(".el-table__body-wrapper tr")
       .filter({ hasText: "owned-browser-edited" });
+    await stage("check.deleted-device-has-history-only");
     await check("deleted-device-has-history-only", async () => {
       await expect(row).toBeVisible();
       await expect(
@@ -303,17 +830,48 @@ async function main() {
       ).toBeVisible();
       expect(await row.getByRole("button").count()).toBe(1);
     });
+    await stage("printer.deleted-history.open");
     await row.getByRole("button", { name: "测试记录", exact: true }).click();
+    await stage("check.deleted-device-history-remains-readable");
     await check("deleted-device-history-remains-readable", () =>
       expect(page.locator(".el-dialog:visible")).toContainText("待确认"),
     );
+    await stage("artifact.history-screenshot");
     await page.screenshot({
       path: path.join(root, "printer-history.png"),
       fullPage: true,
     });
-    report.fixture = await fixture();
+    await stage("fixture.final-read");
+    const finalFixture = await fixture();
+    const finalOwnerMatched = finalFixture.owner === owner;
+    report.finalFixtureOwnerCheck = {
+      status: finalOwnerMatched ? "PASS" : "FAIL",
+      ownerMatched: finalOwnerMatched,
+    };
+    if (!finalOwnerMatched) throw Error("FINAL_FIXTURE_OWNER_MISMATCH");
+    const finalCacheMatched = validatePreviewCacheHandshake(finalFixture.cacheHandshake) &&
+      finalFixture.cacheHandshake.pid === previewCacheHandshake?.pid &&
+      finalFixture.cacheHandshake.metadataSha256 === previewCacheHandshake?.metadataSha256;
+    report.cacheHandshakeCheck.finalObserved = true;
+    if (!finalCacheMatched) {
+      report.cacheHandshakeCheck.status = 'FAIL';
+      throw Error('FINAL_PREVIEW_CACHE_HANDSHAKE_MISMATCH');
+    }
+    previewCacheHandshake = finalFixture.cacheHandshake;
+    report.fixture = {
+      configured: finalFixture.configured,
+      owner: finalFixture.owner,
+      optimizerReady: finalFixture.optimizerReady,
+      deviceCount: finalFixture.deviceCount,
+      submitted: finalFixture.submitted,
+      jobCount: finalFixture.jobCount,
+    };
     report.requests = requests;
-    report.blockedExternalOrigins = [...new Set(blocked)];
+    report.apiEvents = apiEvents;
+    report.blockedExternalRequestCount = blockedExternalRequestCount;
+    report.pageErrorCount = pageErrorCount;
+    report.consoleErrorCount = consoleErrorCount;
+    assertNoUnexpectedDocumentNavigation();
     report.result = "PASS";
   } catch (error) {
     report.reasonType = ["Error", "AssertionError", "TimeoutError"].includes(
@@ -324,21 +882,46 @@ async function main() {
     report.reasonCode = interrupted
       ? "CONTROLLED_INTERRUPTED"
       : "PRINTER_BROWSER_CHECK_FAILED";
+    report.failedStage = currentStage;
+    report.stageDurationMs = Math.max(0, Date.now() - currentStageStartedAt);
+    report.lastPassedCheck = checks.length ? checks[checks.length - 1] : null;
+    report.failureUiState = await failureUiState();
+    report.requests = requests;
+    report.apiEvents = apiEvents;
+    report.blockedExternalRequestCount = blockedExternalRequestCount;
+    report.pageErrorCount = pageErrorCount;
+    report.consoleErrorCount = consoleErrorCount;
     fs.writeFileSync(
       path.join(root, "failure-private.log"),
       String(error.stack),
       { mode: 0o600 },
     );
-    if (page)
-      await page
-        .screenshot({ path: path.join(root, "failure.png"), fullPage: true })
-        .catch(() => {});
+    if (page) {
+      try {
+        await page.screenshot({ path: path.join(root, 'failure.png'), fullPage: true });
+        report.failureScreenshot = { status: 'CAPTURED' };
+      } catch (screenshotError) {
+        report.failureScreenshot = {
+          status: 'UNAVAILABLE',
+          errorType: ['Error', 'TimeoutError'].includes(screenshotError.name) ? screenshotError.name : 'Error',
+        };
+        fs.writeFileSync(path.join(root, 'screenshot-private.log'), String(screenshotError.stack), { mode: 0o600 });
+      }
+    }
   } finally {
     const cleanupErrors = [];
     const closed = { contextClosed: !context, browserClosed: !browser };
     const serverExited = () =>
       !server || server.exitCode !== null || server.signalCode !== null;
     let portReleased = !server;
+    if (context && traceStarted) {
+      try {
+        await context.tracing.stop({ path: tracePath });
+        traceStarted = false;
+      } catch (error) {
+        cleanupErrors.push(String(error.stack));
+      }
+    }
     for (const [name, resource] of [
       ["contextClosed", context],
       ["browserClosed", browser],
@@ -367,6 +950,10 @@ async function main() {
     } catch (error) {
       cleanupErrors.push(String(error.stack));
     }
+    if (previewLogStream) {
+      await new Promise((resolve) => previewLogStream.end(resolve));
+      previewLogStream = null;
+    }
     if (cleanupErrors.length) {
       report.cleanup = "FAIL";
       report.result = "FAIL";
@@ -378,6 +965,19 @@ async function main() {
       );
     } else report.cleanup = "PASS";
     if (log !== undefined) fs.closeSync(log);
+    try {
+      finalizeCacheEvidence();
+    } catch (error) {
+      report.cacheEvidenceError = {
+        stage: cacheFinalizationStage,
+        errorType: ['Error','TypeError','RangeError','SyntaxError'].includes(error.name) ? error.name : 'Error',
+        code: typeof error.code === 'string' && /^[A-Z0-9_]+$/.test(error.code) ? error.code : null,
+      };
+      try {
+        fs.writeFileSync(path.join(root, 'cache-evidence-private.log'), String(error.stack || error), { mode: 0o600 });
+      } catch {}
+      report.result = 'FAIL';
+    }
     report.loopbackPort = port;
     report.resources = {
       owner,
@@ -386,8 +986,7 @@ async function main() {
       serverExited: serverExited(),
       portReleased,
       ownedLoopbackOnly: true,
-      ownershipHandshakeChecked:
-        !!report.fixture && report.fixture.owner === owner,
+      ownershipHandshakeChecked: report.finalFixtureOwnerCheck.status === "PASS",
     };
     report.sourceUnchanged =
       JSON.stringify(identity()) === JSON.stringify(source);
@@ -406,6 +1005,12 @@ async function main() {
           .update(fs.readFileSync(path.join(root, n)))
           .digest("hex"),
       }));
+    report.privateTrace = tracePath && fs.existsSync(tracePath)
+      ? {
+          name: path.basename(tracePath),
+          sha256: crypto.createHash('sha256').update(fs.readFileSync(tracePath)).digest('hex'),
+        }
+      : { status: 'UNAVAILABLE' };
     report.endedAt = Date.now() / 1000;
     report.complete = true;
     process.removeListener("SIGINT", interrupt);

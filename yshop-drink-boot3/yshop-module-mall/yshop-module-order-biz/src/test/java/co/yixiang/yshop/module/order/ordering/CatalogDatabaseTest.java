@@ -5,6 +5,8 @@ import static co.yixiang.yshop.module.product.service.catalog.CatalogOptions.*;
 
 import co.yixiang.yshop.framework.common.util.json.JsonUtils;
 import co.yixiang.yshop.module.product.service.catalog.CatalogOperationsService;
+import co.yixiang.yshop.module.product.service.catalog.BatchStockOperationsService;
+import co.yixiang.yshop.module.product.controller.admin.storeproduct.BatchStockOperationsController;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -13,17 +15,24 @@ import org.springframework.transaction.interceptor.TransactionInterceptor;
 import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Same production services and additive migration on H2 and disposable MySQL/InnoDB. */
 class CatalogDatabaseTest {
     OrderingDatabaseTest f;
     CatalogOperationsService catalog;
+    BatchStockOperationsService stockBatches;
     @BeforeEach void setup() throws Exception {
         f=new OrderingDatabaseTest(); f.setup();
         f.db.execute("DROP TABLE IF EXISTS yshop_product_operation");
+        f.db.execute("DROP TABLE IF EXISTS yshop_product_stock_batch");
         if(f.mysql) {
             String seed=Files.readString(f.boot.resolve("sql/yixiang-drink-open.sql"));
             for(String table:List.of("yshop_store_product_attr","yshop_store_product_attr_result")) {
@@ -33,6 +42,8 @@ class CatalogDatabaseTest {
             var tx=new TransactionTemplate(f.tm);
             String ddl=Files.readString(f.boot.resolve("sql/migrations/2026-10-08-product-catalog.sql"));
             tx.executeWithoutResult(s->{for(String p:ddl.split(";")) if(!p.isBlank()) f.db.execute(p);});
+            String batchDdl=Files.readString(f.boot.resolve("sql/migrations/2026-10-25-product-stock-batch.sql"));
+            tx.executeWithoutResult(s->{for(String p:batchDdl.split(";")) if(!p.isBlank()) f.db.execute(p);});
         } else {
             f.db.execute("ALTER TABLE yshop_store_product ADD COLUMN price DECIMAL(10,2)");
             for(String column:List.of("shop_name VARCHAR(100)","ot_price DECIMAL(10,2)","cost DECIMAL(10,2)","unit_name VARCHAR(20)","description TEXT","spec_type INT DEFAULT 0")) f.db.execute("ALTER TABLE yshop_store_product ADD COLUMN "+column);
@@ -43,11 +54,17 @@ class CatalogDatabaseTest {
             f.db.execute("ALTER TABLE yshop_store_product ADD COLUMN catalog_config TEXT");
             f.db.execute("ALTER TABLE yshop_store_product_attr_value ADD COLUMN is_show INT NOT NULL DEFAULT 1");
             f.db.execute("CREATE TABLE yshop_product_operation(operation_id CHAR(32) PRIMARY KEY,actor_id BIGINT,request_key VARCHAR(64),request_hash VARCHAR(64),product_id BIGINT,sku_id BIGINT,kind VARCHAR(16),before_value DECIMAL(18,2),after_value DECIMAL(18,2),reason VARCHAR(200),result_product_id BIGINT,create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,UNIQUE(actor_id,request_key))");
+            f.db.execute("ALTER TABLE yshop_product_operation ADD COLUMN batch_id CHAR(32)");
+            f.db.execute("ALTER TABLE yshop_product_operation ADD COLUMN delta_value INT");
+            f.db.execute("CREATE TABLE yshop_product_stock_batch(batch_id CHAR(32) PRIMARY KEY,actor_id BIGINT NOT NULL,request_key VARCHAR(64) NOT NULL,request_hash CHAR(64) NOT NULL,shop_id BIGINT NOT NULL,state VARCHAR(16) NOT NULL,result_json MEDIUMTEXT,applied_at TIMESTAMP,UNIQUE(actor_id,request_key))");
         }
         var access=f.access(103,false);
         var proxy=new ProxyFactory(new CatalogOperationsService(f.db,access));proxy.setProxyTargetClass(true);
         proxy.addAdvice(new TransactionInterceptor(f.tm,new AnnotationTransactionAttributeSource()));
         catalog=(CatalogOperationsService)proxy.getProxy();
+        var batchProxy=new ProxyFactory(new BatchStockOperationsService(f.db,access));batchProxy.setProxyTargetClass(true);
+        batchProxy.addAdvice(new TransactionInterceptor(f.tm,new AnnotationTransactionAttributeSource()));
+        stockBatches=(BatchStockOperationsService)batchProxy.getProxy();
     }
     @AfterEach void clear(){SecurityContextHolder.clearContext();}
     Option option(String id,String name,String price){return new Option(id,name,new BigDecimal(price),true,0);}
@@ -112,6 +129,509 @@ class CatalogDatabaseTest {
     @Test void productCopyIndependentAndIdempotent(){configured();String key=key();long dest=catalog.copy(1,2,2,key);assertEquals(dest,catalog.copy(1,2,2,key));assertEquals(0,n("SELECT stock FROM yshop_store_product WHERE id=?",dest));assertEquals(0,n("SELECT is_show FROM yshop_store_product WHERE id=?",dest));assertEquals(1,n("SELECT COUNT(*) FROM yshop_store_product_attr_value WHERE product_id=? AND id<>1",dest));long sku=f.db.queryForObject("SELECT id FROM yshop_store_product_attr_value WHERE product_id=?",Long.class,dest);catalog.adjustStock(dest,sku,0,8,"synthetic target restock",key());assertEquals(10,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));assertEquals(8,n("SELECT stock FROM yshop_store_product WHERE id=?",dest));assertThrows(RuntimeException.class,()->catalog.copy(1,2,1,key()));}
     @Test void batchAllOrNothingOnCrossStore(){f.access(101,false);assertThrows(RuntimeException.class,()->catalog.batch(List.of(1L,2L),0,null));assertEquals(2,n("SELECT COUNT(*) FROM yshop_store_product WHERE is_show=1"));}
     @Test void batchWrongCategoryRollsBack(){assertThrows(RuntimeException.class,()->catalog.batch(List.of(1L,2L),null,1L));assertEquals("2",f.db.queryForObject("SELECT cate_id FROM yshop_store_product WHERE id=2",String.class));}
+
+    private BatchStockOperationsService.LineInput line(long product,long sku,int expected,int delta){
+        return new BatchStockOperationsService.LineInput(product,sku,expected,delta);
+    }
+    private String batchKey(){return "batch_"+UUID.randomUUID().toString().replace("-","");}
+    private long secondSku(){
+        f.db.update("INSERT INTO yshop_store_product_attr_value(id,product_id,sku,stock,sales,price,cost"+(f.mysql?",ot_price,image,`unique`,is_show":"")+") VALUES(3,1,'SKU1-SECOND',5,4,1.23,0"+(f.mysql?",0,'','sku1-second-unique',1":"")+")");
+        f.db.update("UPDATE yshop_store_product SET stock=15 WHERE id=1");
+        return 3L;
+    }
+    private long count(String sql,Object... args){return f.db.queryForObject(sql,Long.class,args);}
+
+    private TransactionTemplate transaction(int isolationLevel) {
+        var transaction = new TransactionTemplate(f.tm);
+        if (isolationLevel != org.springframework.transaction.TransactionDefinition.ISOLATION_DEFAULT)
+            transaction.setIsolationLevel(isolationLevel);
+        return transaction;
+    }
+
+    private <T> Future<T> holdAtBeforeCommit(ExecutorService pool, Callable<T> action,
+            CountDownLatch ready, CountDownLatch release, AtomicLong connectionId, int isolationLevel) {
+        return pool.submit(() -> transaction(isolationLevel).execute(status -> {
+            connectionId.set(f.db.queryForObject("SELECT CONNECTION_ID()", Long.class));
+            T value;
+            try { value = action.call(); }
+            catch (Exception error) { throw new IllegalStateException("R4_HELD_TRANSACTION_ACTION_FAILED", error); }
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void beforeCommit(boolean readOnly) {
+                    ready.countDown();
+                    try {
+                        if (!release.await(40, TimeUnit.SECONDS))
+                            throw new IllegalStateException("R4_TRANSACTION_RELEASE_LATCH_TIMEOUT");
+                    } catch (InterruptedException error) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException("R4_TRANSACTION_RELEASE_INTERRUPTED", error);
+                    }
+                }
+            });
+            return value;
+        }));
+    }
+
+    private void awaitMysqlLockWait(AtomicLong firstConnectionId, AtomicLong competingConnectionId,
+            AtomicReference<Thread> competingThread, Future<?> competing, String boundary)
+            throws Exception {
+        assertTrue(firstConnectionId.get() > 0, boundary + ": first transaction must own a MySQL connection");
+        if (competingConnectionId != null && competingConnectionId.get() > 0)
+            assertNotEquals(firstConnectionId.get(), competingConnectionId.get(),
+                    boundary + ": transactions must use different MySQL connections");
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(25);
+        while (System.nanoTime() < deadline) {
+            if (competingConnectionId != null && competingConnectionId.get() > 0) {
+                Long waiting = f.db.queryForObject(
+                        "SELECT COUNT(*) FROM performance_schema.data_lock_waits w "
+                                + "JOIN performance_schema.threads t ON t.THREAD_ID=w.REQUESTING_THREAD_ID "
+                                + "WHERE t.PROCESSLIST_ID=?",
+                        Long.class, competingConnectionId.get());
+                if (waiting != null && waiting > 0) return;
+            }
+            var transactions = f.db.queryForList(
+                    "SELECT trx_mysql_thread_id,trx_state,trx_wait_started,trx_query "
+                            + "FROM information_schema.innodb_trx ORDER BY trx_mysql_thread_id");
+            var waitingCompetitors = transactions.stream()
+                    .filter(row -> !Objects.equals(((Number) row.get("trx_mysql_thread_id")).longValue(),
+                            firstConnectionId.get()))
+                    .filter(row -> "LOCK WAIT".equals(row.get("trx_state")))
+                    .toList();
+            if (!waitingCompetitors.isEmpty()) {
+                assertEquals(1, waitingCompetitors.size(), boundary + ": exactly one competing transaction must wait");
+                return;
+            }
+            if (competing.isDone()) {
+                try {
+                    Object result = competing.get();
+                    fail(boundary + ": competitor completed without an InnoDB lock wait; outcome=" + result);
+                } catch (ExecutionException error) {
+                    throw new AssertionError(boundary + ": competing transaction failed before lock wait", error.getCause());
+                }
+            }
+            Thread.sleep(20);
+        }
+        var active = f.db.queryForList(
+                "SELECT trx_mysql_thread_id,trx_state,trx_wait_started,trx_query "
+                        + "FROM information_schema.innodb_trx ORDER BY trx_mysql_thread_id");
+        var lockWaits = f.db.queryForList(
+                "SELECT waiting.PROCESSLIST_ID AS waiting_connection,blocking.PROCESSLIST_ID AS blocking_connection, "
+                        + "requested.OBJECT_NAME,requested.INDEX_NAME,requested.LOCK_TYPE,requested.LOCK_MODE "
+                        + "FROM performance_schema.data_lock_waits waits "
+                        + "JOIN performance_schema.threads waiting ON waiting.THREAD_ID=waits.REQUESTING_THREAD_ID "
+                        + "JOIN performance_schema.threads blocking ON blocking.THREAD_ID=waits.BLOCKING_THREAD_ID "
+                        + "JOIN performance_schema.data_locks requested ON requested.ENGINE_LOCK_ID=waits.REQUESTING_ENGINE_LOCK_ID");
+        fail(boundary + ": no InnoDB LOCK WAIT observed within the bounded window; "
+                + "firstConnection=" + firstConnectionId.get() + "; competingConnection="
+                + (competingConnectionId == null ? "service-managed" : competingConnectionId.get())
+                + "; competingThread=" + (competingThread == null || competingThread.get() == null
+                        ? "unavailable" : Arrays.toString(competingThread.get().getStackTrace()))
+                + "; activeTransactions=" + active + "; performanceSchemaLockWaits=" + lockWaits);
+    }
+
+    private boolean tryBatchApply(long expectedFirst, long expectedSecond, long secondSku, String key) {
+        f.access(103, false);
+        var lines = secondSku > 0
+                ? List.of(line(1, 1, (int) expectedFirst, 3), line(1, secondSku, (int) expectedSecond, -2))
+                : List.of(line(1, 1, (int) expectedFirst, 3));
+        stockBatches.apply(1, lines, "controlled inventory race", key);
+        return true;
+    }
+
+    private void restoreSingleSkuFixture() {
+        assertEquals(0, count("SELECT COUNT(*) FROM yshop_order_inventory_reservation WHERE released_at IS NULL"));
+        f.db.update("UPDATE yshop_store_product_attr_value SET stock=10,sales=0 WHERE id=1");
+        f.db.update("UPDATE yshop_store_product SET stock=10,sales=0 WHERE id=1");
+    }
+
+    private void runOrderReservationRace(boolean batchCommitsFirst) throws Exception {
+        restoreSingleSkuFixture();
+        long headersBefore = count("SELECT COUNT(*) FROM yshop_product_stock_batch");
+        long auditsBefore = count("SELECT COUNT(*) FROM yshop_product_operation WHERE batch_id IS NOT NULL");
+        String batchKey = batchKey();
+        var orderRequest = f.request();
+        orderRequest.setNumber(List.of("2"));
+        var pool = Executors.newFixedThreadPool(2);
+        var firstReady = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var competingStarted = new CountDownLatch(1);
+        var firstConnection = new AtomicLong();
+        var competingConnection = new AtomicLong();
+        Future<?> first = null;
+        Future<?> competing = null;
+        try {
+            if (batchCommitsFirst) {
+                first = holdAtBeforeCommit(pool, () -> {
+                    f.access(103, false);
+                    return stockBatches.apply(1, List.of(line(1, 1, 10, 3)), "controlled order race", batchKey);
+                }, firstReady, releaseFirst, firstConnection,
+                        org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
+                assertTrue(firstReady.await(15, TimeUnit.SECONDS), "batch transaction must reach pre-commit with its row locks held");
+                competing = pool.submit(() -> transaction(org.springframework.transaction.TransactionDefinition.ISOLATION_DEFAULT).execute(status -> {
+                    competingConnection.set(f.db.queryForObject("SELECT CONNECTION_ID()", Long.class));
+                    competingStarted.countDown();
+                    return f.place(orderRequest);
+                }));
+            } else {
+                first = holdAtBeforeCommit(pool, () -> f.place(orderRequest),
+                        firstReady, releaseFirst, firstConnection,
+                        org.springframework.transaction.TransactionDefinition.ISOLATION_DEFAULT);
+                assertTrue(firstReady.await(15, TimeUnit.SECONDS), "order transaction must reach pre-commit with its reservation locks held");
+                competing = pool.submit(() -> {
+                    try {
+                        return transaction(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED).execute(status -> {
+                            competingConnection.set(f.db.queryForObject("SELECT CONNECTION_ID()", Long.class));
+                            f.access(103, false);
+                            competingStarted.countDown();
+                            return tryBatchApply(10, 0, 0, batchKey);
+                        });
+                    } catch (co.yixiang.yshop.framework.common.exception.ServiceException error) {
+                        if (!"STOCK_CHANGED_REFRESH_REQUIRED".equals(error.getMessage())) throw error;
+                        return false;
+                    }
+                });
+            }
+            assertTrue(competingStarted.await(10, TimeUnit.SECONDS), "competing business transaction must start");
+            awaitMysqlLockWait(firstConnection, competingConnection, null, competing,
+                    batchCommitsFirst ? "batch-before-order" : "order-before-batch");
+            releaseFirst.countDown();
+            Object firstResult = first.get(30, TimeUnit.SECONDS);
+            Object competingResult = competing.get(30, TimeUnit.SECONDS);
+            boolean batchApplied = batchCommitsFirst || Boolean.TRUE.equals(competingResult);
+            String orderId = batchCommitsFirst ? (String) competingResult : (String) firstResult;
+            assertEquals(batchCommitsFirst, batchApplied);
+            assertEquals(batchCommitsFirst ? 11 : 8, count("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+            assertEquals(batchCommitsFirst ? 11 : 8, count("SELECT stock FROM yshop_store_product WHERE id=1"));
+            assertEquals(2, count("SELECT sales FROM yshop_store_product_attr_value WHERE id=1"));
+            assertEquals(2, count("SELECT quantity FROM yshop_order_inventory_reservation WHERE order_id=?", orderId));
+            assertEquals(headersBefore + (batchCommitsFirst ? 1 : 0), count("SELECT COUNT(*) FROM yshop_product_stock_batch"));
+            assertEquals(auditsBefore + (batchCommitsFirst ? 1 : 0), count("SELECT COUNT(*) FROM yshop_product_operation WHERE batch_id IS NOT NULL"));
+            assertEquals(0, count("SELECT COUNT(*) FROM yshop_store_order WHERE order_id=? AND paid<>0", orderId));
+
+            f.orders.cancel(orderId, 1L, false);
+            f.orders.cancel(orderId, 1L, false);
+            assertEquals(batchCommitsFirst ? 13 : 10, count("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+            assertEquals(batchCommitsFirst ? 13 : 10, count("SELECT stock FROM yshop_store_product WHERE id=1"));
+            assertEquals(0, count("SELECT sales FROM yshop_store_product_attr_value WHERE id=1"));
+            assertEquals(1, count("SELECT COUNT(*) FROM yshop_order_inventory_reservation WHERE order_id=? AND released_at IS NOT NULL", orderId));
+            assertEquals(1, count("SELECT deleted FROM yshop_store_order WHERE order_id=?", orderId));
+        } finally {
+            releaseFirst.countDown();
+            pool.shutdownNow();
+            assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS));
+        }
+    }
+
+    private void runBatchReleaseRace(boolean expiryRelease, boolean batchCommitsFirst) throws Exception {
+        restoreSingleSkuFixture();
+        long headersBefore = count("SELECT COUNT(*) FROM yshop_product_stock_batch");
+        long auditsBefore = count("SELECT COUNT(*) FROM yshop_product_operation WHERE batch_id IS NOT NULL");
+        String batchKey = batchKey();
+        var orderRequest = f.request();
+        orderRequest.setNumber(List.of("2"));
+        String orderId = f.place(orderRequest);
+        if (expiryRelease)
+            f.db.update("UPDATE yshop_store_order SET create_time='2026-10-08 10:00:00' WHERE order_id=?", orderId);
+        assertEquals(8, count("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(2, count("SELECT quantity FROM yshop_order_inventory_reservation WHERE order_id=?", orderId));
+
+        Callable<Boolean> releaseOrder = () -> {
+            if (expiryRelease) {
+                f.orders.cancel(orderId, null, true);
+                return true;
+            }
+            f.orders.cancel(orderId, 1L, false);
+            return true;
+        };
+        var pool = Executors.newFixedThreadPool(2);
+        var firstReady = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var competingStarted = new CountDownLatch(1);
+        var firstConnection = new AtomicLong();
+        var competingConnection = new AtomicLong();
+        var competingThread = new AtomicReference<Thread>();
+        Future<?> first = null;
+        Future<?> competing = null;
+        try {
+            if (batchCommitsFirst) {
+                first = holdAtBeforeCommit(pool, () -> {
+                    f.access(103, false);
+                    return stockBatches.apply(1, List.of(line(1, 1, 8, 3)), "controlled release race", batchKey);
+                }, firstReady, releaseFirst, firstConnection,
+                        org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
+                assertTrue(firstReady.await(15, TimeUnit.SECONDS), "batch transaction must hold SKU/product locks before release starts");
+                competing = pool.submit(() -> {
+                    competingThread.set(Thread.currentThread());
+                    return transaction(
+                        org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED).execute(status -> {
+                    competingConnection.set(f.db.queryForObject("SELECT CONNECTION_ID()", Long.class));
+                    competingStarted.countDown();
+                    try { return releaseOrder.call(); }
+                    catch (Exception error) { throw new IllegalStateException(error); }
+                });
+                });
+            } else {
+                first = holdAtBeforeCommit(pool, releaseOrder, firstReady, releaseFirst, firstConnection,
+                        org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
+                assertTrue(firstReady.await(15, TimeUnit.SECONDS), "release transaction must hold order/product/SKU locks before batch starts");
+                competing = pool.submit(() -> {
+                    competingThread.set(Thread.currentThread());
+                    try {
+                        return transaction(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED).execute(status -> {
+                            competingConnection.set(f.db.queryForObject("SELECT CONNECTION_ID()", Long.class));
+                            f.access(103, false);
+                            competingStarted.countDown();
+                            return tryBatchApply(8, 0, 0, batchKey);
+                        });
+                    } catch (co.yixiang.yshop.framework.common.exception.ServiceException error) {
+                        if (!"STOCK_CHANGED_REFRESH_REQUIRED".equals(error.getMessage())) throw error;
+                        return false;
+                    }
+                });
+            }
+            assertTrue(competingStarted.await(10, TimeUnit.SECONDS), "competing business transaction must start");
+            awaitMysqlLockWait(firstConnection, competingConnection, competingThread, competing,
+                    (expiryRelease ? "expiry" : "active-cancel") + (batchCommitsFirst ? "-before-batch-release" : "-before-release-batch"));
+            releaseFirst.countDown();
+            Object firstResult = first.get(30, TimeUnit.SECONDS);
+            Object competingResult = competing.get(30, TimeUnit.SECONDS);
+            boolean batchApplied = batchCommitsFirst || Boolean.TRUE.equals(competingResult);
+            assertEquals(batchCommitsFirst, batchApplied);
+            assertEquals(batchCommitsFirst ? 13 : 10, count("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+            assertEquals(batchCommitsFirst ? 13 : 10, count("SELECT stock FROM yshop_store_product WHERE id=1"));
+            assertEquals(0, count("SELECT sales FROM yshop_store_product_attr_value WHERE id=1"));
+            assertEquals(1, count("SELECT COUNT(*) FROM yshop_order_inventory_reservation WHERE order_id=? AND released_at IS NOT NULL", orderId));
+            assertEquals(1, count("SELECT deleted FROM yshop_store_order WHERE order_id=?", orderId));
+            assertEquals(headersBefore + (batchCommitsFirst ? 1 : 0), count("SELECT COUNT(*) FROM yshop_product_stock_batch"));
+            assertEquals(auditsBefore + (batchCommitsFirst ? 1 : 0), count("SELECT COUNT(*) FROM yshop_product_operation WHERE batch_id IS NOT NULL"));
+            assertEquals(count("SELECT SUM(stock) FROM yshop_store_product_attr_value WHERE product_id=1"),
+                    count("SELECT stock FROM yshop_store_product WHERE id=1"));
+            if (expiryRelease) assertEquals(0, f.orders.expireBatch());
+            else f.orders.cancel(orderId, 1L, false);
+            assertEquals(1, count("SELECT COUNT(*) FROM yshop_order_inventory_reservation WHERE order_id=? AND released_at IS NOT NULL", orderId));
+            assertEquals(batchCommitsFirst ? 13 : 10, count("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        } finally {
+            releaseFirst.countDown();
+            pool.shutdownNow();
+            assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test void batchStockPreviewIsReadOnlyAndReportsExpectedStockConflict(){
+        var valid=stockBatches.preview(1,List.of(line(1,1,10,3))," restock ");
+        assertTrue(valid.eligible());assertEquals(10L,valid.rows().get(0).currentStock());assertEquals(13L,valid.rows().get(0).afterStock());
+        var stale=stockBatches.preview(1,List.of(line(1,1,9,3)),"restock");
+        assertFalse(stale.eligible());assertEquals("STOCK_CHANGED_REFRESH_REQUIRED",stale.rows().get(0).conflictCode());
+        assertEquals(10,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(10,n("SELECT stock FROM yshop_store_product WHERE id=1"));
+        assertEquals(0,count("SELECT COUNT(*) FROM yshop_product_stock_batch"));
+        assertEquals(0,count("SELECT COUNT(*) FROM yshop_product_operation"));
+    }
+
+    @Test void batchStockAppliesMultipleSkusAtomicallyAndReplaysNormalizedRequest(){
+        long sku2=secondSku();String key=batchKey();var lines=List.of(line(1,1,10,3),line(1,sku2,5,-2));
+        var first=stockBatches.apply(1,lines," shelf restock ",key);
+        var replay=stockBatches.apply(1,List.of(lines.get(1),lines.get(0)),"shelf restock",key);
+        assertEquals(first.batchId(),replay.batchId());assertEquals("APPLIED",replay.state());
+        assertEquals(13,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(3,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=3"));
+        assertEquals(16,n("SELECT stock FROM yshop_store_product WHERE id=1"));
+        assertEquals(0,n("SELECT sales FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(4,n("SELECT sales FROM yshop_store_product_attr_value WHERE id=3"));
+        assertEquals(2,count("SELECT COUNT(*) FROM yshop_product_operation WHERE batch_id=?",first.batchId()));
+        assertEquals(List.of(-2,3),f.db.queryForList("SELECT delta_value FROM yshop_product_operation WHERE batch_id=? ORDER BY delta_value",Integer.class,first.batchId()));
+        assertEquals("CONFIRMED",stockBatches.result(key).status());
+        assertThrows(RuntimeException.class,()->stockBatches.apply(1,lines,"different reason",key));
+        assertEquals(1,count("SELECT COUNT(*) FROM yshop_product_stock_batch"));
+        assertEquals(2,count("SELECT COUNT(*) FROM yshop_product_operation"));
+    }
+
+    @Test void batchStockStaleSecondSkuRejectsEveryLineWithoutAudit(){
+        long sku2=secondSku();f.db.update("UPDATE yshop_store_product_attr_value SET stock=4 WHERE id=?",sku2);
+        f.db.update("UPDATE yshop_store_product SET stock=14 WHERE id=1");
+        var error=assertThrows(co.yixiang.yshop.framework.common.exception.ServiceException.class,
+                ()->stockBatches.apply(1,List.of(line(1,1,10,3),line(1,sku2,5,-2)),"reconcile",batchKey()));
+        assertEquals("STOCK_CHANGED_REFRESH_REQUIRED",error.getMessage());
+        assertEquals(10,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(4,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=3"));
+        assertEquals(14,n("SELECT stock FROM yshop_store_product WHERE id=1"));
+        assertEquals(0,count("SELECT COUNT(*) FROM yshop_product_stock_batch"));
+        assertEquals(0,count("SELECT COUNT(*) FROM yshop_product_operation"));
+    }
+
+    @Test void batchStockSecondAuditFailureRollsBackHeaderAndFirstSku(){
+        long sku2=secondSku();
+        f.db.execute("ALTER TABLE yshop_product_operation ADD CONSTRAINT synthetic_batch_second_audit CHECK(sku_id<>"+sku2+")");
+        assertThrows(RuntimeException.class,()->stockBatches.apply(1,List.of(line(1,1,10,3),line(1,sku2,5,-2)),"audit fail",batchKey()));
+        assertEquals(10,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(5,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=3"));
+        assertEquals(15,n("SELECT stock FROM yshop_store_product WHERE id=1"));
+        assertEquals(0,count("SELECT COUNT(*) FROM yshop_product_stock_batch"));
+        assertEquals(0,count("SELECT COUNT(*) FROM yshop_product_operation"));
+    }
+
+    @Test void batchStockSameKeyConcurrentCallsApplyExactlyOnce() throws Exception {
+        var requestKey=batchKey();var lines=List.of(line(1,1,10,3));
+        var batchIds=new java.util.concurrent.CopyOnWriteArrayList<String>();
+        var results=f.parallel(2,()->{f.access(103,false);batchIds.add(stockBatches.apply(1,lines,"concurrent restock",requestKey).batchId());return true;});
+        assertEquals(List.of(true,true),results);assertEquals(2,batchIds.size());assertEquals(batchIds.get(0),batchIds.get(1));
+        assertEquals(13,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(13,n("SELECT stock FROM yshop_store_product WHERE id=1"));
+        assertEquals(1,count("SELECT COUNT(*) FROM yshop_product_stock_batch"));
+        assertEquals(1,count("SELECT COUNT(*) FROM yshop_product_operation"));
+    }
+
+    @Test void batchStockDifferentKeysCompeteOnExpectedValueWithoutPartialWrite() throws Exception {
+        if (!f.mysql) return; // The same method is invoked by the H2 manifest; MySQL evidence is collected separately.
+        long sku2 = secondSku();
+        long headersBefore = count("SELECT COUNT(*) FROM yshop_product_stock_batch");
+        long auditsBefore = count("SELECT COUNT(*) FROM yshop_product_operation WHERE batch_id IS NOT NULL");
+        var lines = List.of(line(1, 1, 10, 3), line(1, sku2, 5, -2));
+        String winnerKey = batchKey(), loserKey = batchKey();
+        var pool = Executors.newFixedThreadPool(2);
+        var firstReady = new CountDownLatch(1);
+        var releaseFirst = new CountDownLatch(1);
+        var competingStarted = new CountDownLatch(1);
+        var firstConnection = new AtomicLong();
+        var competingConnection = new AtomicLong();
+        Future<?> first = null, competing = null;
+        try {
+            first = holdAtBeforeCommit(pool, () -> {
+                f.access(103, false);
+                return stockBatches.apply(1, lines, "controlled two-SKU race", winnerKey);
+            }, firstReady, releaseFirst, firstConnection,
+                    org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
+            assertTrue(firstReady.await(15, TimeUnit.SECONDS), "first multi-SKU batch must reach pre-commit with locks held");
+            competing = pool.submit(() -> {
+                try {
+                    return transaction(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED).execute(status -> {
+                        competingConnection.set(f.db.queryForObject("SELECT CONNECTION_ID()", Long.class));
+                        assertTrue(competingConnection.get() > 0, "competitor must use an independent MySQL connection");
+                        f.access(103, false);
+                        competingStarted.countDown();
+                        return tryBatchApply(10, 5, sku2, loserKey);
+                    });
+                } catch (co.yixiang.yshop.framework.common.exception.ServiceException error) {
+                    if (!"STOCK_CHANGED_REFRESH_REQUIRED".equals(error.getMessage())) throw error;
+                    return false;
+                }
+            });
+            assertTrue(competingStarted.await(10, TimeUnit.SECONDS), "competing multi-SKU transaction must start");
+            awaitMysqlLockWait(firstConnection, competingConnection, null, competing, "two-key-two-SKU-batch");
+            releaseFirst.countDown();
+            var applied = (BatchStockOperationsService.BatchResult) first.get(30, TimeUnit.SECONDS);
+            assertFalse((Boolean) competing.get(30, TimeUnit.SECONDS));
+            assertEquals("APPLIED", applied.state());
+            assertEquals(headersBefore + 1, count("SELECT COUNT(*) FROM yshop_product_stock_batch"));
+            assertEquals(auditsBefore + 2, count("SELECT COUNT(*) FROM yshop_product_operation WHERE batch_id IS NOT NULL"));
+            assertEquals(1, count("SELECT COUNT(*) FROM yshop_product_stock_batch WHERE batch_id=? AND request_key=? AND state='APPLIED'", applied.batchId(), winnerKey));
+            assertEquals(0, count("SELECT COUNT(*) FROM yshop_product_stock_batch WHERE request_key=?", loserKey));
+            assertEquals(2, count("SELECT COUNT(*) FROM yshop_product_operation WHERE batch_id=?", applied.batchId()));
+            assertEquals(0, count("SELECT COUNT(*) FROM yshop_product_operation WHERE actor_id=103 AND request_key=?", loserKey));
+            assertEquals(13, count("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+            assertEquals(3, count("SELECT stock FROM yshop_store_product_attr_value WHERE id=?", sku2));
+            assertEquals(16, count("SELECT stock FROM yshop_store_product WHERE id=1"));
+            assertEquals(0, count("SELECT sales FROM yshop_store_product_attr_value WHERE id=1"));
+            assertEquals(4, count("SELECT sales FROM yshop_store_product_attr_value WHERE id=?", sku2));
+            assertEquals(count("SELECT SUM(stock) FROM yshop_store_product_attr_value WHERE product_id=1"),
+                    count("SELECT stock FROM yshop_store_product WHERE id=1"));
+        } finally {
+            releaseFirst.countDown();
+            if (pool != null) {
+                pool.shutdownNow();
+                assertTrue(pool.awaitTermination(10, TimeUnit.SECONDS));
+            }
+        }
+    }
+
+    @Test void batchStockRacesOrderReservationInBothLockOrders() throws Exception {
+        if (!f.mysql) return; // MySQL/InnoDB is the only engine that can prove observed lock waits.
+        runOrderReservationRace(true);
+        runOrderReservationRace(false);
+    }
+
+    @Test void batchStockRacesActiveCancellationInBothLockOrders() throws Exception {
+        if (!f.mysql) return; // MySQL/InnoDB is the only engine that can prove observed lock waits.
+        runBatchReleaseRace(false, true);
+        runBatchReleaseRace(false, false);
+    }
+
+    @Test void batchStockRacesExpiryReleaseInBothLockOrders() throws Exception {
+        if (!f.mysql) return; // MySQL/InnoDB is the only engine that can prove observed lock waits.
+        runBatchReleaseRace(true, true);
+        runBatchReleaseRace(true, false);
+    }
+
+    @Test void batchStockRejectsInvalidAndCrossStoreRequestsWithoutDisclosureOrWrites(){
+        assertThrows(RuntimeException.class,()->stockBatches.preview(1,List.of(),"empty"));
+        assertThrows(RuntimeException.class,()->stockBatches.preview(1,List.of(line(1,1,10,1),line(1,1,10,2)),"duplicate"));
+        var tooMany=new ArrayList<BatchStockOperationsService.LineInput>();for(int i=0;i<101;i++)tooMany.add(line(1,i+1,0,1));
+        assertThrows(RuntimeException.class,()->stockBatches.preview(1,tooMany,"too many"));
+        f.access(101,false);
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                ()->stockBatches.preview(1,List.of(line(1,1,10,1),line(2,2,10,1)),"cross-store"));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                ()->stockBatches.apply(1,List.of(line(1,1,10,1),line(2,2,10,1)),"cross-store",batchKey()));
+        assertEquals(10,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(10,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=2"));
+        assertEquals(0,count("SELECT COUNT(*) FROM yshop_product_stock_batch"));
+        assertEquals(0,count("SELECT COUNT(*) FROM yshop_product_operation"));
+    }
+
+    @Test void batchStockSupportsExactlyOneHundredUniqueSkus(){
+        for(int id=3;id<=101;id++){
+            if(f.mysql)f.db.update("INSERT INTO yshop_store_product_attr_value(id,product_id,sku,stock,sales,price,cost,ot_price,image,`unique`,is_show) VALUES(?,1,?,0,0,1.23,0,0,'',?,1)",id,"SKU-"+id,"unique-"+id);
+            else f.db.update("INSERT INTO yshop_store_product_attr_value(id,product_id,sku,stock,sales,price,cost) VALUES(?,1,?,0,0,1.23,0)",id,"SKU-"+id);
+        }
+        var lines=new ArrayList<BatchStockOperationsService.LineInput>();
+        lines.add(line(1,1,10,1));for(int id=3;id<=101;id++)lines.add(line(1,id,0,1));
+        var result=stockBatches.apply(1,lines,"one hundred sku restock",batchKey());
+        assertEquals(100,result.lines().size());assertEquals(110,n("SELECT SUM(stock) FROM yshop_store_product_attr_value WHERE product_id=1"));
+        assertEquals(110,n("SELECT stock FROM yshop_store_product WHERE id=1"));
+        assertEquals(100,count("SELECT COUNT(*) FROM yshop_product_operation WHERE batch_id=?",result.batchId()));
+    }
+
+    @Test void batchStockPreservesReservationAndHistoricalOrderSnapshot(){
+        var order=f.request();order.setNumber(List.of("2"));String orderId=f.place(order);
+        String snapshot=f.db.queryForObject("SELECT cart_info FROM yshop_store_order_cart_info WHERE order_id=?",String.class,orderId);
+        assertEquals(8,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        var result=stockBatches.apply(1,List.of(line(1,1,8,3)),"post reservation restock",batchKey());
+        assertEquals(11,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        f.orders.cancel(orderId,1L,false);f.orders.cancel(orderId,1L,false);
+        assertEquals(13,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(13,n("SELECT stock FROM yshop_store_product WHERE id=1"));
+        assertEquals(snapshot,f.db.queryForObject("SELECT cart_info FROM yshop_store_order_cart_info WHERE order_id=?",String.class,orderId));
+        assertEquals(1,count("SELECT COUNT(*) FROM yshop_product_operation WHERE batch_id=?",result.batchId()));
+        assertEquals(2,n("SELECT quantity FROM yshop_order_inventory_reservation WHERE order_id=?",orderId));
+    }
+
+    @Test void batchStockResultAndReplayRequireCurrentShopPermission(){
+        var key=batchKey();stockBatches.apply(1,List.of(line(1,1,10,1)),"permission check",key);
+        f.db.update("UPDATE yshop_store_shop SET admin_id='101' WHERE id=1");
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,()->stockBatches.result(key));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,()->stockBatches.apply(1,List.of(line(1,1,10,1)),"permission check",key));
+        f.access(104,false);
+        assertEquals("UNCONFIRMED",stockBatches.result(key).status());
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+                ()->stockBatches.apply(1,List.of(line(1,1,10,1)),"permission check",key));
+        assertEquals(11,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(1,count("SELECT COUNT(*) FROM yshop_product_stock_batch"));
+    }
+    @ParameterizedTest @ValueSource(strings={"\"10\"","true","10.5","2147483648"})
+    void batchStockApiRejectsNonIntegerOrOverflowQuantities(String value){
+        String json="{\"shopId\":1,\"lines\":[{\"productId\":1,\"skuId\":1,\"expectedStock\":"+value+",\"delta\":1}],\"reason\":\"strict integer\"}";
+        assertThrows(RuntimeException.class,()->JsonUtils.parseObject(json,BatchStockOperationsController.PreviewRequest.class));
+    }
+    @Test void batchStockSameKeyRejectsEveryChangedSemanticField(){
+        var key=batchKey();var original=List.of(line(1,1,10,1));
+        stockBatches.apply(1,original,"semantic key",key);
+        assertThrows(RuntimeException.class,()->stockBatches.apply(1,List.of(line(1,1,9,1)),"semantic key",key));
+        assertThrows(RuntimeException.class,()->stockBatches.apply(1,List.of(line(1,1,10,2)),"semantic key",key));
+        assertThrows(RuntimeException.class,()->stockBatches.apply(2,List.of(line(2,2,10,1)),"semantic key",key));
+        assertThrows(RuntimeException.class,()->stockBatches.apply(1,original,"different reason",key));
+        assertEquals(11,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));
+        assertEquals(1,count("SELECT COUNT(*) FROM yshop_product_stock_batch"));
+        assertEquals(1,count("SELECT COUNT(*) FROM yshop_product_operation"));
+    }
     @Test void priceDoesNotChangeInventoryOrOldSnapshot(){String id=f.place(f.request());String old=f.db.queryForObject("SELECT cart_info FROM yshop_store_order_cart_info WHERE order_id=?",String.class,id);catalog.price(1,1,new BigDecimal("20"),0,"synthetic",key());assertEquals(9,n("SELECT stock FROM yshop_store_product_attr_value WHERE id=1"));assertEquals(old,f.db.queryForObject("SELECT cart_info FROM yshop_store_order_cart_info WHERE order_id=?",String.class,id));}
     @RepeatedTest(20) void twentyBuyersLastUnit() throws Exception {configured();f.db.update("UPDATE yshop_store_product SET stock=1 WHERE id=1");f.db.update("UPDATE yshop_store_product_attr_value SET stock=1 WHERE id=1");var r=f.parallel(20,()->{try{f.place(request(hot(),1));return true;}catch(co.yixiang.yshop.framework.common.exception.ServiceException ex){return false;}});assertEquals(1,Collections.frequency(r,true));assertEquals(0,n("SELECT stock FROM yshop_store_product WHERE id=1"));}
     @RepeatedTest(20) void priceChangeVersusTwentyOrders() throws Exception {

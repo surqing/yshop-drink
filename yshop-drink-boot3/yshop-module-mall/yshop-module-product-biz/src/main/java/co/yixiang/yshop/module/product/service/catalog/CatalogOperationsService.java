@@ -90,7 +90,7 @@ public class CatalogOperationsService {
     }
     public List<Map<String,Object>> history(long id) {
         access.requireProduct(id);
-        return jdbc.queryForList("SELECT operation_id,actor_id,sku_id,kind,before_value,after_value,reason,result_product_id,create_time FROM yshop_product_operation WHERE product_id=? ORDER BY create_time DESC,operation_id DESC LIMIT 200",id);
+        return jdbc.queryForList("SELECT operation_id,actor_id,sku_id,kind,before_value,delta_value,after_value,reason,result_product_id,batch_id,create_time FROM yshop_product_operation WHERE product_id=? ORDER BY create_time DESC,operation_id DESC LIMIT 200",id);
     }
     public Map<String,Object> configuration(long id) {
         access.requireProduct(id);

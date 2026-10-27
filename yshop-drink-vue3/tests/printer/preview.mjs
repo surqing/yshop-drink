@@ -1,6 +1,9 @@
 /** Start a loopback-only browser fixture for the real Vue page; external APIs are never used. */
 import { createServer } from 'vite'
 import { createServer as createPortProbe } from 'node:net'
+import { readFileSync, realpathSync, unwatchFile, watchFile } from 'node:fs'
+import { isAbsolute, join, resolve } from 'node:path'
+import { createHash } from 'node:crypto'
 
 const requestedPort = process.env.YSHOP_PRINTER_BROWSER_PORT
 const port = requestedPort
@@ -36,8 +39,85 @@ const shops = [
   { id: 1, name: '测试门店一' },
   { id: 2, name: '测试门店二' }
 ]
+let markOptimizerReady
+let optimizerReadyResolved = false
+const optimizerReady = new Promise((resolve) => { markOptimizerReady = resolve })
+const resolveOptimizerReady = () => {
+  if (optimizerReadyResolved) return
+  optimizerReadyResolved = true
+  markOptimizerReady()
+}
+const bypassOptimizerGate = process.env.YSHOP_PRINTER_BROWSER_TEST_BYPASS_OPTIMIZER_READY === 'test-only'
+const awaitOptimizerReady = () => bypassOptimizerGate ? Promise.resolve() : optimizerReady
+const requestedCacheDir = process.env.YSHOP_PRINTER_BROWSER_CACHE_DIR
+if (!requestedCacheDir || !isAbsolute(requestedCacheDir))
+  throw new Error('PRINTER_PREVIEW_CACHE_DIR_REQUIRED')
+const expectedCacheDir = realpathSync(resolve(requestedCacheDir))
+const cacheOwnerId = process.env.YSHOP_PRINTER_BROWSER_CACHE_OWNER_ID
+const ownerMarkerPath = join(expectedCacheDir, '.r4-printer-cache-owner.json')
+const ownerMarker = JSON.parse(readFileSync(ownerMarkerPath, 'utf8'))
+if (!/^[a-f0-9]{32}$/.test(cacheOwnerId || '') || ownerMarker.cacheOwnerId !== cacheOwnerId ||
+    ownerMarker.cacheDir !== expectedCacheDir ||
+    ownerMarker.sourceSha !== process.env.YSHOP_PRINTER_BROWSER_SOURCE_SHA ||
+    ownerMarker.sourceDigest !== process.env.YSHOP_PRINTER_BROWSER_SOURCE_DIGEST)
+  throw new Error('PRINTER_PREVIEW_CACHE_OWNER_MISMATCH')
+const validMetadata = (metadata) => metadata &&
+  ['hash', 'configHash', 'lockfileHash', 'browserHash'].every((key) => typeof metadata[key] === 'string' && metadata[key].length > 0)
+const readValidMetadata = (metadataPath) => {
+  try {
+    const bytes = readFileSync(metadataPath)
+    const metadata = JSON.parse(bytes.toString('utf8'))
+    return validMetadata(metadata) ? { bytes, metadata } : null
+  } catch {
+    return null
+  }
+}
+let cacheHandshake = null
+const waitForOptimizerMetadata = (metadataPath) => new Promise((resolve, reject) => {
+  if (readValidMetadata(metadataPath)) return resolve()
+  const onChange = (current) => {
+    if (!current.isFile() || !readValidMetadata(metadataPath)) return
+    clearTimeout(deadline)
+    unwatchFile(metadataPath, onChange)
+    resolve()
+  }
+  const deadline = setTimeout(() => {
+    unwatchFile(metadataPath, onChange)
+    reject(new Error('PRINTER_PREVIEW_OPTIMIZER_METADATA_TIMEOUT'))
+  }, 60_000)
+  watchFile(metadataPath, { interval: 100, persistent: false }, onChange)
+})
 
 const server = await createServer({
+  cacheDir: expectedCacheDir,
+  optimizeDeps: {
+    entries: ['tests/printer/preview.html'],
+    holdUntilCrawlEnd: false,
+    include: [
+      'element-plus/es/components/base/style/css',
+      'element-plus/es/components/loading/style/css',
+      'element-plus/es/components/tabs/style/css',
+      'element-plus/es/components/tab-pane/style/css',
+      'element-plus/es/components/scrollbar/style/css',
+      'element-plus/es/components/message/style/css',
+      'element-plus/es/components/message-box/style/css',
+      'element-plus/es/components/notification/style/css',
+      'element-plus/es/components/icon/style/css',
+      'vue-ueditor-wrap',
+      'vue-dompurify-html',
+      'element-plus/es/components/aside/style/css',
+      'element-plus/es/components/container/style/css',
+      'element-plus/es/components/divider/style/css',
+      'element-plus/es/components/header/style/css',
+      'element-plus/es/components/main/style/css',
+      'element-plus/es/components/popconfirm/style/css',
+      'element-plus/es/components/transfer/style/css',
+      '@form-create/designer',
+      '@form-create/element-ui/auto-import',
+      'element-plus/es/components/config-provider/style/css',
+      'element-plus/es/components/popover/style/css'
+    ]
+  },
   server: { host: '127.0.0.1', port, strictPort: true, open: false },
   plugins: [
     {
@@ -46,15 +126,17 @@ const server = await createServer({
         server.middlewares.use(async (request, response, next) => {
           const url = new URL(request.url, `http://127.0.0.1:${port}`)
           if (url.pathname === '/__printer-preview') {
+            await awaitOptimizerReady()
             const html = await server.transformIndexHtml(
               url.pathname,
-              '<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><title>打印机页面验收 · 模拟数据</title></head><body><div style="padding:16px;background:#fff3cd">仅用于页面验收 · 模拟设备，不连接真实打印服务</div><div id="app" style="padding:24px"></div><script type="module" src="/tests/printer/preview.ts"></script></body></html>'
+              readFileSync(new URL('./preview.html', import.meta.url), 'utf8')
             )
             response.setHeader('Content-Type', 'text/html; charset=utf-8')
             response.end(html)
             return
           }
           if (url.pathname === '/__printer-fixture') {
+            await awaitOptimizerReady()
             if (url.searchParams.has('configured'))
               configured = url.searchParams.get('configured') === '1'
             response.setHeader('Content-Type', 'application/json')
@@ -62,6 +144,8 @@ const server = await createServer({
               JSON.stringify({
                 configured,
                 owner: process.env.YSHOP_PRINTER_BROWSER_OWNER || null,
+                optimizerReady: optimizerReadyResolved,
+                cacheHandshake,
                 deviceCount: devices.length,
                 submitted,
                 jobCount: jobs.length
@@ -200,5 +284,24 @@ const server = await createServer({
     }
   ]
 })
+const configuredCacheDir = realpathSync(server.config.cacheDir)
+if (configuredCacheDir !== expectedCacheDir)
+  throw new Error('PRINTER_PREVIEW_RESOLVED_CACHE_DIR_MISMATCH')
 await server.listen()
+const metadataPath = join(configuredCacheDir, 'deps', '_metadata.json')
+if (!bypassOptimizerGate) await waitForOptimizerMetadata(metadataPath)
+const metadataRead = readValidMetadata(metadataPath)
+if (metadataRead) {
+  cacheHandshake = {
+    optimizerReady: true,
+    cacheOwnerId,
+    pid: process.pid,
+    resolvedCacheDir: realpathSync(server.config.cacheDir),
+    configCacheDir: configuredCacheDir,
+    metadataPath: realpathSync(metadataPath),
+    metadataSha256: createHash('sha256').update(metadataRead.bytes).digest('hex'),
+    metadata: metadataRead.metadata,
+  }
+  resolveOptimizerReady()
+}
 console.log(`Printer browser acceptance: http://127.0.0.1:${port}/__printer-preview`)

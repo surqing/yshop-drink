@@ -19,6 +19,7 @@ MIGRATIONS = ['payment-credential-columns.sql','2026-10-03-payment-finalization.
               '2026-10-03-wallet-ledger.sql','2026-10-04-payment-attempt.sql',
               '2026-10-04-wechat-v3.sql','2026-10-04-payment-live-readiness.sql',
               '2026-10-08-multistore-ordering.sql','2026-10-08-product-catalog.sql',
+              '2026-10-25-product-stock-batch.sql',
               '2026-10-08-coupon-marketing.sql','2026-10-08-coupon-permissions.sql',
               '2026-10-11-member-identity.sql','2026-10-19-score-submission.sql',
               '2026-10-22-order-fulfillment.sql','2026-10-22-order-print-event.sql',

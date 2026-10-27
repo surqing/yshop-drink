@@ -16,7 +16,7 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 from evidence import Evidence, execute, manifest, workspace, source_identity
-from page_evidence import overall_status, status_of, browser_receipt, printer_browser_receipt
+from page_evidence import overall_status, status_of, browser_receipt, printer_browser_receipt, printer_browser_diagnostics
 
 REPO = Path(__file__).resolve().parents[2]
 BOOT = REPO / 'yshop-drink-boot3'
@@ -174,6 +174,7 @@ class Runner:
                           'CONTROLLED_REPORT_FAILED_OR_INCOMPLETE','CONTROLLED_ASSERTIONS_MISSING',
                           'CONTROLLED_ASSERTIONS_CHANGED','CONTROLLED_ASSERTIONS_FAILED_OR_NOT_EXECUTED',
                           'FAILED_OR_SKIPPED_TESTS','MISSING_OR_UNEXPECTED_TEST_SUITE',
+                          'PRINTER_BROWSER_EXECUTION_FAILED','PRINTER_BROWSER_OWNER_CHECK_REQUIRED',
                           'TEST_NAMES_OR_INVOCATIONS_CHANGED','BACKEND_REACTOR_INCOMPLETE'}
             entry['reason']=code if isinstance(exc,RuntimeError) and code in public_codes else 'STEP_FAILED'
             entry['reasonType']=type(exc).__name__
@@ -271,6 +272,8 @@ class Runner:
         script_hash=hashlib.sha256(script.read_bytes()).hexdigest()
         self.step('printer-browser-pages',[shutil.which('node') or 'node',str(script),str(printer_output)],timeout=600,
             validator=lambda log:printer_browser_receipt(printer_output/'report.json',printer_started,
+                {'sourceSha':self.source_sha,'sourceDigest':self.digest},self.id,printer_expected,script_hash),
+            diagnostic=lambda:printer_browser_diagnostics(printer_output/'report.json',printer_started,
                 {'sourceSha':self.source_sha,'sourceDigest':self.digest},self.id,printer_expected,script_hash))
 
     def cross_end(self, performance=False, mini=False):
@@ -366,7 +369,7 @@ def main():
     p.add_argument('--run-report',action='append',default=[])
     p.add_argument('--output',default=os.environ.get('YSHOP_QUALITY_OUTPUT',str(Path(tempfile.gettempdir())/'yshop-quality')))
     p.add_argument('--profile',choices=['local','ci'])
-    p.add_argument('--scenario')
+    p.add_argument('--scenario',action='append',help='Select an E2E scenario; repeat to run a focused suite')
     p.add_argument('--list',action='store_true',dest='list_scenarios')
     a=p.parse_args()
     if a.mode=='E2E':

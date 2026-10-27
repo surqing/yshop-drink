@@ -970,7 +970,7 @@ class OrderingDatabaseTest {
                                     q.executeQuery().close();
                                 }
                                 held.countDown();
-                                release.await(15, TimeUnit.SECONDS);
+                                release.await(mysql ? 35 : 15, TimeUnit.SECONDS);
                                 c.rollback();
                             }
                             return true;

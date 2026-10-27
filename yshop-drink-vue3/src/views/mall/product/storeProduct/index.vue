@@ -56,9 +56,10 @@
       <el-button :disabled="!selected.length" @click="batchSale(1)" v-hasPermi="['shop:store-product:update']">批量上架</el-button>
       <el-button :disabled="!selected.length" @click="batchSale(0)" v-hasPermi="['shop:store-product:update']">批量下架</el-button>
       <el-button :disabled="!selected.length" @click="openBatchCategory" v-hasPermi="['shop:store-product:update']">批量调整分类</el-button>
+      <el-button :disabled="!selectedProducts.length || !queryParams.shopId" @click="batchStockVisible = true" v-hasPermi="['shop:store-product:update']">批量库存调整</el-button>
       <el-tabs v-model="activeName" type="card" @tab-click="handleClick">
         <el-tab-pane v-for="item in tableTabs" :label="item.title" :key="item.name" :name="item.name">
-          <el-table v-loading="loading" :data="list" @selection-change="rows => selected = rows.map(row => row.id)">
+          <el-table v-loading="loading" :data="list" @selection-change="rows => { selectedProducts = rows; selected = rows.map(row => row.id) }">
             <el-table-column type="selection" width="45" />
             <el-table-column label="id" align="center" width="50" prop="id" />
             <el-table-column label="商品图片" align="center" prop="image" >
@@ -132,6 +133,7 @@
   <!-- 表单弹窗：添加/修改 -->
   <StoreProductForm ref="formRef" @success="getList" />
   <CatalogOperations ref="catalogRef" @success="getList" />
+  <BatchStockOperations v-model="batchStockVisible" :shop-id="queryParams.shopId" :products="selectedProducts" @success="getList" />
   <Dialog v-model="batchCategoryVisible" title="批量调整分类" :close-on-click-modal="false">
     <el-alert title="仅调整当前门店所选商品，全部成功或全部回滚，不影响已有订单快照。" :closable="false" />
     <el-select class="w-240px mt-12px" v-model="batchCategoryId" placeholder="选择目标分类"><el-option v-for="category in batchCategories" :key="category.id" :label="category.name" :value="category.id || 0" /></el-select>
@@ -140,11 +142,13 @@
 </template>
 
 <script setup lang="ts" name="StoreProduct">
+import { watch } from 'vue'
 import { dateFormatter } from '@/utils/formatTime'
 import download from '@/utils/download'
 import * as StoreProductApi from '@/api/mall/product/product'
 import StoreProductForm from './StoreProductForm.vue'
 import CatalogOperations from './CatalogOperations.vue'
+import BatchStockOperations from './BatchStockOperations.vue'
 import * as CatalogApi from '@/api/mall/product/catalog'
 import * as ShopApi from '@/api/mall/store/shop'
 import * as CategoryApi from '@/api/mall/product/category'
@@ -155,6 +159,8 @@ const openBatchCategory = async () => { batchIds.value = [...selected.value]; ba
 const submitBatchCategory = async () => { if (!batchCategoryId.value) { message.warning('请选择目标分类'); return } batchBusy.value = true; try { await CatalogApi.batch(batchIds.value, undefined, batchCategoryId.value); batchCategoryVisible.value = false; message.success('分类已更新'); await getList() } finally { batchBusy.value = false } }
 const catalogRef = ref<InstanceType<typeof CatalogOperations>>()
 const selected = ref<number[]>([])
+const selectedProducts = ref<Array<{ id: number; storeName: string; shopId?: number }>>([])
+const batchStockVisible = ref(false)
 const shopList = ref<ShopApi.ShopVO[]>([])
 const batchSale = async (sale: number) => { await message.confirm(`确认对 ${selected.value.length} 个商品${sale ? '上架' : '下架'}？`); await CatalogApi.batch(selected.value, sale); await getList() }
 import CateTree from './CateTree.vue'
@@ -175,6 +181,12 @@ const queryParams = reactive({
   stock: 1,
   cateId: null,
   shopName: null
+})
+watch(() => queryParams.shopId, (shopId, previous) => {
+  if (shopId === previous) return
+  selected.value = []
+  selectedProducts.value = []
+  batchStockVisible.value = false
 })
 const queryFormRef = ref() // 搜索的表单
 const exportLoading = ref(false) // 导出的加载中
@@ -201,6 +213,7 @@ const tableTabs = ref([
 /** 查询列表 */
 const getList = async () => {
   selected.value = []
+  selectedProducts.value = []
   loading.value = true
   try {
     const data = await StoreProductApi.getStoreProductPage(queryParams)

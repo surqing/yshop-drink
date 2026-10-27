@@ -9,6 +9,20 @@ _CHECKS = {
                      'expired-session','logout-revokes-access','identity-sql'],
     'catalog-order': ['admin-create-product','admin-configure-sku','admin-configure-topping',
                       'order-price-and-choices','admin-order-visible','catalog-edit-keeps-snapshot','invalid-sku-denied','insufficient-stock-denied','order-sql'],
+    'batch-stock-operations': ['batch-stock-fixture-created','batch-stock-api-rejects-non-integer-quantities',
+                               'batch-stock-preview-on-real-page',
+                               'batch-stock-shop-switch-ignores-late-preview',
+                               'batch-stock-http-200-business-error-is-not-success',
+                               'batch-stock-lost-response-recovers-by-original-key',
+                               'batch-stock-reopen-after-clock-rollback-recovers-original-key',
+                               'batch-stock-http-writer-authorized-preview-apply-result',
+                               'batch-stock-http-same-token-revocation-denies-all-batch-operations',
+                               'batch-stock-http-shop-assignment-revocation-denies-all-batch-operations',
+                               'batch-stock-http-query-only-cannot-use-batch-operations',
+                               'batch-stock-http-other-account-cannot-read-batch-result',
+                               'batch-stock-http-cross-store-mixed-request-is-denied',
+                               'batch-stock-history-page-links-batch-and-line-delta',
+                               'batch-stock-sql-and-financial-invariants'],
     'store-isolation': ['store-a-order','store-b-order','cross-store-product-denied',
                         'cross-store-coupon-denied','staff-cannot-read-other-store','other-member-denied','other-member-address-denied','isolation-sql'],
     'order-retry': ['first-response-lost','same-key-retry','admin-single-order','single-order-and-stock-sql'],
@@ -64,9 +78,11 @@ _MINI_SCENARIOS = {name for name, checks in _LOCAL.items() if checks}
 def select_scenarios(profile, scenario=None):
     if profile not in ('local','ci'):
         raise ValueError('E2E_PROFILE_REQUIRED')
-    if scenario is not None and scenario not in _CHECKS:
+    ids = list(_CHECKS) if scenario is None else [scenario] if isinstance(scenario, str) else list(scenario)
+    if not ids or any(name not in _CHECKS for name in ids):
         raise ValueError('UNKNOWN_E2E_SCENARIO')
-    ids=[scenario] if scenario is not None else list(_CHECKS)
+    if len(ids) != len(set(ids)):
+        raise ValueError('DUPLICATE_E2E_SCENARIO')
     return [{'id':name, 'variant':'mini-admin' if profile=='local' and name in _MINI_SCENARIOS else 'api-admin',
              'profiles':['local','ci'],
              'requiredCapabilities':['docker','backend','browser','test-support'] + (['mini'] if profile=='local' and name in _MINI_SCENARIOS else []) +
@@ -78,6 +94,6 @@ def select_scenarios(profile, scenario=None):
 def listing(profile, scenario=None):
     scenarios=select_scenarios(profile,scenario)
     needs_mini=any('mini' in item['requiredCapabilities'] for item in scenarios)
-    return {'profile':profile, 'scope':'three-end-core' if needs_mini else 'backend-admin-subset' if scenario else 'backend-admin-core',
+    return {'profile':profile, 'scope':'three-end-core' if needs_mini else 'backend-admin-subset' if scenario is not None else 'backend-admin-core',
             'miniStatus':'REQUIRED' if needs_mini else 'NOT_RUN',
             'selection':'subset' if scenario else 'core', 'scenarios':scenarios}

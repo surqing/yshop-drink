@@ -1,4 +1,21 @@
 {
+  "tests/batch-stock-context.test.ts": [
+    "late preview for shop A cannot overwrite the active shop B context",
+    "pending batch request remains recoverable after thirty minutes and is isolated by account and shop",
+    "pending request survives wall clock rollback without changing key or body",
+    "HTTP business failures are definitive while network loss remains recoverable",
+    "logout cleanup removes only this feature pending keys"
+  ],
+  "tests/batch-stock-operations.test.ts": [
+    "business-code failure never shows success and requires changed input before a new request",
+    "late preview after the selected shop changes cannot replace the new context",
+    "lost apply response keeps and reuses the original key until a result is confirmed",
+    "empty HTTP 200 response keeps the original request key for recovery",
+    "reopening with a clock ahead checks the saved original key before loading a new draft",
+    "permission revocation after preview never submits or reports success",
+    "session storage failure prevents dispatching a request without a recoverable key",
+    "late committed response after switching shops leaves the original key for later recovery"
+  ],
   "tests/coupon-form.test.ts": [
     "renders edit data and blanks historical redemption code",
     "latest open wins when earlier network response arrives last",

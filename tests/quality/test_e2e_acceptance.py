@@ -105,20 +105,33 @@ class E2eAcceptanceTest(unittest.TestCase):
         local=listing('local');ci=listing('ci')
         by_local={scenario['id']:scenario for scenario in local['scenarios']}
         by_ci={scenario['id']:scenario for scenario in ci['scenarios']}
-        self.assertTrue({'pickup-fulfillment','store-statistics','order-print-jobs','printer-operation-recovery',
+        self.assertTrue({'pickup-fulfillment','store-statistics','order-print-jobs','batch-stock-operations','printer-operation-recovery',
                          'printer-operation-recovery-tenant-enabled'}.issubset(by_local))
         self.assertEqual(set(by_local),set(by_ci))
         self.assertIn('mini',by_local['pickup-fulfillment']['requiredCapabilities'])
         self.assertNotIn('mini',by_local['store-statistics']['requiredCapabilities'])
         self.assertNotIn('mini',by_local['order-print-jobs']['requiredCapabilities'])
+        self.assertNotIn('mini',by_local['batch-stock-operations']['requiredCapabilities'])
         self.assertNotIn('mini',by_local['printer-operation-recovery']['requiredCapabilities'])
         self.assertNotIn('mini',by_local['printer-operation-recovery-tenant-enabled']['requiredCapabilities'])
-        for name in ('pickup-fulfillment','store-statistics','order-print-jobs','printer-operation-recovery',
+        for name in ('pickup-fulfillment','store-statistics','order-print-jobs','batch-stock-operations','printer-operation-recovery',
                      'printer-operation-recovery-tenant-enabled'):
             self.assertEqual('api-admin',by_ci[name]['variant'])
             self.assertEqual('mini-admin' if name=='pickup-fulfillment' else 'api-admin',by_local[name]['variant'])
             self.assertEqual(len(by_local[name]['expectedCheckIds']),len(set(by_local[name]['expectedCheckIds'])))
         exact={
+            'batch-stock-operations':['batch-stock-fixture-created','batch-stock-api-rejects-non-integer-quantities',
+                'batch-stock-preview-on-real-page',
+                'batch-stock-shop-switch-ignores-late-preview',
+                'batch-stock-http-200-business-error-is-not-success','batch-stock-lost-response-recovers-by-original-key',
+                'batch-stock-reopen-after-clock-rollback-recovers-original-key',
+                'batch-stock-http-writer-authorized-preview-apply-result',
+                'batch-stock-http-same-token-revocation-denies-all-batch-operations',
+                'batch-stock-http-shop-assignment-revocation-denies-all-batch-operations',
+                'batch-stock-http-query-only-cannot-use-batch-operations',
+                'batch-stock-http-other-account-cannot-read-batch-result',
+                'batch-stock-http-cross-store-mixed-request-is-denied',
+                'batch-stock-history-page-links-batch-and-line-delta','batch-stock-sql-and-financial-invariants'],
             'pickup-fulfillment':['product-created-for-points','pickup-order-created','payment-confirmed',
                 'work-page-staff-a','work-page-staff-c','work-page-waiting',
                 'two-staff-conflict','accept-through-work-page','prepare-through-work-page','ready-through-work-page',

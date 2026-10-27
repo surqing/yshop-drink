@@ -45,13 +45,19 @@ def main():
         db.mysql(f"CREATE USER '{account}'@'%' IDENTIFIED BY '{password}';")
         account_created = True
         db.mysql(f"GRANT ALL PRIVILEGES ON `{schema}`.* TO '{account}'@'%';")
-        jdbc.write_text(f'url=jdbc:mysql://127.0.0.1:{mysql_port()}/{schema}?useSSL=false&connectTimeout=5000&socketTimeout=30000&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&sessionVariables=innodb_lock_wait_timeout=2\nusername={account}\npassword={password}\n')
+        # The disposable acceptance account needs to observe its competing
+        # connections in information_schema.innodb_trx. PROCESS is global, so
+        # grant it only to this random account and remove the account in finally.
+        db.mysql(f"GRANT PROCESS ON *.* TO '{account}'@'%';")
+        db.mysql(f"GRANT SELECT ON performance_schema.* TO '{account}'@'%';")
+        jdbc.write_text(f'url=jdbc:mysql://127.0.0.1:{mysql_port()}/{schema}?useSSL=false&connectTimeout=5000&socketTimeout=30000&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&sessionVariables=innodb_lock_wait_timeout=30\nusername={account}\npassword={password}\n')
         jdbc.chmod(0o600)
         env = os.environ.copy()
         env['YSHOP_ORDERING_ACCEPTANCE_CONFIG'] = str(jdbc)
+        selected_tests = ('OrderingDatabaseTest,OrderFulfillmentDatabaseTest,AppOrderTakeCompatibilityTest,StoreOrderStatisticsDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance,CouponDatabaseTest' if coupon else 'OrderingDatabaseTest,OrderFulfillmentDatabaseTest,AppOrderTakeCompatibilityTest,StoreOrderStatisticsDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance' if catalog else 'OrderingDatabaseTest,OrderFulfillmentDatabaseTest,AppOrderTakeCompatibilityTest,StoreOrderStatisticsDatabaseTest')
         command = maven_command(WORKSPACE) + [
                    '-pl', 'yshop-module-mall/yshop-module-order-biz', '-am', '-Pmysql-acceptance', 'test',
-                   '-Dtest=' + ('OrderingDatabaseTest,OrderFulfillmentDatabaseTest,AppOrderTakeCompatibilityTest,StoreOrderStatisticsDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance,CouponDatabaseTest' if coupon else 'OrderingDatabaseTest,OrderFulfillmentDatabaseTest,AppOrderTakeCompatibilityTest,StoreOrderStatisticsDatabaseTest,CatalogDatabaseTest,CatalogEditingMysqlAcceptance' if catalog else 'OrderingDatabaseTest,OrderFulfillmentDatabaseTest,AppOrderTakeCompatibilityTest,StoreOrderStatisticsDatabaseTest'), '-Dsurefire.failIfNoSpecifiedTests=false']
+                   '-Dtest=' + selected_tests, '-Dsurefire.failIfNoSpecifiedTests=false']
         evidence = Evidence(PRIVATE / 'quality')
         selected = next(x.split('=', 1)[1].split(',') for x in command if x.startswith('-Dtest='))
         registered = manifest(REPO)

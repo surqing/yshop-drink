@@ -13,7 +13,13 @@ import { CACHE_KEY, useCache } from '@/hooks/web/useCache'
 const { wsCache } = useCache()
 wsCache.set(CACHE_KEY.USER, { user: { id: 999999, shopId: 0 }, permissions: ['*:*:*'] })
 wsCache.set(CACHE_KEY.TenantId, 999999)
-const app = createApp(PrinterPage)
+const app = createApp({
+  ...PrinterPage,
+  beforeMount() { console.info('R4_PREVIEW_LIFECYCLE:printer-page-before-mount') },
+  mounted() { console.info('R4_PREVIEW_LIFECYCLE:printer-page-mounted') },
+  beforeUnmount() { console.info('R4_PREVIEW_LIFECYCLE:printer-page-before-unmount') },
+  unmounted() { console.info('R4_PREVIEW_LIFECYCLE:printer-page-unmounted') }
+})
 setupStore(app)
 await setupI18n(app)
 app.use(ElementPlus)

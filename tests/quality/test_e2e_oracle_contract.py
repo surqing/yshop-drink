@@ -90,6 +90,32 @@ class E2eOracleContractTest(unittest.TestCase):
         sql = query_for('product', {'productId': 101})
         self.assertIn("'giveIntegral',give_integral", sql)
 
+    def test_batch_stock_oracles_are_read_only_and_join_authoritative_rows(self):
+        product = query_for('batch-stock-product', {'productId': 101, 'skuId': 202})
+        self.assertTrue(product.lstrip().startswith('SELECT JSON_OBJECT('))
+        self.assertIn('yshop_product_operation', product)
+        self.assertIn('batchOperationCount', product)
+        state = query_for('batch-stock-state', {
+            'batchId': '0123456789abcdef0123456789abcdef', 'productId': 101, 'skuId': 202
+        })
+        self.assertTrue(state.lstrip().startswith('SELECT JSON_OBJECT('))
+        for field in ('yshop_product_stock_batch','yshop_product_operation','beforeStock','afterStock','operationDelta'):
+            self.assertIn(field, state)
+        self.assertNotIn('INSERT ', product.upper())
+        self.assertNotIn('UPDATE ', state.upper())
+        financial = query_for('batch-stock-financial', {})
+        self.assertIn('yshop_order_payment_attempt', financial)
+        self.assertIn('yshop_member_wallet_transaction', financial)
+
+    def test_batch_stock_oracles_validate_ids_before_building_sql(self):
+        for name, ids in (
+            ('batch-stock-product', {'productId': '101 OR 1=1', 'skuId': 202}),
+            ('batch-stock-product', {'productId': 101, 'skuId': -1}),
+            ('batch-stock-state', {'batchId': "x' OR 1=1 --", 'productId': 101, 'skuId': 202}),
+        ):
+            with self.subTest(name=name, ids=ids), self.assertRaises(ValueError):
+                query_for(name, ids)
+
     def test_entity_oracles_reject_order_id_sql_fragments(self):
         for name in ('fulfillment-state', 'print-jobs'):
             with self.subTest(name=name), self.assertRaises(ValueError):
