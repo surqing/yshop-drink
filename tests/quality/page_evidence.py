@@ -203,6 +203,104 @@ def _safe_printer_diagnostics(value, require_complete):
     return result
 
 
+def _printer_cache_evidence(path, receipt, identity, preview_pid):
+    """Authenticate the private cache owner, Vite metadata and current preview handshake."""
+    import hashlib
+    import re
+    import stat
+
+    cache=receipt.get('cache')
+    cache_keys={'mode','state','cacheOwnerId','metadataPresentBefore','metadataSha256Before',
+                'metadataPresentAfter','metadataSha256After','privateEvidenceSha256'}
+    if not isinstance(cache,dict) or set(cache)!=cache_keys:
+        raise RuntimeError('PRINTER_BROWSER_CACHE_EVIDENCE_REQUIRED')
+    mode=cache.get('mode');state=cache.get('state');owner=cache.get('cacheOwnerId')
+    if mode not in ('RUN_PRIVATE_DEFAULT','EXPLICIT_EXPERIMENT') or state not in ('COLD','WARM'):
+        raise RuntimeError('PRINTER_BROWSER_CACHE_MODE_INVALID')
+    if not isinstance(owner,str) or not re.fullmatch(r'[a-f0-9]{32}',owner):
+        raise RuntimeError('PRINTER_BROWSER_CACHE_OWNER_INVALID')
+    before_present=cache.get('metadataPresentBefore')
+    before_sha=cache.get('metadataSha256Before')
+    after_present=cache.get('metadataPresentAfter')
+    after_sha=cache.get('metadataSha256After')
+    digest=re.compile(r'^[a-f0-9]{64}$')
+    if (type(before_present) is not bool or type(after_present) is not bool
+        or after_present is not True or not isinstance(after_sha,str) or not digest.fullmatch(after_sha)
+        or (before_present and (not isinstance(before_sha,str) or not digest.fullmatch(before_sha)))
+        or (not before_present and before_sha is not None)
+        or (state=='COLD' and before_present is not False)
+        or (state=='WARM' and before_present is not True)):
+        raise RuntimeError('PRINTER_BROWSER_CACHE_METADATA_STATE_INVALID')
+    sidecar=Path(path).parent/'cache-private.json'
+    if (not sidecar.is_file() or stat.S_IMODE(sidecar.stat().st_mode)!=0o600
+        or not isinstance(cache.get('privateEvidenceSha256'),str)
+        or not digest.fullmatch(cache['privateEvidenceSha256'])
+        or hashlib.sha256(sidecar.read_bytes()).hexdigest()!=cache['privateEvidenceSha256']):
+        raise RuntimeError('PRINTER_BROWSER_CACHE_PRIVATE_EVIDENCE_INVALID')
+    private=json.loads(sidecar.read_text())
+    if (private.get('schemaVersion')!=1 or private.get('cacheMode')!=mode
+        or private.get('cacheState')!=state or private.get('cacheOwnerId')!=owner
+        or private.get('sourceIdentity')!=identity
+        or private.get('metadataBeforePresent') is not before_present
+        or private.get('metadataBeforeSha256')!=before_sha
+        or private.get('metadataAfterPresent') is not True
+        or private.get('metadataAfterSha256')!=after_sha):
+        raise RuntimeError('PRINTER_BROWSER_CACHE_PRIVATE_EVIDENCE_MISMATCH')
+    try:
+        cache_dir=Path(private['cacheDir']).resolve(strict=True)
+        metadata_path=Path(private['metadataPath']).resolve(strict=True)
+        marker_path=Path(private['markerPath']).resolve(strict=True)
+    except (KeyError, OSError, TypeError):
+        raise RuntimeError('PRINTER_BROWSER_CACHE_PATH_INVALID')
+    if (str(cache_dir)!=private.get('cacheDir') or str(metadata_path)!=private.get('metadataPath')
+        or str(marker_path)!=private.get('markerPath')
+        or metadata_path!=cache_dir/'deps'/'_metadata.json'
+        or marker_path!=cache_dir/'.r4-printer-cache-owner.json'
+        or any(part=='node_modules' for part in cache_dir.parts)):
+        raise RuntimeError('PRINTER_BROWSER_CACHE_PATH_INVALID')
+    repo=Path(__file__).resolve().parents[2]
+    try:
+        cache_dir.relative_to(repo)
+        inside_repo=True
+    except ValueError:
+        inside_repo=False
+    if inside_repo and not (mode=='RUN_PRIVATE_DEFAULT' and cache_dir.is_relative_to(Path(path).parent.resolve())):
+        raise RuntimeError('PRINTER_BROWSER_CACHE_NOT_PRIVATE')
+    if mode=='RUN_PRIVATE_DEFAULT' and cache_dir!=(Path(path).parent/'private-vite-cache').resolve():
+        raise RuntimeError('PRINTER_BROWSER_DEFAULT_CACHE_NOT_RUN_OWNED')
+    if stat.S_IMODE(marker_path.stat().st_mode)!=0o600:
+        raise RuntimeError('PRINTER_BROWSER_CACHE_OWNER_MARKER_PERMISSIONS')
+    marker_bytes=marker_path.read_bytes()
+    if hashlib.sha256(marker_bytes).hexdigest()!=private.get('markerSha256'):
+        raise RuntimeError('PRINTER_BROWSER_CACHE_OWNER_MARKER_HASH')
+    marker=json.loads(marker_bytes)
+    if (marker.get('cacheOwnerId')!=owner or marker.get('cacheDir')!=str(cache_dir)
+        or any(marker.get(key)!=value for key,value in identity.items())):
+        raise RuntimeError('PRINTER_BROWSER_CACHE_OWNER_MARKER_MISMATCH')
+    if not metadata_path.is_file() or hashlib.sha256(metadata_path.read_bytes()).hexdigest()!=after_sha:
+        raise RuntimeError('PRINTER_BROWSER_CACHE_METADATA_HASH')
+    metadata=json.loads(metadata_path.read_text())
+    required=('hash','configHash','lockfileHash','browserHash')
+    if (not isinstance(metadata,dict) or any(not isinstance(metadata.get(key),str) or not metadata[key] for key in required)
+        or private.get('metadataAfter')!=metadata):
+        raise RuntimeError('PRINTER_BROWSER_CACHE_METADATA_INVALID')
+    preview=private.get('preview')
+    if (not isinstance(preview,dict) or preview.get('pid')!=preview_pid
+        or preview.get('cacheOwnerId')!=owner or preview.get('resolvedCacheDir')!=str(cache_dir)
+        or preview.get('configCacheDir')!=str(cache_dir)
+        or preview.get('metadataPath')!=str(metadata_path)
+        or preview.get('metadataSha256')!=after_sha or preview.get('metadata')!=metadata):
+        raise RuntimeError('PRINTER_BROWSER_CACHE_PREVIEW_HANDSHAKE_INVALID')
+    handshake=receipt.get('cacheHandshakeCheck')
+    handshake_keys={'status','cacheOwnerMatched','resolvedPathMatched','metadataMatched',
+                    'previewPidMatched','startupObserved','finalObserved'}
+    if (not isinstance(handshake,dict) or set(handshake)!=handshake_keys
+        or handshake.get('status')!='PASS'
+        or any(handshake.get(key) is not True for key in handshake_keys-{'status'})):
+        raise RuntimeError('PRINTER_BROWSER_CACHE_HANDSHAKE_REQUIRED')
+    return {key:cache[key] for key in sorted(cache_keys)}
+
+
 def printer_browser_receipt(path, started, identity, run_id, expected, script_hash):
     """Accept the registered owned printer browser sequence only after resource cleanup."""
     import hashlib
@@ -241,6 +339,7 @@ def printer_browser_receipt(path, started, identity, run_id, expected, script_ha
         or type(receipt.get('loopbackPort')) is not int or not 1024<=receipt['loopbackPort']<=65535
         or receipt.get('realProviderRequests')!=0 or receipt.get('blockedExternalRequestCount')!=0):
         raise RuntimeError('PRINTER_BROWSER_OWNED_CLEANUP_REQUIRED')
+    cache_evidence=_printer_cache_evidence(path,receipt,identity,resources['previewPid'])
     diagnostics=_safe_printer_diagnostics(receipt.get('diagnostics'),True)
     artifacts=receipt.get('artifacts',[])
     if not artifacts:raise RuntimeError('PRINTER_BROWSER_ARTIFACTS_REQUIRED')
@@ -252,7 +351,7 @@ def printer_browser_receipt(path, started, identity, run_id, expected, script_ha
         if not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest()!=item.get('sha256'):
             raise RuntimeError('PRINTER_BROWSER_ARTIFACT_INVALID')
     return {'tests':len(checks),'exactNamesChecked':True,'cases':checks,'runId':run_id,
-            'cleanup':'PASS','owner':owner,'diagnostics':diagnostics}
+            'cleanup':'PASS','owner':owner,'cache':cache_evidence,'diagnostics':diagnostics}
 
 
 def printer_browser_diagnostics(path, started, identity, run_id, expected, script_hash):

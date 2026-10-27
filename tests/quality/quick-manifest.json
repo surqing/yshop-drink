@@ -26,7 +26,7 @@
   "tests/quality/test_evidence.py": 50,
   "tests/quality/test_merge_scope.py": 50,
   "tests/quality/test_owned_resources.py": 16,
-  "tests/quality/test_page_evidence.py": 49,
+  "tests/quality/test_page_evidence.py": 54,
   "tests/quality/test_secret_guard.py": 3,
   "tests/smoke/test_secret_scan.py": 4,
   "tests/sms-errors.test.mjs": 4

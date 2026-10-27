@@ -61,7 +61,9 @@ let blockedExternalRequestCount = 0,
   documentGeneration = 0,
   pendingNavigationReason = null;
 const pendingDocumentCommits = [];
-let previewLineBuffer = '', traceStarted = false;
+let previewLineBuffer = '', traceStarted = false,
+  cacheContext = null,
+  previewCacheHandshake = null;
 const injectedTimeoutStage =
   process.env.YSHOP_PRINTER_BROWSER_TEST_INJECT_TIMEOUT === "test-only"
     ? process.env.YSHOP_PRINTER_BROWSER_INJECT_TIMEOUT_STAGE
@@ -86,9 +88,11 @@ const report = {
   startupOwnerCheck: { status: "NOT_RUN" },
   finalFixtureOwnerCheck: { status: "NOT_RUN" },
   optimizerReadinessCheck: { status: 'NOT_RUN', optimizerReady: null },
+  cacheHandshakeCheck: { status: 'NOT_RUN', cacheOwnerMatched: false, resolvedPathMatched: false,
+    metadataMatched: false, previewPidMatched: false, startupObserved: false, finalObserved: false },
   realProviderRequests: 0,
   blockedExternalRequestCount: 0,
-  cache: { state: 'DEFAULT', metadataPresentBefore: null, metadataSha256Before: null },
+  cache: {},
   diagnostics: {
     document: { status: "UNAVAILABLE", events: null },
     vite: { status: "UNAVAILABLE", events: null },
@@ -98,6 +102,103 @@ const report = {
 };
 let server, browser, context, page, log, previewLogStream, tracePath;
 let interrupted = false;
+const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
+const inside = (child, parent) => child === parent || child.startsWith(parent + path.sep);
+const prepareOwnedCache = () => {
+  const explicit = process.env.YSHOP_PRINTER_BROWSER_CACHE_DIR || null;
+  const mode = explicit ? 'EXPLICIT_EXPERIMENT' : 'RUN_PRIVATE_DEFAULT';
+  if (explicit && !path.isAbsolute(explicit)) throw Error('PRINTER_CACHE_PATH_MUST_BE_ABSOLUTE');
+  const requested = path.resolve(explicit || path.join(root, 'private-vite-cache'));
+  if (requested.split(path.sep).includes('node_modules')) throw Error('PRINTER_CACHE_SHARED_NODE_MODULES_FORBIDDEN');
+  const existedBefore = fs.existsSync(requested);
+  if (mode === 'RUN_PRIVATE_DEFAULT' && existedBefore) throw Error('PRINTER_DEFAULT_CACHE_MUST_BE_FRESH');
+  if (existedBefore && fs.lstatSync(requested).isSymbolicLink()) throw Error('PRINTER_CACHE_SYMLINK_FORBIDDEN');
+  fs.mkdirSync(requested, { recursive: true, mode: 0o700 });
+  fs.chmodSync(requested, 0o700);
+  const resolved = fs.realpathSync(requested);
+  if (resolved.split(path.sep).includes('node_modules')) throw Error('PRINTER_CACHE_SHARED_NODE_MODULES_FORBIDDEN');
+  if (inside(resolved, repo) && !(mode === 'RUN_PRIVATE_DEFAULT' && inside(resolved, path.join(repo, '.quality'))))
+    throw Error('PRINTER_CACHE_MUST_BE_PRIVATE_OUTPUT');
+  const markerPath = path.join(resolved, '.r4-printer-cache-owner.json');
+  const metadataPath = path.join(resolved, 'deps', '_metadata.json');
+  let marker, cacheOwnerId;
+  if (fs.existsSync(markerPath)) {
+    if (fs.lstatSync(markerPath).isSymbolicLink()) throw Error('PRINTER_CACHE_OWNER_MARKER_SYMLINK_FORBIDDEN');
+    marker = JSON.parse(fs.readFileSync(markerPath, 'utf8'));
+    if (!/^[a-f0-9]{32}$/.test(marker.cacheOwnerId || '') || marker.cacheDir !== resolved ||
+        marker.sourceSha !== source.sourceSha || marker.sourceDigest !== source.sourceDigest)
+      throw Error('PRINTER_CACHE_OWNER_MARKER_MISMATCH');
+    cacheOwnerId = marker.cacheOwnerId;
+  } else {
+    if (fs.readdirSync(resolved).length !== 0) throw Error('PRINTER_CACHE_UNOWNED_CONTENTS_FORBIDDEN');
+    cacheOwnerId = crypto.randomUUID().replaceAll('-', '');
+    marker = { cacheOwnerId, cacheDir: resolved, sourceSha: source.sourceSha, sourceDigest: source.sourceDigest };
+    fs.writeFileSync(markerPath, JSON.stringify(marker), { flag: 'wx', mode: 0o600 });
+    fs.chmodSync(markerPath, 0o600);
+  }
+  const metadataPresentBefore = fs.existsSync(metadataPath);
+  const metadataSha256Before = metadataPresentBefore ? sha256(fs.readFileSync(metadataPath)) : null;
+  const markerSha256 = sha256(fs.readFileSync(markerPath));
+  cacheContext = { mode, state: metadataPresentBefore ? 'WARM' : 'COLD', cacheOwnerId,
+    cacheDir: resolved, metadataPath, markerPath, markerSha256,
+    metadataPresentBefore, metadataSha256Before };
+  report.cache = {
+    mode, state: cacheContext.state, cacheOwnerId,
+    metadataPresentBefore, metadataSha256Before,
+    metadataPresentAfter: false, metadataSha256After: null, privateEvidenceSha256: null,
+  };
+  return cacheContext;
+};
+const finalizeCacheEvidence = () => {
+  if (!cacheContext) return;
+  let metadata = null, metadataPresentAfter = false, metadataSha256After = null;
+  try {
+    metadataPresentAfter = fs.existsSync(cacheContext.metadataPath);
+    if (metadataPresentAfter) {
+      const bytes = fs.readFileSync(cacheContext.metadataPath);
+      metadataSha256After = sha256(bytes);
+      metadata = JSON.parse(bytes.toString('utf8'));
+    }
+  } catch {
+    metadataPresentAfter = false;
+    metadataSha256After = null;
+    metadata = null;
+  }
+  const privateEvidence = {
+    schemaVersion: 1,
+    cacheMode: cacheContext.mode,
+    cacheState: cacheContext.state,
+    cacheOwnerId: cacheContext.cacheOwnerId,
+    cacheDir: cacheContext.cacheDir,
+    metadataPath: cacheContext.metadataPath,
+    markerPath: cacheContext.markerPath,
+    markerSha256: fs.existsSync(cacheContext.markerPath) ? sha256(fs.readFileSync(cacheContext.markerPath)) : null,
+    sourceIdentity: { sourceSha: source.sourceSha, sourceDigest: source.sourceDigest },
+    metadataBeforePresent: cacheContext.metadataPresentBefore,
+    metadataBeforeSha256: cacheContext.metadataSha256Before,
+    metadataAfterPresent,
+    metadataAfterSha256,
+    metadataAfter: metadata,
+    preview: previewCacheHandshake,
+  };
+  const privatePath = path.join(root, 'cache-private.json');
+  fs.writeFileSync(privatePath, JSON.stringify(privateEvidence, null, 2), { flag: 'wx', mode: 0o600 });
+  fs.chmodSync(privatePath, 0o600);
+  report.cache.metadataPresentAfter = metadataPresentAfter;
+  report.cache.metadataSha256After = metadataSha256After;
+  report.cache.privateEvidenceSha256 = sha256(fs.readFileSync(privatePath));
+};
+const validatePreviewCacheHandshake = (handshake) => {
+  if (!cacheContext || !handshake || typeof handshake !== 'object') return false;
+  const metadata = handshake.metadata;
+  const metadataBytes = fs.existsSync(cacheContext.metadataPath) ? fs.readFileSync(cacheContext.metadataPath) : null;
+  if (!metadataBytes) return false;
+  const actualHash = sha256(metadataBytes);
+  return handshake.optimizerReady === true && handshake.cacheOwnerId === cacheContext.cacheOwnerId &&
+    handshake.resolvedCacheDir === cacheContext.cacheDir && handshake.configCacheDir === cacheContext.cacheDir &&
+    handshake.metadataPath === cacheContext.metadataPath && handshake.metadataSha256 === actualHash &&
+    handshake.pid === server?.pid && JSON.stringify(metadata) === JSON.stringify(JSON.parse(metadataBytes.toString('utf8')));
+};
 const interrupt = () => {
   interrupted = true;
   if (page) page.close().catch(() => {});
@@ -376,17 +477,7 @@ async function main() {
         process.env.YSHOP_QUALITY_SOURCE_DIGEST !== source.sourceDigest)
     )
       throw Error("SOURCE_IDENTITY_MISMATCH");
-    if (process.env.YSHOP_PRINTER_BROWSER_CACHE_DIR) {
-      const metadataPath = path.join(process.env.YSHOP_PRINTER_BROWSER_CACHE_DIR, 'deps', '_metadata.json');
-      const metadataExists = fs.existsSync(metadataPath);
-      report.cache = {
-        state: metadataExists ? 'WARM' : 'COLD',
-        metadataPresentBefore: metadataExists,
-        metadataSha256Before: metadataExists
-          ? crypto.createHash('sha256').update(fs.readFileSync(metadataPath)).digest('hex')
-          : null,
-      };
-    }
+    prepareOwnedCache();
     if (await listening()) throw Error("PREVIEW_PORT_ALREADY_OWNED");
     log = fs.openSync(path.join(root, "preview-private.log"), "w", 0o600);
     previewLogStream = fs.createWriteStream(null, { fd: log, autoClose: false });
@@ -397,6 +488,10 @@ async function main() {
         ...process.env,
         YSHOP_PRINTER_BROWSER_PORT: String(port),
         YSHOP_PRINTER_BROWSER_OWNER: owner,
+        YSHOP_PRINTER_BROWSER_CACHE_DIR: cacheContext.cacheDir,
+        YSHOP_PRINTER_BROWSER_CACHE_OWNER_ID: cacheContext.cacheOwnerId,
+        YSHOP_PRINTER_BROWSER_SOURCE_SHA: source.sourceSha,
+        YSHOP_PRINTER_BROWSER_SOURCE_DIGEST: source.sourceDigest,
       },
       stdio: ["ignore", "pipe", "pipe"],
       detached: true,
@@ -411,16 +506,30 @@ async function main() {
         if (r.ok) {
           const body = await r.json();
           const ownerMatched = body.owner === owner;
-          const optimizerReady = body.optimizerReady === true;
+          const cacheHandshake = body.cacheHandshake;
+          const cacheReady = validatePreviewCacheHandshake(cacheHandshake);
+          const optimizerReady = body.optimizerReady === true && cacheReady;
+          previewCacheHandshake = cacheHandshake || null;
           report.startupOwnerCheck = {
             status: ownerMatched ? "PASS" : "FAIL",
             ownerMatched,
+          };
+          report.cacheHandshakeCheck = {
+            status: cacheReady ? 'PASS' : 'FAIL',
+            cacheOwnerMatched: cacheHandshake?.cacheOwnerId === cacheContext.cacheOwnerId,
+            resolvedPathMatched: cacheHandshake?.resolvedCacheDir === cacheContext.cacheDir &&
+              cacheHandshake?.configCacheDir === cacheContext.cacheDir,
+            metadataMatched: cacheReady,
+            previewPidMatched: cacheHandshake?.pid === server.pid,
+            startupObserved: true,
+            finalObserved: false,
           };
           report.optimizerReadinessCheck = {
             status: optimizerReady ? 'PASS' : process.env.YSHOP_PRINTER_BROWSER_TEST_BYPASS_OPTIMIZER_READY === 'test-only' ? 'BYPASSED' : 'FAIL',
             optimizerReady,
           };
           if (!ownerMatched) throw Error("PREVIEW_OWNER_MISMATCH");
+          if (!cacheReady) throw Error('PREVIEW_CACHE_HANDSHAKE_MISMATCH');
           if (!optimizerReady && process.env.YSHOP_PRINTER_BROWSER_TEST_BYPASS_OPTIMIZER_READY !== 'test-only')
             throw Error('PREVIEW_OPTIMIZER_NOT_READY');
           break;
@@ -732,7 +841,23 @@ async function main() {
       ownerMatched: finalOwnerMatched,
     };
     if (!finalOwnerMatched) throw Error("FINAL_FIXTURE_OWNER_MISMATCH");
-    report.fixture = finalFixture;
+    const finalCacheMatched = validatePreviewCacheHandshake(finalFixture.cacheHandshake) &&
+      finalFixture.cacheHandshake.pid === previewCacheHandshake?.pid &&
+      finalFixture.cacheHandshake.metadataSha256 === previewCacheHandshake?.metadataSha256;
+    report.cacheHandshakeCheck.finalObserved = true;
+    if (!finalCacheMatched) {
+      report.cacheHandshakeCheck.status = 'FAIL';
+      throw Error('FINAL_PREVIEW_CACHE_HANDSHAKE_MISMATCH');
+    }
+    previewCacheHandshake = finalFixture.cacheHandshake;
+    report.fixture = {
+      configured: finalFixture.configured,
+      owner: finalFixture.owner,
+      optimizerReady: finalFixture.optimizerReady,
+      deviceCount: finalFixture.deviceCount,
+      submitted: finalFixture.submitted,
+      jobCount: finalFixture.jobCount,
+    };
     report.requests = requests;
     report.apiEvents = apiEvents;
     report.blockedExternalRequestCount = blockedExternalRequestCount;
@@ -832,6 +957,12 @@ async function main() {
       );
     } else report.cleanup = "PASS";
     if (log !== undefined) fs.closeSync(log);
+    try {
+      finalizeCacheEvidence();
+    } catch (error) {
+      report.cacheEvidenceError = ['Error','TypeError'].includes(error.name) ? error.name : 'Error';
+      report.result = 'FAIL';
+    }
     report.loopbackPort = port;
     report.resources = {
       owner,

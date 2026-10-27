@@ -153,6 +153,21 @@ class PrinterBrowserReceiptTest(unittest.TestCase):
         self.folder=tempfile.TemporaryDirectory();self.addCleanup(self.folder.cleanup)
         self.root=Path(self.folder.name);self.path=self.root/'report.json';self.started=time.time()-1
         self.identity={'sourceSha':'sha','sourceDigest':'digest'};self.owner='a'*32
+        self.cache_dir=self.root/'private-vite-cache'
+        self.cache_dir.mkdir(mode=0o700)
+        self.cache_owner='b'*32
+        self.marker_path=self.cache_dir/'.r4-printer-cache-owner.json'
+        self.metadata_path=self.cache_dir/'deps'/'_metadata.json'
+        self.metadata_path.parent.mkdir()
+        self.metadata={
+            'hash':'vite-hash','configHash':'vite-config-hash',
+            'lockfileHash':'vite-lockfile-hash','browserHash':'vite-browser-hash',
+            'optimized':{},'chunks':{}
+        }
+        self.metadata_path.write_text(json.dumps(self.metadata))
+        self.marker={**self.identity,'cacheOwnerId':self.cache_owner,'cacheDir':str(self.cache_dir.resolve())}
+        self.marker_path.write_text(json.dumps(self.marker))
+        self.marker_path.chmod(0o600)
         (self.root/'page.png').write_bytes(b'synthetic screenshot')
         self.value={**self.identity,'runId':'run','owner':self.owner,'result':'PASS','cleanup':'PASS',
             'complete':True,'sourceUnchanged':True,'startedAt':self.started+.1,'endedAt':self.started+.2,
@@ -160,10 +175,41 @@ class PrinterBrowserReceiptTest(unittest.TestCase):
             'startupOwnerCheck':{'status':'PASS','ownerMatched':True},
             'finalFixtureOwnerCheck':{'status':'PASS','ownerMatched':True},
             'optimizerReadinessCheck':{'status':'PASS','optimizerReady':True},
+            'cacheHandshakeCheck':{'status':'PASS','cacheOwnerMatched':True,'resolvedPathMatched':True,
+                'metadataMatched':True,'previewPidMatched':True,'startupObserved':True,'finalObserved':True},
             'resources':{'owner':self.owner,'browserClosed':True,'contextClosed':True,'serverExited':True,'portReleased':True,'previewPid':1234,'ownedLoopbackOnly':True,'ownershipHandshakeChecked':True},
+            'cache':{},
             'scriptSha256':'script','realProviderRequests':0,'blockedExternalRequestCount':0,
             'artifacts':[{'path':'page.png','sha256':hashlib.sha256(b'synthetic screenshot').hexdigest()}],
             'diagnostics':self.valid_diagnostics()}
+        self.write_cache_evidence()
+    def write_cache_evidence(self, mode='RUN_PRIVATE_DEFAULT', state='COLD', before_present=False, before_sha=None):
+        import hashlib
+        after_sha=hashlib.sha256(self.metadata_path.read_bytes()).hexdigest()
+        marker_sha=hashlib.sha256(self.marker_path.read_bytes()).hexdigest()
+        private={
+            'schemaVersion':1,'cacheMode':mode,'cacheState':state,
+            'cacheOwnerId':self.cache_owner,'cacheDir':str(self.cache_dir.resolve()),
+            'metadataPath':str(self.metadata_path.resolve()),'markerPath':str(self.marker_path.resolve()),
+            'markerSha256':marker_sha,'sourceIdentity':self.identity,
+            'metadataBeforePresent':before_present,'metadataBeforeSha256':before_sha,
+            'metadataAfterPresent':True,'metadataAfterSha256':after_sha,
+            'metadataAfter':self.metadata,
+            'preview':{'pid':1234,'cacheOwnerId':self.cache_owner,
+                'resolvedCacheDir':str(self.cache_dir.resolve()),
+                'configCacheDir':str(self.cache_dir.resolve()),
+                'metadataPath':str(self.metadata_path.resolve()),'metadataSha256':after_sha,
+                'metadata':self.metadata}
+        }
+        private_path=self.root/'cache-private.json'
+        private_path.write_text(json.dumps(private,sort_keys=True))
+        private_path.chmod(0o600)
+        self.value['cache']={
+            'mode':mode,'state':state,'cacheOwnerId':self.cache_owner,
+            'metadataPresentBefore':before_present,'metadataSha256Before':before_sha,
+            'metadataPresentAfter':True,'metadataSha256After':after_sha,
+            'privateEvidenceSha256':hashlib.sha256(private_path.read_bytes()).hexdigest()
+        }
     def valid_diagnostics(self):
         confirmations=[]
         for operation in ['printer.reconnect.confirm','printer.test-print.confirm',
@@ -206,6 +252,53 @@ class PrinterBrowserReceiptTest(unittest.TestCase):
         return printer_browser_receipt(self.path,self.started,self.identity,'run',['one','two'],'script')
     def test_printer_receipt_accepts_exact_fresh_source_and_owned_cleanup(self):
         self.assertEqual(2,self.verify()['tests'])
+    def test_printer_receipt_rejects_default_or_missing_cache_ownership_evidence(self):
+        for cache in [
+            {'state':'DEFAULT','metadataPresentBefore':None,'metadataSha256Before':None},
+            {},
+        ]:
+            bad=copy.deepcopy(self.value);bad['cache']=cache
+            with self.assertRaises(RuntimeError):self.verify(bad)
+        private=self.root/'cache-private.json';private.unlink()
+        with self.assertRaises(RuntimeError):self.verify()
+    def test_printer_receipt_accepts_owned_explicit_warm_cache(self):
+        import hashlib
+        before=hashlib.sha256(self.metadata_path.read_bytes()).hexdigest()
+        self.write_cache_evidence('EXPLICIT_EXPERIMENT','WARM',True,before)
+        self.assertEqual(2,self.verify()['tests'])
+    def test_printer_receipt_rejects_cache_sidecar_marker_or_metadata_tampering(self):
+        import hashlib
+        sidecar=self.root/'cache-private.json'
+        original=sidecar.read_bytes()
+        sidecar.write_bytes(original+b' ')
+        with self.assertRaises(RuntimeError):self.verify()
+        sidecar.write_bytes(original)
+        self.marker_path.write_text(json.dumps({**self.marker,'sourceDigest':'foreign'}))
+        self.marker_path.chmod(0o600)
+        with self.assertRaises(RuntimeError):self.verify()
+        self.marker_path.write_text(json.dumps(self.marker));self.marker_path.chmod(0o600)
+        self.metadata_path.write_text(json.dumps({**self.metadata,'configHash':'foreign'}))
+        self.write_cache_evidence()
+        with self.assertRaises(RuntimeError):self.verify()
+    def test_printer_receipt_requires_default_cache_inside_private_output(self):
+        self.cache_dir.rename(self.root/'renamed-cache')
+        self.cache_dir=self.root/'renamed-cache'
+        self.marker_path=self.cache_dir/'.r4-printer-cache-owner.json'
+        self.metadata_path=self.cache_dir/'deps'/'_metadata.json'
+        self.marker={**self.identity,'cacheOwnerId':self.cache_owner,'cacheDir':str(self.cache_dir.resolve())}
+        self.marker_path.write_text(json.dumps(self.marker));self.marker_path.chmod(0o600)
+        self.write_cache_evidence()
+        with self.assertRaises(RuntimeError):self.verify()
+    def test_printer_driver_and_preview_require_an_owned_private_cache(self):
+        repo=Path(__file__).resolve().parents[2]
+        driver=(repo/'tests/printer/browser-acceptance.cjs').read_text()
+        preview=(repo/'yshop-drink-vue3/tests/printer/preview.mjs').read_text()
+        self.assertIn("path.join(root, 'private-vite-cache')",driver)
+        self.assertIn('YSHOP_PRINTER_BROWSER_CACHE_DIR',driver)
+        self.assertIn('cacheDir: expectedCacheDir',preview)
+        self.assertIn('PRINTER_PREVIEW_CACHE_DIR_REQUIRED',preview)
+        self.assertIn('server.config.cacheDir',preview)
+        self.assertNotIn('|| undefined',preview)
     def test_printer_receipt_rejects_claimed_cleanup_without_owned_resource_receipts(self):
         for field,value in [('resources',{}),('cleanup','FAIL'),('sourceUnchanged',False),('complete',False)]:
             bad=copy.deepcopy(self.value);bad[field]=value
