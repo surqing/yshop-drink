@@ -102,6 +102,7 @@ const report = {
 };
 let server, browser, context, page, log, previewLogStream, tracePath;
 let interrupted = false;
+let cacheFinalizationStage = 'NOT_STARTED';
 const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const inside = (child, parent) => child === parent || child.startsWith(parent + path.sep);
 const prepareOwnedCache = () => {
@@ -151,6 +152,7 @@ const prepareOwnedCache = () => {
 };
 const finalizeCacheEvidence = () => {
   if (!cacheContext) return;
+  cacheFinalizationStage = 'READ_METADATA';
   let metadata = null, metadataPresentAfter = false, metadataSha256After = null;
   try {
     metadataPresentAfter = fs.existsSync(cacheContext.metadataPath);
@@ -181,12 +183,18 @@ const finalizeCacheEvidence = () => {
     metadataAfter: metadata,
     preview: previewCacheHandshake,
   };
+  cacheFinalizationStage = 'SERIALIZE_PRIVATE_EVIDENCE';
+  const serialized = JSON.stringify(privateEvidence, null, 2);
   const privatePath = path.join(root, 'cache-private.json');
-  fs.writeFileSync(privatePath, JSON.stringify(privateEvidence, null, 2), { flag: 'wx', mode: 0o600 });
+  cacheFinalizationStage = 'WRITE_PRIVATE_EVIDENCE';
+  fs.writeFileSync(privatePath, serialized, { flag: 'wx', mode: 0o600 });
+  cacheFinalizationStage = 'SET_PRIVATE_EVIDENCE_MODE';
   fs.chmodSync(privatePath, 0o600);
+  cacheFinalizationStage = 'HASH_PRIVATE_EVIDENCE';
   report.cache.metadataPresentAfter = metadataPresentAfter;
   report.cache.metadataSha256After = metadataSha256After;
   report.cache.privateEvidenceSha256 = sha256(fs.readFileSync(privatePath));
+  cacheFinalizationStage = 'COMPLETE';
 };
 const validatePreviewCacheHandshake = (handshake) => {
   if (!cacheContext || !handshake || typeof handshake !== 'object') return false;
@@ -960,7 +968,14 @@ async function main() {
     try {
       finalizeCacheEvidence();
     } catch (error) {
-      report.cacheEvidenceError = ['Error','TypeError'].includes(error.name) ? error.name : 'Error';
+      report.cacheEvidenceError = {
+        stage: cacheFinalizationStage,
+        errorType: ['Error','TypeError','RangeError','SyntaxError'].includes(error.name) ? error.name : 'Error',
+        code: typeof error.code === 'string' && /^[A-Z0-9_]+$/.test(error.code) ? error.code : null,
+      };
+      try {
+        fs.writeFileSync(path.join(root, 'cache-evidence-private.log'), String(error.stack || error), { mode: 0o600 });
+      } catch {}
       report.result = 'FAIL';
     }
     report.loopbackPort = port;
